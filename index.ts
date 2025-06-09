@@ -29,9 +29,9 @@ function getHeight(): number {
 
 const getDisplayEndIndex = (
   curr: number,
-  linesHeight: number,
+  height: number,
   contentLength: number
-): number => Math.min(contentLength, curr + linesHeight - 1);
+): number => Math.min(contentLength, curr + height - 1);
 
 function getPositionInfo(
   curr: number,
@@ -54,14 +54,16 @@ export async function pager(
   content: any[],
   showPosition: boolean = false
 ): Promise<void> {
+  const CTRL_C = '\u0003', UP = '\u001b[A', DOWN = '\u001b[B';
+
   if (content.length === 0) {
     console.log('\nNO CONTENT.\n');
     return;
   }
 
-  let linesHeight = getHeight();
+  let height = getHeight();
   let curr = 0;
-  let listEnd = getDisplayEndIndex(curr, linesHeight, content.length);
+  let listEnd = getDisplayEndIndex(curr, height, content.length);
 
   let output = '';
   for (let i = curr; i < listEnd; i++) {
@@ -74,27 +76,20 @@ export async function pager(
 
   render(output);
 
-  let key = await listenKey();
+  let key = await readKey();
 
-  while (key !== '\u0003' && key.toLowerCase() !== 'q') {
-    linesHeight = getHeight();
-    if (linesHeight === -1) {
-      console.log(
-        '\nTOO LOW TERMINAL HEIGHT,\n' +
-        'Showing scrollable page aborted.\n'
-      );
-      return;
-    }
+  while (key !== CTRL_C && key.toLowerCase() !== 'q') {
+    height = getHeight();
 
-    if (key === '\u001b[A' && curr > 0) {
+    if (key === UP && curr > 0) {
       curr--;
-    } else if (key === '\u001b[B' && curr + linesHeight - 2 < content.length) {
+    } else if (key === DOWN && curr + height - 1 < content.length) {
       curr++;
     }
 
-    listTo = curr + linesHeight - 2 > content.length?
+    listTo = curr + height - 2 > content.length?
       content.length:
-      curr + linesHeight - 2;
+      curr + height - 2;
 
     render(content, curr, listTo);
 
