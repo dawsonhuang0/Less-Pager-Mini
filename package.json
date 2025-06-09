@@ -1,0 +1,34 @@
+{
+  "name": "terminal-scroller",
+  "version": "1.0.0",
+  "description": "A scrollable terminal pager for Node.js CLI apps (terminal only)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dawsonhuang0/Terminal-Scroller.git"
+  },
+  "keywords": [
+    "cli",
+    "terminal",
+    "scroll",
+    "pager",
+    "nodejs",
+    "scrollable",
+    "command-line",
+    "interactive",
+    "less",
+    "viewer"
+  ],
+  "author": "Dawson Huang",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dawsonhuang0/Terminal-Scroller/issues"
+  },
+  "homepage": "https://github.com/dawsonhuang0/Terminal-Scroller#readme",
+  "devDependencies": {
+    "@types/node": "^22.15.30"
+  }
+}
