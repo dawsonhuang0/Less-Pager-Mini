@@ -19,7 +19,13 @@ async function readKey(): Promise<string> {
   });
 }
 
-const getHeight = (): number => process.stdout.rows;
+const getHeight = (): number => {
+  const rows = process.stdout.rows;
+  if (rows < 2) {
+    throw new Error('Insufficient terminal height. Minimum required is 2 lines.');
+  }
+  return rows;
+}
 
 function getDisplayEndIndex(
   curr: number,
@@ -43,10 +49,9 @@ export async function pager(
     return;
   }
 
+  let linesHeight = getHeight();
   let curr = 0;
-  let listTo = curr + linesHeight - 2 > content.length?
-    content.length:
-    curr + linesHeight - 2;
+  let listEnd = getDisplayEndIndex(curr, linesHeight, content.length);
 
   let output = '';
   for (let i = start; i < end; i++) {
@@ -62,9 +67,8 @@ export async function pager(
   console.clear();
   process.stdout.write(`\r${output}`);
 
-  let linesHeight = getHeight();
   if (linesHeight === -1) {
-    throw new Error('Insufficient terminal height. Minimum required is 2 lines.');
+    throw new Error('');
   }
 
   render(content, curr, listTo);
