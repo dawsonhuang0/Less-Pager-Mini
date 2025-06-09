@@ -66,12 +66,14 @@ function render(output: string): void {
   process.stdout.write(output);
 }
 
+function actionHandler(key: string): void {
+  if (key === '\u0003') process.exit();
+}
+
 export async function pager(
   content: any[],
   showPosition: boolean = false
 ): Promise<void> {
-  const CTRL_C = '\u0003', UP = '\u001b[A', DOWN = '\u001b[B';
-
   if (content.length === 0) {
     console.log('\nNO CONTENT.\n');
     return;
@@ -81,16 +83,7 @@ export async function pager(
   let curr = 0;
   let listEnd = getDisplayEndIndex(curr, height, content.length);
 
-  let output = '';
-  for (let i = curr; i < listEnd; i++) {
-    output += `${content[i]}\n`;
-  }
-
-  if (showPosition) output += getPositionInfo(curr, listEnd, content.length);
-
-  output += ':';
-
-  render(output);
+  render(getOutput(curr, listEnd, content, showPosition));
 
   let key = await readKey();
 
@@ -105,20 +98,10 @@ export async function pager(
 
     listEnd = getDisplayEndIndex(curr, height, content.length);
 
-    output = '';
-    for (let i = curr; i < listEnd; i++) {
-      output += `${content[i]}\n`;
-    }
-
-    if (showPosition) output += getPositionInfo(curr, listEnd, content.length);
-
-    output += ':';
-
-    render(output);
+    render(getOutput(curr, listEnd, content, showPosition));
 
     key = await readKey();
   }
 
-  if (key === '\u0003') return;
-  return;
+  if (key === CTRL_C) process.exit();
 }
