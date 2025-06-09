@@ -21,6 +21,11 @@ async function readKey(): Promise<string> {
 
 const getHeight = (): number => process.stdout.rows;
 
+function render(output: string) {
+  console.clear();
+  process.stdout.write(output);
+}
+
 export async function pager(
   content: any[],
   showPosition?: boolean
