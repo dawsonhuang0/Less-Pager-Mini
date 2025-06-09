@@ -52,7 +52,7 @@ function render(output: string) {
 
 export async function pager(
   content: any[],
-  showPosition?: boolean
+  showPosition: boolean = false
 ): Promise<void> {
   if (content.length === 0) {
     console.log('\nNO CONTENT.\n');
@@ -68,20 +68,11 @@ export async function pager(
     output += `${content[i]}\n`;
   }
 
-  output += end - start === 1 || content.length === 1?
-    `${curr + 1}`:
-    `${curr + 1}-${listTo}`;
-  output += ` of ${content.length}\n`;
-  output += '[q] quit, [↑] go up, [↓] go down';
+  if (showPosition) output += getPositionInfo(curr, listEnd, content.length);
 
-  console.clear();
-  process.stdout.write(`\r${output}`);
+  output += ':';
 
-  if (linesHeight === -1) {
-    throw new Error('');
-  }
-
-  render(content, curr, listTo);
+  render(output);
 
   let key = await listenKey();
 
