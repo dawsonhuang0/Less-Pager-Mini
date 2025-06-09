@@ -45,7 +45,23 @@ function getPositionInfo(
   return info + ` of ${contentLength}`;
 }
 
-function render(output: string) {
+function getOutput(
+  curr: number,
+  listEnd: number,
+  content: any[],
+  showPosition: boolean
+): string {
+  let output = '';
+  for (let i = curr; i < listEnd; i++) {
+    output += `${content[i]}\n`;
+  }
+
+  if (showPosition) output += getPositionInfo(curr, listEnd, content.length);
+
+  return output + ':';
+}
+
+function render(output: string): void {
   console.clear();
   process.stdout.write(output);
 }
@@ -87,13 +103,20 @@ export async function pager(
       curr++;
     }
 
-    listTo = curr + height - 2 > content.length?
-      content.length:
-      curr + height - 2;
+    listEnd = getDisplayEndIndex(curr, height, content.length);
 
-    render(content, curr, listTo);
+    output = '';
+    for (let i = curr; i < listEnd; i++) {
+      output += `${content[i]}\n`;
+    }
 
-    key = await listenKey();
+    if (showPosition) output += getPositionInfo(curr, listEnd, content.length);
+
+    output += ':';
+
+    render(output);
+
+    key = await readKey();
   }
 
   if (key === '\u0003') return;
