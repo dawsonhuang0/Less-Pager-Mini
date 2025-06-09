@@ -19,7 +19,7 @@ async function readKey(): Promise<string> {
   });
 }
 
-const getHeight = (): number => {
+function getHeight(): number {
   const rows = process.stdout.rows;
   if (rows < 2) {
     throw new Error('Insufficient terminal height. Minimum required is 2 lines.');
@@ -27,12 +27,22 @@ const getHeight = (): number => {
   return rows;
 }
 
-function getDisplayEndIndex(
+const getDisplayEndIndex = (
   curr: number,
   linesHeight: number,
   contentLength: number
-): number {
-  return Math.min(contentLength, curr + linesHeight - 1);
+): number => Math.min(contentLength, curr + linesHeight - 1);
+
+function getPositionInfo(
+  curr: number,
+  listEnd: number,
+  contentLength: number
+): string {
+  let info = `${curr + 1}`;
+  if (listEnd - curr !== 1) {
+    info += `-${listEnd}`;
+  }
+  return info + ` of ${contentLength}`;
 }
 
 function render(output: string) {
@@ -54,8 +64,8 @@ export async function pager(
   let listEnd = getDisplayEndIndex(curr, linesHeight, content.length);
 
   let output = '';
-  for (let i = start; i < end; i++) {
-    output += content[i] + '\n';
+  for (let i = curr; i < listEnd; i++) {
+    output += `${content[i]}\n`;
   }
 
   output += end - start === 1 || content.length === 1?
