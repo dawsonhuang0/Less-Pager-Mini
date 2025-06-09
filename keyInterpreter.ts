@@ -1,3 +1,5 @@
+const UP = '\u001b[A', DOWN = '\u001b[B';
+
 export enum Actions {
   // basic
   EXIT = 'EXIT',
@@ -23,6 +25,25 @@ export enum Actions {
 
 export function action(key: string): Actions | undefined {
   switch (key) {
+    case UP:
+      return Actions.LINE_BACKWARD;
+
+    case DOWN:
+      return Actions.LINE_FORWARD;
+  }
+
+  switch (key.toLowerCase()) {
+    case 'q':
+      return Actions.EXIT;
+    
+    case 'h':
+      return Actions.HELP;
+
+    case 'v':
+      return Actions.VERSION;
+
+    
+
     default:
       return undefined;
   }
