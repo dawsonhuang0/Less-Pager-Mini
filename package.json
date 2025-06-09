@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/dawsonhuang0/Terminal-Scroller#readme",
   "devDependencies": {
-    "@types/node": "^22.15.30"
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
   }
 }
