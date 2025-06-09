@@ -1,1 +1,1 @@
-# Terminal-Scroller
+# Terminal-Pager

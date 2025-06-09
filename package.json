@@ -1,5 +1,5 @@
 {
-  "name": "terminal-scroller",
+  "name": "terminal-pager",
   "version": "1.0.0",
   "description": "A scrollable terminal pager for Node.js CLI apps (terminal only)",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dawsonhuang0/Terminal-Scroller.git"
+    "url": "git+https://github.com/dawsonhuang0/Terminal-Pager.git"
   },
   "keywords": [
     "cli",
@@ -25,9 +25,9 @@
   "author": "Dawson Huang",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/dawsonhuang0/Terminal-Scroller/issues"
+    "url": "https://github.com/dawsonhuang0/Terminal-Pager/issues"
   },
-  "homepage": "https://github.com/dawsonhuang0/Terminal-Scroller#readme",
+  "homepage": "https://github.com/dawsonhuang0/Terminal-Pager#readme",
   "devDependencies": {
     "@types/node": "^22.15.30",
     "typescript": "^5.8.3"
