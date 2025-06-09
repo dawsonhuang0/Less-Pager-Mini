@@ -1,4 +1,4 @@
-function listenKey(): Promise<string> {
+async function readKey(): Promise<string> {
   return new Promise(resolve => {
     if (!process.stdin.isTTY) {
       throw new Error('Interactive terminal (TTY) is required to use this feature.');
@@ -21,7 +21,10 @@ function listenKey(): Promise<string> {
 
 const getHeight = (): number => process.stdout.rows;
 
-export async function pager(content: any[]): Promise<void> {
+export async function pager(
+  content: any[],
+  showPosition?: boolean
+): Promise<void> {
   if (content.length === 0) {
     console.log('\nNO CONTENT.\n');
     return;
