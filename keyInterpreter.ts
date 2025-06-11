@@ -13,9 +13,9 @@ export enum Actions {
   LINE_FORWARD = 'LINE_FORWARD',
   WINDOW_BACKWARD = 'WINDOW_BACKWARD',
   WINDOW_FORWARD = 'WINDOW_FORWARD',
-  HALF_WINDOW_BACKWARD = 'HALF_WINDOW_BACKWARD',///////////////
+  HALF_WINDOW_BACKWARD = 'HALF_WINDOW_BACKWARD',
   HALF_WINDOW_FORWARD = 'HALF_WINDOW_FORWARD',
-  HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',
+  HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',///////////////
   HALF_WINDOW_RIGHT = 'HALF_WINDOW_RIGHT',
   FIRST_COL = 'FIRST_COL',
   LAST_COL = 'LAST_COL',
@@ -68,4 +68,14 @@ const keys: Record<string, Actions> = {
   '\x66': Actions.WINDOW_FORWARD, // f
   '\x7A': Actions.WINDOW_FORWARD, // z
   '\x20': Actions.WINDOW_FORWARD, // SPACE
+
+  // half window backward
+  '\x15': Actions.HALF_WINDOW_BACKWARD, // ^U
+  '\x75': Actions.HALF_WINDOW_BACKWARD, // u
+
+  // half window forward
+  '\x04': Actions.HALF_WINDOW_FORWARD, // ^D
+  '\x64': Actions.HALF_WINDOW_FORWARD, // d
+
+  // half window left
 };
