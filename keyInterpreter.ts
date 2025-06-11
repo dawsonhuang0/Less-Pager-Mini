@@ -1,83 +1,71 @@
-const UP = '\u001b[A', DOWN = '\u001b[B', SPACE = '\x20',
-  CTRL_E = '\x05', CTRL_N = '\x0E', CTRL_Y = '\x19',
-  CTRL_K = '\x0B', CTRL_P = '\x10', CTRL_F = '\x06',
-  CTRL_V = '\x16', CTRL_B = '\x02', CTRL_D = '\x04',
-  CTRL_U = '\x15', ESC_V = '\x1Bv';
+export const action = (key: string): Actions | undefined => keys[key];
+const LEFT = '\x1B[D', RIGHT = '\x1B[C';
 
 export enum Actions {
   // basic
+  FORCE_EXIT = 'FORCE_EXIT',
   EXIT = 'EXIT',
   HELP = 'HELP',
   VERSION = 'VERSION',
 
   // moving
-  COL_BACKWARD = 'COL_BACKWARD',
-  COL_FORWARD = 'COL_FORWARD',
   LINE_BACKWARD = 'LINE_BACKWARD',
   LINE_FORWARD = 'LINE_FORWARD',
   WINDOW_BACKWARD = 'WINDOW_BACKWARD',
   WINDOW_FORWARD = 'WINDOW_FORWARD',
-  HALF_WINDOW_BACKWARD = 'HALF_WINDOW_BACKWARD',
+  HALF_WINDOW_BACKWARD = 'HALF_WINDOW_BACKWARD',///////////////
   HALF_WINDOW_FORWARD = 'HALF_WINDOW_FORWARD',
-  LEFT_HALF_WINDOW = 'LEFT_HALF_WINDOW',
-  RIGHT_HALF_WINDOW = 'RIGHT_HALF_WINDOW',
+  HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',
+  HALF_WINDOW_RIGHT = 'HALF_WINDOW_RIGHT',
+  FIRST_COL = 'FIRST_COL',
+  LAST_COL = 'LAST_COL',
 
   // jumping
   FIRST_LINE = 'FIRST_LINE',
-  LAST_LINE = 'LAST_LINE',
-  FIRST_COL = 'FIRST_COL',
-  LAST_COL = 'LAST_COL'
+  LAST_LINE = 'LAST_LINE'
 }
 
-export function action(key: string): Actions | undefined {
-  switch (key) {
-    case CTRL_Y:
-    case CTRL_K:
-    case CTRL_P:
-    case UP:
-      return Actions.LINE_BACKWARD;
+const keys: Record<string, Actions> = {
+  // force exit
+  '\x03': Actions.FORCE_EXIT, // ^C
 
-    case CTRL_E:
-    case CTRL_N:
-    case DOWN:
-      return Actions.LINE_FORWARD;
+  // exit
+  '\x51': Actions.EXIT, // Q
+  '\x71': Actions.EXIT, // q
 
-    case CTRL_B:
-    case ESC_V:
-      return Actions.WINDOW_BACKWARD;
+  // help
+  '\x48': Actions.HELP, // H
+  '\x68': Actions.HELP, // h
 
-    case CTRL_F:
-    case CTRL_V:
-    case SPACE:
-      return Actions.WINDOW_FORWARD;
-  }
+  // version
+  '\x56': Actions.VERSION, // V
 
-  switch (key.toLowerCase()) {
-    case 'q':
-      return Actions.EXIT;
-    
-    case 'h':
-      return Actions.HELP;
+  // line backward
+  '\x0B': Actions.LINE_BACKWARD, // ^K
+  '\x10': Actions.LINE_BACKWARD, // ^P
+  '\x19': Actions.LINE_BACKWARD, // ^Y
+  '\x6B': Actions.LINE_BACKWARD, // k
+  '\x79': Actions.LINE_BACKWARD, // y
+  '\x1B[A': Actions.LINE_BACKWARD, // ARROW UP
 
-    case 'v':
-      return Actions.VERSION;
+  // line forward
+  '\x05': Actions.LINE_FORWARD, // ^E
+  '\x0E': Actions.LINE_FORWARD, // ^N
+  '\x65': Actions.LINE_FORWARD, // e
+  '\x6A': Actions.LINE_FORWARD, // j
+  '\x0D': Actions.LINE_FORWARD, // RETURN
+  '\x1B[B': Actions.LINE_FORWARD, // ARROW DOWN
 
-    case 'y':
-    case 'k':
-      return Actions.LINE_BACKWARD;
+  // window backward
+  '\x02': Actions.WINDOW_BACKWARD, // ^B
+  '\x62': Actions.WINDOW_BACKWARD, // b
+  '\x77': Actions.WINDOW_BACKWARD, // w
+  '\x1Bv': Actions.WINDOW_BACKWARD, // ESC-v
 
-    case 'e':
-    case 'j':
-      return Actions.LINE_FORWARD;
-
-    case 'b':
-    case 'w':
-      return Actions.WINDOW_BACKWARD;
-
-    case 'f':
-    case 'z':
-      return Actions.WINDOW_FORWARD;
-  }
-
-  return undefined;
-}
+  // window forward
+  '\x06': Actions.WINDOW_FORWARD, // ^F
+  '\x16': Actions.WINDOW_FORWARD, // ^V
+  '\x66': Actions.WINDOW_FORWARD, // f
+  '\x7A': Actions.WINDOW_FORWARD, // z
+  '\x20': Actions.WINDOW_FORWARD, // SPACE
+};
