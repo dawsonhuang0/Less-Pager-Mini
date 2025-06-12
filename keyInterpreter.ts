@@ -17,8 +17,8 @@ export enum Actions {
   HALF_WINDOW_FORWARD = 'HALF_WINDOW_FORWARD',
   HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',
   HALF_WINDOW_RIGHT = 'HALF_WINDOW_RIGHT',
-  FIRST_COL = 'FIRST_COL',///////////////
-  LAST_COL = 'LAST_COL',
+  FIRST_COL = 'FIRST_COL',
+  LAST_COL = 'LAST_COL',///////////////
 
   // jumping
   FIRST_LINE = 'FIRST_LINE',
@@ -86,4 +86,10 @@ const keys: Record<string, Actions> = {
   '\x1B[C': Actions.HALF_WINDOW_RIGHT, // RIGHT ARROW
 
   // first column
+  '\x1B{': Actions.FIRST_COL, // ESC-{
+  '\x1B[1;5D': Actions.FIRST_COL, // ^LEFT ARROW
+
+  // last column
+  '\x1B}': Actions.LAST_COL, // ESC-}
+  '\x1B[1;5C': Actions.LAST_COL, // ^RIGHT ARROW
 };
