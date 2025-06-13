@@ -1,9 +1,9 @@
 async function readKey(): Promise<string> {
-  return new Promise(resolve => {
-    if (!process.stdin.isTTY) {
-      throw new Error('Interactive terminal (TTY) is required to use this feature.');
-    }
+  if (!process.stdin.isTTY) {
+    throw new Error('Interactive terminal (TTY) is required to use this feature.');
+  }
 
+  return new Promise(resolve => {
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
@@ -67,7 +67,9 @@ function render(output: string): void {
 }
 
 function actionHandler(key: string): void {
-  if (key === '\u0003') process.exit();
+  switch () {
+
+  }
 }
 
 export async function pager(
