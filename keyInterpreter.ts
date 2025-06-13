@@ -1,5 +1,4 @@
 export const action = (key: string): Actions | undefined => keys[key];
-const RIGHT = '\x1B[C';
 
 export enum Actions {
   // basic
@@ -18,7 +17,7 @@ export enum Actions {
   HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',
   HALF_WINDOW_RIGHT = 'HALF_WINDOW_RIGHT',
   FIRST_COL = 'FIRST_COL',
-  LAST_COL = 'LAST_COL',///////////////
+  LAST_COL = 'LAST_COL',
 
   // jumping
   FIRST_LINE = 'FIRST_LINE',
@@ -92,4 +91,16 @@ const keys: Record<string, Actions> = {
   // last column
   '\x1B}': Actions.LAST_COL, // ESC-}
   '\x1B[1;5C': Actions.LAST_COL, // ^RIGHT ARROW
+
+  // first line
+  '\x25': Actions.FIRST_LINE, // %
+  '\x67': Actions.FIRST_LINE, // g
+  '\x70': Actions.FIRST_LINE, // p
+  '\x3C': Actions.FIRST_LINE, // <
+  '\x1B<': Actions.FIRST_LINE, // ESC-<
+
+  // last line
+  '\x47': Actions.LAST_LINE, // G
+  '\x3E': Actions.LAST_LINE, // >
+  '\x1B>': Actions.LAST_LINE, // ESC->
 };
