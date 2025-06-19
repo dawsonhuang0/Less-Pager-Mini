@@ -1,23 +1,4 @@
-async function readKey(): Promise<string> {
-  if (!process.stdin.isTTY) {
-    throw new Error('Interactive terminal (TTY) is required to use this feature.');
-  }
-
-  return new Promise(resolve => {
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
-
-    const listener = (key: string) => {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdin.removeListener('data', listener);
-      resolve(key);
-    };
-
-    process.stdin.on('data', listener);
-  });
-}
+import { readKey } from "./readKey";
 
 function getHeight(): number {
   const rows = process.stdout.rows;
