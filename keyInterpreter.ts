@@ -6,6 +6,7 @@ export enum Actions {
   EXIT = 'EXIT',
   HELP = 'HELP',
   VERSION = 'VERSION',
+  GET_LINE = 'GET_LINE',
 
   // moving
   LINE_BACKWARD = 'LINE_BACKWARD',
@@ -21,7 +22,23 @@ export enum Actions {
 
   // jumping
   FIRST_LINE = 'FIRST_LINE',
-  LAST_LINE = 'LAST_LINE'
+  LAST_LINE = 'LAST_LINE',
+  PCT_LINE = 'PCT_LINE',
+  CLOSE_BRACKET = 'CLOSE_BRACKET',
+  OPEN_BRACKET = 'OPEN_BRACKET',
+
+  // repainting
+  REPAINT = 'REPAINT',
+  DROP_INPUT_REPAINT = 'DROP_INPUT_REPAINT',
+
+  // searching
+  SEARCH_LINE_BACKWARD = 'SEARCH_LINE_BACKWARD',
+  SEARCH_LINE_FORWARD = 'SEARCH_LINE_FORWARD',
+  REPEAT_SEARCH = 'REPEAT_SEARCH',
+  REVERSE_SEARCH = 'REVERSE_SEARCH',
+  HIGHLIGHT_TOGGLE = 'HIGHLIGHT_TOGGLE',
+  CLEAR_SEARCH = 'CLEAR_SEARCH',
+  PATTERN_ONLY = 'PATTERN_ONLY',
 }
 
 const keys: Record<string, Actions> = {
@@ -93,9 +110,7 @@ const keys: Record<string, Actions> = {
   '\x1B[1;5C': Actions.LAST_COL, // ^RIGHT ARROW
 
   // first line
-  '\x25': Actions.FIRST_LINE, // %
   '\x67': Actions.FIRST_LINE, // g
-  '\x70': Actions.FIRST_LINE, // p
   '\x3C': Actions.FIRST_LINE, // <
   '\x1B<': Actions.FIRST_LINE, // ESC-<
 
@@ -103,4 +118,8 @@ const keys: Record<string, Actions> = {
   '\x47': Actions.LAST_LINE, // G
   '\x3E': Actions.LAST_LINE, // >
   '\x1B>': Actions.LAST_LINE, // ESC->
+
+  // percent line
+  '\x25': Actions.PCT_LINE, // %
+  '\x70': Actions.PCT_LINE, // p
 };
