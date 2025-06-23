@@ -1,29 +1,7 @@
-export const action = (key: string): Actions | undefined => keys[key];
+export const action = (key: string): string | undefined => keys[key];
 
 export enum Actions {
-  // basic
-  FORCE_EXIT = 'FORCE_EXIT',
-  EXIT = 'EXIT',
-  HELP = 'HELP',
-  VERSION = 'VERSION',
-  GET_LINE = 'GET_LINE',
-
-  // moving
-  LINE_BACKWARD = 'LINE_BACKWARD',
-  LINE_FORWARD = 'LINE_FORWARD',
-  WINDOW_BACKWARD = 'WINDOW_BACKWARD',
-  WINDOW_FORWARD = 'WINDOW_FORWARD',
-  HALF_WINDOW_BACKWARD = 'HALF_WINDOW_BACKWARD',
-  HALF_WINDOW_FORWARD = 'HALF_WINDOW_FORWARD',
-  HALF_WINDOW_LEFT = 'HALF_WINDOW_LEFT',
-  HALF_WINDOW_RIGHT = 'HALF_WINDOW_RIGHT',
-  FIRST_COL = 'FIRST_COL',
-  LAST_COL = 'LAST_COL',
-
   // jumping
-  FIRST_LINE = 'FIRST_LINE',
-  LAST_LINE = 'LAST_LINE',
-  PCT_LINE = 'PCT_LINE',
   CLOSE_BRACKET = 'CLOSE_BRACKET',
   OPEN_BRACKET = 'OPEN_BRACKET',
 
@@ -41,85 +19,87 @@ export enum Actions {
   PATTERN_ONLY = 'PATTERN_ONLY',
 }
 
-const keys: Record<string, Actions> = {
+const keys: Record<string, string> = {
   // force exit
-  '\x03': Actions.FORCE_EXIT, // ^C
+  '\x03': 'FORCE_EXIT', // ^C
 
   // exit
-  '\x51': Actions.EXIT, // Q
-  '\x71': Actions.EXIT, // q
+  '\x51': 'EXIT', // Q
+  '\x71': 'EXIT', // q
 
   // help
-  '\x48': Actions.HELP, // H
-  '\x68': Actions.HELP, // h
+  '\x48': 'HELP', // H
+  '\x68': 'HELP', // h
 
   // version
-  '\x56': Actions.VERSION, // V
+  '\x56': 'VERSION', // V
+
+  // get line
 
   // line backward
-  '\x0B': Actions.LINE_BACKWARD, // ^K
-  '\x10': Actions.LINE_BACKWARD, // ^P
-  '\x19': Actions.LINE_BACKWARD, // ^Y
-  '\x6B': Actions.LINE_BACKWARD, // k
-  '\x79': Actions.LINE_BACKWARD, // y
-  '\x1B[A': Actions.LINE_BACKWARD, // ARROW UP
+  '\x0B': 'LINE_BACKWARD', // ^K
+  '\x10': 'LINE_BACKWARD', // ^P
+  '\x19': 'LINE_BACKWARD', // ^Y
+  '\x6B': 'LINE_BACKWARD', // k
+  '\x79': 'LINE_BACKWARD', // y
+  '\x1B[A': 'LINE_BACKWARD', // ARROW UP
 
   // line forward
-  '\x05': Actions.LINE_FORWARD, // ^E
-  '\x0E': Actions.LINE_FORWARD, // ^N
-  '\x65': Actions.LINE_FORWARD, // e
-  '\x6A': Actions.LINE_FORWARD, // j
-  '\x0D': Actions.LINE_FORWARD, // RETURN
-  '\x1B[B': Actions.LINE_FORWARD, // ARROW DOWN
+  '\x05': 'LINE_FORWARD', // ^E
+  '\x0E': 'LINE_FORWARD', // ^N
+  '\x65': 'LINE_FORWARD', // e
+  '\x6A': 'LINE_FORWARD', // j
+  '\x0D': 'LINE_FORWARD', // RETURN
+  '\x1B[B': 'LINE_FORWARD', // ARROW DOWN
 
   // window backward
-  '\x02': Actions.WINDOW_BACKWARD, // ^B
-  '\x62': Actions.WINDOW_BACKWARD, // b
-  '\x77': Actions.WINDOW_BACKWARD, // w
-  '\x1Bv': Actions.WINDOW_BACKWARD, // ESC-v
+  '\x02': 'WINDOW_BACKWARD', // ^B
+  '\x62': 'WINDOW_BACKWARD', // b
+  '\x77': 'WINDOW_BACKWARD', // w
+  '\x1Bv': 'WINDOW_BACKWARD', // ESC-v
 
   // window forward
-  '\x06': Actions.WINDOW_FORWARD, // ^F
-  '\x16': Actions.WINDOW_FORWARD, // ^V
-  '\x66': Actions.WINDOW_FORWARD, // f
-  '\x7A': Actions.WINDOW_FORWARD, // z
-  '\x20': Actions.WINDOW_FORWARD, // SPACE
+  '\x06': 'WINDOW_FORWARD', // ^F
+  '\x16': 'WINDOW_FORWARD', // ^V
+  '\x66': 'WINDOW_FORWARD', // f
+  '\x7A': 'WINDOW_FORWARD', // z
+  '\x20': 'WINDOW_FORWARD', // SPACE
 
   // half window backward
-  '\x15': Actions.HALF_WINDOW_BACKWARD, // ^U
-  '\x75': Actions.HALF_WINDOW_BACKWARD, // u
+  '\x15': 'HALF_WINDOW_BACKWARD', // ^U
+  '\x75': 'HALF_WINDOW_BACKWARD', // u
 
   // half window forward
-  '\x04': Actions.HALF_WINDOW_FORWARD, // ^D
-  '\x64': Actions.HALF_WINDOW_FORWARD, // d
+  '\x04': 'HALF_WINDOW_FORWARD', // ^D
+  '\x64': 'HALF_WINDOW_FORWARD', // d
 
   // half window left
-  '\x1B(': Actions.HALF_WINDOW_LEFT, // ESC-(
-  '\x1B[D': Actions.HALF_WINDOW_LEFT, // LEFT ARROW
+  '\x1B(': 'HALF_WINDOW_LEFT', // ESC-(
+  '\x1B[D': 'HALF_WINDOW_LEFT', // LEFT ARROW
 
   // half window right
-  '\x1B)': Actions.HALF_WINDOW_RIGHT, // ESC-)
-  '\x1B[C': Actions.HALF_WINDOW_RIGHT, // RIGHT ARROW
+  '\x1B)': 'HALF_WINDOW_RIGHT', // ESC-)
+  '\x1B[C': 'HALF_WINDOW_RIGHT', // RIGHT ARROW
 
   // first column
-  '\x1B{': Actions.FIRST_COL, // ESC-{
-  '\x1B[1;5D': Actions.FIRST_COL, // ^LEFT ARROW
+  '\x1B{': 'FIRST_COL', // ESC-{
+  '\x1B[1;5D': 'FIRST_COL', // ^LEFT ARROW
 
   // last column
-  '\x1B}': Actions.LAST_COL, // ESC-}
-  '\x1B[1;5C': Actions.LAST_COL, // ^RIGHT ARROW
+  '\x1B}': 'LAST_COL', // ESC-}
+  '\x1B[1;5C': 'LAST_COL', // ^RIGHT ARROW
 
   // first line
-  '\x67': Actions.FIRST_LINE, // g
-  '\x3C': Actions.FIRST_LINE, // <
-  '\x1B<': Actions.FIRST_LINE, // ESC-<
+  '\x67': 'FIRST_LINE', // g
+  '\x3C': 'FIRST_LINE', // <
+  '\x1B<': 'FIRST_LINE', // ESC-<
 
   // last line
-  '\x47': Actions.LAST_LINE, // G
-  '\x3E': Actions.LAST_LINE, // >
-  '\x1B>': Actions.LAST_LINE, // ESC->
+  '\x47': 'LAST_LINE', // G
+  '\x3E': 'LAST_LINE', // >
+  '\x1B>': 'LAST_LINE', // ESC->
 
   // percent line
-  '\x25': Actions.PCT_LINE, // %
-  '\x70': Actions.PCT_LINE, // p
+  '\x25': 'PCT_LINE', // %
+  '\x70': 'PCT_LINE', // p
 };
