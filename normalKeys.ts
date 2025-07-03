@@ -1,11 +1,5 @@
 export const action = (key: string): string | undefined => keys[key];
 
-export enum Actions {
-  // jumping
-  CLOSE_BRACKET = 'CLOSE_BRACKET',
-  OPEN_BRACKET = 'OPEN_BRACKET',
-}
-
 const keys: Record<string, string> = {
   /**
    * (N) - any number
@@ -22,6 +16,19 @@ const keys: Record<string, string> = {
   // ESC command
   '\x1B': 'ESC', // ESC
 
+  // hythen & underline command
+  '\x2D': 'TAG_COMMAND', // -
+  '\x5F': 'TAG_COMMAND', // _
+
+  // add command to run when opening a new file
+  '\x2B': 'ADD_COMMAND', // +
+
+  // run shell command
+  '\x21': 'SHELL_COMMAND', // !
+
+  // quit current feature
+  '\x03': 'QUIT', // ^C
+
   // help
   '\x68': 'HELP', // h
   '\x48': 'HELP', // H
@@ -29,10 +36,6 @@ const keys: Record<string, string> = {
   // exit
   '\x71': 'EXIT', // q
   '\x51': 'EXIT', // Q
-
-  // hythen & underline command
-  '\x2D': 'TAG_COMMAND', // -
-  '\x5F': 'TAG_COMMAND', // _
 
   // (*) forward one line (or (N) lines)
   '\x65': 'LINE_FORWARD', // e
@@ -125,22 +128,43 @@ const keys: Record<string, string> = {
   // (*) display only matching lines
   '\x26': 'PATTERN_ONLY', // &
 
-  // version
-  '\x56': 'VERSION', // V
-
-  // get line
-
-  // first line
+  // (*) go to first line in file (or line (N))
   '\x67': 'FIRST_LINE', // g
   '\x3C': 'FIRST_LINE', // <
   '\x1B<': 'FIRST_LINE', // ESC-<
 
-  // last line
+  // (*) go to last line in file (or line (N))
   '\x47': 'LAST_LINE', // G
   '\x3E': 'LAST_LINE', // >
   '\x1B>': 'LAST_LINE', // ESC->
 
-  // percent line
-  '\x25': 'PCT_LINE', // %
-  '\x70': 'PCT_LINE', // p
+  // (*) go to beginning of file (or (N) percent into file)
+  '\x70': 'PERCENT_LINE', // p
+  '\x25': 'PERCENT_LINE', // %
+
+  // (*) find close bracket } ) ]
+  '\x7B': 'CURLY_BRACKET_RIGHT', // {
+  '\x28': 'ROUND_BRACKET_RIGHT', // (
+  '\x5B': 'SQUARE_BRACKET_RIGHT', // [
+
+  // (*) find open bracket { ( [
+  '\x7D': 'CURLY_BRACKET_LEFT', // }
+  '\x29': 'ROUND_BRACKET_LEFT', // )
+  '\x5D': 'SQUARE_BRACKET_LEFT', // ]
+
+  // (*) find close bracket <c2>
+  '\x1B\x06': 'CUSTOM_BRACKET_RIGHT', // ESC-^F
+
+  // (*) find open bracket <c1>
+  '\x1B\x02': 'CUSTOM_BRACKET_LEFT', // ESC-^B
+
+  // examine a new file
+  '\x18\x16': 'OPEN_FILE', // ^X^V
+
+  // print current file name
+  '\x3D': 'CURRENT_INFO', // =
+  '\x07': 'CURRENT_INFO', // ^G
+
+  // print version number of "less-pager-mini"
+  '\x56': 'VERSION', // V
 };
