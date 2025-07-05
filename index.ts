@@ -47,24 +47,52 @@ function render(output: string): void {
   process.stdout.write(output);
 }
 
-function actionHandler(key: string): void {
-  switch () {
+function inputToString(
+  input: unknown,
+  preserveFormat: boolean
+): string {
+  switch (typeof input) {
+    case 'string':
+      return input;
 
+    case 'undefined':
+      return 'undefined';
+
+    case 'number':
+    case 'bigint':
+    case 'boolean':
+    case 'function':
+      return input.toString();
+    
+    case 'object':
+      return JSON.stringify(
+        input, null, preserveFormat? 0: 2
+      );
   }
+
+  return '';
 }
 
 export async function pager(
-  content: any[],
-  showPosition: boolean = false
+  input: unknown,
+  preserveFormat: boolean = false,
+  examineFile: boolean = false
 ): Promise<void> {
-  if (content.length === 0) {
-    console.log('\nNO CONTENT.\n');
-    return;
+  let content: string;
+
+  if (Array.isArray(input)) {
+    if (preserveFormat) {
+      content = input.toString();
+    } else {
+      content = input.join('\n');
+    }
+  } else {
+    content = inputToString(input, preserveFormat);
   }
 
   let height = getHeight();
   let curr = 0;
-  let listEnd = getDisplayEndIndex(curr, height, content.length);
+  let listEnd = getDisplayEndIndex(curr, height, input.length);
 
   render(getOutput(curr, listEnd, content, showPosition));
 
