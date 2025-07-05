@@ -1,10 +1,33 @@
+import fs from 'fs';
+
+/**
+ * Converts input to an array of file paths.
+ * - Invalid paths will be ignored.
+ * 
+ * @param input unknown input that may convert to file paths.
+ * @returns array of file paths.
+ */
+export function inputToFilePaths(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input
+      .flat(Infinity)
+      .filter(path => typeof path === 'string' && fs.existsSync(path));
+  }
+
+  if (typeof input === 'string' && fs.existsSync(input)) {
+    return [ input ];
+  }
+
+  return [];
+}
+
 /**
  * Converts input to string.
- * - symbol type will convert to empty string
+ * - Symbol type will convert to empty string.
  * 
  * @param input unknown input that may convert to text.
  * @param preserveFormat decide whether to format the output.
- * @returns converted string
+ * @returns converted string.
  */
 export function inputToString(
   input: unknown,
