@@ -33,16 +33,6 @@ export function inputToString(
   input: unknown,
   preserveFormat: boolean
 ): string {
-  if (Array.isArray(input)) {
-    const stringifiedArray = input.map(
-      item => inputToString(item, preserveFormat)
-    );
-
-    return preserveFormat
-      ? stringifiedArray.toString()
-      : stringifiedArray.join('\n');
-  }
-
   switch (typeof input) {
     case 'string':
       return input;
@@ -57,9 +47,7 @@ export function inputToString(
       return input.toString();
     
     case 'object':
-      return JSON.stringify(
-        input, null, preserveFormat? 0: 2
-      );
+      return JSON.stringify(input, null, preserveFormat? 0: 2);
   }
 
   return '';
