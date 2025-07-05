@@ -47,10 +47,28 @@ function render(output: string): void {
   process.stdout.write(output);
 }
 
+/**
+ * Converts input to string.
+ * - symbol type will convert to empty string
+ * 
+ * @param input unknown input that may convert to text.
+ * @param preserveFormat decide whether to format the output.
+ * @returns converted string
+ */
 function inputToString(
   input: unknown,
   preserveFormat: boolean
 ): string {
+  if (Array.isArray(input)) {
+    const stringifiedArray = input.map(
+      item => inputToString(item, preserveFormat)
+    );
+
+    return preserveFormat
+      ? stringifiedArray.toString()
+      : stringifiedArray.join('\n');
+  }
+
   switch (typeof input) {
     case 'string':
       return input;
@@ -80,15 +98,8 @@ export async function pager(
 ): Promise<void> {
   let content: string;
 
-  if (Array.isArray(input)) {
-    if (preserveFormat) {
-      content = input.toString();
-    } else {
-      content = input.join('\n');
-    }
-  } else {
-    content = inputToString(input, preserveFormat);
-  }
+  content = inputToString(input, preserveFormat);
+  if (!content) return;
 
   let height = getHeight();
   let curr = 0;
