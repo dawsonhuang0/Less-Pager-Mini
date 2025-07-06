@@ -2,9 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-interface Config {
-  indentation: number,
-}
+import { Config } from './interfaces';
 
 const defaultConfig: Config = {
   indentation: 2,

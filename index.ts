@@ -1,4 +1,7 @@
 import { readKey } from "./readKey";
+import { inputToFilePaths, inputToString } from "./helpers";
+
+import { Params } from "./interfaces";
 
 function getHeight(): number {
   const rows = process.stdout.rows;
@@ -48,59 +51,38 @@ function render(output: string): void {
 }
 
 /**
- * Converts input to string.
- * - symbol type will convert to empty string
+ * Less-mini-pager
  * 
- * @param input unknown input that may convert to text.
- * @param preserveFormat decide whether to format the output.
- * @returns converted string
+ * @param input any unknown input to page.
+ * @param preserveFormat if true, preserves JavaScript default formatting.
+ * @param examineFile if true, attempts to treat input as file path(s)
+ *                    and page content.
+ * @returns void.
  */
-function inputToString(
-  input: unknown,
-  preserveFormat: boolean
-): string {
-  if (Array.isArray(input)) {
-    const stringifiedArray = input.map(
-      item => inputToString(item, preserveFormat)
-    );
-
-    return preserveFormat
-      ? stringifiedArray.toString()
-      : stringifiedArray.join('\n');
-  }
-
-  switch (typeof input) {
-    case 'string':
-      return input;
-
-    case 'undefined':
-      return 'undefined';
-
-    case 'number':
-    case 'bigint':
-    case 'boolean':
-    case 'function':
-      return input.toString();
-    
-    case 'object':
-      return JSON.stringify(
-        input, null, preserveFormat? 0: 2
-      );
-  }
-
-  return '';
-}
-
 export async function pager(
   input: unknown,
   preserveFormat: boolean = false,
   examineFile: boolean = false
 ): Promise<void> {
-  let content: string;
+  if (examineFile) {
+    await filePager(inputToFilePaths(input), preserveFormat);
+    return;
+  }
 
-  content = inputToString(input, preserveFormat);
+  const content = inputToString(input, preserveFormat);
   if (!content) return;
 
+  await contentPager(content);
+}
+
+async function filePager(
+  filePaths: string[],
+  preserveFormat: boolean
+): Promise<void> {
+  if (!filePaths.length) return;
+}
+
+async function contentPager(content: string): Promise<void> {
   let height = getHeight();
   let curr = 0;
   let listEnd = getDisplayEndIndex(curr, height, input.length);
@@ -127,3 +109,7 @@ export async function pager(
 
   if (key === CTRL_C) process.exit();
 }
+
+const params: Params = {
+
+};
