@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { config } from './pagerConfig';
 
 /**
  * Converts input to an array of file paths.
@@ -47,7 +48,7 @@ export function inputToString(
       return input.toString();
     
     case 'object':
-      return JSON.stringify(input, null, preserveFormat? 0: 2);
+      return JSON.stringify(input, null, preserveFormat? 0: config.indentation);
   }
 
   return '';
