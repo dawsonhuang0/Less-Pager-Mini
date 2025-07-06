@@ -2,7 +2,15 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-let config: Record<string, boolean | number> = {};
+interface Config {
+  indentation: number,
+}
+
+const defaultConfig: Config = {
+  indentation: 2,
+};
+
+export let config: Config = { ...defaultConfig };
 
 export function fetchConfig() {
   const configFilePath = path.join(getConfigDir(), 'pagerConfig.json');
@@ -31,13 +39,7 @@ export function storeConfig() {
   fs.writeFileSync(configFilePath, JSON.stringify(config), 'utf8');
 }
 
-export function resetConfig() {
-  const defaultConfig = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'defaultConfig.json'), 'utf8')
-  );
-
-  config = defaultConfig;
-}
+export const resetConfig = () => config = { ...defaultConfig };
 
 function getConfigDir(): string {
   const home = os.homedir();
