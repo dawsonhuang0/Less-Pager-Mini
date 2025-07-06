@@ -19,7 +19,8 @@ export default defineConfig([
       globals: globals.node
     },
     rules: {
-      "max-len": ["warn", { code: 80 }]
+      "max-len": ["warn", { code: 80 }],
+      "eol-last": ["error", "always"],
     }
   },
 
