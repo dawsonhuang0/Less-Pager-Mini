@@ -1,11 +1,9 @@
-export interface Params {
+export interface Config {
   window: number;
   halfWindow: number;
 
   screenWidth: number;
   halfScreenWidth: number;
-}
 
-export interface Config {
   indentation: number;
 }
