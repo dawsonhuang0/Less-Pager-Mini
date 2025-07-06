@@ -54,3 +54,43 @@ export function inputToString(
 
   return '';
 }
+
+/**
+ * Format content for rendering.
+ * - Output format is determined by chopLongLines configuration.
+ * 
+ * @param content string content.
+ * @returns formatted content for rendering.
+ */
+export function formatText(content: string): string {
+  let formattedText = '';
+
+  if (config.chopLongLines) {
+    let rows = 0;
+    let cols = 0;
+    let i = 0;
+
+    while (i < content.length && rows < config.window - 1) {
+      if (rows >= config.row) formattedText += content[i];
+
+      cols++;
+
+      if (content[i] === '\n') {
+        rows++;
+        cols = 0;
+      }
+
+      if (cols === config.screenWidth && rows >= config.row) {
+        if (content[i + 1] !== '\n') formattedText += '\n';
+        rows++;
+        cols = 0;
+      }
+
+      i++;
+    }
+
+    return formattedText;
+  }
+
+  return formattedText;
+}
