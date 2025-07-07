@@ -67,6 +67,35 @@ export function formatContent(content: string): string {
 
   let formattedContent = '';
 
+  let rows = 0;
+  let cols = 0;
+  let i = 0;
+
+  while (i < content.length && rows < config.window - 1) {
+    if (cols < config.screenWidth - 1 && rows >= config.row) {
+      formattedContent += content[i];
+    }
+
+    cols++;
+
+    if (content[i] === '\n') {
+      cols = 0;
+      rows++;
+    }
+
+    if (cols === config.screenWidth - 1 && content[i + 1] !== '\n') {
+      formattedContent += '\x1b[7m>\x1b[0m\n';
+    }
+
+    i++;
+  }
+
+  if (rows < config.window - 1) {
+    formattedContent += '\x1b[1m'
+      + '\n~'.repeat(config.window - rows - 2)
+      + '\x1b[0m';
+  }
+
   return formattedContent;
 }
 
@@ -76,7 +105,7 @@ export function formatContent(content: string): string {
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  let prompt = ':';
+  let prompt = '\n:';
   return prompt;
 }
 
