@@ -62,23 +62,33 @@ export function inputToString(
  * @param content string content.
  * @returns formatted content for rendering.
  */
-export function formatText(content: string): string {
+export function formatContent(content: string): string {
   if (config.chopLongLines) return chopLongLines(content);
 
-  let formattedText = '';
+  let formattedContent = '';
 
-  return formattedText;
+  return formattedContent;
+}
+
+/**
+ * Render processed content.
+ * 
+ * @param content processed string content
+ */
+export function renderContent(content: string): void {
+  process.stdout.write('\x1b[H\x1b[2J');
+  process.stdout.write(content);
 }
 
 function chopLongLines(content: string): string {
-  let formattedText = '';
+  let formattedContent = '';
 
   let rows = 0;
   let cols = 0;
   let i = 0;
 
   while (i < content.length && rows < config.window - 1) {
-    if (rows >= config.row) formattedText += content[i];
+    if (rows >= config.row) formattedContent += content[i];
 
     cols++;
 
@@ -88,7 +98,7 @@ function chopLongLines(content: string): string {
     }
 
     if (cols === config.screenWidth && rows >= config.row) {
-      if (content[i + 1] !== '\n') formattedText += '\n';
+      if (content[i + 1] !== '\n') formattedContent += '\n';
       rows++;
       cols = 0;
     }
@@ -96,5 +106,9 @@ function chopLongLines(content: string): string {
     i++;
   }
 
-  return formattedText;
+  if (rows < config.window - 1) {
+    formattedContent += '\n'.repeat(config.window - rows - 1);
+  }
+
+  return formattedContent;
 }
