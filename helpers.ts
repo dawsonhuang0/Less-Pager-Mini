@@ -63,33 +63,37 @@ export function inputToString(
  * @returns formatted content for rendering.
  */
 export function formatText(content: string): string {
+  if (config.chopLongLines) return chopLongLines(content);
+
   let formattedText = '';
 
-  if (config.chopLongLines) {
-    let rows = 0;
-    let cols = 0;
-    let i = 0;
+  return formattedText;
+}
 
-    while (i < content.length && rows < config.window - 1) {
-      if (rows >= config.row) formattedText += content[i];
+function chopLongLines(content: string): string {
+  let formattedText = '';
 
-      cols++;
+  let rows = 0;
+  let cols = 0;
+  let i = 0;
 
-      if (content[i] === '\n') {
-        rows++;
-        cols = 0;
-      }
+  while (i < content.length && rows < config.window - 1) {
+    if (rows >= config.row) formattedText += content[i];
 
-      if (cols === config.screenWidth && rows >= config.row) {
-        if (content[i + 1] !== '\n') formattedText += '\n';
-        rows++;
-        cols = 0;
-      }
+    cols++;
 
-      i++;
+    if (content[i] === '\n') {
+      rows++;
+      cols = 0;
     }
 
-    return formattedText;
+    if (cols === config.screenWidth && rows >= config.row) {
+      if (content[i + 1] !== '\n') formattedText += '\n';
+      rows++;
+      cols = 0;
+    }
+
+    i++;
   }
 
   return formattedText;
