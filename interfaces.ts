@@ -2,11 +2,11 @@ export interface Config {
   row: number;
   col: number;
 
-  window: number;
   setWindow: number;
-
-  halfWindow: number;
   setHalfWindow: number;
+
+  window: number;
+  halfWindow: number;
 
   screenWidth: number;
   halfScreenWidth: number;
