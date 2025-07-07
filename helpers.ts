@@ -56,7 +56,7 @@ export function inputToString(
 }
 
 /**
- * Format content for rendering.
+ * Formats content for rendering.
  * - Output format is determined by chopLongLines configuration.
  * 
  * @param content string content.
@@ -71,7 +71,7 @@ export function formatContent(content: string): string {
 }
 
 /**
- * Render processed content.
+ * Renders processed content on terminal.
  * 
  * @param content processed string content
  */
@@ -80,6 +80,12 @@ export function renderContent(content: string): void {
   process.stdout.write(content);
 }
 
+/**
+ * Formats content by chopping long lines to fit screen width.
+ * 
+ * @param content string content.
+ * @returns formatted content for rendering.
+ */
 function chopLongLines(content: string): string {
   let formattedContent = '';
 
