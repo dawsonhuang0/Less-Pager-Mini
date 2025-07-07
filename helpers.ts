@@ -91,6 +91,13 @@ export function renderContent(content: string): void {
 }
 
 /**
+ * Makes terminal play alert sound.
+ */
+export function ringBell(): void {
+  process.stdout.write('\x07');
+}
+
+/**
  * Formats content by chopping long lines to fit screen width.
  * 
  * @param content string content.
