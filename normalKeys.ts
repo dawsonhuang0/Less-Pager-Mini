@@ -1,6 +1,8 @@
-export const action = (key: string): string | undefined => keys[key];
+import { Actions } from "./interfaces";
 
-const keys: Record<string, string> = {
+export const getAction = (key: string): Actions | undefined => keys[key];
+
+const keys: Record<string, Actions> = {
   /**
    * (N) - any number
    * (*) - supports (N) as prefix
