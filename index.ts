@@ -50,9 +50,14 @@ async function filePager(
 }
 
 async function contentPager(content: string): Promise<void> {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+
+  let exit = false;
   let render = true;
 
-  while (true) {
+  while (!exit) {
     if (render) {
       const displayContent = formatContent(content) + getPrompt();
       renderContent(displayContent);
@@ -65,7 +70,8 @@ async function contentPager(content: string): Promise<void> {
 
     switch (action) {
       case 'EXIT':
-        return;
+        exit = true;
+        break;
   
       case undefined:
         ringBell();
@@ -74,4 +80,7 @@ async function contentPager(content: string): Promise<void> {
         render = false;
     }
   }
+
+  process.stdin.setRawMode(false);
+  process.stdin.pause();
 }

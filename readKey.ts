@@ -5,21 +5,15 @@ export async function readKey(): Promise<string> {
 
   return new Promise(resolve => {
     const resolveKey = (key: string) => {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
       process.stdin.removeListener('data', keyListener);
+      clearTimeout(timer);
       resolve(key);
     };
-
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
 
     let timer: ReturnType<typeof setTimeout>;
 
     const keyListener = (key: string) => {
       if (timer) {
-        clearTimeout(timer);
         resolveKey('\x1B' + key);
       }
 
