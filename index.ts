@@ -1,5 +1,16 @@
+import { Actions } from "./interfaces";
+
 import { readKey } from "./readKey";
-import { inputToFilePaths, inputToString } from "./helpers";
+import { getAction } from "./normalKeys";
+
+import {
+  inputToFilePaths,
+  inputToString,
+  formatContent,
+  getPrompt,
+  renderContent,
+  ringBell
+} from "./helpers";
 
 import { config } from "./pagerConfig";
 
@@ -39,5 +50,28 @@ async function filePager(
 }
 
 async function contentPager(content: string): Promise<void> {
-  let displayContent = '';
+  let render = true;
+
+  while (true) {
+    if (render) {
+      const displayContent = formatContent(content) + getPrompt();
+      renderContent(displayContent);
+    }
+
+    render = true;
+
+    const key = await readKey();
+    const action: Actions | undefined = getAction(key);
+
+    switch (action) {
+      case 'EXIT':
+        return;
+  
+      case undefined:
+        ringBell();
+  
+      default:
+        render = false;
+    }
+  }
 }
