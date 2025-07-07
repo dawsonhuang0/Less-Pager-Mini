@@ -71,6 +71,16 @@ export function formatContent(content: string): string {
 }
 
 /**
+ * Generates prompt depends on program events.
+ * 
+ * @returns command prompt string.
+ */
+export function getPrompt(): string {
+  let prompt = ':';
+  return prompt;
+}
+
+/**
  * Renders processed content on terminal.
  * 
  * @param content processed string content
