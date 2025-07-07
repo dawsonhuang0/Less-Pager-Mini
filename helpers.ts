@@ -115,7 +115,7 @@ export function getPrompt(): string {
  * @param content processed string content
  */
 export function renderContent(content: string): void {
-  process.stdout.write('\x1b[H\x1b[2J');
+  process.stdout.write('\x1b[H\x1b[2J\x1b[3J');
   process.stdout.write(content);
 }
 
