@@ -3,7 +3,10 @@ export interface Config {
   col: number;
 
   window: number;
+  setWindow: number;
+
   halfWindow: number;
+  setHalfWindow: number;
 
   screenWidth: number;
   halfScreenWidth: number;
