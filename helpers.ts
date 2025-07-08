@@ -132,7 +132,7 @@ export function ringBell(): void {
 /**
  * Formats content by chopping long lines to fit screen width.
  * 
- * @param content string content.
+ * @param content string content array.
  * @returns formatted content for rendering.
  */
 function chopLongLines(content: string[]): string {
@@ -144,19 +144,16 @@ function chopLongLines(content: string[]): string {
 
   if (config.subRow && i < content.length) {
     const line = content[i];
-    const subRows = Math.floor(line.length / config.screenWidth);
-
-    row = partitionLine(formattedContent, line, row, maxRow, subRows, true);
+    row = partitionLine(formattedContent, line, row, maxRow, true);
 
     i++;
   }
 
   while (row < maxRow && i < content.length) {
     const line = content[i];
-    const subRows = Math.floor(line.length / config.screenWidth);
 
-    row = subRows
-      ? partitionLine(formattedContent, line, row, maxRow, subRows)
+    row = line.length > config.screenWidth
+      ? partitionLine(formattedContent, line, row, maxRow)
       : assignLine(formattedContent, line, row);
 
     i++;
@@ -189,7 +186,6 @@ function assignLine(
  * @param line line of content at index i in chopLongLines.
  * @param row current row relative to terminal window.
  * @param maxRow partitioning stops when row >= maxRow.
- * @param subRows number of segments the line will be split into.
  * @param firstLine if true, partition starts from config.subRow instead of 0.
  * @returns updated row.
  */
@@ -198,19 +194,16 @@ function partitionLine(
   line: string,
   row: number,
   maxRow: number,
-  subRows: number,
   firstLine: boolean = false
 ): number {
   let subRow = firstLine? config.subRow: 0;
+  const subRows = Math.ceil(line.length / config.screenWidth);
 
-  while (subRow < subRows + 1 && row < maxRow) {
+  while (subRow < subRows && row < maxRow) {
     const start = subRow * config.screenWidth;
     const end = start + config.screenWidth;
 
-    formattedContent[row - config.row] = line.slice(
-      start,
-      Math.min(end, line.length)
-    );
+    formattedContent[row - config.row] = line.slice(start, end);
 
     row++;
     subRow++;
