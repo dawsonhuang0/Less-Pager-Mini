@@ -14,9 +14,6 @@ import {
 
 import { config } from "./pagerConfig";
 
-config.halfWindow = config.window / 2;
-config.halfScreenWidth = config.screenWidth / 2;
-
 /**
  * Less-mini-pager
  * 
@@ -37,7 +34,7 @@ export async function pager(
   }
 
   const content = inputToString(input, preserveFormat);
-  if (!content) return;
+  if (!content.length) return;
 
   await contentPager(content);
 }
@@ -49,7 +46,17 @@ async function filePager(
   if (!filePaths.length) return;
 }
 
-async function contentPager(content: string): Promise<void> {
+async function contentPager(content: string[]): Promise<void> {
+  process.on('SIGWINCH', () => {
+    config.window = process.stdout.rows;
+    config.screenWidth = process.stdout.columns;
+    config.halfWindow = config.window / 2;
+    config.halfScreenWidth = config.screenWidth / 2;
+
+    const displayContent = formatContent(content) + getPrompt();
+    renderContent(displayContent);
+  });
+
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.setEncoding('utf8');
@@ -71,6 +78,37 @@ async function contentPager(content: string): Promise<void> {
     switch (action) {
       case 'EXIT':
         exit = true;
+        break;
+
+      case 'LINE_FORWARD':
+        config.row++;
+
+        if (content[config.lastIndex].length <= config.screenWidth) {
+          config.lastRow++;
+          if (config.lastIndex < content.length - 1) {
+            config.lastIndex++;
+          } else {
+            ringBell();
+          }
+        } else {
+          config.lastRow--;
+        }
+        
+        break;
+
+      case 'LINE_BACKWARD':
+        config.row--;
+
+        config.lastRow--;
+        if (config.lastIndex > 0) {
+          config.lastIndex--;
+        } else {
+          ringBell();
+        }
+
+        break;
+
+      case 'REPAINT':
         break;
   
       case undefined:
