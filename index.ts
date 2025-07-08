@@ -12,6 +12,11 @@ import {
   ringBell
 } from "./helpers";
 
+import {
+  lineForward,
+  lineBackward
+} from "./features/moving";
+
 import { config } from "./pagerConfig";
 
 /**
@@ -81,31 +86,17 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        config.row++;
-
-        if (content[config.lastIndex].length <= config.screenWidth) {
-          config.lastRow++;
-          if (config.lastIndex < content.length - 1) {
-            config.lastIndex++;
-          } else {
-            ringBell();
-          }
-        } else {
-          config.lastRow--;
-        }
-        
+        const subRows = Math.floor(
+          content[config.index].length / config.screenWidth
+        );
+        lineForward(subRows);
         break;
 
       case 'LINE_BACKWARD':
-        config.row--;
-
-        config.lastRow--;
-        if (config.lastIndex > 0) {
-          config.lastIndex--;
-        } else {
-          ringBell();
-        }
-
+        const subRow = Math.floor(
+          content[config.index].length / config.screenWidth
+        );
+        lineBackward(subRow);
         break;
 
       case 'REPAINT':
