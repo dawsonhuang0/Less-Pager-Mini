@@ -24,35 +24,37 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts input to string.
- * - Symbol type will convert to empty string.
+ * Converts input to string array.
+ * - Symbol type will convert to empty array.
  * 
- * @param input unknown input that may convert to text.
+ * @param input unknown input that may convert to string array.
  * @param preserveFormat decide whether to format the output.
- * @returns converted string.
+ * @returns converted string array.
  */
 export function inputToString(
   input: unknown,
   preserveFormat: boolean
-): string {
+): string[] {
   switch (typeof input) {
     case 'string':
-      return input;
+      return input.split('\n');
 
     case 'undefined':
-      return 'undefined';
+      return ['undefined'];
 
     case 'number':
     case 'bigint':
     case 'boolean':
     case 'function':
-      return input.toString();
+      return input.toString().split('\n');
     
     case 'object':
-      return JSON.stringify(input, null, preserveFormat? 0: config.indentation);
+      return JSON
+        .stringify(input, null, preserveFormat? 0: config.indentation)
+        .split('\n');
   }
 
-  return '';
+  return [];
 }
 
 /**
@@ -62,37 +64,38 @@ export function inputToString(
  * @param content string content.
  * @returns formatted content for rendering.
  */
-export function formatContent(content: string): string {
+export function formatContent(content: string[]): string {
   if (config.chopLongLines) return chopLongLines(content);
 
   let formattedContent = '';
 
   let rows = 0;
-  let cols = 0;
-  let i = 0;
+  let i = config.screenWidth;
 
-  while (i < content.length && rows < config.window - 1) {
-    if (cols < config.screenWidth - 1 && rows >= config.row) {
-      formattedContent += content[i];
+  while (rows < config.window - 1) {
+    const start = i - config.screenWidth;
+    let end = -1;
+    while (start < i && content[i] !== '\n') {
+      if (content[i] === '\n' && end !== -1) end = i;
+      i--;
+    }
+  
+    if (start < i) {
+      i += config.screenWidth;
+      formattedContent += content.slice(start, i) + '\x1b[7m>\x1b[0m\n';
+      while (content[i] !== '\n' && i < content.length) i++;
+      if (i === content.length) break;
+    } else {
+      formattedContent += content.slice(start, i + 1);
     }
 
-    cols++;
-
-    if (content[i] === '\n') {
-      cols = 0;
-      rows++;
-    }
-
-    if (cols === config.screenWidth - 1 && content[i + 1] !== '\n') {
-      formattedContent += '\x1b[7m>\x1b[0m\n';
-    }
-
-    i++;
+    rows++;
+    i += config.screenWidth + 1;
   }
 
   if (rows < config.window - 1) {
     formattedContent += '\x1b[1m'
-      + '\n~'.repeat(config.window - rows - 2)
+      + '~\n'.repeat(config.window - rows - 2)
       + '\x1b[0m';
   }
 
@@ -105,7 +108,7 @@ export function formatContent(content: string): string {
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  let prompt = '\n:';
+  let prompt = ':';
   return prompt;
 }
 
@@ -115,7 +118,7 @@ export function getPrompt(): string {
  * @param content processed string content
  */
 export function renderContent(content: string): void {
-  process.stdout.write('\x1b[H\x1b[2J\x1b[3J');
+  console.clear();
   process.stdout.write(content);
 }
 
@@ -132,35 +135,86 @@ export function ringBell(): void {
  * @param content string content.
  * @returns formatted content for rendering.
  */
-function chopLongLines(content: string): string {
-  let formattedContent = '';
+function chopLongLines(content: string[]): string {
+  const maxRow = config.row + config.window - 1;
+  const formattedContent: string[] = new Array(config.window).fill('');
 
-  let rows = 0;
-  let cols = 0;
-  let i = 0;
+  let i = config.index;
+  let row = config.row;
 
-  while (i < content.length && rows < config.window - 1) {
-    if (rows >= config.row) formattedContent += content[i];
+  if (config.subRow && i < content.length) {
+    const line = content[i];
+    const subRows = Math.floor(line.length / config.screenWidth);
 
-    cols++;
-
-    if (content[i] === '\n') {
-      rows++;
-      cols = 0;
-    }
-
-    if (cols === config.screenWidth && rows >= config.row) {
-      if (content[i + 1] !== '\n') formattedContent += '\n';
-      rows++;
-      cols = 0;
-    }
+    row = partitionLine(formattedContent, line, row, maxRow, subRows, true);
 
     i++;
   }
 
-  if (rows < config.window - 1) {
-    formattedContent += '\n'.repeat(config.window - rows - 1);
+  while (row < maxRow && i < content.length) {
+    const line = content[i];
+    const subRows = Math.floor(line.length / config.screenWidth);
+
+    row = subRows
+      ? partitionLine(formattedContent, line, row, maxRow, subRows)
+      : assignLine(formattedContent, line, row);
+
+    i++;
   }
 
-  return formattedContent;
+  return formattedContent.join('\n');
+}
+
+/**
+ * Assigns a line to formattedContent array by row.
+ * 
+ * @param formattedContent formatted content array for rendering.
+ * @param line line of content at index i in chopLongLines.
+ * @param row current row relative to terminal window.
+ * @returns incremented row.
+ */
+function assignLine(
+  formattedContent: string[],
+  line: string,
+  row: number
+): number {
+  formattedContent[row - config.row] = line;
+  return row + 1;
+}
+
+/**
+ * Partitions a long line and inserts each to formattedContent array.
+ * 
+ * @param formattedContent formatted content array for rendering.
+ * @param line line of content at index i in chopLongLines.
+ * @param row current row relative to terminal window.
+ * @param maxRow partitioning stops when row >= maxRow.
+ * @param subRows number of segments the line will be split into.
+ * @param firstLine if true, partition starts from config.subRow instead of 0.
+ * @returns updated row.
+ */
+function partitionLine(
+  formattedContent: string[],
+  line: string,
+  row: number,
+  maxRow: number,
+  subRows: number,
+  firstLine: boolean = false
+): number {
+  let subRow = firstLine? config.subRow: 0;
+
+  while (subRow < subRows + 1 && row < maxRow) {
+    const start = subRow * config.screenWidth;
+    const end = start + config.screenWidth;
+
+    formattedContent[row - config.row] = line.slice(
+      start,
+      Math.min(end, line.length)
+    );
+
+    row++;
+    subRow++;
+  }
+
+  return row;
 }
