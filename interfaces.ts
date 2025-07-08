@@ -2,8 +2,8 @@ export interface Config {
   row: number;
   col: number;
 
-  lastRow: number;
-  lastIndex: number;
+  index: number;
+  subRow: number;
 
   setWindow: number;
   setHalfWindow: number;

@@ -3,8 +3,8 @@ import { Config } from "./interfaces";
 export const config: Config = {
   row: 0,
   col: 0,
-  lastRow: 0,
-  lastIndex: 0,
+  index: 0,
+  subRow: 0,
   setWindow: -1,
   setHalfWindow: -1,
   window: process.stdout.rows ?? 24,
