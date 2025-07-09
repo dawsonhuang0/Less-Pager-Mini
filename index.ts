@@ -86,26 +86,23 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        const subRows = Math.floor(
-          content[config.index].length / config.screenWidth
+        lineForward(
+          Math.floor(content[config.index].length / config.screenWidth)
         );
-        lineForward(subRows);
         break;
 
-      case 'LINE_BACKWARD':
-        const subRow = Math.floor(
-          content[config.index].length / config.screenWidth
+      case 'LINE_BACKWARD': {
+        lineBackward(
+          Math.floor(content[config.index].length / config.screenWidth)
         );
-        lineBackward(subRow);
         break;
+      }
 
       case 'REPAINT':
         break;
   
-      case undefined:
-        ringBell();
-  
       default:
+        ringBell();
         render = false;
     }
   }
