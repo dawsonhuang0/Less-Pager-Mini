@@ -76,6 +76,9 @@ npm i less-pager-mini
 
 ```ts
 import { pager } from 'less-pager-mini';
+
+const example = ['a', 'b', 'c'];
+await pager(example);
 ```
 
 ### Function Parameters:
@@ -90,7 +93,7 @@ import { pager } from 'less-pager-mini';
     <th><code>true</code> (preserve format)</th>
   </tr>
   <tr>
-    <td style="vertical-align: top; width: 50%;">
+    <td>
 <pre>
 <code>Before:
 ['a','b',['c','d']]
@@ -113,7 +116,7 @@ After:
 }</code>
 </pre>
     </td>
-    <td style="vertical-align: top; width: 50%;">
+    <td style="display: flex;">
 <pre>
 <code>Before:
 ['a','b',['c','d']]
@@ -190,7 +193,7 @@ Let’s make **Less-Pager-Mini** better together!
 
 ## Acknowledgments
 
-- Inspired by [less](https://github.com/gwsw/less) by Mark Nudelman – the legendary terminal pager that set the standard.
+- Inspired by <code><a href="https://github.com/gwsw/less">less</a></code> by Mark Nudelman – the legendary terminal pager that set the standard.
 
 
 
