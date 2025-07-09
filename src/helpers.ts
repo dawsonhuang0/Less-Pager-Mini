@@ -50,7 +50,7 @@ export function inputToString(
     
     case 'object':
       return JSON
-        .stringify(input, null, preserveFormat? 0: config.indentation)
+        .stringify(input, null, preserveFormat ? 0 : config.indentation)
         .split('\n');
   }
 
@@ -61,45 +61,16 @@ export function inputToString(
  * Formats content for rendering.
  * - Output format is determined by chopLongLines configuration.
  * 
- * @param content string content.
+ * @param content string content array.
  * @returns formatted content for rendering.
  */
 export function formatContent(content: string[]): string {
-  if (config.chopLongLines) return chopLongLines(content);
+  const maxRow = config.row + config.window - 1;
+  const formattedContent: string[] = new Array(config.window).fill('');
 
-  let formattedContent = '';
-
-  let rows = 0;
-  let i = config.screenWidth;
-
-  while (rows < config.window - 1) {
-    const start = i - config.screenWidth;
-    let end = -1;
-    while (start < i && content[i] !== '\n') {
-      if (content[i] === '\n' && end !== -1) end = i;
-      i--;
-    }
-  
-    if (start < i) {
-      i += config.screenWidth;
-      formattedContent += content.slice(start, i) + '\x1b[7m>\x1b[0m\n';
-      while (content[i] !== '\n' && i < content.length) i++;
-      if (i === content.length) break;
-    } else {
-      formattedContent += content.slice(start, i + 1);
-    }
-
-    rows++;
-    i += config.screenWidth + 1;
-  }
-
-  if (rows < config.window - 1) {
-    formattedContent += '\x1b[1m'
-      + '~\n'.repeat(config.window - rows - 2)
-      + '\x1b[0m';
-  }
-
-  return formattedContent;
+  return config.chopLongLines
+    ? chopLongLines(content, formattedContent, maxRow)
+    : wrapLongLines(content, formattedContent, maxRow);
 }
 
 /**
@@ -133,12 +104,43 @@ export function ringBell(): void {
  * Formats content by chopping long lines to fit screen width.
  * 
  * @param content string content array.
+ * @param formattedContent formatted content array for rendering.
+ * @param maxRow insertion stops when row >= maxRow.
  * @returns formatted content for rendering.
  */
-function chopLongLines(content: string[]): string {
-  const maxRow = config.row + config.window - 1;
-  const formattedContent: string[] = new Array(config.window).fill('');
+function chopLongLines(
+  content: string[],
+  formattedContent: string[],
+  maxRow: number
+): string {
+  let row = config.row;
 
+  while (row < maxRow && row < content.length) {
+    const line = content[row];
+
+    formattedContent[row - config.row] = line.length > config.screenWidth
+      ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
+      : line;
+
+    row++;
+  }
+
+  return formattedContent.join('\n');
+}
+
+/**
+ * Formats content by wrapping long lines to fit screen width.
+ * 
+ * @param content string content array.
+ * @param formattedContent formatted content array for rendering.
+ * @param maxRow insertion stops when row >= maxRow.
+ * @returns formatted content for rendering.
+ */
+function wrapLongLines(
+  content: string[],
+  formattedContent: string[],
+  maxRow: number
+): string {
   let row = config.row;
   let i = row;
 
@@ -194,7 +196,7 @@ function partitionLine(
   maxRow: number,
   firstLine: boolean = false
 ): number {
-  let subRow = firstLine? config.subRow: 0;
+  let subRow = firstLine ? config.subRow : 0;
   const subRows = Math.ceil(line.length / config.screenWidth);
 
   while (subRow < subRows && row < maxRow) {
