@@ -11,9 +11,8 @@
     A lightweight terminal pager inspired by <code><a href="https://github.com/gwsw/less">less</a></code>, written in TypeScript for Node.js CLI apps.  
   </p>
 
-  <!--TODO: ADD LINK AFTER PUBLISH-->
-  [![npm](https://img.shields.io/npm/v/less-pager-mini.svg)](https://www.npmjs.com/package/)
-  ![downloads](https://img.shields.io/npm/dw/less-pager-mini)
+  [![npm](https://img.shields.io/npm/v/less-pager-mini.svg)](https://www.npmjs.com/package/less-pager-mini)
+  [![downloads](https://img.shields.io/npm/dw/less-pager-mini)](https://www.npmjs.com/package/less-pager-mini)
   ![Platform](https://img.shields.io/badge/platform-terminal-black?color=f0f0f0)
   [![Build Status](https://github.com/dawsonhuang0/Less-Pager-Mini/actions/workflows/ci.yml/badge.svg)](https://github.com/dawsonhuang0/Less-Pager-Mini/actions)
 </div>

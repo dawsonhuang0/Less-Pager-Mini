@@ -110,3 +110,5 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.setRawMode(false);
   process.stdin.pause();
 }
+
+export default pager;

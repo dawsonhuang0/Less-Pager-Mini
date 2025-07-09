@@ -1,1 +1,8 @@
+# folders
 node_modules/
+dist/
+
+# files
+*.log
+.env
+.DS_Store

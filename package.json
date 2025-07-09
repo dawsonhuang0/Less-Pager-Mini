@@ -2,10 +2,13 @@
   "name": "less-pager-mini",
   "version": "1.0.0",
   "description": "A scrollable terminal pager for Node.js CLI apps (terminal only)",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
+    "build": "tsc",
     "lint": "eslint",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "repository": {
     "type": "git",
