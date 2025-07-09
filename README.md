@@ -87,18 +87,12 @@ await pager(example);
 
 <code>preserveFormat</code>: If <code>true</code>, preserves JavaScript default formatting.
 
-<table>
-  <tr>
-    <th><code>false</code> (formatted)</th>
-    <th><code>true</code> (preserve format)</th>
-  </tr>
-  <tr>
-    <td>
-<pre>
-<code>Before:
-['a','b',['c','d']]
-{'a':1,'b':2,'c':{'d':3}}<br />
-After:
+```bash
+Format preserved:
+["a","b",["c","d"]]
+{"a":1,"b":2,"c":{"d":3}}
+
+Formatted:
 [
   "a",
   "b",
@@ -113,21 +107,8 @@ After:
   "c": {
     "d": 3
   }
-}</code>
-</pre>
-    </td>
-    <td style="display: flex;">
-<pre>
-<code>Before:
-['a','b',['c','d']]
-{'a':1,'b':2,'c':{'d':3}}<br />
-After:
-['a','b',['c','d']]
-{'a':1,'b':2,'c':{'d':3}}</code>
-</pre>
-    </td>
-  </tr>
-</table>
+}
+```
 
 <code>examineFile</code>: if <code>true</code>, attempts to treat input as file path(s) and page content, invalid files will be ignored.
 
