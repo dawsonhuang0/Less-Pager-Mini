@@ -86,15 +86,11 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        lineForward(
-          Math.floor(content[config.index].length / config.screenWidth)
-        );
+        lineForward(content);
         break;
 
       case 'LINE_BACKWARD': {
-        lineBackward(
-          Math.floor(content[config.index].length / config.screenWidth)
-        );
+        lineBackward(content);
         break;
       }
 

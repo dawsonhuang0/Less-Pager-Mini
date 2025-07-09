@@ -1,8 +1,6 @@
 export interface Config {
   row: number;
   col: number;
-
-  index: number;
   subRow: number;
 
   setWindow: number;

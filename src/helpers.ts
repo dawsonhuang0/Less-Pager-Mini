@@ -139,13 +139,11 @@ function chopLongLines(content: string[]): string {
   const maxRow = config.row + config.window - 1;
   const formattedContent: string[] = new Array(config.window).fill('');
 
-  let i = config.index;
   let row = config.row;
+  let i = row;
 
   if (config.subRow && i < content.length) {
-    const line = content[i];
-    row = partitionLine(formattedContent, line, row, maxRow, true);
-
+    row = partitionLine(formattedContent, content[i], row, maxRow, true);
     i++;
   }
 

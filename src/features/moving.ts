@@ -1,21 +1,22 @@
 import { config } from "../pagerConfig";
 
-export function lineForward(subRows: number): void {
-  if (config.subRow < subRows) {
+const getSubRows = (line: string): number =>
+  Math.floor(line.length / config.screenWidth);
+
+export function lineForward(content: string[]): void {
+  if (config.subRow < getSubRows(content[config.row])) {
     config.subRow++;
   } else {
     config.row++;
-    config.index++;
     config.subRow = 0;
   }
 }
 
-export function lineBackward(subRow: number): void {
+export function lineBackward(content: string[]): void {
   if (config.subRow > 0) {
     config.subRow--;
   } else {
     config.row--;
-    config.index--;
-    config.subRow = subRow;
+    config.subRow = getSubRows(content[config.row]);
   }
 }
