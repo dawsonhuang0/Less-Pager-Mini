@@ -7,7 +7,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "lint": "eslint",
+    "lint": "eslint src",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "repository": {
