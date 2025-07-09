@@ -1,6 +1,8 @@
 export async function readKey(): Promise<string> {
   if (!process.stdin.isTTY) {
-    throw new Error('Interactive terminal (TTY) is required to use this feature.');
+    throw new Error(
+      'Interactive terminal (TTY) is required to use this feature.'
+    );
   }
 
   return new Promise(resolve => {
