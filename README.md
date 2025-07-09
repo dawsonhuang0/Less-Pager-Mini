@@ -37,6 +37,7 @@
     <li>
       <a href="#about-the-project">About The Project</a>
       <ul>
+        <li><a href="#roadmap">Roadmap</a></li>
         <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
@@ -141,6 +142,21 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - 🔁 **Familiar Commands** – Inherits command keys from [`less`](https://github.com/gwsw/less)
 - 📦 **Minimal Dependencies** – Lightweight, stable, and portable
 - 🖥️ **Pure Terminal UX** – Replicates 99% of the [`less`](https://github.com/gwsw/less) experience
+
+## Roadmap
+
+- [ ] COMMAND MODE
+- [ ] MOVING
+  - [x] Forward one line
+  - [x] Backward one line
+  - [ ] Forward N line (waiting for command mode)
+  - [ ] Backward N line
+  - [ ] Forward one window
+- [ ] JUMPING
+- [ ] SEARCHING
+- [ ] CHANGING FILES
+- [ ] MISCELLANEOUS COMMANDS
+- [ ] OPTIONS
 
 ## Built With
 
