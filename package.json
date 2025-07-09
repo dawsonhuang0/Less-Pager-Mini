@@ -1,5 +1,5 @@
 {
-  "name": "terminal-pager",
+  "name": "less-pager-mini",
   "version": "1.0.0",
   "description": "A scrollable terminal pager for Node.js CLI apps (terminal only)",
   "main": "index.js",
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dawsonhuang0/Terminal-Pager.git"
+    "url": "git+https://github.com/dawsonhuang0/Less-Pager-Mini.git"
   },
   "keywords": [
     "cli",
@@ -21,14 +21,23 @@
     "command-line",
     "interactive",
     "less",
-    "viewer"
+    "viewer",
+    "text viewer",
+    "file viewer",
+    "terminal pager",
+    "stdout",
+    "tty",
+    "ansi",
+    "typescript",
+    "minimal",
+    "lightweight"
   ],
   "author": "Dawson Huang",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/dawsonhuang0/Terminal-Pager/issues"
+    "url": "https://github.com/dawsonhuang0/Less-Pager-Mini/issues"
   },
-  "homepage": "https://github.com/dawsonhuang0/Terminal-Pager#readme",
+  "homepage": "https://github.com/dawsonhuang0/Less-Pager-Mini#readme",
   "devDependencies": {
     "@eslint/js": "^9.30.1",
     "@eslint/json": "^0.12.0",
