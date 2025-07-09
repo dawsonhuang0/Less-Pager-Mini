@@ -1,1 +1,200 @@
-# Terminal-Pager
+# Less-Pager-Mini
+
+<div align="center">
+  <a href="https://github.com/dawsonhuang0/Less-Pager-Mini">
+    <img src="logo.svg" alt="Logo" style="width: 30%; height: auto;">
+  </a>
+
+  <br />
+
+  <p align="center">
+    A lightweight terminal pager inspired by <code><a href="https://github.com/gwsw/less">less</a></code>, written in TypeScript for Node.js CLI apps.  
+  </p>
+
+  <!--TODO: ADD LINK AFTER PUBLISH-->
+  [![npm](https://img.shields.io/npm/v/less-pager-mini.svg)](https://www.npmjs.com/package/)
+  ![downloads](https://img.shields.io/npm/dw/less-pager-mini)
+  ![Platform](https://img.shields.io/badge/platform-terminal-black?color=f0f0f0)
+  [![Build Status](https://github.com/dawsonhuang0/Less-Pager-Mini/actions/workflows/ci.yml/badge.svg)](https://github.com/dawsonhuang0/Less-Pager-Mini/actions)
+</div>
+
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#usage">Usage</a>
+      <ul>
+        <li><a href="#function-parameters">Parameters</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li><a href="#feedback">Feedback</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+    <li><a href="#license">License</a></li>
+  </ol>
+</details>
+
+
+
+## Getting Started
+
+To get a local copy up and running follow these simple steps.
+
+### Prerequisites
+
+Make sure you have the following installed:
+
+- [Node.js](https://nodejs.org/) (v16 or higher)
+- [npm](https://www.npmjs.com/) (comes with Node.js)
+
+### Installation
+
+Install Less-Pager-Mini via npm:
+
+```bash
+npm i less-pager-mini
+```
+
+
+
+## Usage
+
+<h3>JavaScript / TypeScript:</h3>
+
+```ts
+import { pager } from 'less-pager-mini';
+```
+
+### Function Parameters:
+
+<code>input</code>: Any unknown input (except <code>symbol</code>) to page.
+
+<code>preserveFormat</code>: If <code>true</code>, preserves JavaScript default formatting.
+
+<table>
+  <tr>
+    <th><code>false</code> (formatted)</th>
+    <th><code>true</code> (preserve format)</th>
+  </tr>
+  <tr>
+    <td style="vertical-align: top; width: 50%;">
+<pre>
+<code>Before:
+['a','b',['c','d']]
+{'a':1,'b':2,'c':{'d':3}}<br />
+After:
+[
+  "a",
+  "b",
+  [
+    "c",
+    "d"
+  ]
+]
+{
+  "a": 1,
+  "b": 2,
+  "c": {
+    "d": 3
+  }
+}</code>
+</pre>
+    </td>
+    <td style="vertical-align: top; width: 50%;">
+<pre>
+<code>Before:
+['a','b',['c','d']]
+{'a':1,'b':2,'c':{'d':3}}<br />
+After:
+['a','b',['c','d']]
+{'a':1,'b':2,'c':{'d':3}}</code>
+</pre>
+    </td>
+  </tr>
+</table>
+
+<code>examineFile</code>: if <code>true</code>, attempts to treat input as file path(s) and page content, invalid files will be ignored.
+
+Example input:
+
+```ts
+'a.txt'
+```
+
+or
+
+```ts
+[
+  'a.txt',
+  'b.md',
+  'c' // Ignored
+]
+```
+
+
+
+## About The Project
+
+Wanna glance at your array or objects, but scrolling through terminal feels painful? This tool got your back.  
+
+**Less-Pager-Mini** is a lightweight pager that lets you scroll massive terminal output with ease and precision.  
+
+Whether you're debugging, dumping logs, or previewing data structures — this pager helps you scroll fast without getting lost in overwhelming output.
+
+- 🔁 **Familiar Commands** – Inherits command keys from [`less`](https://github.com/gwsw/less)
+- 📦 **Minimal Dependencies** – Lightweight, stable, and portable
+- 🖥️ **Pure Terminal UX** – Replicates 99% of the [`less`](https://github.com/gwsw/less) experience
+
+## Built With
+
+[![ANSI Escape Codes](https://img.shields.io/badge/ANSI%20Escape%20Codes-black?style=for-the-badge)](https://en.wikipedia.org/wiki/ANSI_escape_code)  
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org/)  
+[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org/)  
+[![ESLint](https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white&style=for-the-badge)](https://eslint.org/)
+
+
+
+## Feedback
+
+Found something odd or came up with a bright improvement?  
+Feel free to [open an issue](https://github.com/dawsonhuang0/Less-Pager-Mini/issues) — contributions and feedback are always welcome!
+
+
+
+## Contributing
+
+Contributions are welcome! If you have suggestions, improvements, or bug fixes, feel free to:
+
+- Fork the repo
+- Create a new branch
+- Make your changes
+- Open a pull request
+
+Please follow the coding style and write clear commit messages.  
+Let’s make **Less-Pager-Mini** better together!
+
+
+
+## Acknowledgments
+
+- Inspired by [less](https://github.com/gwsw/less) by Mark Nudelman – the legendary terminal pager that set the standard.
+
+
+
+## License
+
+Distributed under the MIT License.  
+See [`LICENSE`](LICENSE) for more information.
