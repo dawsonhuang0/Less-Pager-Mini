@@ -17,7 +17,7 @@ import {
   lineBackward
 } from "./features/moving";
 
-import { config } from "./pagerConfig";
+import { config, mode } from "./pagerConfig";
 
 /**
  * Less-mini-pager
@@ -58,6 +58,11 @@ async function contentPager(content: string[]): Promise<void> {
     config.halfWindow = config.window / 2;
     config.halfScreenWidth = config.screenWidth / 2;
 
+    if (mode.INIT && mode.EOF) {
+      mode.INIT = false;
+      mode.NORMAL = true;
+    }
+
     const displayContent = formatContent(content) + getPrompt();
     renderContent(displayContent);
   });
@@ -79,6 +84,10 @@ async function contentPager(content: string[]): Promise<void> {
 
     const key = await readKey();
     const action: Actions | undefined = getAction(key);
+
+    if (mode.INIT && mode.EOF && action !== 'LINE_FORWARD') {
+      mode.INIT = false;
+    }
 
     switch (action) {
       case 'EXIT':

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { config } from './pagerConfig';
+import { config, mode } from './pagerConfig';
 
 /**
  * Calculates the max sub-row index for a line based on screen width.
@@ -89,10 +89,7 @@ export function formatContent(content: string[]): string {
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  switch (config.mode) {
-    case 'NORMAL':
-      return ':';
-  }
+  if (mode.NORMAL && !mode.EOF) return ':';
 
   return '';
 }
@@ -139,10 +136,8 @@ function chopLongLines(
     row++;
   }
 
-  if (row === content.length && row <= maxRow) {
-    formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
-    config.mode = 'END_OF_FILE';
-  }
+  mode.EOF = row === content.length && row <= maxRow;
+  if (mode.EOF) formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
 
   return formattedContent.join('\n');
 }
@@ -183,15 +178,17 @@ function wrapLongLines(
     i++;
   }
 
-  if (i === content.length && row <= maxRow && lastRow + maxSubRow(line) - config.subRow < row) {
-    if (config.mode != 'NORMAL') {
-      while (row < maxRow) {
-        formattedContent[row - config.row] = '\x1b[1m~\x1b[0m';
-        row++;
-      }
+  mode.EOF = i === content.length
+    && row <= maxRow
+    && lastRow + maxSubRow(line) - config.subRow < row;
+
+  if (mode.EOF) {
+    while (!mode.INIT && row < maxRow) {
+      formattedContent[row - config.row] = '\x1b[1m~\x1b[0m';
+      row++;
     }
+
     formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
-    config.mode = 'END_OF_FILE';
   }
 
   return formattedContent.join('\n');
