@@ -3,6 +3,16 @@ import fs from 'fs';
 import { config } from './pagerConfig';
 
 /**
+ * Calculates the max sub-row index for a line based on screen width.
+ * - Always returns 0 if config.chopLongLines is true.
+ * 
+ * @param line line of content.
+ * @returns max subRow index.
+ */
+export const maxSubRow = (line: string): number =>
+  config.chopLongLines? 0: Math.floor(line.length / config.screenWidth);
+
+/**
  * Converts input to an array of file paths.
  * - Invalid paths will be ignored.
  * 
@@ -74,13 +84,17 @@ export function formatContent(content: string[]): string {
 }
 
 /**
- * Generates prompt depends on program events.
+ * Generates prompt depends on mode.
  * 
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  let prompt = ':';
-  return prompt;
+  switch (config.mode) {
+    case 'NORMAL':
+      return ':';
+  }
+
+  return '';
 }
 
 /**
@@ -125,6 +139,11 @@ function chopLongLines(
     row++;
   }
 
+  if (row === content.length && row <= maxRow) {
+    formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
+    config.mode = 'END_OF_FILE';
+  }
+
   return formattedContent.join('\n');
 }
 
@@ -142,21 +161,37 @@ function wrapLongLines(
   maxRow: number
 ): string {
   let row = config.row;
+  let lastRow = row;
+
   let i = row;
+  let line = content[i];
 
   if (config.subRow && i < content.length) {
-    row = partitionLine(formattedContent, content[i], row, maxRow, true);
+    row = partitionLine(formattedContent, line, row, maxRow, true);
     i++;
   }
 
   while (row < maxRow && i < content.length) {
-    const line = content[i];
+    lastRow = row;
+
+    line = content[i];
 
     row = line.length > config.screenWidth
       ? partitionLine(formattedContent, line, row, maxRow)
       : assignLine(formattedContent, line, row);
 
     i++;
+  }
+
+  if (i === content.length && row <= maxRow && lastRow + maxSubRow(line) - config.subRow < row) {
+    if (config.mode != 'NORMAL') {
+      while (row < maxRow) {
+        formattedContent[row - config.row] = '\x1b[1m~\x1b[0m';
+        row++;
+      }
+    }
+    formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
+    config.mode = 'END_OF_FILE';
   }
 
   return formattedContent.join('\n');
@@ -197,7 +232,7 @@ function partitionLine(
   firstLine: boolean = false
 ): number {
   let subRow = firstLine ? config.subRow : 0;
-  const subRows = Math.ceil(line.length / config.screenWidth);
+  const subRows = maxSubRow(line) + 1;
 
   while (subRow < subRows && row < maxRow) {
     const start = subRow * config.screenWidth;
