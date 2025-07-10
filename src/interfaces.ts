@@ -12,16 +12,15 @@ export interface Config {
   screenWidth: number;
   halfScreenWidth: number;
 
-  mode: Mode;
-
   chopLongLines: boolean;
 
   indentation: number;
 }
 
 export type Mode =
+  | 'INIT'
   | 'NORMAL'
-  | 'END_OF_FILE';
+  | 'EOF';
 
 export type Actions =
   | 'COMMAND'

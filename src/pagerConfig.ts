@@ -1,4 +1,4 @@
-import { Config } from "./interfaces";
+import { Config, Mode } from "./interfaces";
 
 export const config: Config = {
   row: 0,
@@ -10,7 +10,12 @@ export const config: Config = {
   halfWindow: (process.stdout.rows ?? 24) / 2,
   screenWidth: process.stdout.columns ?? 80,
   halfScreenWidth: (process.stdout.columns ?? 80) / 2,
-  mode: 'NORMAL',
   chopLongLines: false,
   indentation: 2,
 };
+
+export const mode: Record<Mode, boolean> = {
+  'INIT': true,
+  'NORMAL': false,
+  'EOF': false,
+}
