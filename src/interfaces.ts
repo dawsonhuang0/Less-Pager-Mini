@@ -19,7 +19,6 @@ export interface Config {
 
 export type Mode =
   | 'INIT'
-  | 'NORMAL'
   | 'EOF';
 
 export type Actions =

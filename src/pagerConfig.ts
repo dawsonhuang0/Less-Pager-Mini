@@ -16,6 +16,5 @@ export const config: Config = {
 
 export const mode: Record<Mode, boolean> = {
   'INIT': true,
-  'NORMAL': false,
   'EOF': false,
 }

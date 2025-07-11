@@ -89,7 +89,7 @@ export function formatContent(content: string[]): string {
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  if (mode.NORMAL && !mode.EOF) return ':';
+  if (!mode.EOF) return ':';
 
   return '';
 }

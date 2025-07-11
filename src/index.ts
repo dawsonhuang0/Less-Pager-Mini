@@ -53,15 +53,12 @@ async function filePager(
 
 async function contentPager(content: string[]): Promise<void> {
   process.on('SIGWINCH', () => {
+    mode.INIT = false;
+
     config.window = process.stdout.rows;
     config.screenWidth = process.stdout.columns;
     config.halfWindow = config.window / 2;
     config.halfScreenWidth = config.screenWidth / 2;
-
-    if (mode.INIT && mode.EOF) {
-      mode.INIT = false;
-      mode.NORMAL = true;
-    }
 
     const displayContent = formatContent(content) + getPrompt();
     renderContent(displayContent);
@@ -73,21 +70,24 @@ async function contentPager(content: string[]): Promise<void> {
 
   let exit = false;
   let render = true;
+  let buffer = '';
 
   while (!exit) {
     if (render) {
-      const displayContent = formatContent(content) + getPrompt();
+      const displayContent = formatContent(content) + getPrompt() + buffer;
       renderContent(displayContent);
     }
 
     render = true;
 
     const key = await readKey();
-    const action: Actions | undefined = getAction(key);
 
-    if (mode.INIT && mode.EOF && action !== 'LINE_FORWARD') {
-      mode.INIT = false;
+    if (key >= '0' && key <= '9') {
+      buffer += key;
+      continue;
     }
+
+    const action: Actions | undefined = getAction(key);
 
     switch (action) {
       case 'EXIT':
@@ -95,11 +95,11 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        lineForward(content);
+        lineForward(content, buffer);
         break;
 
       case 'LINE_BACKWARD': {
-        lineBackward(content);
+        lineBackward(content, buffer);
         break;
       }
 
@@ -109,6 +109,12 @@ async function contentPager(content: string[]): Promise<void> {
       default:
         ringBell();
         render = false;
+    }
+
+    buffer = '';
+
+    if (mode.INIT && mode.EOF && action !== 'LINE_FORWARD') {
+      mode.INIT = false;
     }
   }
 
