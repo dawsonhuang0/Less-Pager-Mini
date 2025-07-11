@@ -51,7 +51,7 @@
 
 ## Getting Started
 
-To get a local copy up and running follow these simple steps.
+Follow these simple steps to install Less-Pager-Mini.
 
 ### Prerequisites
 
@@ -148,9 +148,10 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [ ] MOVING
   - [x] Forward one line
   - [x] Backward one line
-  - [ ] Forward N line (waiting for command mode)
-  - [ ] Backward N line
+  - [x] Forward N line
+  - [x] Backward N line
   - [ ] Forward one window
+  - [ ] Backward one window
 - [ ] JUMPING
 - [ ] SEARCHING
 - [ ] CHANGING FILES

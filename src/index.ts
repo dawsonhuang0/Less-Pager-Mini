@@ -73,6 +73,8 @@ async function contentPager(content: string[]): Promise<void> {
   let buffer = '';
 
   while (!exit) {
+    mode.BUFFERING = Boolean(buffer);
+
     if (render) {
       const displayContent = formatContent(content) + getPrompt() + buffer;
       renderContent(displayContent);

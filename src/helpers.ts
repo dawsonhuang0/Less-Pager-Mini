@@ -13,6 +13,18 @@ export const maxSubRow = (line: string): number =>
   config.chopLongLines? 0: Math.floor(line.length / config.screenWidth);
 
 /**
+ * Converts a numeric string offset to a number.
+ * - Returns 1 if offset is invalid.
+ * 
+ * @param offset string to convert to a number.
+ * @returns parsed numeric offset.
+ */
+export function offsetToNum(offset: string): number {
+  const n = parseInt(offset, 10);
+  return n ? n : 1;
+}
+
+/**
  * Converts input to an array of file paths.
  * - Invalid paths will be ignored.
  * 
@@ -76,7 +88,7 @@ export function inputToString(
  */
 export function formatContent(content: string[]): string {
   const maxRow = config.row + config.window - 1;
-  const formattedContent: string[] = new Array(config.window).fill('');
+  const formattedContent: string[] = [];
 
   return config.chopLongLines
     ? chopLongLines(content, formattedContent, maxRow)
@@ -89,7 +101,7 @@ export function formatContent(content: string[]): string {
  * @returns command prompt string.
  */
 export function getPrompt(): string {
-  if (!mode.EOF) return ':';
+  if (!mode.EOF || mode.BUFFERING) return '\n:';
 
   return '';
 }
@@ -129,15 +141,18 @@ function chopLongLines(
   while (row < maxRow && row < content.length) {
     const line = content[row];
 
-    formattedContent[row - config.row] = line.length > config.screenWidth
-      ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
-      : line;
+    formattedContent.push(
+      line.length > config.screenWidth
+        ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
+        : line
+    );
 
     row++;
   }
 
   mode.EOF = row === content.length && row <= maxRow;
-  if (mode.EOF) formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
+
+  padToEOF(formattedContent, row, maxRow);
 
   return formattedContent.join('\n');
 }
@@ -182,14 +197,7 @@ function wrapLongLines(
     && row <= maxRow
     && lastRow + maxSubRow(line) - config.subRow < row;
 
-  if (mode.EOF) {
-    while (!mode.INIT && row < maxRow) {
-      formattedContent[row - config.row] = '\x1b[1m~\x1b[0m';
-      row++;
-    }
-
-    formattedContent[row - config.row] = '\x1b[7m(END)\x1b[0m';
-  }
+  padToEOF(formattedContent, row, maxRow);
 
   return formattedContent.join('\n');
 }
@@ -207,7 +215,7 @@ function assignLine(
   line: string,
   row: number
 ): number {
-  formattedContent[row - config.row] = line;
+  formattedContent.push(line);
   return row + 1;
 }
 
@@ -235,11 +243,33 @@ function partitionLine(
     const start = subRow * config.screenWidth;
     const end = start + config.screenWidth;
 
-    formattedContent[row - config.row] = line.slice(start, end);
+    formattedContent.push(line.slice(start, end));
 
     row++;
     subRow++;
   }
 
   return row;
+}
+
+/**
+ * Pads the remaining lines.
+ * 
+ * @param formattedContent formatted content array for rendering.
+ * @param row current row relative to terminal window.
+ * @param maxRow filling stops when row >= maxRow.
+ */
+function padToEOF(
+  formattedContent: string[],
+  row: number,
+  maxRow: number
+): void {
+  while (!mode.INIT && row < maxRow) {
+    formattedContent.push('\x1b[1m~\x1b[0m');
+    row++;
+  }
+
+  if (!mode.BUFFERING && mode.EOF) {
+    formattedContent.push('\x1b[7m(END)\x1b[0m');
+  }
 }
