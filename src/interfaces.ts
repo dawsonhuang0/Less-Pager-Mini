@@ -19,7 +19,8 @@ export interface Config {
 
 export type Mode =
   | 'INIT'
-  | 'EOF';
+  | 'EOF'
+  | 'BUFFERING';
 
 export type Actions =
   | 'COMMAND'
