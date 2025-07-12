@@ -15,7 +15,9 @@ import {
 
 import {
   lineForward,
-  lineBackward
+  lineBackward,
+  windowForward,
+  windowBackward,
 } from "./features/moving";
 
 import { config, mode } from "./pagerConfig";
@@ -107,9 +109,11 @@ async function contentPager(content: string[]): Promise<void> {
       }
 
       case 'WINDOW_FORWARD':
+        windowForward(content, buffer);
         break;
 
       case 'WINDOW_BACKWARD':
+        windowBackward(content, buffer);
         break;
 
       case 'REPAINT':

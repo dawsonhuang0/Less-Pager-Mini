@@ -1,4 +1,4 @@
-import { maxSubRow, ringBell } from "../helpers";
+import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 
 import { config, mode } from "../pagerConfig";
 
@@ -71,4 +71,14 @@ export function lineBackward(content: string[], offset: number): void {
   }
 
   if (config.row < 0) config.row = 0;
+}
+
+export function windowForward(content: string[], buffer: string): void {
+  const offset = bufferToNum(buffer);
+  lineForward(content, offset ? offset : config.window - 1);
+}
+
+export function windowBackward(content: string[], buffer: string): void {
+  const offset = bufferToNum(buffer);
+  lineBackward(content, offset ? offset : config.window - 1);
 }

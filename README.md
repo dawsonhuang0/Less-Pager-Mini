@@ -150,8 +150,10 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
   - [x] Backward one line
   - [x] Forward N line
   - [x] Backward N line
-  - [ ] Forward one window
-  - [ ] Backward one window
+  - [x] Forward one window
+  - [x] Backward one window
+  - [ ] Forward one window and set window to N
+  - [ ] Backward one window and set window to N
 - [ ] JUMPING
 - [ ] SEARCHING
 - [ ] CHANGING FILES
