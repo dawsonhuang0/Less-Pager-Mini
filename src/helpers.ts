@@ -14,14 +14,14 @@ export const maxSubRow = (line: string): number =>
 
 /**
  * Converts a numeric string buffer to a number.
- * - Returns 1 if buffer is invalid.
+ * - Returns 0 if buffer is invalid.
  * 
  * @param buffer string to convert to a number.
  * @returns parsed numeric buffer.
  */
 export function bufferToNum(buffer: string): number {
   const n = parseInt(buffer, 10);
-  return n ? n : 1;
+  return n ? n : 0;
 }
 
 /**

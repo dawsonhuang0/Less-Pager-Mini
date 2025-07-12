@@ -98,13 +98,19 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        lineForward(content, bufferToNum(buffer));
+        lineForward(content, Math.max(bufferToNum(buffer), 1));
         break;
 
       case 'LINE_BACKWARD': {
-        lineBackward(content, bufferToNum(buffer));
+        lineBackward(content, Math.max(bufferToNum(buffer), 1));
         break;
       }
+
+      case 'WINDOW_FORWARD':
+        break;
+
+      case 'WINDOW_BACKWARD':
+        break;
 
       case 'REPAINT':
         break;
