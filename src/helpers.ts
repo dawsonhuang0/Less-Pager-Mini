@@ -13,14 +13,14 @@ export const maxSubRow = (line: string): number =>
   config.chopLongLines? 0: Math.floor(line.length / config.screenWidth);
 
 /**
- * Converts a numeric string offset to a number.
- * - Returns 1 if offset is invalid.
+ * Converts a numeric string buffer to a number.
+ * - Returns 1 if buffer is invalid.
  * 
- * @param offset string to convert to a number.
- * @returns parsed numeric offset.
+ * @param buffer string to convert to a number.
+ * @returns parsed numeric buffer.
  */
-export function offsetToNum(offset: string): number {
-  const n = parseInt(offset, 10);
+export function bufferToNum(buffer: string): number {
+  const n = parseInt(buffer, 10);
   return n ? n : 1;
 }
 
@@ -264,6 +264,8 @@ function padToEOF(
   row: number,
   maxRow: number
 ): void {
+  if (mode.INIT && row === maxRow) mode.INIT = false;
+
   while (!mode.INIT && row < maxRow) {
     formattedContent.push('\x1b[1m~\x1b[0m');
     row++;

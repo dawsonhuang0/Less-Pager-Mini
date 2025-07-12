@@ -9,7 +9,8 @@ import {
   formatContent,
   getPrompt,
   renderContent,
-  ringBell
+  ringBell,
+  bufferToNum
 } from "./helpers";
 
 import {
@@ -97,11 +98,11 @@ async function contentPager(content: string[]): Promise<void> {
         break;
 
       case 'LINE_FORWARD':
-        lineForward(content, buffer);
+        lineForward(content, bufferToNum(buffer));
         break;
 
       case 'LINE_BACKWARD': {
-        lineBackward(content, buffer);
+        lineBackward(content, bufferToNum(buffer));
         break;
       }
 
