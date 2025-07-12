@@ -4,7 +4,7 @@ export const config: Config = {
   row: 0,
   col: 0,
   subRow: 0,
-  setWindow: -1,
+  setWindow: 0,
   setHalfWindow: -1,
   window: process.stdout.rows ?? 24,
   halfWindow: (process.stdout.rows ?? 24) / 2,

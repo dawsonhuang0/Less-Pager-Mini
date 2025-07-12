@@ -73,12 +73,58 @@ export function lineBackward(content: string[], offset: number): void {
   if (config.row < 0) config.row = 0;
 }
 
+/**
+ * Forwards one window.
+ * - Forwards lines if given buffer is valid.
+ * - If given buffer is invalid, forwards config.setWindow lines if set.
+ * 
+ * @param content string content array.
+ * @param buffer lines to move forward.
+ */
 export function windowForward(content: string[], buffer: string): void {
-  const offset = bufferToNum(buffer);
-  lineForward(content, offset ? offset : config.window - 1);
+  lineForward(
+    content,
+    bufferToNum(buffer) || config.setWindow || config.window - 1
+  );
 }
 
+/**
+ * Backwards one window.
+ * - Backwards lines if given buffer is valid.
+ * - If given buffer is invalid, backwards config.setWindow lines if set.
+ * 
+ * @param content string content array.
+ * @param buffer lines to move backward.
+ */
 export function windowBackward(content: string[], buffer: string): void {
-  const offset = bufferToNum(buffer);
-  lineBackward(content, offset ? offset : config.window - 1);
+  lineBackward(
+    content,
+    bufferToNum(buffer) || config.setWindow || config.window - 1
+  );
+}
+
+/**
+ * Sets a custom window size using the provided buffer and moves forward.
+ * - Updates `config.setWindow` if the buffer is valid.
+ * - Uses the updated value or falls back to `config.window - 1`.
+ * 
+ * @param content string content array.
+ * @param buffer lines to move forward.
+ */
+export function setWindowForward(content: string[], buffer: string): void {
+  config.setWindow = bufferToNum(buffer) || config.setWindow;
+  lineForward(content, config.setWindow || config.window - 1);
+}
+
+/**
+ * Sets a custom window size using the provided buffer and moves backward.
+ * - Updates `config.setWindow` if the buffer is valid.
+ * - Uses the updated value or falls back to `config.window - 1`.
+ * 
+ * @param content string content array.
+ * @param buffer lines to move backward.
+ */
+export function setWindowBackward(content: string[], buffer: string): void {
+  config.setWindow = bufferToNum(buffer) || config.setWindow;
+  lineBackward(content, config.setWindow || config.window - 1);
 }
