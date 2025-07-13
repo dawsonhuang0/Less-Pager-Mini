@@ -54,39 +54,78 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts any input to a string array.
- * 
- * - Strings and primitives are split by newline.
- * - Objects are stringified with optional formatting.
- * 
- * @param input - Value to convert.
- * @param preserveFormat - Whether to keep original formatting.
- * @returns - Array of strings representing the input.
+ * Converts unknown input into a string array, handling line breaks and wide characters.
+ *
+ * - Supports strings, numbers, booleans, functions, objects, and undefined.
+ * - Preserves newlines and splits on them.
+ * - Handles surrogate pairs and width-2 characters (e.g., emoji) by isolating them for proper CLI rendering.
+ *
+ * @param input - The input to normalize into a string array.
+ * @param preserveFormat - Whether to preserve formatting (e.g., JSON indentation).
+ * @returns An array of strings ready for terminal display.
  */
 export function inputToString(
   input: unknown,
   preserveFormat: boolean
 ): string[] {
+  let inputString = '';
+
   switch (typeof input) {
     case 'string':
-      return input.split('\n');
+      inputString = input;
+      break;
 
     case 'undefined':
-      return ['undefined'];
+      inputString = 'undefined';
+      break;
 
     case 'number':
     case 'bigint':
     case 'boolean':
     case 'function':
-      return input.toString().split('\n');
+      inputString = input.toString();
+      break;
     
     case 'object':
-      return JSON
-        .stringify(input, null, preserveFormat ? 0 : config.indentation)
-        .split('\n');
+      inputString = JSON.stringify(
+        input, null, preserveFormat ? 0 : config.indentation
+      );
+      break;
+
+    default:
+      return [];
   }
 
-  return [];
+  const formattedInput: string[] = [];
+  let line = [];
+
+  for (let i = 0; i < inputString.length; i++) {
+    let c = inputString[i];
+    const code = c.codePointAt(0);
+
+    if (code && code > 0xffff) {
+      c = inputString.slice(i, i + 2);
+      i++;
+    }
+
+    const isWide = charWidth(c) === 2;
+
+    if (isWide && line.length) {
+      formattedInput.push(line.join(''));
+      line = [];
+    }
+
+    line.push(c);
+
+    if (isWide || c === '\n') {
+      formattedInput.push(line.join(''));
+      line = [];
+    }
+  }
+
+  if (line.length) formattedInput.push(line.join(''));
+
+  return formattedInput;
 }
 
 /**
@@ -142,6 +181,36 @@ export function renderContent(content: string): void {
  */
 export function ringBell(): void {
   process.stdout.write('\x07');
+}
+
+/**
+ * Returns the terminal width of a character.
+ *
+ * - Wide characters (CJK, emoji, etc.) return 2.
+ * - Narrow characters return 1.
+ * - Invalid or empty input returns 0.
+ *
+ * @param c - The character to measure.
+ * @returns Terminal display width in cells.
+ */
+function charWidth(c: string): number {
+  const code = c.codePointAt(0);
+  if (!code) return 0;
+
+  if (code <= 0x1FFF) return 1;
+
+  if (
+    (code >= 0x1100  && code <= 0x115F) ||
+    (code >= 0x2E80  && code <= 0xA4CF) ||
+    (code >= 0xAC00  && code <= 0xD7A3) ||
+    (code >= 0xF900  && code <= 0xFAFF) ||
+    (code >= 0xFE10  && code <= 0xFE19) ||
+    (code >= 0xFE30  && code <= 0xFE6F) ||
+    (code >= 0x1F300 && code <= 0x1FAD6) ||
+    (code >= 0x20000 && code <= 0x2FFFD)
+  ) return 2;
+
+  return 1;
 }
 
 /**
