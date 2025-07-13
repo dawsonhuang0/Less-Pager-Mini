@@ -3,21 +3,26 @@ import fs from 'fs';
 import { config, mode } from './pagerConfig';
 
 /**
- * Calculates the max sub-row index for a line based on screen width.
- * - Always returns 0 if config.chopLongLines is true.
- * 
- * @param line line of content.
- * @returns max subRow index.
+ * Calculates how many sub-rows (wrapped lines) a line occupies on screen.
+ *
+ * - Returns 0 if `config.chopLongLines` is enabled (no wrapping).
+ * - Otherwise, returns the number of wrapped lines based on
+ *   `config.screenWidth`.
+ *
+ * @param line - A single line of text from the content.
+ * @returns The number of sub-rows needed to display the line.
  */
 export const maxSubRow = (line: string): number =>
   config.chopLongLines? 0: Math.floor(line.length / config.screenWidth);
 
 /**
- * Converts a numeric string buffer to a number.
- * - Returns 0 if buffer is invalid.
- * 
- * @param buffer string to convert to a number.
- * @returns parsed numeric buffer.
+ * Converts a buffer string to a number.
+ *
+ * - Parses the string as a base-10 integer.
+ * - Returns 0 if the input is not a valid number or equals 0.
+ *
+ * @param buffer - The string to convert.
+ * @returns Parsed numeric value, or 0 if invalid.
  */
 export function bufferToNum(buffer: string): number {
   const n = parseInt(buffer, 10);
@@ -25,11 +30,14 @@ export function bufferToNum(buffer: string): number {
 }
 
 /**
- * Converts input to an array of file paths.
- * - Invalid paths will be ignored.
- * 
- * @param input unknown input that may convert to file paths.
- * @returns array of file paths.
+ * Normalizes unknown input into an array of valid file paths.
+ *
+ * - Accepts a string, an array, or nested arrays containing strings.
+ * - Filters out non-string values and paths that do not exist on the
+ *   filesystem.
+ *
+ * @param input - A potential file path, array of paths, or nested arrays.
+ * @returns An array of existing file paths.
  */
 export function inputToFilePaths(input: unknown): string[] {
   if (Array.isArray(input)) {
@@ -46,12 +54,14 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts input to string array.
- * - Symbol type will convert to empty array.
+ * Converts any input to a string array.
  * 
- * @param input unknown input that may convert to string array.
- * @param preserveFormat decide whether to format the output.
- * @returns converted string array.
+ * - Strings and primitives are split by newline.
+ * - Objects are stringified with optional formatting.
+ * 
+ * @param input - Value to convert.
+ * @param preserveFormat - Whether to keep original formatting.
+ * @returns - Array of strings representing the input.
  */
 export function inputToString(
   input: unknown,
@@ -80,11 +90,13 @@ export function inputToString(
 }
 
 /**
- * Formats content for rendering.
- * - Output format is determined by chopLongLines configuration.
- * 
- * @param content string content array.
- * @returns formatted content for rendering.
+ * Formats content for display based on line wrapping configuration.
+ *
+ * - Chooses between chopping or wrapping long lines.
+ * - Limits formatting to the current window range.
+ *
+ * @param content - The full array of content lines to format.
+ * @returns A formatted string ready for rendering.
  */
 export function formatContent(content: string[]): string {
   const maxRow = config.row + config.window - 1;
@@ -96,9 +108,13 @@ export function formatContent(content: string[]): string {
 }
 
 /**
- * Generates prompt depends on mode.
- * 
- * @returns command prompt string.
+ * Returns the prompt string to be shown at the bottom of the screen.
+ *
+ * - Typically returns `':'` to indicate the pager is awaiting user input.
+ * - Suppressed if an EOF marker like `(END)` is already displayed.
+ * - May adapt based on the current mode (e.g. buffering, EOF).
+ *
+ * @returns The prompt string, or an empty string if suppressed.
  */
 export function getPrompt(): string {
   if (!mode.EOF || mode.BUFFERING) return '\n:';
@@ -107,9 +123,12 @@ export function getPrompt(): string {
 }
 
 /**
- * Renders processed content on terminal.
- * 
- * @param content processed string content
+ * Renders the given content to the terminal.
+ *
+ * - Clears the screen before writing.
+ * - Outputs the content directly to `stdout`.
+ *
+ * @param content - The string content to display in the terminal.
  */
 export function renderContent(content: string): void {
   console.clear();
@@ -117,19 +136,25 @@ export function renderContent(content: string): void {
 }
 
 /**
- * Makes terminal play alert sound.
+ * Triggers an audible bell sound in the terminal.
+ *
+ * Sends the ASCII bell character (`\x07`) to `stdout`.
  */
 export function ringBell(): void {
   process.stdout.write('\x07');
 }
 
 /**
- * Formats content by chopping long lines to fit screen width.
- * 
- * @param content string content array.
- * @param formattedContent formatted content array for rendering.
- * @param maxRow insertion stops when row >= maxRow.
- * @returns formatted content for rendering.
+ * Truncates long lines and appends a visible overflow marker.
+ *
+ * - Adds an inverted `>` marker if a line exceeds the screen width.
+ * - Pads the output with tildes (`~`) to fill the window height.
+ * - Updates EOF mode if the end of content is reached.
+ *
+ * @param content - The full input content split into lines.
+ * @param formattedContent - The array to store processed display lines.
+ * @param maxRow - The maximum row index to process up to.
+ * @returns A single formatted string ready to be rendered.
  */
 function chopLongLines(
   content: string[],
@@ -158,12 +183,16 @@ function chopLongLines(
 }
 
 /**
- * Formats content by wrapping long lines to fit screen width.
- * 
- * @param content string content array.
- * @param formattedContent formatted content array for rendering.
- * @param maxRow insertion stops when row >= maxRow.
- * @returns formatted content for rendering.
+ * Wraps long lines across multiple terminal rows based on screen width.
+ *
+ * - Handles partial rendering if `config.subRow` is active.
+ * - Uses `partitionLine` to split long lines, `assignLine` for short ones.
+ * - Updates EOF status and pads the rest of the window if needed.
+ *
+ * @param content - The full input content split into lines.
+ * @param formattedContent - The array to store wrapped display lines.
+ * @param maxRow - The maximum terminal row index to fill.
+ * @returns A single formatted string ready to be rendered.
  */
 function wrapLongLines(
   content: string[],
@@ -203,12 +232,15 @@ function wrapLongLines(
 }
 
 /**
- * Assigns a line to formattedContent array by row.
- * 
- * @param formattedContent formatted content array for rendering.
- * @param line line of content at index i in chopLongLines.
- * @param row current row relative to terminal window.
- * @returns incremented row.
+ * Assigns a single line of content to the formatted output.
+ *
+ * - Pushes the line directly into the `formattedContent` array.
+ * - Advances the row index by one.
+ *
+ * @param formattedContent - The array to store formatted lines.
+ * @param line - A single line of text to display.
+ * @param row - The current row index.
+ * @returns The next row index after assignment.
  */
 function assignLine(
   formattedContent: string[],
@@ -220,14 +252,19 @@ function assignLine(
 }
 
 /**
- * Partitions a long line and inserts each to formattedContent array.
- * 
- * @param formattedContent formatted content array for rendering.
- * @param line line of content at index i in chopLongLines.
- * @param row current row relative to terminal window.
- * @param maxRow partitioning stops when row >= maxRow.
- * @param firstLine if true, partition starts from config.subRow instead of 0.
- * @returns updated row.
+ * Breaks a long line into sub-rows and appends them to the formatted output.
+ *
+ * - Splits a line based on `config.screenWidth` into multiple segments.
+ * - Starts from `config.subRow` if it's the first line; otherwise starts at 0.
+ * - Stops when the line is fully processed or the maximum row limit is reached.
+ *
+ * @param formattedContent - The array to store formatted line segments.
+ * @param line - The long line to be partitioned.
+ * @param row - The current row index.
+ * @param maxRow - The maximum number of rows allowed.
+ * @param firstLine - Whether this is the first line being rendered
+ *                    (uses `config.subRow`).
+ * @returns The next available row index after partitioning.
  */
 function partitionLine(
   formattedContent: string[],
@@ -253,11 +290,15 @@ function partitionLine(
 }
 
 /**
- * Pads the remaining lines.
- * 
- * @param formattedContent formatted content array for rendering.
- * @param row current row relative to terminal window.
- * @param maxRow filling stops when row >= maxRow.
+ * Pads the remaining lines after content with placeholder or end indicator.
+ *
+ * - Pushes `~` lines if not in `INIT` mode and under `maxRow`.
+ * - Appends `(END)` marker if at end of file and not buffering.
+ * - Also disables `INIT` mode if it reaches `maxRow`.
+ *
+ * @param formattedContent - The array to append placeholder or end markers.
+ * @param row - The current row index.
+ * @param maxRow - The maximum number of rows allowed to fill.
  */
 function padToEOF(
   formattedContent: string[],

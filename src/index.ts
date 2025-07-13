@@ -25,13 +25,17 @@ import {
 import { config, mode } from "./pagerConfig";
 
 /**
- * Less-mini-pager
- * 
- * @param input any unknown input to page.
- * @param preserveFormat if true, preserves JavaScript default formatting.
- * @param examineFile if true, attempts to treat input as file path(s)
- *                    and page content.
- * @returns void.
+ * Less-pager-mini
+ *
+ * - If `examineFile` is true, treats input as file path(s) and loads file
+ *   content.
+ * - Otherwise, converts arbitrary input into displayable string content.
+ *
+ * @param input - The input to render, which can be a string, object, or array.
+ * @param preserveFormat - Whether to preserve original formatting
+ *                         (no indentation).
+ * @param examineFile - If true, treats input as file path(s) and reads from
+ *                      disk.
  */
 export async function pager(
   input: unknown,
@@ -49,6 +53,15 @@ export async function pager(
   await contentPager(content);
 }
 
+/**
+ * Displays the contents of provided file paths using the pager.
+ *
+ * - Ignores empty file path arrays.
+ * - Converts file content to string arrays for rendering.
+ *
+ * @param filePaths - Array of file paths to display.
+ * @param preserveFormat - Whether to preserve the file’s original formatting.
+ */
 async function filePager(
   filePaths: string[],
   preserveFormat: boolean
@@ -56,6 +69,15 @@ async function filePager(
   if (!filePaths.length) return;
 }
 
+/**
+ * Starts an interactive pager session to navigate through string content.
+ *
+ * - Handles terminal resizing (SIGWINCH) to re-render content.
+ * - Supports key-based navigation with buffered numeric input.
+ * - Responds to various paging actions like line/window movement and exit.
+ *
+ * @param content - The content to be displayed in the pager.
+ */
 async function contentPager(content: string[]): Promise<void> {
   process.on('SIGWINCH', () => {
     mode.INIT = false;

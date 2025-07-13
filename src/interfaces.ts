@@ -1,3 +1,6 @@
+/**
+ * Global configuration options for the pager display and behavior.
+ */
 export interface Config {
   row: number;
   col: number;
@@ -17,11 +20,20 @@ export interface Config {
   indentation: number;
 }
 
+/**
+ * Represents the current state of the pager.
+ */
 export type Mode =
   | 'INIT'
   | 'EOF'
   | 'BUFFERING';
 
+/**
+ * Represents all possible key-based actions in the pager.
+ * 
+ * These actions control navigation, search, file operations, and various pager
+ * behaviors. They are typically triggered by specific key presses.
+ */
 export type Actions =
   | 'COMMAND'
   | 'Z_EXIT'

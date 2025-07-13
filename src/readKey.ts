@@ -1,3 +1,13 @@
+/**
+ * Reads a single keypress from the terminal asynchronously.
+ *
+ * - Handles escape sequences by combining `\x1B` with the following character.
+ * - Times out after 50ms to detect standalone ESC key.
+ * - Requires the terminal to be in TTY mode.
+ *
+ * @returns A promise that resolves to the pressed key string.
+ * @throws If the terminal is not interactive (non-TTY).
+ */
 export async function readKey(): Promise<string> {
   if (!process.stdin.isTTY) {
     throw new Error(

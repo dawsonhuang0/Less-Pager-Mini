@@ -3,10 +3,14 @@ import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 import { config, mode } from "../pagerConfig";
 
 /**
- * Forwards lines.
- * 
- * @param content string content array.
- * @param offset lines to move forward.
+ * Moves the view forward by a given number of lines.
+ *
+ * - If `chopLongLines` is enabled, advances full rows.
+ * - Otherwise, advances sub-rows (wrapped lines) accordingly.
+ * - If EOF is reached, rings the terminal bell and halts.
+ *
+ * @param content - The full content as an array of lines.
+ * @param offset - The number of lines or sub-rows to move forward.
  */
 export function lineForward(content: string[], offset: number): void {
   if (mode.EOF) {
@@ -40,10 +44,14 @@ export function lineForward(content: string[], offset: number): void {
 }
 
 /**
- * Backwards lines.
- * 
- * @param content string content array.
- * @param offset lines to move backward.
+ * Moves the view backward by a given number of lines.
+ *
+ * - If `chopLongLines` is enabled, steps back full rows.
+ * - Otherwise, steps back sub-rows (wrapped lines) accordingly.
+ * - Rings the terminal bell if already at the top.
+ *
+ * @param content - The full content as an array of lines.
+ * @param offset - The number of lines or sub-rows to move backward.
  */
 export function lineBackward(content: string[], offset: number): void {
   if (!config.row && !config.subRow) {
@@ -74,12 +82,14 @@ export function lineBackward(content: string[], offset: number): void {
 }
 
 /**
- * Forwards one window.
- * - Forwards lines if given buffer is valid.
- * - If given buffer is invalid, forwards config.setWindow lines if set.
- * 
- * @param content string content array.
- * @param buffer lines to move forward.
+ * Moves the view forward by one window.
+ *
+ * - If `buffer` is a valid number, uses it as the offset.
+ * - Otherwise, uses `config.setWindow` if set, or defaults to
+ *   `config.window - 1`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the number of lines to scroll forward.
  */
 export function windowForward(content: string[], buffer: string): void {
   lineForward(
@@ -89,12 +99,14 @@ export function windowForward(content: string[], buffer: string): void {
 }
 
 /**
- * Backwards one window.
- * - Backwards lines if given buffer is valid.
- * - If given buffer is invalid, backwards config.setWindow lines if set.
- * 
- * @param content string content array.
- * @param buffer lines to move backward.
+ * Moves the view backward by one window.
+ *
+ * - If `buffer` is a valid number, uses it as the offset.
+ * - Otherwise, uses `config.setWindow` if set, or defaults to
+ *   `config.window - 1`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the number of lines to scroll backward.
  */
 export function windowBackward(content: string[], buffer: string): void {
   lineBackward(
@@ -104,12 +116,15 @@ export function windowBackward(content: string[], buffer: string): void {
 }
 
 /**
- * Sets a custom window size using the provided buffer and moves forward.
- * - Updates `config.setWindow` if the buffer is valid.
- * - Uses the updated value or falls back to `config.window - 1`.
- * 
- * @param content string content array.
- * @param buffer lines to move forward.
+ * Sets a custom window size using the given `buffer`, and scrolls forward.
+ *
+ * - If `buffer` is a valid number, updates `config.setWindow` with it.
+ * - Then scrolls forward by `config.setWindow` or falls back to
+ *   `config.window - 1`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the custom number of lines to scroll
+ *                 forward.
  */
 export function setWindowForward(content: string[], buffer: string): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
@@ -117,12 +132,15 @@ export function setWindowForward(content: string[], buffer: string): void {
 }
 
 /**
- * Sets a custom window size using the provided buffer and moves backward.
- * - Updates `config.setWindow` if the buffer is valid.
- * - Uses the updated value or falls back to `config.window - 1`.
- * 
- * @param content string content array.
- * @param buffer lines to move backward.
+ * Sets a custom window size using the given `buffer`, and scrolls backward.
+ *
+ * - If `buffer` is a valid number, updates `config.setWindow` with it.
+ * - Then scrolls backward by `config.setWindow` or falls back to
+ *   `config.window - 1`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the custom number of lines to scroll
+ *                 backward.
  */
 export function setWindowBackward(content: string[], buffer: string): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;

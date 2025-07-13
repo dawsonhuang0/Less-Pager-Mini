@@ -1,7 +1,20 @@
 import { Actions } from "./interfaces";
 
+/**
+ * Maps a key press to a corresponding pager action.
+ *
+ * @param key - A single-character string from user input.
+ * @returns The corresponding `Actions` type if defined, otherwise `undefined`.
+ */
 export const getAction = (key: string): Actions | undefined => keys[key];
 
+/**
+ * Maps single-character key inputs to their corresponding pager actions.
+ *
+ * This keybinding object enables interpreting user keystrokes (like `:` or `q`)
+ * into `Actions` understood by the pager.
+ * Supports control characters (e.g., ^C), punctuation, and printable ASCII.
+ */
 const keys: Record<string, Actions> = {
   /**
    * (N) - any number

@@ -1,5 +1,8 @@
 import { Config, Mode } from "./interfaces";
 
+/**
+ * Global configuration for pager rendering and navigation.
+ */
 export const config: Config = {
   row: 0,
   col: 0,
@@ -14,6 +17,9 @@ export const config: Config = {
   indentation: 2,
 };
 
+/**
+ * Tracks the current pager state.
+ */
 export const mode: Record<Mode, boolean> = {
   'INIT': true,
   'EOF': false,
