@@ -54,15 +54,18 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts unknown input into a string array, handling line breaks and wide characters.
+ * Converts various input types into a formatted array of strings.
  *
- * - Supports strings, numbers, booleans, functions, objects, and undefined.
- * - Preserves newlines and splits on them.
- * - Handles surrogate pairs and width-2 characters (e.g., emoji) by isolating them for proper CLI rendering.
+ * - Strings are split into segments, preserving lines and wide characters.
+ * - Non-string primitives are converted via `.toString()`.
+ * - Objects are serialized using `JSON.stringify`, respecting indentation.
+ * - ASCII-only strings are processed with a fast path; others with UTF-aware
+ *   splitting.
  *
- * @param input - The input to normalize into a string array.
- * @param preserveFormat - Whether to preserve formatting (e.g., JSON indentation).
- * @returns An array of strings ready for terminal display.
+ * @param input - The value to convert (string, number, object, etc.).
+ * @param preserveFormat - Whether to disable indentation in JSON output.
+ * @returns An array of string segments suitable for display in pagers or
+ *          terminals.
  */
 export function inputToString(
   input: unknown,
@@ -96,36 +99,14 @@ export function inputToString(
       return [];
   }
 
+  if (!inputString) return [];
+
   const formattedInput: string[] = [];
-  let line = [];
 
-  for (let i = 0; i < inputString.length; i++) {
-    let c = inputString[i];
-    const code = c.codePointAt(0);
-
-    if (code && code > 0xffff) {
-      c = inputString.slice(i, i + 2);
-      i++;
-    }
-
-    const isWide = charWidth(c) === 2;
-
-    if (isWide && line.length) {
-      formattedInput.push(line.join(''));
-      line = [];
-    }
-
-    line.push(c);
-
-    if (isWide || c === '\n') {
-      formattedInput.push(line.join(''));
-      line = [];
-    }
-  }
-
-  if (line.length) formattedInput.push(line.join(''));
-
-  return formattedInput;
+  // eslint-disable-next-line no-control-regex
+  return /^[\x00-\x7F]*$/.test(inputString)
+    ? splitAsciiInput(formattedInput, inputString)
+    : splitUtfInput(formattedInput, inputString);
 }
 
 /**
@@ -211,6 +192,78 @@ function charWidth(c: string): number {
   ) return 2;
 
   return 1;
+}
+
+/**
+ * Splits an ASCII-only string into segments based on newline characters.
+ *
+ * - Each line is pushed individually, preserving the structure.
+ * - If a newline appears at the start, it is preserved as '\n'.
+ * - Avoids adding empty strings at the end.
+ *
+ * @param formattedInput - The array to store formatted string segments.
+ * @param inputString - The ASCII-only input string.
+ * @returns The formatted array of string segments.
+ */
+function splitAsciiInput(
+  formattedInput: string[],
+  inputString: string
+): string[] {
+  let prev = 0;
+  let curr = inputString.indexOf('\n', prev);
+
+  if (curr === -1) return [inputString];
+
+  while (curr !== -1) {
+    formattedInput.push(curr ? inputString.slice(prev, curr) : '\n');
+    prev = curr;
+    curr = inputString.indexOf('\n', prev + 1);
+  }
+
+  if (prev < inputString.length - 1) {
+    formattedInput.push(inputString.slice(prev));
+  }
+
+  return formattedInput;
+}
+
+/**
+ * Splits a UTF-8 encoded string into segments, ensuring wide characters
+ * (e.g., emojis, CJK characters) and newline characters are isolated.
+ *
+ * - Preserves line structure by pushing accumulated characters until a newline
+ *   or wide character.
+ * - Wide characters (width 2) are isolated into their own lines.
+ * - Handles surrogate pairs using `Array.from` to correctly process UTF-16.
+ *
+ * @param formattedInput - The array to store formatted string segments.
+ * @param inputString - The UTF-8 encoded input string.
+ * @returns The formatted array of string segments.
+ */
+function splitUtfInput(
+  formattedInput: string[],
+  inputString: string
+): string[] {
+  let line: string[] = [];
+
+  for (const c of inputString) {
+    if (c === '\n') {
+      if (line.length) formattedInput.push(line.join(''));
+      line = ['\n'];
+    } else if (charWidth(c) === 2) {
+      if (line.length) {
+        formattedInput.push(line.join(''));
+        line = [];
+      }
+      formattedInput.push(c);
+    } else {
+      line.push(c);
+    }
+  }
+
+  if (line.length) formattedInput.push(line.join(''));
+
+  return formattedInput;
 }
 
 /**
