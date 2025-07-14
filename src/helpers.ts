@@ -54,54 +54,39 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts various input types to a 2D string array for formatted display.
- *
- * - Strings are split by lines.
- * - Non-ASCII characters (e.g. emojis, CJK) are further segmented.
- * - Preserves or flattens formatting based on `preserveFormat`.
- *
- * @param input - Any input to be stringified and processed.
- * @param preserveFormat - If true, skips indentation in JSON.stringify.
- * @returns A 2D array of strings representing the formatted input.
+ * Converts any input to a string array.
+ * 
+ * - Strings and primitives are split by newline.
+ * - Objects are stringified with optional formatting.
+ * 
+ * @param input - Value to convert.
+ * @param preserveFormat - Whether to keep original formatting.
+ * @returns - Array of strings representing the input.
  */
 export function inputToString(
   input: unknown,
   preserveFormat: boolean
-): string[][] {
-  let inputString = '';
-
+): string[] {
   switch (typeof input) {
     case 'string':
-      inputString = input;
-      break;
+      return input.split('\n');
 
     case 'undefined':
-      inputString = 'undefined';
-      break;
+      return ['undefined'];
 
     case 'number':
     case 'bigint':
     case 'boolean':
     case 'function':
-      inputString = input.toString();
-      break;
+      return input.toString().split('\n');
     
     case 'object':
-      inputString = JSON.stringify(
-        input, null, preserveFormat ? 0 : config.indentation
-      );
-      break;
-
-    default:
-      return [];
+      return JSON
+        .stringify(input, null, preserveFormat ? 0 : config.indentation)
+        .split('\n');
   }
 
-  if (!inputString) return [];
-
-  // eslint-disable-next-line no-control-regex
-  return /^[\x00-\x7F]*$/.test(inputString)
-    ? inputString.split('\n').map(line => [line])
-    : splitUtfInput(inputString.split('\n'));
+  return [];
 }
 
 /**
@@ -160,6 +145,19 @@ export function ringBell(): void {
 }
 
 /**
+ * Checks whether a given segment consists entirely of ASCII characters.
+ *
+ * - Matches characters in the range 0x00 to 0x7F.
+ * - Used to determine whether fast-path rendering can be applied.
+ *
+ * @param segment - A string segment to check.
+ * @returns Whether the segment is pure ASCII.
+ */
+const isAscii = (segment: string): boolean =>
+  // eslint-disable-next-line no-control-regex
+  /^[\x00-\x7F]*$/.test(segment);
+
+/**
  * Returns the terminal width of a character.
  *
  * - Wide characters (CJK, emoji, etc.) return 2.
@@ -190,78 +188,17 @@ function charWidth(c: string): number {
 }
 
 /**
- * Splits each input line into an array of smaller segments.
- * - ASCII-only lines are returned as-is (wrapped in a single-element array).
- * - Lines containing width-2 characters (e.g. emojis, CJK) are split into
- *   segments to ensure proper rendering in terminal UIs.
+ * Formats each line of content by chopping it to fit the screen width.
  *
- * @param splitInput Array of input lines.
- * @returns Array of line segments for each original line.
- */
-function splitUtfInput(
-  splitInput: string[]
-): string[][] {
-  return splitInput.map(line => {
-    // eslint-disable-next-line no-control-regex
-    return /^[\x00-\x7F]*$/.test(line)
-      ? [line]
-      : splitUtfLine(line);
-  });
-}
-
-/**
- * Splits a string into segments, isolating width-2 characters (e.g., emojis, CJK).
- * Uses `Intl.Segmenter` if available to properly handle grapheme clusters.
+ * - Leaves ASCII-only lines as-is or truncates them with a visual tail.
+ * - For non-ASCII lines, uses character width to avoid mid-character truncation.
+ * - Adds a reverse video ">" marker when chopping occurs.
+ * - Only formats up to the visible window height (`maxRow`).
  *
- * @param line - The input string line to split.
- * @returns An array of segments, where each width-2 character is isolated.
- */
-function splitUtfLine(line: string): string[] {
-  const formattedLine: string[] = [];
-
-  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - TS might not recognize Segmenter
-    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
-    : null;
-
-  const splitLine = segmenter
-    ? [...segmenter.segment(line)].map(s => s.segment)
-    : Array.from(line);
-
-  let lastSlice = 0;
-
-  for (let i = 0; i < splitLine.length; i++) {
-    const c = splitLine[i];
-
-    if (charWidth(c) === 2) {
-      if (i > lastSlice) {
-        formattedLine.push(splitLine.slice(lastSlice, i).join(''));
-      }
-
-      formattedLine.push(c);
-      lastSlice = i + 1;
-    }
-  }
-
-  if (lastSlice < splitLine.length) {
-    formattedLine.push(splitLine.slice(lastSlice).join(''));
-  }
-
-  return formattedLine;
-}
-
-/**
- * Truncates long lines and appends a visible overflow marker.
- *
- * - Adds an inverted `>` marker if a line exceeds the screen width.
- * - Pads the output with tildes (`~`) to fill the window height.
- * - Updates EOF mode if the end of content is reached.
- *
- * @param content - The full input content split into lines.
- * @param formattedContent - The array to store processed display lines.
- * @param maxRow - The maximum row index to process up to.
- * @returns A single formatted string ready to be rendered.
+ * @param content - Raw content as an array of strings (1D lines).
+ * @param formattedContent - Output buffer to collect processed lines.
+ * @param maxRow - The last row index (inclusive) to display.
+ * @returns A newline-joined string ready for terminal rendering.
  */
 function chopLongLines(
   content: string[],
@@ -273,17 +210,47 @@ function chopLongLines(
   while (row < maxRow && row < content.length) {
     const line = content[row];
 
-    formattedContent.push(
-      line.length > config.screenWidth
-        ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
-        : line
-    );
+    if (line.length <= config.screenWidth) {
+      formattedContent.push(line);
+      row++;
+      continue;
+    }
+
+    if (isAscii(line)) {
+      formattedContent.push(
+        line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
+      );
+    } else {
+      const formattedLine: string[] = [];
+
+      const segments = Array.from(line);
+      let length = 0;
+
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const segmentWidth = charWidth(segment);
+        const concatLength = length + segmentWidth;
+
+        if (concatLength > config.screenWidth - 1 || (concatLength === config.screenWidth && i !== segments.length - 1)) {
+          formattedLine.push(
+            '\x1b[7m' +
+            ' '.repeat(Math.max(config.screenWidth - length - 1, 0)) +
+            '>\x1b[0m'
+          );
+          break;
+        }
+
+        formattedLine.push(segment);
+        length += segmentWidth;
+      }
+
+      formattedContent.push(formattedLine.join(''));
+    }
 
     row++;
   }
 
   mode.EOF = row === content.length && row <= maxRow;
-
   padToEOF(formattedContent, row, maxRow);
 
   return formattedContent.join('\n');
