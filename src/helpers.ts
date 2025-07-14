@@ -54,23 +54,20 @@ export function inputToFilePaths(input: unknown): string[] {
 }
 
 /**
- * Converts various input types into a formatted array of strings.
+ * Converts various input types to a 2D string array for formatted display.
  *
- * - Strings are split into segments, preserving lines and wide characters.
- * - Non-string primitives are converted via `.toString()`.
- * - Objects are serialized using `JSON.stringify`, respecting indentation.
- * - ASCII-only strings are processed with a fast path; others with UTF-aware
- *   splitting.
+ * - Strings are split by lines.
+ * - Non-ASCII characters (e.g. emojis, CJK) are further segmented.
+ * - Preserves or flattens formatting based on `preserveFormat`.
  *
- * @param input - The value to convert (string, number, object, etc.).
- * @param preserveFormat - Whether to disable indentation in JSON output.
- * @returns An array of string segments suitable for display in pagers or
- *          terminals.
+ * @param input - Any input to be stringified and processed.
+ * @param preserveFormat - If true, skips indentation in JSON.stringify.
+ * @returns A 2D array of strings representing the formatted input.
  */
 export function inputToString(
   input: unknown,
   preserveFormat: boolean
-): string[] {
+): string[][] {
   let inputString = '';
 
   switch (typeof input) {
@@ -101,12 +98,10 @@ export function inputToString(
 
   if (!inputString) return [];
 
-  const formattedInput: string[] = [];
-
   // eslint-disable-next-line no-control-regex
   return /^[\x00-\x7F]*$/.test(inputString)
-    ? splitAsciiInput(formattedInput, inputString)
-    : splitUtfInput(formattedInput, inputString);
+    ? inputString.split('\n').map(line => [line])
+    : splitUtfInput(inputString.split('\n'));
 }
 
 /**
@@ -195,75 +190,65 @@ function charWidth(c: string): number {
 }
 
 /**
- * Splits an ASCII-only string into segments based on newline characters.
+ * Splits each input line into an array of smaller segments.
+ * - ASCII-only lines are returned as-is (wrapped in a single-element array).
+ * - Lines containing width-2 characters (e.g. emojis, CJK) are split into
+ *   segments to ensure proper rendering in terminal UIs.
  *
- * - Each line is pushed individually, preserving the structure.
- * - If a newline appears at the start, it is preserved as '\n'.
- * - Avoids adding empty strings at the end.
- *
- * @param formattedInput - The array to store formatted string segments.
- * @param inputString - The ASCII-only input string.
- * @returns The formatted array of string segments.
+ * @param splitInput Array of input lines.
+ * @returns Array of line segments for each original line.
  */
-function splitAsciiInput(
-  formattedInput: string[],
-  inputString: string
-): string[] {
-  let prev = 0;
-  let curr = inputString.indexOf('\n', prev);
-
-  if (curr === -1) return [inputString];
-
-  while (curr !== -1) {
-    formattedInput.push(curr ? inputString.slice(prev, curr) : '\n');
-    prev = curr;
-    curr = inputString.indexOf('\n', prev + 1);
-  }
-
-  if (prev < inputString.length - 1) {
-    formattedInput.push(inputString.slice(prev));
-  }
-
-  return formattedInput;
+function splitUtfInput(
+  splitInput: string[]
+): string[][] {
+  return splitInput.map(line => {
+    // eslint-disable-next-line no-control-regex
+    return /^[\x00-\x7F]*$/.test(line)
+      ? [line]
+      : splitUtfLine(line);
+  });
 }
 
 /**
- * Splits a UTF-8 encoded string into segments, ensuring wide characters
- * (e.g., emojis, CJK characters) and newline characters are isolated.
+ * Splits a string into segments, isolating width-2 characters (e.g., emojis, CJK).
+ * Uses `Intl.Segmenter` if available to properly handle grapheme clusters.
  *
- * - Preserves line structure by pushing accumulated characters until a newline
- *   or wide character.
- * - Wide characters (width 2) are isolated into their own lines.
- * - Handles surrogate pairs using `Array.from` to correctly process UTF-16.
- *
- * @param formattedInput - The array to store formatted string segments.
- * @param inputString - The UTF-8 encoded input string.
- * @returns The formatted array of string segments.
+ * @param line - The input string line to split.
+ * @returns An array of segments, where each width-2 character is isolated.
  */
-function splitUtfInput(
-  formattedInput: string[],
-  inputString: string
-): string[] {
-  let line: string[] = [];
+function splitUtfLine(line: string): string[] {
+  const formattedLine: string[] = [];
 
-  for (const c of inputString) {
-    if (c === '\n') {
-      if (line.length) formattedInput.push(line.join(''));
-      line = ['\n'];
-    } else if (charWidth(c) === 2) {
-      if (line.length) {
-        formattedInput.push(line.join(''));
-        line = [];
+  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - TS might not recognize Segmenter
+    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+    : null;
+
+  const splitLine = segmenter
+    ? [...segmenter.segment(line)].map(s => s.segment)
+    : Array.from(line);
+
+  let lastSlice = 0;
+
+  for (let i = 0; i < splitLine.length; i++) {
+    const c = splitLine[i];
+
+    if (charWidth(c) === 2) {
+      if (i > lastSlice) {
+        formattedLine.push(splitLine.slice(lastSlice, i).join(''));
       }
-      formattedInput.push(c);
-    } else {
-      line.push(c);
+
+      formattedLine.push(c);
+      lastSlice = i + 1;
     }
   }
 
-  if (line.length) formattedInput.push(line.join(''));
+  if (lastSlice < splitLine.length) {
+    formattedLine.push(splitLine.slice(lastSlice).join(''));
+  }
 
-  return formattedInput;
+  return formattedLine;
 }
 
 /**
