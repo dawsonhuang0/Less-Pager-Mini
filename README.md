@@ -160,6 +160,7 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [ ] CHANGING FILES
 - [ ] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
+- [x] Support wide-character (emoji, CJK, etc.) rendering
 
 ## Built With
 

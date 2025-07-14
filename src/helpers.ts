@@ -3,17 +3,17 @@ import fs from 'fs';
 import { config, mode } from './pagerConfig';
 
 /**
- * Calculates how many sub-rows (wrapped lines) a line occupies on screen.
- *
- * - Returns 0 if `config.chopLongLines` is enabled (no wrapping).
- * - Otherwise, returns the number of wrapped lines based on
- *   `config.screenWidth`.
- *
- * @param line - A single line of text from the content.
- * @returns The number of sub-rows needed to display the line.
+ * Returns how many extra sub-rows a line will take if it overflows screen
+ * width.
+ * 
+ * - Returns 0 if line-chopping is enabled.
+ * - Otherwise, calculates how many full rows the visual width spans.
+ * 
+ * @param line - The string to measure.
+ * @returns Number of sub-rows needed to display the line.
  */
 export const maxSubRow = (line: string): number =>
-  config.chopLongLines? 0: Math.floor(line.length / config.screenWidth);
+  config.chopLongLines ? 0 : Math.floor(visualWidth(line) / config.screenWidth);
 
 /**
  * Converts a buffer string to a number.
@@ -188,6 +188,24 @@ function charWidth(c: string): number {
 }
 
 /**
+ * Calculates the total visual width of a string based on terminal character
+ * widths.
+ *
+ * @param line - The input string to measure.
+ * @returns The total visual width of the string in terminal columns.
+ */
+export function visualWidth(line: string): number {
+  const segments = Array.from(line);
+  let length = 0;
+
+  for (const segment of segments) {
+    length += charWidth(segment);
+  }
+
+  return length;
+}
+
+/**
  * Truncates long lines to fit the screen width with a visual marker.
  *
  * - Uses `chopLine` for non-ASCII content to handle wide characters safely.
@@ -209,7 +227,7 @@ function chopLongLines(
   while (row < maxRow && row < content.length) {
     const line = content[row];
 
-    if (line.length <= config.screenWidth) {
+    if (visualWidth(line) <= config.screenWidth) {
       formattedContent.push(line);
       row++;
       continue;
@@ -284,23 +302,19 @@ function chopLine(line: string): string {
     }
 
     formattedLine.push(segment);
-    length += segmentWidth;
+    length = concatLength;
   }
 
   return formattedLine.join('');
 }
 
 /**
- * Wraps long lines across multiple terminal rows based on screen width.
+ * Wraps lines to fit within screen width, handling partial rows if needed.
  *
- * - Handles partial rendering if `config.subRow` is active.
- * - Uses `partitionLine` to split long lines, `assignLine` for short ones.
- * - Updates EOF status and pads the rest of the window if needed.
- *
- * @param content - The full input content split into lines.
- * @param formattedContent - The array to store wrapped display lines.
- * @param maxRow - The maximum terminal row index to fill.
- * @returns A single formatted string ready to be rendered.
+ * @param content - The original content lines.
+ * @param formattedContent - The array to store processed output lines.
+ * @param maxRow - Maximum number of rows to display.
+ * @returns The joined string of formatted lines.
  */
 function wrapLongLines(
   content: string[],
@@ -308,32 +322,25 @@ function wrapLongLines(
   maxRow: number
 ): string {
   let row = config.row;
-  let lastRow = row;
+  let line = content[row];
 
-  let i = row;
-  let line = content[i];
+  row = config.subRow || visualWidth(line) > config.screenWidth
+    ? partitionLine(formattedContent, line, row, maxRow, true)
+    : assignLine(formattedContent, line, row);
 
-  if (config.subRow && i < content.length) {
-    row = partitionLine(formattedContent, line, row, maxRow, true);
-    i++;
-  }
+  let i = row + 1;
 
   while (row < maxRow && i < content.length) {
-    lastRow = row;
-
     line = content[i];
 
-    row = line.length > config.screenWidth
+    row = visualWidth(line) > config.screenWidth
       ? partitionLine(formattedContent, line, row, maxRow)
       : assignLine(formattedContent, line, row);
 
     i++;
   }
 
-  mode.EOF = i === content.length
-    && row <= maxRow
-    && lastRow + maxSubRow(line) - config.subRow < row;
-
+  mode.EOF = i === content.length && row <= maxRow;
   padToEOF(formattedContent, row, maxRow);
 
   return formattedContent.join('\n');
@@ -360,19 +367,16 @@ function assignLine(
 }
 
 /**
- * Breaks a long line into sub-rows and appends them to the formatted output.
+ * Breaks a long line into screen-width-sized chunks and appends them to the
+ * output.
  *
- * - Splits a line based on `config.screenWidth` into multiple segments.
- * - Starts from `config.subRow` if it's the first line; otherwise starts at 0.
- * - Stops when the line is fully processed or the maximum row limit is reached.
- *
- * @param formattedContent - The array to store formatted line segments.
- * @param line - The long line to be partitioned.
- * @param row - The current row index.
- * @param maxRow - The maximum number of rows allowed.
- * @param firstLine - Whether this is the first line being rendered
- *                    (uses `config.subRow`).
- * @returns The next available row index after partitioning.
+ * @param formattedContent - Output array to store partitioned lines.
+ * @param line - The input line to be partitioned.
+ * @param row - Current row index in the output.
+ * @param maxRow - Maximum number of rows to fill.
+ * @param firstLine - Whether this is the first (possibly partially displayed)
+ *                    line.
+ * @returns The updated row index after processing.
  */
 function partitionLine(
   formattedContent: string[],
@@ -381,17 +385,40 @@ function partitionLine(
   maxRow: number,
   firstLine: boolean = false
 ): number {
-  let subRow = firstLine ? config.subRow : 0;
-  const subRows = maxSubRow(line) + 1;
+  const subRowStart = firstLine ? config.subRow : 0;
+  let subRow = 0;
 
-  while (subRow < subRows && row < maxRow) {
-    const start = subRow * config.screenWidth;
-    const end = start + config.screenWidth;
+  let formattedLine: string[] = [];
 
-    formattedContent.push(line.slice(start, end));
+  const segments = Array.from(line);
+  let length = 0;
 
+  for (let i = 0; row < maxRow && i < segments.length; i++) {
+    const segment = segments[i];
+    const segmentWidth = charWidth(segment);
+    const concatLength = length + segmentWidth;
+
+    if (concatLength >= config.screenWidth) {
+      const overflow = concatLength > config.screenWidth;
+
+      if (subRow >= subRowStart) formattedContent.push(
+        formattedLine.join('') + (overflow ? '' : segment)
+      );
+
+      formattedLine = overflow ? [segment] : [];
+      length = overflow ? segmentWidth : 0;
+
+      row++;
+      subRow++;
+    } else {
+      formattedLine.push(segment);
+      length = concatLength;
+    }
+  }
+
+  if (row < maxRow && subRow >= subRowStart && formattedLine.length) {
+    formattedContent.push(formattedLine.join(''));
     row++;
-    subRow++;
   }
 
   return row;
