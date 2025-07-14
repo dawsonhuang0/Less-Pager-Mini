@@ -188,17 +188,16 @@ function charWidth(c: string): number {
 }
 
 /**
- * Formats each line of content by chopping it to fit the screen width.
+ * Truncates long lines to fit the screen width with a visual marker.
  *
- * - Leaves ASCII-only lines as-is or truncates them with a visual tail.
- * - For non-ASCII lines, uses character width to avoid mid-character truncation.
- * - Adds a reverse video ">" marker when chopping occurs.
- * - Only formats up to the visible window height (`maxRow`).
+ * - Uses `chopLine` for non-ASCII content to handle wide characters safely.
+ * - Adds a reverse video `>` if the line is chopped.
+ * - Only processes lines within the visible window range.
  *
- * @param content - Raw content as an array of strings (1D lines).
- * @param formattedContent - Output buffer to collect processed lines.
- * @param maxRow - The last row index (inclusive) to display.
- * @returns A newline-joined string ready for terminal rendering.
+ * @param content - Raw content as an array of strings.
+ * @param formattedContent - Output buffer for processed lines.
+ * @param maxRow - Maximum row index to format up to.
+ * @returns The final formatted content joined by newlines.
  */
 function chopLongLines(
   content: string[],
@@ -216,36 +215,11 @@ function chopLongLines(
       continue;
     }
 
-    if (isAscii(line)) {
-      formattedContent.push(
-        line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
-      );
-    } else {
-      const formattedLine: string[] = [];
-
-      const segments = Array.from(line);
-      let length = 0;
-
-      for (let i = 0; i < segments.length; i++) {
-        const segment = segments[i];
-        const segmentWidth = charWidth(segment);
-        const concatLength = length + segmentWidth;
-
-        if (concatLength > config.screenWidth - 1 || (concatLength === config.screenWidth && i !== segments.length - 1)) {
-          formattedLine.push(
-            '\x1b[7m' +
-            ' '.repeat(Math.max(config.screenWidth - length - 1, 0)) +
-            '>\x1b[0m'
-          );
-          break;
-        }
-
-        formattedLine.push(segment);
-        length += segmentWidth;
-      }
-
-      formattedContent.push(formattedLine.join(''));
-    }
+    formattedContent.push(
+      isAscii(line)
+        ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
+        : chopLine(line)
+    );
 
     row++;
   }
@@ -254,6 +228,66 @@ function chopLongLines(
   padToEOF(formattedContent, row, maxRow);
 
   return formattedContent.join('\n');
+}
+
+/**
+ * Determines if the current segment should be the last visible part of the
+ * line.
+ *
+ * - Marks the point where the line would exceed the screen width.
+ * - Also checks if the segment exactly fits the screen but isn't the last.
+ *
+ * @param concatLength - Current total display width including this segment.
+ * @param segmentsLength - Total number of segments in the line.
+ * @param i - Current segment index.
+ * @returns True if this segment should trigger truncation with a tail marker.
+ */
+function isTail(
+  concatLength: number,
+  segmentsLength: number,
+  i: number
+): boolean {
+  return (
+    concatLength > config.screenWidth - 1 ||
+    (concatLength === config.screenWidth && i !== segmentsLength - 1)
+  );
+}
+
+/**
+ * Truncates a single line to fit the screen width, respecting character width.
+ *
+ * - Handles wide characters (e.g. emoji, CJK) using `charWidth`.
+ * - Appends a visual tail (`>`) in reverse video if the line is chopped.
+ * - Ensures no mid-character truncation occurs.
+ *
+ * @param line - A single string line to process.
+ * @returns The chopped line with visual overflow indicator if needed.
+ */
+function chopLine(line: string): string {
+  const formattedLine: string[] = [];
+
+  const segments = Array.from(line);
+  let length = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const segmentWidth = charWidth(segment);
+    const concatLength = length + segmentWidth;
+
+    if (isTail(concatLength, segments.length, i)) {
+      formattedLine.push(
+        '\x1b[7m' +
+        ' '.repeat(Math.max(config.screenWidth - length - 1, 0)) +
+        '>\x1b[0m'
+      );
+      break;
+    }
+
+    formattedLine.push(segment);
+    length += segmentWidth;
+  }
+
+  return formattedLine.join('');
 }
 
 /**
