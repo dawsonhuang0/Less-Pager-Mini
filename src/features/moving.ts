@@ -3,13 +3,16 @@ import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 import { config, mode } from "../pagerConfig";
 
 /**
- * Moves the view forward by a given number of lines.
+ * Moves the viewport forward by a given number of lines or sub-rows.
  *
- * - If `chopLongLines` is enabled, advances full rows.
- * - Otherwise, advances sub-rows (wrapped lines) accordingly.
- * - If EOF is reached, rings the terminal bell and halts.
+ * - In chopped mode (`chopLongLines = true`), moves full logical lines up to
+ *   the screen limit.
+ * - In wrapped mode, moves by visual sub-rows, respecting wrapping boundaries.
+ * - Prevents scrolling past the calculated end viewport to preserve the (END)
+ *   marker.
+ * - Rings a terminal bell if already at EOF and unable to scroll further.
  *
- * @param content - The full content as an array of lines.
+ * @param content - The array of full text lines in the buffer.
  * @param offset - The number of lines or sub-rows to move forward.
  */
 export function lineForward(content: string[], offset: number): void {
@@ -19,7 +22,10 @@ export function lineForward(content: string[], offset: number): void {
   }
 
   if (config.chopLongLines) {
-    config.row = Math.min(config.row + offset, content.length - 1);
+    config.row = Math.min(
+      config.row + offset,
+      Math.max(content.length - config.window + 1, 0)
+    );
     return;
   }
 
@@ -34,13 +40,19 @@ export function lineForward(content: string[], offset: number): void {
   config.subRow = 0;
   config.row++;
 
-  while (offset && config.row < content.length) {
+  const rowEnd = getEndPosition(content);
+  const maxRow = Math.max(rowEnd.maxRow, 0) + 1;
+
+  while (offset && config.row < maxRow) {
     config.subRow = Math.min(maxSubRow(content[config.row]), offset);
     offset -= config.subRow + 1;
     config.row++;
   }
 
-  if (config.row === content.length) config.row = content.length - 1;
+  if (config.row === maxRow) {
+    config.row = maxRow - 1;
+    config.subRow = rowEnd.subRow;
+  }
 }
 
 /**
@@ -145,4 +157,40 @@ export function setWindowForward(content: string[], buffer: string): void {
 export function setWindowBackward(content: string[], buffer: string): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
   lineBackward(content, config.setWindow || config.window - 1);
+}
+
+/**
+ * Calculates the last visible row and sub-row that can fit within the current
+ * window height.
+ *
+ * This is used in wrapped mode to determine the correct position for `(END)`,
+ * ensuring the viewport is filled without exceeding the screen height.
+ *
+ * @param content - The array of text lines.
+ * @returns An object containing:
+ *            - `maxRow`: the last visible row index,
+ *            - `subRow`: the starting sub-row to fit the viewport.
+ */
+function getEndPosition(content: string[]): {
+  maxRow: number,
+  subRow: number
+} {
+  let maxRow = content.length - 1;
+  let subRow = 0;
+  let rowCount = 0;
+
+  while (maxRow >= 0) {
+    const subRows = maxSubRow(content[maxRow]) + 1;
+    const rowSum = rowCount + subRows;
+  
+    if (rowSum >= config.window - 1) {
+      subRow = rowSum - config.window + 1;
+      break;
+    }
+  
+    rowCount = rowSum;
+    maxRow--;
+  }
+
+  return { maxRow, subRow };
 }
