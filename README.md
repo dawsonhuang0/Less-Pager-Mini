@@ -154,7 +154,9 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
   - [x] Backward one window
   - [x] Forward one window and set window to N
   - [x] Backward one window and set window to N
-  - [ ] Forward one window, but don't stop at EOF
+  - [x] Forward one window, but don't stop at EOF
+  - [ ] Forward one half-window and set half-window to N
+  - [ ] Backward one half-window and set half-window to N
 - [ ] JUMPING
 - [ ] SEARCHING
 - [ ] CHANGING FILES

@@ -3,20 +3,24 @@ import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 import { config, mode } from "../pagerConfig";
 
 /**
- * Moves the viewport forward by a given number of lines or sub-rows.
+ * Moves the view forward by a number of visual lines or sub-rows.
  *
- * - In chopped mode (`chopLongLines = true`), moves full logical lines up to
- *   the screen limit.
- * - In wrapped mode, moves by visual sub-rows, respecting wrapping boundaries.
- * - Prevents scrolling past the calculated end viewport to preserve the (END)
- *   marker.
- * - Rings a terminal bell if already at EOF and unable to scroll further.
+ * - Handles both chopped and wrapped line modes.
+ * - Respects EOF unless `ignoreEOF` is `true`.
+ * - In chopped mode, scrolls by full rows only.
+ * - In wrapped mode, scrolls sub-rows with smart bounds.
  *
- * @param content - The array of full text lines in the buffer.
- * @param offset - The number of lines or sub-rows to move forward.
+ * @param content - The full content as an array of lines.
+ * @param offset - Number of lines or sub-rows to move forward.
+ * @param ignoreEOF - Whether to ignore (END) and allow overflowing the
+ *                    viewport.
  */
-export function lineForward(content: string[], offset: number): void {
-  if (mode.EOF) {
+export function lineForward(
+  content: string[],
+  offset: number,
+  ignoreEOF: boolean = false
+): void {
+  if (!ignoreEOF && mode.EOF) {
     ringBell();
     return;
   }
@@ -40,8 +44,8 @@ export function lineForward(content: string[], offset: number): void {
   config.subRow = 0;
   config.row++;
 
-  const rowEnd = getEndPosition(content);
-  const maxRow = Math.max(rowEnd.maxRow, 0) + 1;
+  const rowEnd = ignoreEOF ? null : getEndPosition(content);
+  const maxRow = rowEnd ? Math.max(rowEnd.maxRow, 0) + 1 : content.length;
 
   while (offset && config.row < maxRow) {
     config.subRow = Math.min(maxSubRow(content[config.row]), offset);
@@ -51,7 +55,7 @@ export function lineForward(content: string[], offset: number): void {
 
   if (config.row === maxRow) {
     config.row = maxRow - 1;
-    config.subRow = rowEnd.subRow;
+    if (rowEnd) config.subRow = rowEnd.subRow;
   }
 }
 
@@ -94,19 +98,26 @@ export function lineBackward(content: string[], offset: number): void {
 }
 
 /**
- * Moves the view forward by one window.
+ * Scrolls the view forward by a window size.
  *
- * - If `buffer` is a valid number, uses it as the offset.
- * - Otherwise, uses `config.setWindow` if set, or defaults to
- *   `config.window - 1`.
+ * - If `buffer` is a valid number, it overrides the default window size.
+ * - Falls back to `config.setWindow` or `config.window - 1` if `buffer` is
+ *   invalid.
+ * - If `ignoreEOF` is `true`, allows scrolling beyond (END) without clamping.
  *
- * @param content - The full content as an array of lines.
- * @param buffer - A string representing the number of lines to scroll forward.
+ * @param content - The full content to paginate.
+ * @param buffer - A string that may represent the number of lines to scroll.
+ * @param ignoreEOF - Whether to bypass EOF constraints during scrolling.
  */
-export function windowForward(content: string[], buffer: string): void {
+export function windowForward(
+  content: string[],
+  buffer: string,
+  ignoreEOF: boolean = false
+): void {
   lineForward(
     content,
-    bufferToNum(buffer) || config.setWindow || config.window - 1
+    bufferToNum(buffer) || config.setWindow || config.window - 1,
+    ignoreEOF
   );
 }
 

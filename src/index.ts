@@ -148,6 +148,10 @@ async function contentPager(content: string[]): Promise<void> {
         setWindowBackward(content, buffer);
         break;
 
+      case 'NO_EOF_WINDOW_FORWARD':
+        windowForward(content, buffer, true);
+        break;
+
       case 'REPAINT':
         break;
   
