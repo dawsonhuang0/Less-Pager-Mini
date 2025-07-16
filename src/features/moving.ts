@@ -20,7 +20,9 @@ export function lineForward(
   offset: number,
   ignoreEOF: boolean = false
 ): void {
-  if (!ignoreEOF && mode.EOF) {
+  const currSubRow = maxSubRow(content[config.row]);
+
+  if (isEndPosition(ignoreEOF, content.length, currSubRow)) {
     ringBell();
     return;
   }
@@ -33,7 +35,7 @@ export function lineForward(
     return;
   }
 
-  const remaining = maxSubRow(content[config.row]) - config.subRow;
+  const remaining = currSubRow - config.subRow;
 
   if (remaining >= offset) {
     config.subRow += offset;
@@ -168,6 +170,30 @@ export function setWindowForward(content: string[], buffer: string): void {
 export function setWindowBackward(content: string[], buffer: string): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
   lineBackward(content, config.setWindow || config.window - 1);
+}
+
+/**
+ * Determines whether the current viewport position is at the end of the
+ * content.
+ *
+ * This check accounts for both EOF mode and the final row/subRow position
+ * based on whether EOF should be ignored.
+ *
+ * @param ignoreEOF - If `true`, skips EOF check and only uses position
+ *                    comparison.
+ * @param contentLength - Total number of content rows.
+ * @param currSubRow - The final sub-row index to compare against.
+ * @returns `true` if the current position is at the end; otherwise, `false`.
+ */
+function isEndPosition(
+  ignoreEOF: boolean,
+  contentLength: number,
+  currSubRow: number
+): boolean {
+  return (
+    (!ignoreEOF && mode.EOF) ||
+    (config.row === contentLength - 1 && config.subRow === currSubRow)
+  );
 }
 
 /**
