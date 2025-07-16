@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import wcwidth from 'wcwidth';
+
 import { config, mode } from './pagerConfig';
 
 /**
@@ -158,52 +160,47 @@ const isAscii = (segment: string): boolean =>
   /^[\x00-\x7F]*$/.test(segment);
 
 /**
- * Returns the terminal width of a character.
- *
- * - Wide characters (CJK, emoji, etc.) return 2.
- * - Narrow characters return 1.
- * - Invalid or empty input returns 0.
- *
- * @param c - The character to measure.
- * @returns Terminal display width in cells.
- */
-function charWidth(c: string): number {
-  const code = c.codePointAt(0);
-  if (code === undefined) return 0;
-
-  if (
-    code < 0x1100 ||
-    (code > 0x115F && code < 0x2329) ||
-    (code > 0x232A && code < 0x2E80) ||
-    (code > 0xA4CF && code < 0xAC00) ||
-    (code > 0xD7A3 && code < 0xF900) ||
-    (code > 0xFAFF && code < 0xFE10) ||
-    (code > 0xFE19 && code < 0xFE30) ||
-    (code > 0xFE6F && code < 0x1F300) ||
-    (code > 0x1FAFF && code < 0x20000)
-  ) return 1;
-
-  return 2;
-}
-
-/**
  * Calculates the total visual width of a string based on terminal character
  * widths.
  *
  * @param line - The input string to measure.
  * @returns The total visual width of the string in terminal columns.
  */
-export function visualWidth(line: string): number {
+function visualWidth(line: string): number {
   if (isAscii(line)) return line.length;
 
-  const segments = Array.from(line);
+  const segments = segmentLine(line);
   let length = 0;
 
   for (const segment of segments) {
-    length += charWidth(segment);
+    length += wcwidth(segment);
   }
 
   return length;
+}
+
+/**
+ * Segments a given string into grapheme clusters (visible characters).
+ *
+ * - Uses `Intl.Segmenter` if available to accurately split the string into
+ *   grapheme clusters
+ * - Falls back to `Array.from` for environments where `Intl.Segmenter` is
+ *   unavailable.
+ *
+ * @param line - The input string to be segmented.
+ * @returns An array of grapheme segments, each representing one visible
+ *          character.
+ */
+function segmentLine(line: string): string[] {
+  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - TS may not recognize Segmenter in older versions
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+  return segmenter
+    ? [...segmenter.segment(line)].flatMap(s => s.segment)
+    : Array.from(line);
 }
 
 /**
@@ -285,12 +282,12 @@ function isTail(
 function chopLine(line: string): string {
   const formattedLine: string[] = [];
 
-  const segments = Array.from(line);
+  const segments = segmentLine(line);
   let length = 0;
 
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
-    const segmentWidth = charWidth(segment);
+    const segmentWidth = visualWidth(segment);
     const concatLength = length + segmentWidth;
 
     if (isTail(concatLength, segments.length, i)) {
@@ -397,12 +394,12 @@ function partitionLine(
 ): number {
   let formattedLine: string[] = [];
 
-  const segments = Array.from(line);
+  const segments = segmentLine(line);
   let length = 0;
   let subRow = 0;
 
   for (const segment of segments) {
-    const segmentWidth = charWidth(segment);
+    const segmentWidth = visualWidth(segment);
     const concatLength = length + segmentWidth;
 
     if (concatLength < config.screenWidth) {
