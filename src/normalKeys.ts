@@ -22,6 +22,10 @@ const keys: Record<string, Actions> = {
    * EOF - end-of-file
    */
 
+  // backspace
+  '\x08': 'BACKSPACE', // backspace
+  '\x7F': 'BACKSPACE', // delete
+
   // command
   '\x3A': 'COMMAND', // :
 

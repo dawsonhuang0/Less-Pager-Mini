@@ -118,6 +118,11 @@ async function contentPager(content: string[]): Promise<void> {
 
     const action: Actions | undefined = getAction(key);
 
+    if (action === 'BACKSPACE' && buffer) {
+      buffer = buffer.slice(0, -1);
+      continue;
+    }
+
     switch (action) {
       case 'EXIT':
         exit = true;

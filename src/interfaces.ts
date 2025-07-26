@@ -35,6 +35,7 @@ export type Mode =
  * behaviors. They are typically triggered by specific key presses.
  */
 export type Actions =
+  | 'BACKSPACE'
   | 'COMMAND'
   | 'Z_EXIT'
   | 'ESC'
