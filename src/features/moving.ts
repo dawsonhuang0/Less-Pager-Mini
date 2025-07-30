@@ -45,7 +45,7 @@ export function lineForward(
 
     if (config.subRow + offset <= currSubRowMax) {
       config.subRow += offset;
-      break;
+      return;
     }
 
     offset -= currSubRowMax - config.subRow + 1;
@@ -84,21 +84,21 @@ export function lineBackward(content: string[], offset: number): void {
     return;
   }
 
-  if (config.subRow >= offset) {
-    config.subRow -= offset;
-    return;
-  }
+  while (offset > 0 && config.row >= 0) {
+    if (config.subRow >= offset) {
+      config.subRow -= offset;
+      return;
+    }
 
-  offset -= config.subRow + 1;
-  config.row--;
-
-  while (offset && config.row >= 0) {
-    config.subRow = Math.max(maxSubRow(content[config.row]) - offset, 0);
     offset -= config.subRow + 1;
     config.row--;
+    if (config.row >= 0) config.subRow = maxSubRow(content[config.row]);
   }
 
-  if (config.row < 0) config.row = 0;
+  if (config.row < 0) {
+    config.row = 0;
+    config.subRow = 0;
+  }
 }
 
 /**
