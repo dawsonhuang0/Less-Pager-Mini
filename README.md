@@ -155,8 +155,10 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
   - [x] Forward one window and set window to N
   - [x] Backward one window and set window to N
   - [x] Forward one window, but don't stop at EOF
-  - [ ] Forward one half-window and set half-window to N
-  - [ ] Backward one half-window and set half-window to N
+  - [x] Forward one half-window and set half-window to N
+  - [x] Backward one half-window and set half-window to N
+  - [ ] Right one or N positions half screen width
+  - [ ] Left one or N positions half screen width
 - [ ] JUMPING
 - [ ] SEARCHING
 - [ ] CHANGING FILES
@@ -169,8 +171,9 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 [![ANSI Escape Codes](https://img.shields.io/badge/ANSI%20Escape%20Codes-black?style=for-the-badge)](https://en.wikipedia.org/wiki/ANSI_escape_code)  
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org/)  
 [![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org/)  
-[![ESLint](https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white&style=for-the-badge)](https://eslint.org/)
-
+[![ESLint](https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white&style=for-the-badge)](https://eslint.org/)  
+[![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white&style=for-the-badge)](https://vitest.dev/)  
+[![Husky](https://img.shields.io/badge/Husky-000000?logo=husky&logoColor=white&style=for-the-badge)](https://typicode.github.io/husky/)
 
 
 ## Feedback
