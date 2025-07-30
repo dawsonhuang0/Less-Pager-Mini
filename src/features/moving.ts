@@ -1,3 +1,4 @@
+import { off } from "process";
 import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 
 import { config, mode } from "../pagerConfig";
@@ -20,44 +21,45 @@ export function lineForward(
   offset: number,
   ignoreEOF: boolean = false
 ): void {
-  const currSubRow = maxSubRow(content[config.row]);
+  let currSubRowMax = maxSubRow(content[config.row]);
 
-  if (isEndPosition(ignoreEOF, content.length, currSubRow)) {
+  if (isEndPosition(ignoreEOF, content.length, currSubRowMax)) {
     ringBell();
     return;
   }
 
   if (config.chopLongLines) {
-    config.row = Math.min(
-      config.row + offset,
-      Math.max(content.length - config.window + 1, 0)
-    );
+    const maxRow = ignoreEOF
+      ? content.length - 1
+      : Math.max(content.length - config.window + 1, 0);
+
+    config.row = Math.min(config.row + offset, maxRow);
     return;
   }
-
-  const remaining = currSubRow - config.subRow;
-
-  if (remaining >= offset) {
-    config.subRow += offset;
-    return;
-  }
-
-  offset -= remaining + 1;
-  config.subRow = 0;
-  config.row++;
 
   const rowEnd = ignoreEOF ? null : getEndPosition(content);
-  const maxRow = rowEnd ? Math.max(rowEnd.maxRow, 0) + 1 : content.length;
+  const maxRow = rowEnd ? rowEnd.maxRow : content.length;
 
-  while (offset && config.row < maxRow) {
-    config.subRow = Math.min(maxSubRow(content[config.row]), offset);
-    offset -= config.subRow + 1;
+  while (offset > 0 && config.row < maxRow) {
+    currSubRowMax = maxSubRow(content[config.row]);
+
+    if (config.subRow + offset <= currSubRowMax) {
+      config.subRow += offset;
+      break;
+    }
+
+    offset -= currSubRowMax - config.subRow + 1;
+
     config.row++;
+    config.subRow = 0;
   }
 
-  if (config.row === maxRow) {
-    config.row = maxRow - 1;
-    if (rowEnd) config.subRow = rowEnd.subRow;
+  if (config.row === content.length) {
+    config.row = content.length - 1;
+    config.subRow = currSubRowMax;
+  } else if (rowEnd && config.row >= rowEnd.maxRow) {
+    config.row = rowEnd.maxRow;
+    if (config.subRow > rowEnd.subRow) config.subRow = rowEnd.subRow;
   }
 }
 
