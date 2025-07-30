@@ -8,7 +8,7 @@ export const config: Config = {
   col: 0,
   subRow: 0,
   setWindow: 0,
-  setHalfWindow: -1,
+  setHalfWindow: 0,
   window: process.stdout.rows ?? 24,
   halfWindow: (process.stdout.rows ?? 24) / 2,
   screenWidth: process.stdout.columns ?? 80,

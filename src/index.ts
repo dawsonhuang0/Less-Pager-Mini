@@ -19,7 +19,9 @@ import {
   windowForward,
   windowBackward,
   setWindowForward,
-  setWindowBackward
+  setWindowBackward,
+  setHalfWindowForward,
+  setHalfWindowBackward
 } from "./features/moving";
 
 import { config, mode } from "./pagerConfig";
@@ -67,6 +69,9 @@ async function filePager(
   preserveFormat: boolean
 ): Promise<void> {
   if (!filePaths.length) return;
+
+  // remove line below in the future
+  if (preserveFormat) console.log('TODO: preserveFormat not implemented yet');
 }
 
 /**
@@ -155,6 +160,14 @@ async function contentPager(content: string[]): Promise<void> {
 
       case 'NO_EOF_WINDOW_FORWARD':
         windowForward(content, buffer, true);
+        break;
+
+      case 'SET_HALF_WINDOW_FORWARD':
+        setHalfWindowForward(content, buffer);
+        break;
+
+      case 'SET_HALF_WINDOW_BACKWARD':
+        setHalfWindowBackward(content, buffer);
         break;
 
       case 'REPAINT':

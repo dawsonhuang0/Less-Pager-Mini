@@ -173,6 +173,40 @@ export function setWindowBackward(content: string[], buffer: string): void {
 }
 
 /**
+ * Sets a custom half-window size using the given `buffer`, and scrolls forward.
+ *
+ * - If `buffer` is a valid number, updates `config.setHalfWindow` with it.
+ * - Then scrolls forward by `config.setHalfWindow` or falls back to
+ *   `config.halfWindow`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the custom number of lines to scroll
+ *                 forward.
+ */
+export function setHalfWindowForward(content: string[], buffer: string): void {
+  config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
+  lineForward(content, config.setHalfWindow || config.halfWindow);
+}
+
+
+/**
+ * Sets a custom half-window size using the given `buffer`, and scrolls
+ * backward.
+ *
+ * - If `buffer` is a valid number, updates `config.setHalfWindow` with it.
+ * - Then scrolls backward by `config.setHalfWindow` or falls back to
+ *   `config.halfWindow`.
+ *
+ * @param content - The full content as an array of lines.
+ * @param buffer - A string representing the custom number of lines to scroll
+ *                 backward.
+ */
+export function setHalfWindowBackward(content: string[], buffer: string): void {
+  config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
+  lineBackward(content, config.setHalfWindow || config.halfWindow);
+}
+
+/**
  * Determines whether the current viewport position is at the end of the
  * content.
  *
