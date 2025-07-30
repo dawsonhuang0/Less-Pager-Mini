@@ -56,7 +56,21 @@ describe('chopLongLines', () => {
     expect(output.split('\n')[0]).toBe('5 Hello こんにちは 안녕하세요 你好 😀😃😄😁😆');
   });
 
-  const lastLine = '14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些\x1b[7m>\x1b[0m';
+  test('forwards multiple lines into chopped line', () => {
+      lineForward(content, 12);
+      let output = formatContent(content);
+      expect(output.split('\n')[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
+
+      lineForward(content, 1);
+      output = formatContent(content);
+      expect(output.split('\n')[0]).toBe('14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些\x1b[7m>\x1b[0m');
+
+      lineForward(content, 1);
+      output = formatContent(content);
+      expect(output.split('\n')[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
+    });
+
+  const lastLine = '15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬';
 
   test('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
@@ -67,7 +81,6 @@ describe('chopLongLines', () => {
 
   test('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
-
     const output = formatContent(content);
     expect(output.split('\n')[0]).toBe(lastLine);
   });
@@ -79,16 +92,24 @@ describe('wrapLongLines', () => {
   });
 
   test('forwards to wrapped line and forward 1 line', () => {
-    lineForward(content, 13);
+    lineForward(content, 12);
     let output = formatContent(content);
+    expect(output.split('\n')[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
+    
+    lineForward(content, 1);
+    output = formatContent(content);
     expect(output.split('\n')[0]).toBe('14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些');
 
     lineForward(content, 1);
     output = formatContent(content);
     expect(output.split('\n')[0]).toBe('复杂的字符。');
+
+    lineForward(content, 1);
+    output = formatContent(content);
+    expect(output.split('\n')[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
   });
 
-  const lastLine = '19 Mixed: Hello 世界 🌈🔥💧❄️🍀🌸🌼🌻🌺🌹🌷🌱🌲🌳';
+  const lastLine = '20 A line with CJK + emoji + ASCII to push the limits: 编程测试';
 
   test('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
@@ -99,7 +120,6 @@ describe('wrapLongLines', () => {
 
   test('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
-
     const output = formatContent(content);
     expect(output.split('\n')[0]).toBe(lastLine);
   });

@@ -35,6 +35,7 @@ const text = `1 A
 33 这是一段非常长的文字，为了确保终端在渲染时不会出错，我们加入足够的内容来测试分页功能是否正常
 34 🚀🚀🚀 Testing long emoji-only line 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
 35 Final big mix: ABC汉字🙂🙃😉😌😍🥰😘😗😙😚🤪🤨🧐🤓😎🥸🤩🥳🤗🤔
-36 THE END 🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩`;
+36 One more to end!!!
+37 THE END 🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩🚩`;
 
 export const content = inputToString(text, false);

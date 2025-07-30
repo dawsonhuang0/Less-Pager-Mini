@@ -1,4 +1,3 @@
-import { off } from "process";
 import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 
 import { config, mode } from "../pagerConfig";
