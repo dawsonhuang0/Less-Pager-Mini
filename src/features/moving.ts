@@ -3,17 +3,11 @@ import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 import { config, mode } from "../pagerConfig";
 
 /**
- * Moves the view forward by a number of visual lines or sub-rows.
+ * Moves forward by a given offset through content lines or subrows.
  *
- * - Handles both chopped and wrapped line modes.
- * - Respects EOF unless `ignoreEOF` is `true`.
- * - In chopped mode, scrolls by full rows only.
- * - In wrapped mode, scrolls sub-rows with smart bounds.
- *
- * @param content - The full content as an array of lines.
- * @param offset - Number of lines or sub-rows to move forward.
- * @param ignoreEOF - Whether to ignore (END) and allow overflowing the
- *                    viewport.
+ * @param content - Full content lines.
+ * @param offset - Number of lines/subrows to move forward.
+ * @param ignoreEOF - If true, ignores EOF clamp (optional).
  */
 export function lineForward(
   content: string[],
@@ -37,10 +31,12 @@ export function lineForward(
   }
 
   const rowEnd = ignoreEOF ? null : getEndPosition(content);
-  const maxRow = rowEnd ? rowEnd.maxRow : content.length;
+  const maxRow = rowEnd ? rowEnd.maxRow : content.length - 1;
 
-  while (offset > 0 && config.row < maxRow) {
-    currSubRowMax = maxSubRow(content[config.row]);
+  while (offset > 0 && config.row <= maxRow) {
+    currSubRowMax = config.row === maxRow && rowEnd
+      ? rowEnd.subRow
+      : maxSubRow(content[config.row]);
 
     if (config.subRow + offset <= currSubRowMax) {
       config.subRow += offset;
@@ -53,12 +49,12 @@ export function lineForward(
     config.subRow = 0;
   }
 
-  if (config.row === content.length) {
+  if (rowEnd && config.row > rowEnd.maxRow) {
+    config.row = rowEnd.maxRow;
+    config.subRow = rowEnd.subRow;
+  } else if (config.row === content.length) {
     config.row = content.length - 1;
     config.subRow = currSubRowMax;
-  } else if (rowEnd && config.row >= rowEnd.maxRow) {
-    config.row = rowEnd.maxRow;
-    if (config.subRow > rowEnd.subRow) config.subRow = rowEnd.subRow;
   }
 }
 
@@ -89,14 +85,15 @@ export function lineBackward(content: string[], offset: number): void {
       return;
     }
 
-    offset -= config.subRow + 1;
-    config.row--;
-    if (config.row >= 0) config.subRow = maxSubRow(content[config.row]);
-  }
+    if (config.row === 0) {
+      config.subRow = 0;
+      return;
+    }
 
-  if (config.row < 0) {
-    config.row = 0;
-    config.subRow = 0;
+    offset -= config.subRow + 1;
+
+    config.row--;
+    config.subRow = maxSubRow(content[config.row]);
   }
 }
 
@@ -217,31 +214,25 @@ export function setHalfWindowBackward(content: string[], buffer: string): void {
  * @param ignoreEOF - If `true`, skips EOF check and only uses position
  *                    comparison.
  * @param contentLength - Total number of content rows.
- * @param currSubRow - The final sub-row index to compare against.
+ * @param currSubRowMax - The final sub-row index to compare against.
  * @returns `true` if the current position is at the end; otherwise, `false`.
  */
 function isEndPosition(
   ignoreEOF: boolean,
   contentLength: number,
-  currSubRow: number
+  currSubRowMax: number
 ): boolean {
   return (
     (!ignoreEOF && mode.EOF) ||
-    (config.row === contentLength - 1 && config.subRow === currSubRow)
+    (config.row === contentLength - 1 && config.subRow === currSubRowMax)
   );
 }
 
 /**
- * Calculates the last visible row and sub-row that can fit within the current
- * window height.
+ * Calculates the last visible row and subrow for window clamping.
  *
- * This is used in wrapped mode to determine the correct position for `(END)`,
- * ensuring the viewport is filled without exceeding the screen height.
- *
- * @param content - The array of text lines.
- * @returns An object containing:
- *            - `maxRow`: the last visible row index,
- *            - `subRow`: the starting sub-row to fit the viewport.
+ * @param content - Full content lines.
+ * @returns Object with `maxRow` and `subRow` for the end position.
  */
 function getEndPosition(content: string[]): {
   maxRow: number,
@@ -262,6 +253,11 @@ function getEndPosition(content: string[]): {
   
     rowCount = rowSum;
     maxRow--;
+  }
+
+  if (maxRow < 0) {
+    maxRow = 0;
+    subRow = 0;
   }
 
   return { maxRow, subRow };

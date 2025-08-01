@@ -101,12 +101,16 @@ export function inputToString(
  * @returns A formatted string ready for rendering.
  */
 export function formatContent(content: string[]): string {
-  const maxRow = config.row + config.window - 1;
-  const formattedContent: string[] = [];
+  const lines: string[] = [];
 
-  return config.chopLongLines
-    ? chopLongLines(content, formattedContent, maxRow)
-    : wrapLongLines(content, formattedContent, maxRow);
+  if (config.chopLongLines) {
+    chopLongLines(content, lines);
+  } else {
+    wrapLongLines(content, lines);
+  }
+
+  padToEOF(lines);
+  return lines.join('\n');
 }
 
 /**
@@ -196,54 +200,44 @@ function segmentLine(line: string): string[] {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore - TS may not recognize Segmenter in older versions
     ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+    // Fallback for environments without Intl.Segmenter
+    /* v8 ignore next */
     : null;
 
   return segmenter
     ? [...segmenter.segment(line)].flatMap(s => s.segment)
+
+    // Fallback for environments without Intl.Segmenter
+    /* v8 ignore next */
     : Array.from(line);
 }
 
 /**
- * Truncates long lines to fit the screen width with a visual marker.
+ * Chops long lines to fit screen width and fills the window.
  *
- * - Uses `chopLine` for non-ASCII content to handle wide characters safely.
- * - Adds a reverse video `>` if the line is chopped.
- * - Only processes lines within the visible window range.
- *
- * @param content - Raw content as an array of strings.
- * @param formattedContent - Output buffer for processed lines.
- * @param maxRow - Maximum row index to format up to.
- * @returns The final formatted content joined by newlines.
+ * @param content - Full content lines.
+ * @param lines - Output array of chopped lines.
  */
-function chopLongLines(
-  content: string[],
-  formattedContent: string[],
-  maxRow: number
-): string {
-  let row = config.row;
+function chopLongLines(content: string[], lines: string[]): void {
+  const maxRow = content.length - config.row;
 
-  while (row < maxRow && row < content.length) {
-    const line = content[row];
+  while (lines.length < config.window - 1 && lines.length < maxRow) {
+    const line = content[config.row + lines.length];
 
     if (visualWidth(line) <= config.screenWidth) {
-      formattedContent.push(line);
-      row++;
+      lines.push(line);
       continue;
     }
 
-    formattedContent.push(
+    lines.push(
       isAscii(line)
         ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
         : chopLine(line)
     );
-
-    row++;
   }
 
-  mode.EOF = row === content.length && row <= maxRow;
-  padToEOF(formattedContent, row, maxRow);
-
-  return formattedContent.join('\n');
+  mode.EOF = lines.length === maxRow;
 }
 
 /**
@@ -270,19 +264,15 @@ function isTail(
 }
 
 /**
- * Truncates a single line to fit the screen width, respecting character width.
+ * Truncates a long line to screen width and appends a `>` marker.
  *
- * - Handles wide characters (e.g. emoji, CJK) using `charWidth`.
- * - Appends a visual tail (`>`) in reverse video if the line is chopped.
- * - Ensures no mid-character truncation occurs.
- *
- * @param line - A single string line to process.
- * @returns The chopped line with visual overflow indicator if needed.
+ * @param longLine - The line to chop.
+ * @returns The chopped line with marker.
  */
-function chopLine(line: string): string {
-  const formattedLine: string[] = [];
+function chopLine(longLine: string): string {
+  const line: string[] = [];
 
-  const segments = segmentLine(line);
+  const segments = segmentLine(longLine);
   let length = 0;
 
   for (let i = 0; i < segments.length; i++) {
@@ -291,7 +281,7 @@ function chopLine(line: string): string {
     const concatLength = length + segmentWidth;
 
     if (isTail(concatLength, segments.length, i)) {
-      formattedLine.push(
+      line.push(
         '\x1b[7m' +
         ' '.repeat(Math.max(config.screenWidth - length - 1, 0)) +
         '>\x1b[0m'
@@ -299,102 +289,65 @@ function chopLine(line: string): string {
       break;
     }
 
-    formattedLine.push(segment);
+    line.push(segment);
     length = concatLength;
   }
 
-  return formattedLine.join('');
+  return line.join('');
 }
 
 /**
- * Formats the visible window of content into screen-sized lines.
+ * Wraps lines into subrows to fit screen width and fills the window.
  *
- * - Begins rendering from the current `config.row` and `config.subRow`.
- * - Uses `partitionLine` for long lines, or `assignLine` for short ones.
- * - Stops when `maxRow` is filled or content ends.
- * - Sets `mode.EOF` if the end of content is reached.
- *
- * @param content - The full content split into original lines.
- * @param formattedContent - The buffer to store formatted screen lines.
- * @param maxRow - The maximum number of rows that can be filled.
- * @returns The formatted content joined by line breaks.
+ * @param content - Full content lines.
+ * @param lines - Output array of wrapped lines.
  */
-function wrapLongLines(
-  content: string[],
-  formattedContent: string[],
-  maxRow: number
-): string {
-  let row = config.row;
+function wrapLongLines(content: string[], lines: string[]): void {
+  const maxRow = content.length - config.row;
 
-  let i = row;
-  let line = content[i];
+  let row = 0;
+  let isCompleteLine = true;
+  let line = content[config.row];
 
-  if (config.subRow && i < content.length) {
-    row = partitionLine(formattedContent, line, row, maxRow, config.subRow);
-    i++;
+  if (config.subRow) {
+    isCompleteLine = partitionLine(lines, line, config.subRow);
+    row++;
   }
 
-  while (row < maxRow && i < content.length) {
-    line = content[i];
+  while (lines.length < config.window - 1 && row < maxRow) {
+    line = content[config.row + row];
 
-    row = visualWidth(line) > config.screenWidth
-      ? partitionLine(formattedContent, line, row, maxRow)
-      : assignLine(formattedContent, line, row);
+    if (visualWidth(line) > config.screenWidth) {
+      isCompleteLine = partitionLine(lines, line, 0);
+    } else {
+      lines.push(line);
+    }
 
-    i++;
+    row++;
   }
 
-  mode.EOF = i === content.length && row <= maxRow;
-  padToEOF(formattedContent, row, maxRow);
-
-  return formattedContent.join('\n');
+  mode.EOF = isCompleteLine && row === maxRow;
 }
 
 /**
- * Assigns a single line of content to the formatted output.
+ * Wraps a long line into subrows and appends them to `lines`.
  *
- * - Pushes the line directly into the `formattedContent` array.
- * - Advances the row index by one.
+ * - Starts from `subRowStart` for partial line display.
+ * - Stops early if window limit is reached.
  *
- * @param formattedContent - The array to store formatted lines.
- * @param line - A single line of text to display.
- * @param row - The current row index.
- * @returns The next row index after assignment.
- */
-function assignLine(
-  formattedContent: string[],
-  line: string,
-  row: number
-): number {
-  formattedContent.push(line);
-  return row + 1;
-}
-
-/**
- * Wraps a long line into multiple rows if it exceeds the screen width.
- *
- * - Splits the line into sub-rows based on `config.screenWidth`.
- * - Starts appending sub-rows from `subRowStart` index (for paged viewing).
- * - Updates and returns the new row index after appending wrapped lines.
- *
- * @param formattedContent - The array to store rendered lines.
- * @param line - The raw string line to be wrapped.
- * @param row - The starting row index in the output.
- * @param maxRow - The maximum number of rows allowed to write.
- * @param subRowStart - The sub-row index to begin rendering from
- *                      (used for scroll).
- * @returns The updated row index after wrapping and appending.
+ * @param lines - Output array for wrapped segments.
+ * @param longLine - The line to split and wrap.
+ * @param subRowStart - Starting subrow index (default 0).
+ * @returns `true` if the line is fully wrapped, `false` if truncated.
  */
 function partitionLine(
-  formattedContent: string[],
-  line: string,
-  row: number,
-  maxRow: number,
-  subRowStart: number = 0
-): number {
-  let formattedLine: string[] = [];
+  lines: string[],
+  longLine: string,
+  subRowStart: number
+): boolean {
+  let line: string[] = [];
 
-  const segments = segmentLine(line);
+  const segments = segmentLine(longLine);
   let length = 0;
   let subRow = 0;
 
@@ -403,7 +356,7 @@ function partitionLine(
     const concatLength = length + segmentWidth;
 
     if (concatLength < config.screenWidth) {
-      formattedLine.push(segment);
+      line.push(segment);
       length = concatLength;
       continue;
     }
@@ -411,50 +364,40 @@ function partitionLine(
     const overflow = concatLength > config.screenWidth;
 
     if (subRow >= subRowStart) {
-      formattedContent.push(
-        formattedLine.join('') + (overflow ? '' : segment)
+      if (lines.length === config.window - 1) return false;
+
+      lines.push(
+        line.join('') + (overflow ? '' : segment)
       );
-      row++;
     }
 
-    formattedLine = overflow ? [segment] : [];
+    line = overflow ? [segment] : [];
     length = overflow ? segmentWidth : 0;
 
     subRow++;
   }
 
-  if (row < maxRow && subRow >= subRowStart && formattedLine.length) {
-    formattedContent.push(formattedLine.join(''));
-    row++;
+  if (line.length && subRow >= subRowStart) {
+    if (lines.length === config.window - 1) return false;
+    lines.push(line.join(''));
   }
 
-  return row;
+  return true;
 }
 
 /**
- * Pads the remaining lines after content with placeholder or end indicator.
+ * Pads remaining window space with `~` lines or an `(END)` marker.
  *
- * - Pushes `~` lines if not in `INIT` mode and under `maxRow`.
- * - Appends `(END)` marker if at end of file and not buffering.
- * - Also disables `INIT` mode if it reaches `maxRow`.
- *
- * @param formattedContent - The array to append placeholder or end markers.
- * @param row - The current row index.
- * @param maxRow - The maximum number of rows allowed to fill.
+ * @param lines - The array of formatted lines to pad.
  */
-function padToEOF(
-  formattedContent: string[],
-  row: number,
-  maxRow: number
-): void {
-  if (mode.INIT && row === maxRow) mode.INIT = false;
-
-  while (!mode.INIT && row < maxRow) {
-    formattedContent.push('\x1b[1m~\x1b[0m');
-    row++;
+function padToEOF(lines: string[]): void {
+  while (!mode.INIT && lines.length < config.window - 1) {
+    lines.push('\x1b[1m~\x1b[0m');
   }
 
+  if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
+
   if (!mode.BUFFERING && mode.EOF) {
-    formattedContent.push('\x1b[7m(END)\x1b[0m');
+    lines.push('\x1b[7m(END)\x1b[0m');
   }
 }
