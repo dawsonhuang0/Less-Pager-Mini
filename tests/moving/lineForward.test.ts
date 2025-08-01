@@ -15,6 +15,7 @@ beforeEach(() => {
   config.halfScreenWidth = 40;
   config.halfWindow = 12;
 
+  mode.INIT = true;
   mode.EOF = false;
 });
 
@@ -26,13 +27,21 @@ describe('chopLongLines', () => {
   test('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
+    let output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+
     lineForward(lessContent, 1);
-    let output = formatContent(lessContent);
-    expect(output.split('\n')[0]).toBe('1 A');
+  
+    output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
 
     lineForward(lessContent, 9999);
-    output = formatContent(lessContent);
-    expect(output.split('\n')[0]).toBe('1 A');
+  
+    output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
   test('forwards 1 line', () => {
@@ -70,19 +79,22 @@ describe('chopLongLines', () => {
       expect(output.split('\n')[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
     });
 
-  const lastLine = '15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬';
+  const lastLine = '28 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vel hendr\x1b[7m>\x1b[0m';
 
   test('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
 
-    const output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+    const output = formatContent(content).split('\n');
+    expect(output[0]).toBe(lastLine);
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
   test('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
-    const output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+
+    const output = formatContent(content).split('\n');
+    expect(output[0]).toBe(lastLine);
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 });
 
@@ -91,36 +103,61 @@ describe('wrapLongLines', () => {
     config.chopLongLines = false;
   });
 
-  test('forwards to wrapped line and forward 1 line', () => {
-    lineForward(content, 12);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
-    
-    lineForward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些');
+  test('does not forward when content lines are less than window', () => {
+    const lessContent = content.slice(0, 6);
 
-    lineForward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('复杂的字符。');
+    let output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
 
-    lineForward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
+    lineForward(lessContent, 1);
+  
+    output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+
+    lineForward(lessContent, 9999);
+  
+    output = formatContent(lessContent).split('\n');
+    expect(output[0]).toBe('1 A');
+    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  const lastLine = '20 A line with CJK + emoji + ASCII to push the limits: 编程测试';
+  test('forwards to wrapped line and continue until exit wrapped line', () => {
+    lineForward(content, 22);
+    let output = formatContent(content);
+    expect(output.split('\n')[0]).toBe('21 hashMap[13]:');
+
+    const expectOutputs = [
+      `22 {"key":"apple","value":1} -> {"key":"cherry","value":5} -> {"key":"mango","va`,
+      `lue":7} -> {"key":"strawberry","value":2} -> {"key":"pineapple","value":6} -> {"`,
+      `key":"blueberry","value":3} -> {"key":"raspberry","value":10} -> {"key":"blackbe`,
+      `rry","value":7} -> null`,
+      '23 Another long one: 🧵🧶🪡🪢🪣🪤🪥🪦🪧🪨🪩🪪🪫🪬🪭🪮🪯🪰🪱🪲🪳🪴🪵'
+    ];
+
+    for (const expectOutput of expectOutputs) {
+      lineForward(content, 1);
+      output = formatContent(content);
+      expect(output.split('\n')[0]).toBe(expectOutput);
+    }
+  });
+
+  const lastLine = '31 混合行包括各种字符和符号，用于终端宽度测试。';
 
   test('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
 
-    const output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+    const output = formatContent(content).split('\n');
+    expect(output[0]).toBe(lastLine);
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
   test('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
-    const output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+
+    const output = formatContent(content).split('\n');
+    expect(output[0]).toBe(lastLine);
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 });
