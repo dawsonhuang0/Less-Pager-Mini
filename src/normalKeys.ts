@@ -15,6 +15,7 @@ export const getAction = (key: string): Actions | undefined => keys[key];
  * into `Actions` understood by the pager.
  * Supports control characters (e.g., ^C), punctuation, and printable ASCII.
  */
+/* v8 ignore next */ // test coverage ignored because object has no logic
 const keys: Record<string, Actions> = {
   /**
    * (N) - any number
