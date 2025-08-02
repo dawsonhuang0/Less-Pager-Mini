@@ -59,17 +59,18 @@ export function lineForward(
 }
 
 /**
- * Moves the view backward by a given number of lines.
+ * Scroll backward by the given offset.
  *
- * - If `chopLongLines` is enabled, steps back full rows.
- * - Otherwise, steps back sub-rows (wrapped lines) accordingly.
- * - Rings the terminal bell if already at the top.
+ * - Stops and rings bell at BOF, also disables `mode.INIT`.
+ * - In chopped mode, moves by whole lines.
+ * - In wrapped mode, moves by sub-rows within a line.
  *
- * @param content - The full content as an array of lines.
- * @param offset - The number of lines or sub-rows to move backward.
+ * @param content - Full content lines.
+ * @param offset - Lines or sub-rows to scroll backward.
  */
 export function lineBackward(content: string[], offset: number): void {
   if (!config.row && !config.subRow) {
+    if (mode.INIT) mode.INIT = false;
     ringBell();
     return;
   }

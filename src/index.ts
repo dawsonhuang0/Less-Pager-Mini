@@ -179,10 +179,6 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     buffer = '';
-
-    if (mode.INIT && mode.EOF && action !== 'LINE_FORWARD') {
-      mode.INIT = false;
-    }
   }
 
   process.stdin.setRawMode(false);
