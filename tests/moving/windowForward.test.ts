@@ -46,7 +46,7 @@ describe('chopLongLines', () => {
 
   test('forwards 1 window', () => {
     windowForward(content, '');
-    let output = formatContent(content);
+    const output = formatContent(content);
     expect(output.split('\n')[0]).toBe('24 Hello world! 👋 你好世界！こんにちは世界！안녕하세요 세상! 🌍🌎🌏');
   });
 
