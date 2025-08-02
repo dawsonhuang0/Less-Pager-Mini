@@ -34,12 +34,12 @@ describe('chopLongLines', () => {
     lineBackward(lessContent, 1);
     output = formatContent(lessContent).split('\n');
     expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
 
     lineBackward(lessContent, 9999);
     output = formatContent(lessContent).split('\n');
     expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
   test('backwards 1 line', () => {
@@ -129,13 +129,13 @@ describe('wrapLongLines', () => {
 
     output = formatContent(lessContent).split('\n');
     expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
 
     lineBackward(lessContent, 9999);
 
     output = formatContent(lessContent).split('\n');
     expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
   test('forwards to the end of wrapped line and backwards until exit wrapped line', () => {
