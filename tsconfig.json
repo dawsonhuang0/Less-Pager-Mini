@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
+    "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "declaration": true,
-    "declarationDir": "./dist",
     "module": "commonjs",
-    "target": "es2020",
+    "target": "esnext",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
