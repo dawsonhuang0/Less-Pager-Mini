@@ -129,6 +129,7 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     switch (action) {
+      case 'FORCE_EXIT':
       case 'EXIT':
         exit = true;
         break;

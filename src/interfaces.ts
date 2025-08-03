@@ -45,6 +45,7 @@ export type Actions =
   | 'QUIT'
   | 'HELP'
   | 'EXIT'
+  | 'FORCE_EXIT'
   | 'LINE_FORWARD'
   | 'LINE_BACKWARD'
   | 'WINDOW_FORWARD'

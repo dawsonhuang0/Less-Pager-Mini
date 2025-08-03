@@ -57,6 +57,9 @@ const keys: Record<string, Actions> = {
   '\x71': 'EXIT', // q
   '\x51': 'EXIT', // Q
 
+  // force exit
+  '\x1A': 'FORCE_EXIT', // ^Z
+
   // (*) forward one line (or (N) lines)
   '\x65': 'LINE_FORWARD', // e
   '\x05': 'LINE_FORWARD', // ^E
