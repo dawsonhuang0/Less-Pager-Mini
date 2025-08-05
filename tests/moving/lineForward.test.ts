@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { formatContent } from '../../src/helpers';
 
@@ -24,7 +24,7 @@ describe('chopLongLines', () => {
     config.chopLongLines = true;
   });
 
-  test('does not forward when content lines are less than window', () => {
+  it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
     let output = formatContent(lessContent).split('\n');
@@ -44,7 +44,7 @@ describe('chopLongLines', () => {
     expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards 1 line', () => {
+  it('forwards 1 line', () => {
     lineForward(content, 1);
     let output = formatContent(content);
     expect(output.split('\n')[0]).toBe('2 ABCD');
@@ -54,7 +54,7 @@ describe('chopLongLines', () => {
     expect(output.split('\n')[0]).toBe('3 你好');
   });
 
-  test('forwards 2 lines', () => {
+  it('forwards 2 lines', () => {
     lineForward(content, 1);
     lineForward(content, 1);
     let output = formatContent(content);
@@ -65,7 +65,7 @@ describe('chopLongLines', () => {
     expect(output.split('\n')[0]).toBe('5 Hello こんにちは 안녕하세요 你好 😀😃😄😁😆');
   });
 
-  test('forwards multiple lines into chopped line', () => {
+  it('forwards multiple lines into chopped line', () => {
     lineForward(content, 12);
     let output = formatContent(content);
     expect(output.split('\n')[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
@@ -81,7 +81,7 @@ describe('chopLongLines', () => {
 
   const lastLine = '28 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vel hendr\x1b[7m>\x1b[0m';
 
-  test('forwards 64 lines on key press but does not exceed EOF', () => {
+  it('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
 
     const output = formatContent(content).split('\n');
@@ -89,7 +89,7 @@ describe('chopLongLines', () => {
     expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards many lines but does not exceed EOF', () => {
+  it('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
 
     const output = formatContent(content).split('\n');
@@ -103,7 +103,7 @@ describe('wrapLongLines', () => {
     config.chopLongLines = false;
   });
 
-  test('does not forward when content lines are less than window', () => {
+  it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
     let output = formatContent(lessContent).split('\n');
@@ -123,7 +123,7 @@ describe('wrapLongLines', () => {
     expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards to wrapped line and continue until exit wrapped line', () => {
+  it('forwards to wrapped line and continue until exit wrapped line', () => {
     lineForward(content, 22);
     let output = formatContent(content);
     expect(output.split('\n')[0]).toBe('21 hashMap[13]:');
@@ -145,7 +145,7 @@ describe('wrapLongLines', () => {
 
   const lastLine = '31 混合行包括各种字符和符号，用于终端宽度测试。';
 
-  test('forwards 64 lines on key press but does not exceed EOF', () => {
+  it('forwards 64 lines on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) lineForward(content, 1);
 
     const output = formatContent(content).split('\n');
@@ -153,7 +153,7 @@ describe('wrapLongLines', () => {
     expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards many lines but does not exceed EOF', () => {
+  it('forwards many lines but does not exceed EOF', () => {
     lineForward(content, 9999);
 
     const output = formatContent(content).split('\n');

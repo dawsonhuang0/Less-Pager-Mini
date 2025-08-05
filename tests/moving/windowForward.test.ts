@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { formatContent } from '../../src/helpers';
 
@@ -24,7 +24,7 @@ describe('chopLongLines', () => {
     config.chopLongLines = true;
   });
 
-  test('does not forward when content lines are less than window', () => {
+  it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
     let output = formatContent(lessContent).split('\n');
@@ -44,7 +44,7 @@ describe('chopLongLines', () => {
     expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards 1 window', () => {
+  it('forwards 1 window', () => {
     windowForward(content, '');
     const output = formatContent(content);
     expect(output.split('\n')[0]).toBe('24 Hello world! 👋 你好世界！こんにちは世界！안녕하세요 세상! 🌍🌎🌏');
@@ -52,7 +52,7 @@ describe('chopLongLines', () => {
 
   const lastLine = '28 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vel hendr\x1b[7m>\x1b[0m';
 
-  test('forwards to EOF', () => {
+  it('forwards to EOF', () => {
     windowForward(content, '');
     let output = formatContent(content).split('\n');
     expect(output[0]).toBe('24 Hello world! 👋 你好世界！こんにちは世界！안녕하세요 세상! 🌍🌎🌏');
@@ -64,7 +64,7 @@ describe('chopLongLines', () => {
     expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards by buffer', () => {
+  it('forwards by buffer', () => {
     windowForward(content, '1');
     let output = formatContent(content).split('\n');
     expect(output[0]).toBe('2 ABCD');
@@ -74,7 +74,7 @@ describe('chopLongLines', () => {
     expect(output[0]).toBe('7 这是一段中文，用于测试宽度显示效果。');
   });
 
-  test('forwards into chopped line', () => {
+  it('forwards into chopped line', () => {
     windowForward(content, '12');
     let output = formatContent(content).split('\n');
     expect(output[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
@@ -88,7 +88,7 @@ describe('chopLongLines', () => {
     expect(output[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
   });
 
-  test('forwards 64 windows on key press but does not exceed EOF', () => {
+  it('forwards 64 windows on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) windowForward(content, '');
 
     const output = formatContent(content).split('\n');
@@ -96,7 +96,7 @@ describe('chopLongLines', () => {
     expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards by large buffer but does not exceed EOF', () => {
+  it('forwards by large buffer but does not exceed EOF', () => {
     windowForward(content, '9999');
 
     const output = formatContent(content).split('\n');
@@ -110,7 +110,7 @@ describe('wrapLongLines', () => {
     config.chopLongLines = false;
   });
 
-  test('does not forward when content lines are less than window', () => {
+  it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
     let output = formatContent(lessContent).split('\n');
@@ -132,7 +132,7 @@ describe('wrapLongLines', () => {
 
   const lastLine = '31 混合行包括各种字符和符号，用于终端宽度测试。';
 
-  test('forwards to wrapped line and continue until exit wrapped line', () => {
+  it('forwards to wrapped line and continue until exit wrapped line', () => {
     windowForward(content, '1');
     let output = formatContent(content);
     expect(output.split('\n')[0]).toBe('2 ABCD');
@@ -146,7 +146,7 @@ describe('wrapLongLines', () => {
     expect(output.split('\n')[0]).toBe(lastLine);
   });
 
-  test('forwards 64 windows on key press but does not exceed EOF', () => {
+  it('forwards 64 windows on key press but does not exceed EOF', () => {
     for (let i = 0; i < 64; i++) windowForward(content, '');
 
     const output = formatContent(content).split('\n');
@@ -154,7 +154,7 @@ describe('wrapLongLines', () => {
     expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
   });
 
-  test('forwards by large buffer but does not exceed EOF', () => {
+  it('forwards by large buffer but does not exceed EOF', () => {
     windowForward(content, '9999');
 
     const output = formatContent(content).split('\n');
