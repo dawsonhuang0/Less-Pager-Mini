@@ -176,8 +176,8 @@ function visualWidth(line: string): number {
   const segments = segmentLine(line);
   let length = 0;
 
-  for (const segment of segments) {
-    length += wcwidth(segment);
+  for (let i = 0; i < segments.length; i++) {
+    length += wcwidth(segments[i]);
   }
 
   return length;
@@ -351,7 +351,8 @@ function partitionLine(
   let length = 0;
   let subRow = 0;
 
-  for (const segment of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
     const segmentWidth = visualWidth(segment);
     const concatLength = length + segmentWidth;
 
@@ -366,9 +367,8 @@ function partitionLine(
     if (subRow >= subRowStart) {
       if (lines.length === config.window - 1) return false;
 
-      lines.push(
-        line.join('') + (overflow ? '' : segment)
-      );
+      if (!overflow) line.push(segment);
+      lines.push(line.join(''));
     }
 
     line = overflow ? [segment] : [];
