@@ -6,7 +6,7 @@ import { text, content } from '../utils/mockContent';
 
 import { implementLineForward } from '../utils/testUtils';
 
-import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../utils/constants';
+import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
 
 const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
