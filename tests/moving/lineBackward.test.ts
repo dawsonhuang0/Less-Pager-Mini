@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-
-import { formatContent } from '../../src/helpers';
-
-import { lineForward, lineBackward } from '../../src/features/moving';
+import { beforeEach, describe, it } from 'vitest';
 
 import { config, mode } from '../../src/pagerConfig';
 
-import { content } from '../textContent';
+import { text, content } from '../utils/mockContent';
+
+import { implementLineForward, implementLineBackward } from '../utils/testUtils';
+
+import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../utils/constants';
+
+const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
 beforeEach(() => {
   config.row = 0;
@@ -19,6 +21,8 @@ beforeEach(() => {
   mode.EOF = false;
 });
 
+const line1 = text[0];
+
 describe('chopLongLines', () => {
   beforeEach(() => {
     config.chopLongLines = true;
@@ -27,89 +31,41 @@ describe('chopLongLines', () => {
   it('does not backward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
-    let output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    // `(END)` should not be at bottom at first load with content rows less than window
+    implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
-    lineBackward(lessContent, 1);
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
-
-    lineBackward(lessContent, 9999);
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
-  });
-
-  it('backwards 1 line', () => {
-    lineForward(content, 2);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('3 你好');
-
-    lineBackward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('2 ABCD');
-
-    lineBackward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('1 A');
+    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
   it('backwards 2 lines', () => {
-    lineForward(content, 6);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('7 这是一段中文，用于测试宽度显示效果。');
+    implementLineForward(content, 6, false, [text[6]]);
 
-    lineBackward(content, 1);
-    lineBackward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('5 Hello こんにちは 안녕하세요 你好 😀😃😄😁😆');
+    implementLineBackward(content, 1, false, [text[5]]);
+    implementLineBackward(content, 1, false, [text[4]]);
 
-    lineBackward(content, 2);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('3 你好');
+    implementLineBackward(content, 2, false, [text[2]]);
   });
 
   it('forwards multiple lines then backwards 1 line into chopped line', () => {
-    lineForward(content, 14);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
+    implementLineForward(content, 14, false, [text[14]]);
 
-    lineBackward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些\x1b[7m>\x1b[0m');
-
-    lineBackward(content, 1);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
+    implementLineBackward(content, 1, false, ['14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementLineBackward(content, 1, false, [text[12]]);
   });
 
-  const lastLine = '28 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vel hendr\x1b[7m>\x1b[0m';
+  const lastLine = text[27].slice(0, 79)+ COL_END_MARKER;
 
   it('backwards 64 lines on key press but does not exceed BOF', () => {
-    lineForward(content, 9999);
+    implementLineForward(content, 9999, false, [lastLine, END_MARKER], [0, 23]);
 
-    let output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
-
-    for (let i = 0; i < 64; i++) lineBackward(content, 1);
-
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe('1 A');
+    implementLineBackward(content, 64, true, [line1]);
   });
 
   it('backwards many lines but does not exceed BOF', () => {
-    lineForward(content, 9999);
-    
-    let output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementLineForward(content, 9999, false, [lastLine, END_MARKER], [0, 23]);
 
-    lineBackward(content, 99999);
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe('1 A');
+    implementLineBackward(content, 99999, false, [line1]);
   });
 });
 
@@ -121,63 +77,42 @@ describe('wrapLongLines', () => {
   it('does not backward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
-    let output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    // `(END)` should not be at bottom at first load with content rows less than window
+    implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
-    lineBackward(lessContent, 1);
-
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
-
-    lineBackward(lessContent, 9999);
-
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
   it('forwards to the end of wrapped line and backwards until exit wrapped line', () => {
-    lineForward(content, 27);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('23 Another long one: 🧵🧶🪡🪢🪣🪤🪥🪦🪧🪨🪩🪪🪫🪬🪭🪮🪯🪰🪱🪲🪳🪴🪵');
+    implementLineForward(content, 27, false, [text[22]]);
+
+    const line22 = text[21];
 
     const expectOutputs = [
-      `rry","value":7} -> null`,
-      `key":"blueberry","value":3} -> {"key":"raspberry","value":10} -> {"key":"blackbe`,
-      `lue":7} -> {"key":"strawberry","value":2} -> {"key":"pineapple","value":6} -> {"`,
-      `22 {"key":"apple","value":1} -> {"key":"cherry","value":5} -> {"key":"mango","va`,
-      '21 hashMap[13]:'
+      line22.slice(240),
+      line22.slice(160, 240),
+      line22.slice(80, 160),
+      line22.slice(0, 80),
+      text[20]
     ];
 
-    for (const expectOutput of expectOutputs) {
-      lineBackward(content, 1);
-      output = formatContent(content);
-      expect(output.split('\n')[0]).toBe(expectOutput);
+    for (let i = 0; i < expectOutputs.length; i++) {
+      implementLineBackward(content, 1, false, [expectOutputs[i]]);
     }
   });
 
-  const lastLine = '31 混合行包括各种字符和符号，用于终端宽度测试。';
+  const lastLine = text[30];
 
   it('backwards 64 lines on key press but does not exceed BOF', () => {
-    lineForward(content, 9999);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+    implementLineForward(content, 9999, false, [lastLine, END_MARKER], [0, 23]);
 
-    for (let i = 0; i < 64; i++) lineBackward(content, 1);
-
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('1 A');
+    implementLineBackward(content, 64, true, [line1]);
   });
 
   it('backwards many lines but does not exceed BOF', () => {
-    lineForward(content, 9999);
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+    implementLineForward(content, 9999, false, [lastLine, END_MARKER], [0, 23]);
 
-    lineBackward(content, 99999);
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('1 A');
+    implementLineBackward(content, 99999, false, [line1]);
   });
 });

@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-
-import { formatContent } from '../../src/helpers';
-
-import { windowForward } from '../../src/features/moving';
+import { beforeEach, describe, it } from 'vitest';
 
 import { config, mode } from '../../src/pagerConfig';
 
-import { content } from '../textContent';
+import { text, content } from '../utils/mockContent';
+
+import { implementWindowForward } from '../utils/testUtils';
+
+import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../utils/constants';
+
+const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
 beforeEach(() => {
   config.row = 0;
@@ -19,6 +21,8 @@ beforeEach(() => {
   mode.EOF = false;
 });
 
+const line1 = text[0];
+
 describe('chopLongLines', () => {
   beforeEach(() => {
     config.chopLongLines = true;
@@ -27,81 +31,38 @@ describe('chopLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
-    let output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    // `(END)` should not be at bottom at first load with content rows less than window
+    implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
-    windowForward(lessContent, '');
-
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
-
-    windowForward(lessContent, '9999');
-  
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(lessContent, '', false, [line1, END_MARKER], [0, 6]);
+    implementWindowForward(lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
   });
 
-  it('forwards 1 window', () => {
-    windowForward(content, '');
-    const output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('24 Hello world! 👋 你好世界！こんにちは世界！안녕하세요 세상! 🌍🌎🌏');
-  });
-
-  const lastLine = '28 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vel hendr\x1b[7m>\x1b[0m';
+  const lastLine = text[27].slice(0, 79) + COL_END_MARKER;
 
   it('forwards to EOF', () => {
-    windowForward(content, '');
-    let output = formatContent(content).split('\n');
-    expect(output[0]).toBe('24 Hello world! 👋 你好世界！こんにちは世界！안녕하세요 세상! 🌍🌎🌏');
-
-    windowForward(content, '');
-
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(content, '', false, [text[23]]);
+    implementWindowForward(content, '', false, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards by buffer', () => {
-    windowForward(content, '1');
-    let output = formatContent(content).split('\n');
-    expect(output[0]).toBe('2 ABCD');
-
-    windowForward(content, '5');
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe('7 这是一段中文，用于测试宽度显示效果。');
+    implementWindowForward(content, '1', false, [text[1]]);
+    implementWindowForward(content, '5', false, [text[6]]);
   });
 
   it('forwards into chopped line', () => {
-    windowForward(content, '12');
-    let output = formatContent(content).split('\n');
-    expect(output[0]).toBe('13 1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ🌈🔥💧❄️🍀🌸');
+    implementWindowForward(content, '12', false, [text[12]]);
 
-    windowForward(content, '1');
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe('14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些\x1b[7m>\x1b[0m');
-
-    windowForward(content, '1');
-    output = formatContent(content).split('\n');
-    expect(output[0]).toBe('15 🧠🫀🫁🦷🦴🦿🦾🧬🔬👀👅👄👃👂👣🧠🫀🫁🦷🦴🦿🦾🧬');
+    implementWindowForward(content, '1', false, ['14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementWindowForward(content, '1', false, [text[14]]);
   });
 
   it('forwards 64 windows on key press but does not exceed EOF', () => {
-    for (let i = 0; i < 64; i++) windowForward(content, '');
-
-    const output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(content, '64', true, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards by large buffer but does not exceed EOF', () => {
-    windowForward(content, '9999');
-
-    const output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(content, '9999', false, [lastLine, END_MARKER], [0, 23]);
   });
 });
 
@@ -113,52 +74,27 @@ describe('wrapLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
-    let output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    // `(END)` should not be at bottom at first load with content rows less than window
+    implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
-    windowForward(lessContent, '');
-
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
-
-    windowForward(lessContent, '9999');
-  
-    output = formatContent(lessContent).split('\n');
-    expect(output[0]).toBe('1 A');
-    expect(output[6]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(lessContent, '', false, [line1, END_MARKER], [0, 6]);
+    implementWindowForward(lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
   });
 
-  const lastLine = '31 混合行包括各种字符和符号，用于终端宽度测试。';
+  const lastLine = text[30];
 
   it('forwards to wrapped line and continue until exit wrapped line', () => {
-    windowForward(content, '1');
-    let output = formatContent(content);
-    expect(output.split('\n')[0]).toBe('2 ABCD');
+    implementWindowForward(content, '1', false, [text[1]]);
 
-    windowForward(content, '');
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(`lue":7} -> {"key":"strawberry","value":2} -> {"key":"pineapple","value":6} -> {"`);
-
-    windowForward(content, '');
-    output = formatContent(content);
-    expect(output.split('\n')[0]).toBe(lastLine);
+    implementWindowForward(content, '', false, [text[21].slice(80, 160)]);
+    implementWindowForward(content, '', false, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards 64 windows on key press but does not exceed EOF', () => {
-    for (let i = 0; i < 64; i++) windowForward(content, '');
-
-    const output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(content, '64', true, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards by large buffer but does not exceed EOF', () => {
-    windowForward(content, '9999');
-
-    const output = formatContent(content).split('\n');
-    expect(output[0]).toBe(lastLine);
-    expect(output[23]).toBe('\x1b[7m(END)\x1b[0m');
+    implementWindowForward(content, '9999', false, [lastLine, END_MARKER], [0, 23]);
   });
 });

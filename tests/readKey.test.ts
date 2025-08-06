@@ -71,10 +71,10 @@ it('should clean up listeners and timers', async () => {
  *
  * - Mocks `process.stdin.on('data')` to emit given keys in order.
  * - Each key is dispatched using `setTimeout` with provided delays.
- * - Defaults to 10 ms delay if `timeouts` array is not specified.
+ * - Defaults to 10 ms delay if `timeouts` array is not specified.
  *
  * @param keys - Array of key strings to simulate (e.g., `['\x1B', 'v']`).
- * @param timeouts - Optional delays (ms) for each key; defaults to 10 ms.
+ * @param timeouts - Optional delays (ms) for each key; defaults to 10 ms.
  */
 function implement(keys: string[], timeouts: number[] = []): void {
   mockStdin.on.mockImplementation((event, listener) => {
