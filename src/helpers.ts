@@ -171,6 +171,9 @@ const isAscii = (segment: string): boolean =>
  * @returns The total visual width of the string in terminal columns.
  */
 function visualWidth(line: string): number {
+  // eslint-disable-next-line no-control-regex
+  if (/\x1b\[[0-9;]*m/g.test(line)) line = line.replace(/\x1b\[[0-9;]*m/g, '');
+
   if (isAscii(line)) return line.length;
 
   const segments = segmentLine(line);
