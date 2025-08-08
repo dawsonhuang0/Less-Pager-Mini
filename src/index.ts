@@ -1,5 +1,16 @@
 import { Actions } from "./interfaces";
 
+import {
+  config,
+  mode,
+  applyConfig,
+  applyMode,
+  resetConfig,
+  resetMode
+} from "./config";
+
+import { help } from "./help";
+
 import { readKey } from "./readKey";
 import { getAction } from "./normalKeys";
 
@@ -24,8 +35,6 @@ import {
   setHalfWindowBackward
 } from "./features/moving";
 
-import { config, mode } from "./config";
-
 /**
  * Less-pager-mini
  *
@@ -39,7 +48,7 @@ import { config, mode } from "./config";
  * @param examineFile - If true, treats input as file path(s) and reads from
  *                      disk.
  */
-export async function pager(
+export default async function pager(
   input: unknown,
   preserveFormat: boolean = false,
   examineFile: boolean = false
@@ -106,6 +115,10 @@ async function contentPager(content: string[]): Promise<void> {
   let render = true;
   let buffer = '';
 
+  let prevContent: string[] = [];
+  let prevConfig = config;
+  let prevMode = mode;
+
   while (!exit) {
     mode.BUFFERING = Boolean(buffer);
 
@@ -132,8 +145,15 @@ async function contentPager(content: string[]): Promise<void> {
 
     switch (action) {
       case 'FORCE_EXIT':
-      case 'EXIT':
         exit = true;
+        break;
+
+      case 'EXIT':
+        exit = shouldExit();
+        break;
+
+      case 'HELP':
+        prepareHelp();
         break;
 
       case 'LINE_FORWARD':
@@ -188,6 +208,39 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.pause();
 
   process.stdout.write('\x1b[?1049l');
-}
 
-export default pager;
+  // helpers
+
+  /**
+   * Exits help mode if active, otherwise allows pager to exit.
+   *
+   * @returns `true` if should exit, `false` if returning from help.
+   */
+  function shouldExit(): boolean {
+    if (!mode.HELP) return true;
+
+    content = prevContent;
+    applyConfig(prevConfig);
+    applyMode(prevMode);
+
+    mode.HELP = false;
+    return false;
+  }
+
+  /**
+   * Enters help mode by saving current state and loading help content.
+   */
+  function prepareHelp(): void {
+    if (mode.HELP) return;
+  
+    prevContent = content;
+    prevConfig = config;
+    prevMode = mode;
+  
+    resetConfig();
+    resetMode();
+  
+    mode.HELP = true;
+    content = help;
+  }
+}

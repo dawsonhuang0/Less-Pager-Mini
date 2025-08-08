@@ -26,7 +26,8 @@ export interface Config {
 export type Mode =
   | 'INIT'
   | 'EOF'
-  | 'BUFFERING';
+  | 'BUFFERING'
+  | 'HELP';
 
 /**
  * Represents all possible key-based actions in the pager.

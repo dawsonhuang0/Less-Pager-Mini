@@ -4,6 +4,8 @@ import wcwidth from 'wcwidth';
 
 import { config, mode } from './config';
 
+import { INVERSE_ON, INVERSE_OFF } from './constants';
+
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
  * width.
@@ -123,6 +125,21 @@ export function formatContent(content: string[]): string {
  * @returns The prompt string, or an empty string if suppressed.
  */
 export function getPrompt(): string {
+  const helpPrompt = [
+    'HELP -- ' ,
+    mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more',
+    ', or q when done'
+  ].join('');
+
+  if (mode.HELP && !mode.BUFFERING) {
+    return [
+      '\n',
+      INVERSE_ON,
+      helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)),
+      INVERSE_OFF
+    ].join('');
+  }
+
   if (!mode.EOF || mode.BUFFERING) return '\n:';
 
   return '';
@@ -400,7 +417,7 @@ function padToEOF(lines: string[]): void {
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
 
-  if (!mode.BUFFERING && mode.EOF) {
+  if (!mode.BUFFERING && !mode.HELP && mode.EOF) {
     lines.push('\x1b[7m(END)\x1b[0m');
   }
 }
