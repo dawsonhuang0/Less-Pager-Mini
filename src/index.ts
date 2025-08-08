@@ -24,7 +24,7 @@ import {
   setHalfWindowBackward
 } from "./features/moving";
 
-import { config, mode } from "./pagerConfig";
+import { config, mode } from "./config";
 
 /**
  * Less-pager-mini

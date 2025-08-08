@@ -1,6 +1,6 @@
 import { beforeEach, describe, it } from 'vitest';
 
-import { config, mode } from '../../src/pagerConfig';
+import { config, mode } from '../../src/config';
 
 import { text, content } from '../utils/mockContent';
 

@@ -2,7 +2,7 @@ import fs from 'fs';
 
 import wcwidth from 'wcwidth';
 
-import { config, mode } from './pagerConfig';
+import { config, mode } from './config';
 
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen

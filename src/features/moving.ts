@@ -1,6 +1,6 @@
 import { maxSubRow, ringBell, bufferToNum } from "../helpers";
 
-import { config, mode } from "../pagerConfig";
+import { config, mode } from "../config";
 
 /**
  * Moves forward by a given offset through content lines or subrows.
