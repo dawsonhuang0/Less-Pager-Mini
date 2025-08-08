@@ -84,6 +84,8 @@ async function filePager(
  * @param content - The content to be displayed in the pager.
  */
 async function contentPager(content: string[]): Promise<void> {
+  process.stdout.write('\x1b[?1049h');
+
   process.on('SIGWINCH', () => {
     mode.INIT = false;
 
@@ -184,6 +186,8 @@ async function contentPager(content: string[]): Promise<void> {
 
   process.stdin.setRawMode(false);
   process.stdin.pause();
+
+  process.stdout.write('\x1b[?1049l');
 }
 
 export default pager;
