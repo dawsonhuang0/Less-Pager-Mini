@@ -251,8 +251,11 @@ const isAscii = (segment: string): boolean =>
  * @returns The total visual width of the string in terminal columns.
  */
 function visualWidth(line: string): number {
+  // regex that matchs the pattern '\x1b[...m'
   // eslint-disable-next-line no-control-regex
-  if (/\x1b\[[0-9;]*m/g.test(line)) line = line.replace(/\x1b\[[0-9;]*m/g, '');
+  const styleRegex = /\x1b\[[0-9;]*m/g;
+
+  if (styleRegex.test(line)) line = line.replace(styleRegex, '');
 
   if (isAscii(line)) return line.length;
 

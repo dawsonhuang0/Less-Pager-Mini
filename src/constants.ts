@@ -1,3 +1,6 @@
+export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
+export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
+
 export const INVERSE_ON = '\x1b[7m';
 export const INVERSE_OFF = '\x1b[0m';
 

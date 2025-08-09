@@ -35,6 +35,8 @@ import {
   setHalfWindowBackward
 } from "./features/moving";
 
+import { ALTERNATE_CONSOLE_ON, ALTERNATE_CONSOLE_OFF } from "./constants";
+
 /**
  * Less-pager-mini
  *
@@ -93,7 +95,7 @@ async function filePager(
  * @param content - The content to be displayed in the pager.
  */
 async function contentPager(content: string[]): Promise<void> {
-  process.stdout.write('\x1b[?1049h');
+  process.stdout.write(ALTERNATE_CONSOLE_ON);
 
   process.on('SIGWINCH', () => {
     mode.INIT = false;
@@ -205,7 +207,7 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.setRawMode(false);
   process.stdin.pause();
 
-  process.stdout.write('\x1b[?1049l');
+  process.stdout.write(ALTERNATE_CONSOLE_OFF);
 
   // helpers
 
