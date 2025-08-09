@@ -19,6 +19,7 @@ export default defineConfig([
     rules: {
       "max-len": ["warn", { code: 80 }],
       "eol-last": ["error", "always"],
+      "semi": ["error", "always"],
     }
   },
 ]);

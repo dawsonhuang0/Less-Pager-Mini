@@ -26,7 +26,7 @@ export let mode: Record<Mode, boolean> = {
   'EOF': false,
   'BUFFERING': false,
   'HELP': false,
-}
+};
 
 export const applyConfig = (newConfig: Config) => config = newConfig;
 

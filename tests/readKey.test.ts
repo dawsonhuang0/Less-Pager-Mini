@@ -46,7 +46,7 @@ it('should handle escape sequences', async () => {
 it('should resolve with standalone ESC after timeout', async () => {
   vi.useFakeTimers();
 
-  implement(['\x1B'])
+  implement(['\x1B']);
 
   const promise = readKey();
 

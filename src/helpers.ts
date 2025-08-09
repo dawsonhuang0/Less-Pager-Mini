@@ -168,7 +168,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   const content = formatContent(rawContent);
   const prompt = getPrompt();
 
-  if (prompt) content.push(prompt + getBuffer(buffer))
+  if (prompt) content.push(prompt + getBuffer(buffer));
 
   console.clear();
   process.stdout.write(content.join('\n'));
