@@ -76,11 +76,11 @@ export function implementWindowForward(
   const numSteps = parseInt(steps, 10) || -1;
 
   if (consecutive) {
-    for (let i = 0; i < numSteps; i++) windowForward(content, '');
+    for (let i = 0; i < numSteps; i++) windowForward(content, []);
   } else if (numSteps > 0) {
-    windowForward(content, steps);
+    windowForward(content, steps.split(''));
   } else if (numSteps === -1) {
-    windowForward(content, '');
+    windowForward(content, []);
   }
 
   checkOutputs(content, expectedOutputs, expectedLines);
@@ -98,7 +98,7 @@ function checkOutputs(
   expectedOutputs: string[],
   expectedLines: number[]
 ) {
-  const output = formatContent(content).split('\n');
+  const output = formatContent(content);
 
   for (let i = 0; i < expectedLines.length; i++) {
     expect(output[expectedLines[i]]).toBe(expectedOutputs[i]);

@@ -178,7 +178,10 @@ export function setWindowBackward(content: string[], buffer: string[]): void {
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setHalfWindowForward(content: string[], buffer: string[]): void {
+export function setHalfWindowForward(
+  content: string[],
+  buffer: string[]
+): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
   lineForward(content, config.setHalfWindow || config.halfWindow);
 }
@@ -195,7 +198,10 @@ export function setHalfWindowForward(content: string[], buffer: string[]): void 
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setHalfWindowBackward(content: string[], buffer: string[]): void {
+export function setHalfWindowBackward(
+  content: string[],
+  buffer: string[]
+): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
   lineBackward(content, config.setHalfWindow || config.halfWindow);
 }
