@@ -25,11 +25,11 @@ export const maxSubRow = (line: string): number =>
  * - Parses the string as a base-10 integer.
  * - Returns 0 if the input is not a valid number or equals 0.
  *
- * @param buffer - The string to convert.
+ * @param buffer - The string array to convert.
  * @returns Parsed numeric value, or 0 if invalid.
  */
-export function bufferToNum(buffer: string): number {
-  const n = parseInt(buffer, 10);
+export function bufferToNum(buffer: string[]): number {
+  const n = parseInt(buffer.join(''), 10);
   return n ? n : 0;
 }
 
@@ -94,15 +94,24 @@ export function inputToString(
 }
 
 /**
+ * Triggers an audible bell sound in the terminal.
+ *
+ * Sends the ASCII bell character (`\x07`) to `stdout`.
+ */
+export function ringBell(): void {
+  process.stdout.write('\x07');
+}
+
+/**
  * Formats content for display based on line wrapping configuration.
  *
  * - Chooses between chopping or wrapping long lines.
  * - Limits formatting to the current window range.
  *
  * @param content - The full array of content lines to format.
- * @returns A formatted string ready for rendering.
+ * @returns A formatted string array ready for rendering.
  */
-export function formatContent(content: string[]): string {
+export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
 
   if (config.chopLongLines) {
@@ -112,7 +121,57 @@ export function formatContent(content: string[]): string {
   }
 
   padToEOF(lines);
-  return lines.join('\n');
+  return lines;
+}
+
+/**
+ * Adds a character to the input buffer.
+ *
+ * - Increments buffer offset if visible width limit is reached.
+ *
+ * @param buffer - Current input buffer array.
+ * @param key - Character to append.
+ */
+export function addBufferChar(buffer: string[], key: string): void {
+  if (visibleBufferLength(buffer.length) + 1 === config.screenWidth - 1) {
+    config.bufferOffset++;
+  }
+
+  buffer.push(key);
+}
+
+/**
+ * Removes the last character from the input buffer.
+ *
+ * - Decrements buffer offset if no visible characters remain.
+ *
+ * @param buffer - Current input buffer array.
+ */
+export function delBufferChar(buffer: string[]): void {
+  if (visibleBufferLength(buffer.length) === 0) {
+    config.bufferOffset--;
+  }
+
+  buffer.pop();
+}
+
+/**
+ * Renders the given content to the terminal.
+ *
+ * - Clears the screen before writing.
+ * - Outputs the content directly to `stdout`.
+ *
+ * @param rawContent - The string content to display in the terminal.
+ * @param buffer - Array of buffer characters.
+ */
+export function render(rawContent: string[], buffer: string[]): void {
+  const content = formatContent(rawContent);
+  const prompt = getPrompt();
+
+  if (prompt) content.push(prompt + getBuffer(buffer))
+
+  console.clear();
+  process.stdout.write(content.join('\n'));
 }
 
 /**
@@ -124,7 +183,7 @@ export function formatContent(content: string[]): string {
  *
  * @returns The prompt string, or an empty string if suppressed.
  */
-export function getPrompt(): string {
+function getPrompt(): string {
   const helpPrompt = [
     'HELP -- ' ,
     mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more',
@@ -133,38 +192,42 @@ export function getPrompt(): string {
 
   if (mode.HELP && !mode.BUFFERING) {
     return [
-      '\n',
       INVERSE_ON,
       helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)),
       INVERSE_OFF
     ].join('');
   }
 
-  if (!mode.EOF || mode.BUFFERING) return '\n:';
+  if (!mode.EOF || mode.BUFFERING) return ':';
 
   return '';
 }
 
 /**
- * Renders the given content to the terminal.
+ * Trims the buffer to fit within the screen width.
  *
- * - Clears the screen before writing.
- * - Outputs the content directly to `stdout`.
+ * - If too long, trims equally from the start to keep the tail visible.
  *
- * @param content - The string content to display in the terminal.
+ * @param buffer - Array of buffer characters.
+ * @returns The buffer as a string, trimmed if necessary.
  */
-export function renderContent(content: string): void {
-  console.clear();
-  process.stdout.write(content);
+function getBuffer(buffer: string[]): string {
+  const width = config.screenWidth - 1;
+  const halfWidth = Math.floor(width / 2);
+
+  return buffer.slice(halfWidth * config.bufferOffset).join('');
 }
 
 /**
- * Triggers an audible bell sound in the terminal.
+ * Calculates visible characters in the buffer.
  *
- * Sends the ASCII bell character (`\x07`) to `stdout`.
+ * @param bufferLength - Total buffer character count.
+ * @returns Number of visible characters based on offset.
  */
-export function ringBell(): void {
-  process.stdout.write('\x07');
+function visibleBufferLength(bufferLength: number): number {
+  const width = config.screenWidth - 1;
+  const halfWidth = Math.floor(width / 2);
+  return bufferLength - halfWidth * config.bufferOffset;
 }
 
 /**

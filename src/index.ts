@@ -17,9 +17,9 @@ import { getAction } from "./normalKeys";
 import {
   inputToFilePaths,
   inputToString,
-  formatContent,
-  getPrompt,
-  renderContent,
+  addBufferChar,
+  delBufferChar,
+  render,
   ringBell,
   bufferToNum
 } from "./helpers";
@@ -86,7 +86,7 @@ async function filePager(
 /**
  * Starts an interactive pager session to navigate through string content.
  *
- * - Handles terminal resizing (SIGWINCH) to re-render content.
+ * - Handles terminal resizing (SIGWINCH) to repaint content.
  * - Supports key-based navigation with buffered numeric input.
  * - Responds to various paging actions like line/window movement and exit.
  *
@@ -103,8 +103,9 @@ async function contentPager(content: string[]): Promise<void> {
     config.halfWindow = config.window / 2;
     config.halfScreenWidth = config.screenWidth / 2;
 
-    const displayContent = formatContent(content) + getPrompt();
-    renderContent(displayContent);
+    buffer = [];
+    config.bufferOffset = 0;
+    render(content, buffer);
   });
 
   process.stdin.setRawMode(true);
@@ -112,34 +113,30 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.setEncoding('utf8');
 
   let exit = false;
-  let render = true;
-  let buffer = '';
+  let repaint = true;
+  let buffer: string[] = [];
 
   let prevContent: string[] = [];
   let prevConfig = config;
   let prevMode = mode;
 
   while (!exit) {
-    mode.BUFFERING = Boolean(buffer);
+    mode.BUFFERING = Boolean(buffer.length);
 
-    if (render) {
-      const displayContent = formatContent(content) + getPrompt() + buffer;
-      renderContent(displayContent);
-    }
-
-    render = true;
+    if (repaint) render(content, buffer);
+    repaint = true;
 
     const key = await readKey();
 
     if (key >= '0' && key <= '9') {
-      buffer += key;
+      addBufferChar(buffer, key);
       continue;
     }
 
     const action: Actions | undefined = getAction(key);
 
-    if (action === 'BACKSPACE' && buffer) {
-      buffer = buffer.slice(0, -1);
+    if (action === 'BACKSPACE' && buffer.length) {
+      delBufferChar(buffer);
       continue;
     }
 
@@ -198,10 +195,11 @@ async function contentPager(content: string[]): Promise<void> {
   
       default:
         ringBell();
-        render = false;
+        repaint = false;
     }
 
-    buffer = '';
+    buffer = [];
+    config.bufferOffset = 0;
   }
 
   process.stdin.setRawMode(false);
