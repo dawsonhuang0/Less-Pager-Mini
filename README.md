@@ -2,7 +2,7 @@
 
 <div align="center">
   <a href="https://github.com/dawsonhuang0/Less-Pager-Mini">
-    <img src="logo.svg" alt="Logo" style="width: 30%; height: auto;">
+    <img src="logo.svg" alt="Logo" style="width: 320px; height: 192px;">
   </a>
 
   <br />
@@ -165,6 +165,7 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [ ] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
 - [x] Support wide-character (emoji, CJK, etc.) rendering
+- [x] Support help page
 
 ## Built With
 
