@@ -15,6 +15,7 @@ export let config: Config = {
   halfScreenWidth: (process.stdout.columns ?? 80) / 2,
   chopLongLines: false,
   indentation: 2,
+  bufferOffset: 0,
 };
 
 /**
@@ -43,6 +44,7 @@ export const resetConfig = () => config = {
   halfScreenWidth: (process.stdout.columns ?? 80) / 2,
   chopLongLines: false,
   indentation: 2,
+  bufferOffset: 0,
 };
 
 export const resetMode = () => mode = {

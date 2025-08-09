@@ -18,6 +18,7 @@ export interface Config {
   chopLongLines: boolean;
 
   indentation: number;
+  bufferOffset: number;
 }
 
 /**

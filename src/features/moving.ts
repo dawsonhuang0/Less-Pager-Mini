@@ -106,12 +106,12 @@ export function lineBackward(content: string[], offset: number): void {
  * - If `ignoreEOF` is `true`, allows scrolling beyond (END) without clamping.
  *
  * @param content - The full content to paginate.
- * @param buffer - A string that may represent the number of lines to scroll.
+ * @param buffer - A string array that represents the number of lines to scroll.
  * @param ignoreEOF - Whether to bypass EOF constraints during scrolling.
  */
 export function windowForward(
   content: string[],
-  buffer: string,
+  buffer: string[],
   ignoreEOF: boolean = false
 ): void {
   lineForward(
@@ -129,9 +129,9 @@ export function windowForward(
  *   `config.window - 1`.
  *
  * @param content - The full content as an array of lines.
- * @param buffer - A string representing the number of lines to scroll backward.
+ * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function windowBackward(content: string[], buffer: string): void {
+export function windowBackward(content: string[], buffer: string[]): void {
   lineBackward(
     content,
     bufferToNum(buffer) || config.setWindow || config.window - 1
@@ -146,10 +146,9 @@ export function windowBackward(content: string[], buffer: string): void {
  *   `config.window - 1`.
  *
  * @param content - The full content as an array of lines.
- * @param buffer - A string representing the custom number of lines to scroll
- *                 forward.
+ * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setWindowForward(content: string[], buffer: string): void {
+export function setWindowForward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
   lineForward(content, config.setWindow || config.window - 1);
 }
@@ -162,10 +161,9 @@ export function setWindowForward(content: string[], buffer: string): void {
  *   `config.window - 1`.
  *
  * @param content - The full content as an array of lines.
- * @param buffer - A string representing the custom number of lines to scroll
- *                 backward.
+ * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setWindowBackward(content: string[], buffer: string): void {
+export function setWindowBackward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
   lineBackward(content, config.setWindow || config.window - 1);
 }
@@ -178,10 +176,9 @@ export function setWindowBackward(content: string[], buffer: string): void {
  *   `config.halfWindow`.
  *
  * @param content - The full content as an array of lines.
- * @param buffer - A string representing the custom number of lines to scroll
- *                 forward.
+ * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setHalfWindowForward(content: string[], buffer: string): void {
+export function setHalfWindowForward(content: string[], buffer: string[]): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
   lineForward(content, config.setHalfWindow || config.halfWindow);
 }
@@ -196,10 +193,9 @@ export function setHalfWindowForward(content: string[], buffer: string): void {
  *   `config.halfWindow`.
  *
  * @param content - The full content as an array of lines.
- * @param buffer - A string representing the custom number of lines to scroll
- *                 backward.
+ * @param buffer - A string array that represents the number of lines to scroll.
  */
-export function setHalfWindowBackward(content: string[], buffer: string): void {
+export function setHalfWindowBackward(content: string[], buffer: string[]): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
   lineBackward(content, config.setHalfWindow || config.halfWindow);
 }
