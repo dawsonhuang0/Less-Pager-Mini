@@ -285,5 +285,9 @@ export const help = [
   ' DownArrow ...................... ESC-j ... Retrieve next command line.',
   ' TAB ...................................... Complete filename & cycle.',
   ' SHIFT-TAB ...................... ESC-TAB   Complete filename & reverse cycle.',
-  ' ctrl-L ................................... Complete filename, list all.'
+  ' ctrl-L ................................... Complete filename, list all.',
+  ' ---------------------------------------------------------------------------',
+  '',
+  `        This help is adapted from "less" by Mark Nudelman.`,
+  '        Original: http://greenwoodsoftware.com/less/'
 ];

@@ -159,10 +159,9 @@ async function contentPager(content: string[]): Promise<void> {
         lineForward(content, bufferToNum(buffer) || 1);
         break;
 
-      case 'LINE_BACKWARD': {
+      case 'LINE_BACKWARD':
         lineBackward(content, bufferToNum(buffer) || 1);
         break;
-      }
 
       case 'WINDOW_FORWARD':
         windowForward(content, buffer);
