@@ -164,6 +164,7 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [ ] CHANGING FILES
 - [ ] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
+- [ ] Custom Key-Bindings
 - [x] Support wide-character (emoji, CJK, etc.) rendering
 - [x] Support help page
 
