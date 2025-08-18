@@ -132,7 +132,7 @@ or
 
 ## About The Project
 
-Wanna glance at your array or objects, but scrolling through terminal feels painful? This tool got your back.  
+Want to glance your array or objects, but scrolling through terminal feels painful? This tool got your back.  
 
 **Less-Pager-Mini** is a lightweight pager that lets you scroll massive terminal output with ease and precision.  
 
