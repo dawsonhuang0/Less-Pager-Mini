@@ -243,3 +243,6 @@ async function contentPager(content: string[]): Promise<void> {
     content = help;
   }
 }
+
+module.exports = pager;
+module.exports.default = pager;

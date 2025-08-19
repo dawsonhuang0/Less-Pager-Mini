@@ -75,7 +75,7 @@ npm i less-pager-mini
 <h3>JavaScript / TypeScript:</h3>
 
 ```ts
-import { pager } from 'less-pager-mini';
+import pager from 'less-pager-mini';
 
 const example = ['a', 'b', 'c'];
 await pager(example);
