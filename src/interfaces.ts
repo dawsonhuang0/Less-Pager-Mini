@@ -3,8 +3,10 @@
  */
 export interface Config {
   row: number;
-  col: number;
   subRow: number;
+
+  col: number;
+  setCol: number;
 
   setWindow: number;
   setHalfWindow: number;

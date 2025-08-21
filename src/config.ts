@@ -2,14 +2,15 @@ import { Config, Mode } from "./interfaces";
 
 const defaultConfig: Config = {
   row: 0,
-  col: 0,
   subRow: 0,
+  col: 0,
+  setCol: 0,
   setWindow: 0,
   setHalfWindow: 0,
   window: process.stdout.rows ?? 24,
-  halfWindow: (process.stdout.rows ?? 24) / 2,
+  halfWindow: Math.floor((process.stdout.rows ?? 24) / 2),
   screenWidth: process.stdout.columns ?? 80,
-  halfScreenWidth: (process.stdout.columns ?? 80) / 2,
+  halfScreenWidth: Math.floor((process.stdout.columns ?? 80) / 2),
   chopLongLines: false,
   indentation: 2,
   bufferOffset: 0,
