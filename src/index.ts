@@ -97,6 +97,11 @@ async function filePager(
 async function contentPager(content: string[]): Promise<void> {
   process.stdout.write(ALTERNATE_CONSOLE_ON);
 
+  process.on('uncaughtException', () => {
+    process.stdout.write(ALTERNATE_CONSOLE_OFF);
+    process.exit(1);
+  });
+
   process.on('SIGWINCH', () => {
     mode.INIT = false;
 
