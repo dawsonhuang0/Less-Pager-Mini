@@ -9,7 +9,7 @@ import {
   resetMode
 } from "./config";
 
-import { help } from "./help";
+import { help } from "./lessHelp";
 
 import { readKey } from "./readKey";
 import { getAction } from "./normalKeys";
