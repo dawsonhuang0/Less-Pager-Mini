@@ -307,19 +307,20 @@ function segmentLine(line: string): string[] {
  */
 function chopLongLines(content: string[], lines: string[]): void {
   const maxRow = content.length - config.row;
+  const maxCol = config.screenWidth + config.col;
 
   while (lines.length < config.window - 1 && lines.length < maxRow) {
     const line = content[config.row + lines.length];
 
-    if (visualWidth(line) <= config.screenWidth) {
-      lines.push(line);
+    if (!isAscii(line)) {
+      lines.push(chopLine(line, maxCol));
       continue;
     }
 
     lines.push(
-      isAscii(line)
-        ? line.slice(0, config.screenWidth - 1) + '\x1b[7m>\x1b[0m'
-        : chopLine(line)
+      line.length > maxCol
+        ? line.slice(config.col, maxCol - 1) + '\x1b[7m>\x1b[0m'
+        : line.slice(config.col)
     );
   }
 
@@ -327,56 +328,70 @@ function chopLongLines(content: string[], lines: string[]): void {
 }
 
 /**
- * Determines if the current segment should be the last visible part of the
- * line.
- *
- * - Marks the point where the line would exceed the screen width.
- * - Also checks if the segment exactly fits the screen but isn't the last.
- *
- * @param concatLength - Current total display width including this segment.
- * @param segmentsLength - Total number of segments in the line.
- * @param i - Current segment index.
- * @returns True if this segment should trigger truncation with a tail marker.
- */
-function isTail(
-  concatLength: number,
-  segmentsLength: number,
-  i: number
-): boolean {
-  return (
-    concatLength > config.screenWidth - 1 ||
-    (concatLength === config.screenWidth && i !== segmentsLength - 1)
-  );
-}
-
-/**
  * Truncates a long line to screen width and appends a `>` marker.
  *
  * @param longLine - The line to chop.
+ * @param maxCol - The maximum visible column width.
  * @returns The chopped line with marker.
  */
-function chopLine(longLine: string): string {
+function chopLine(longLine: string, maxCol: number): string {
   const line: string[] = [];
 
-  const segments = segmentLine(longLine);
+  const segments = Array.from(longLine);
   let length = 0;
+  let i = 0;
 
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-    const segmentWidth = visualWidth(segment);
-    const concatLength = length + segmentWidth;
+  let segmentWidth = 0;
+  let concatLength = 0;
 
-    if (isTail(concatLength, segments.length, i)) {
-      line.push(
-        '\x1b[7m' +
-        ' '.repeat(Math.max(config.screenWidth - length - 1, 0)) +
-        '>\x1b[0m'
-      );
+  while (i < segments.length) {
+    segmentWidth = visualWidth(segments[i]);
+    concatLength = length + segmentWidth;
+
+    if (concatLength > config.col) break;
+
+    length = concatLength;
+    i++;
+  }
+
+  if (i === segments.length) return '';
+
+  const remaining = config.col - length;
+  const excess = segmentWidth - remaining;
+
+  if (isAscii(segments[i])) {
+    line.push(segments[i].slice(remaining));
+  } else {
+    line.push(
+      remaining
+        ? INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF
+        : segments[i]
+    );
+  }
+
+  length = concatLength;
+  i++;
+
+  while (length < maxCol && i < segments.length) {
+    segmentWidth = visualWidth(segments[i]);
+    concatLength = length + segmentWidth;
+
+    if (concatLength >= maxCol && i !== segments.length - 1) {
+      const remaining = maxCol - length - 1;
+
+      if (isAscii(segments[i])) {
+        line.push(segments[i].slice(0, remaining) + '\x1b[7m>\x1b[0m');
+      } else {
+        line.push(`\x1b[7m${' '.repeat(remaining)}>\x1b[0m`);
+      }
+
       break;
     }
 
-    line.push(segment);
+    line.push(segments[i]);
+
     length = concatLength;
+    i++;
   }
 
   return line.join('');
