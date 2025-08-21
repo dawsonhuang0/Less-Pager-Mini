@@ -1,9 +1,6 @@
 import { Config, Mode } from "./interfaces";
 
-/**
- * Global configuration for pager rendering and navigation.
- */
-export let config: Config = {
+const defaultConfig: Config = {
   row: 0,
   col: 0,
   subRow: 0,
@@ -17,39 +14,52 @@ export let config: Config = {
   indentation: 2,
   bufferOffset: 0,
 };
+
+const defaultMode: Record<Mode, boolean> = {
+  'INIT': true,
+  'EOF': false,
+  'BUFFERING': false,
+  'HELP': false,
+};
+
+/**
+ * Global configuration for pager rendering and navigation.
+ */
+export let config: Config = { ...defaultConfig };
 
 /**
  * Tracks the current pager state.
  */
-export let mode: Record<Mode, boolean> = {
-  'INIT': true,
-  'EOF': false,
-  'BUFFERING': false,
-  'HELP': false,
-};
+export let mode: Record<Mode, boolean> = { ...defaultMode };
 
-export const applyConfig = (newConfig: Config) => config = newConfig;
+/**
+ * Overwrites all pager configuration with a new one.
+ *
+ * @param newConfig New configuration object.
+ */
+export function applyConfig(newConfig: Config): void {
+  config = newConfig;
+}
 
-export const applyMode = (newMode: Record<Mode, boolean>) => mode = newMode;
+/**
+ * Overwrites all mode flags with a new set.
+ *
+ * @param newMode New mode flags.
+ */
+export function applyMode(newMode: Record<Mode, boolean>): void {
+  mode = newMode;
+}
 
-export const resetConfig = () => config = {
-  row: 0,
-  col: 0,
-  subRow: 0,
-  setWindow: 0,
-  setHalfWindow: 0,
-  window: process.stdout.rows ?? 24,
-  halfWindow: (process.stdout.rows ?? 24) / 2,
-  screenWidth: process.stdout.columns ?? 80,
-  halfScreenWidth: (process.stdout.columns ?? 80) / 2,
-  chopLongLines: false,
-  indentation: 2,
-  bufferOffset: 0,
-};
+/**
+ * Resets the global configuration to default values.
+ */
+export function resetConfig(): void {
+  config = { ...defaultConfig };
+}
 
-export const resetMode = () => mode = {
-  'INIT': true,
-  'EOF': false,
-  'BUFFERING': false,
-  'HELP': false,
-};
+/**
+ * Resets all mode flags to their default state.
+ */
+export function resetMode(): void {
+  mode = { ...defaultMode };
+}
