@@ -4,7 +4,7 @@ import wcwidth from 'wcwidth';
 
 import { config, mode } from './config';
 
-import { INVERSE_ON, INVERSE_OFF } from './constants';
+import { STYLE_REGEX, INVERSE_ON, INVERSE_OFF } from './constants';
 
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
@@ -114,7 +114,7 @@ export function ringBell(): void {
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
 
-  if (config.chopLongLines) {
+  if (config.chopLongLines || config.col) {
     chopLongLines(content, lines);
   } else {
     wrapLongLines(content, lines);
@@ -251,11 +251,7 @@ const isAscii = (segment: string): boolean =>
  * @returns The total visual width of the string in terminal columns.
  */
 function visualWidth(line: string): number {
-  // regex that matchs the pattern '\x1b[...m'
-  // eslint-disable-next-line no-control-regex
-  const styleRegex = /\x1b\[[0-9;]*m/g;
-
-  if (styleRegex.test(line)) line = line.replace(styleRegex, '');
+  if (STYLE_REGEX.test(line)) line = line.replace(STYLE_REGEX, '');
 
   if (isAscii(line)) return line.length;
 
@@ -317,6 +313,11 @@ function chopLongLines(content: string[], lines: string[]): void {
       continue;
     }
 
+    if (STYLE_REGEX.test(line)) {
+      lines.push(chopStyledLine(line));
+      continue;
+    }
+
     lines.push(
       line.length > maxCol
         ? line.slice(config.col, maxCol - 1) + '\x1b[7m>\x1b[0m'
@@ -325,6 +326,59 @@ function chopLongLines(content: string[], lines: string[]): void {
   }
 
   mode.EOF = lines.length === maxRow;
+}
+
+/**
+ * Chop a styled line to screen width.
+ * 
+ * - Keeps ANSI styles in place.
+ * - Adds '>' if chopped.
+ * 
+ * @param styledLine Line with ANSI codes.
+ * @returns Chopped line with styles.
+ */
+function chopStyledLine(styledLine: string): string {
+  const line: string[] = [];
+
+  const visualLength = styledLine.replace(STYLE_REGEX, '').length;
+
+  const ansis: { ansi: string, start: number, end: number }[] = [];
+  STYLE_REGEX.lastIndex = 0;
+  let curr;
+
+  while ((curr = STYLE_REGEX.exec(styledLine)) !== null) {
+    ansis.push({
+      ansi: curr[0],
+      start: curr.index,
+      end: STYLE_REGEX.lastIndex
+    });
+  }
+
+  let c = 0, i = 0, currAnsi = 0, length = 0;
+
+  while (length < config.screenWidth && i < styledLine.length) {
+    if (currAnsi < ansis.length && i === ansis[currAnsi].start) {
+      line.push(ansis[currAnsi].ansi);
+      i = ansis[currAnsi].end;
+      currAnsi++;
+      continue;
+    }
+
+    if (length === config.screenWidth - 1 && c !== visualLength - 1) {
+      line.push('\x1b[7m>\x1b[0m');
+      break;
+    }
+
+    if (c >= config.col) {
+      line.push(styledLine[i]);
+      length++;
+    }
+
+    c++;
+    i++;
+  }
+    
+  return line.join('');
 }
 
 /**

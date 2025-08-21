@@ -157,8 +157,10 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
   - [x] Forward one window, but don't stop at EOF
   - [x] Forward one half-window and set half-window to N
   - [x] Backward one half-window and set half-window to N
-  - [ ] Right one or N positions half screen width
-  - [ ] Left one or N positions half screen width
+  - [x] Right one or N positions half screen width
+  - [x] Left one or N positions half screen width
+  - [ ] Right to last column
+  - [ ] Left  to first column
 - [ ] JUMPING
 - [ ] SEARCHING
 - [ ] CHANGING FILES

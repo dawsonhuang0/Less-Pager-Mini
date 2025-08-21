@@ -186,7 +186,6 @@ export function setHalfWindowForward(
   lineForward(content, config.setHalfWindow || config.halfWindow);
 }
 
-
 /**
  * Sets a custom half-window size using the given `buffer`, and scrolls
  * backward.
@@ -204,6 +203,29 @@ export function setHalfWindowBackward(
 ): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
   lineBackward(content, config.setHalfWindow || config.halfWindow);
+}
+
+/**
+ * Scrolls right by buffer value or half screen width.
+ *
+ * @param buffer - Buffer containing scroll offset.
+ */
+export function setHalfScreenRight(buffer: string[]): void {
+  if (mode.INIT) mode.INIT = false;
+  config.setCol = bufferToNum(buffer) || config.setCol;
+  config.col += config.setCol || config.halfScreenWidth;
+}
+
+/**
+ * Scrolls left by buffer value or half screen width.
+ *
+ * @param buffer - Buffer containing scroll offset.
+ */
+export function setHalfScreenLeft(buffer: string[]): void {
+  if (mode.INIT) mode.INIT = false;
+  config.setCol = bufferToNum(buffer) || config.setCol;
+  config.col -= config.setCol || config.halfScreenWidth;
+  if (config.col < 0) config.col = 0;
 }
 
 /**

@@ -32,7 +32,9 @@ import {
   setWindowForward,
   setWindowBackward,
   setHalfWindowForward,
-  setHalfWindowBackward
+  setHalfWindowBackward,
+  setHalfScreenRight,
+  setHalfScreenLeft
 } from "./features/moving";
 
 import { ALTERNATE_CONSOLE_ON, ALTERNATE_CONSOLE_OFF } from "./constants";
@@ -194,6 +196,14 @@ async function contentPager(content: string[]): Promise<void> {
 
       case 'SET_HALF_WINDOW_BACKWARD':
         setHalfWindowBackward(content, buffer);
+        break;
+
+      case 'SET_HALF_SCREEN_RIGHT':
+        setHalfScreenRight(buffer);
+        break;
+
+      case 'SET_HALF_SCREEN_LEFT':
+        setHalfScreenLeft(buffer);
         break;
 
       case 'REPAINT':
