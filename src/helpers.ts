@@ -255,7 +255,7 @@ function visualWidth(line: string): number {
 
   if (isAscii(line)) return line.length;
 
-  const segments = segmentLine(line);
+  const segments = Array.from(line);
   let length = 0;
 
   for (let i = 0; i < segments.length; i++) {
@@ -263,36 +263,6 @@ function visualWidth(line: string): number {
   }
 
   return length;
-}
-
-/**
- * Segments a given string into grapheme clusters (visible characters).
- *
- * - Uses `Intl.Segmenter` if available to accurately split the string into
- *   grapheme clusters
- * - Falls back to `Array.from` for environments where `Intl.Segmenter` is
- *   unavailable.
- *
- * @param line - The input string to be segmented.
- * @returns An array of grapheme segments, each representing one visible
- *          character.
- */
-function segmentLine(line: string): string[] {
-  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - TS may not recognize Segmenter in older versions
-    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-
-    // Fallback for environments without Intl.Segmenter
-    /* v8 ignore next */
-    : null;
-
-  return segmenter
-    ? [...segmenter.segment(line)].flatMap(s => s.segment)
-
-    // Fallback for environments without Intl.Segmenter
-    /* v8 ignore next */
-    : Array.from(line);
 }
 
 /**
@@ -502,7 +472,7 @@ function partitionLine(
 ): boolean {
   let line: string[] = [];
 
-  const segments = segmentLine(longLine);
+  const segments = Array.from(longLine);
   let length = 0;
   let subRow = 0;
 
