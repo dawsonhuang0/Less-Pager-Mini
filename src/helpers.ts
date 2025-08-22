@@ -371,7 +371,7 @@ function chopStyledLine(styledLine: string): string {
     c++;
     i++;
   }
-    
+
   return line.join('');
 }
 

@@ -109,8 +109,8 @@ async function contentPager(content: string[]): Promise<void> {
 
     config.window = process.stdout.rows;
     config.screenWidth = process.stdout.columns;
-    config.halfWindow = config.window / 2;
-    config.halfScreenWidth = config.screenWidth / 2;
+    config.halfWindow = Math.floor(config.window / 2);
+    config.halfScreenWidth = Math.floor(config.screenWidth / 2);
 
     buffer = [];
     config.bufferOffset = 0;
