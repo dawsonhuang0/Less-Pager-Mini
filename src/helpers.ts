@@ -4,7 +4,13 @@ import wcwidth from 'wcwidth';
 
 import { config, mode } from './config';
 
-import { STYLE_REGEX, INVERSE_ON, INVERSE_OFF } from './constants';
+import {
+  ASCII_REGEX,
+  STYLE_REGEX,
+  STYLE_REGEX_G,
+  INVERSE_ON,
+  INVERSE_OFF
+} from './constants';
 
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
@@ -239,9 +245,7 @@ function visibleBufferLength(bufferLength: number): number {
  * @param segment - A string segment to check.
  * @returns Whether the segment is pure ASCII.
  */
-const isAscii = (segment: string): boolean =>
-  // eslint-disable-next-line no-control-regex
-  /^[\x00-\x7F]*$/.test(segment);
+const isAscii = (segment: string): boolean => ASCII_REGEX.test(segment);
 
 /**
  * Calculates the total visual width of a string based on terminal character
@@ -251,7 +255,7 @@ const isAscii = (segment: string): boolean =>
  * @returns The total visual width of the string in terminal columns.
  */
 function visualWidth(line: string): number {
-  if (STYLE_REGEX.test(line)) line = line.replace(STYLE_REGEX, '');
+  if (STYLE_REGEX.test(line)) line = line.replace(STYLE_REGEX_G, '');
 
   if (isAscii(line)) return line.length;
 
@@ -310,39 +314,37 @@ function chopLongLines(content: string[], lines: string[]): void {
 function chopStyledLine(styledLine: string): string {
   const line: string[] = [];
 
-  const visualLength = styledLine.replace(STYLE_REGEX, '').length;
+  const visualLength = styledLine.replace(STYLE_REGEX_G, '').length;
 
   const ansis: { ansi: string, start: number, end: number }[] = [];
-  STYLE_REGEX.lastIndex = 0;
-  let ansi;
+  STYLE_REGEX_G.lastIndex = 0;
+  let ansi, c = 0, i = 0;
 
-  while ((ansi = STYLE_REGEX.exec(styledLine)) !== null) {
-    ansis.push({
-      ansi: ansi[0],
-      start: ansi.index,
-      end: STYLE_REGEX.lastIndex
-    });
-  }
-
-  let c = 0, i = 0, curr = 0;
-
-  while (curr < ansis.length && c < config.col && i < styledLine.length) {
-    const concatChars = c + ansis[curr].start - i;
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+    const concatChars = c + ansi.index - i;
 
     if (concatChars < config.col) {
-      line.push(ansis[curr].ansi);
+      line.push(ansi[0]);
       c = concatChars;
-      i = ansis[curr].end;
-      curr++;
-    } else {
+      i = STYLE_REGEX_G.lastIndex;
+      continue;
+    }
+
+    if (!ansis.length) {
       i += config.col - c;
       c = config.col;
     }
+
+    ansis.push({
+      ansi: ansi[0],
+      start: ansi.index,
+      end: STYLE_REGEX_G.lastIndex
+    });
   }
 
   if (i === styledLine.length) return line.join('');
 
-  let length = 0;
+  let length = 0, curr = 0;
 
   while (length < config.screenWidth && i < styledLine.length) {
     if (curr < ansis.length && i === ansis[curr].start) {
