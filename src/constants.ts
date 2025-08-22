@@ -1,6 +1,12 @@
-// regex that matchs the pattern '\x1b[...m'
-// eslint-disable-next-line no-control-regex
-export const STYLE_REGEX = /\x1b\[[0-9;]*m/g;
+/* eslint-disable no-control-regex */
+
+export const ASCII_REGEX = /^[\x00-\x7F]*$/;
+export const STYLE_REGEX = /\x1b\[[0-9;]*m/;
+export const STYLE_REGEX_G = /\x1b\[[0-9;]*m/g;
+
+export const CONSOLE_TITLE_START = '\x1b]0;';
+export const CONSOLE_TITLE_END = '\x07';
+export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
 
 export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';

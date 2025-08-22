@@ -37,7 +37,15 @@ import {
   setHalfScreenLeft
 } from "./features/moving";
 
-import { ALTERNATE_CONSOLE_ON, ALTERNATE_CONSOLE_OFF } from "./constants";
+import {
+  CONSOLE_TITLE_START,
+  CONSOLE_TITLE_END,
+  CONSOLE_TITLE_RESET,
+  ALTERNATE_CONSOLE_ON,
+  ALTERNATE_CONSOLE_OFF
+} from "./constants";
+
+const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
 
 /**
  * Less-pager-mini
@@ -97,10 +105,12 @@ async function filePager(
  * @param content - The content to be displayed in the pager.
  */
 async function contentPager(content: string[]): Promise<void> {
+  process.stdout.write(TITLE);
   process.stdout.write(ALTERNATE_CONSOLE_ON);
 
   process.on('uncaughtException', () => {
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
+    process.stdout.write(CONSOLE_TITLE_RESET);
     process.exit(1);
   });
 
@@ -222,6 +232,7 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.pause();
 
   process.stdout.write(ALTERNATE_CONSOLE_OFF);
+  process.stdout.write(CONSOLE_TITLE_RESET);
 
   // helpers
 
