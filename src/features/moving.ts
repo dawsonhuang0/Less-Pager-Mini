@@ -21,7 +21,7 @@ export function lineForward(
     return;
   }
 
-  if (config.chopLongLines) {
+  if (config.chopLongLines || config.col) {
     const maxRow = ignoreEOF
       ? content.length - 1
       : Math.max(content.length - config.window + 1, 0);
@@ -74,7 +74,7 @@ export function lineBackward(content: string[], offset: number): void {
     return;
   }
 
-  if (config.chopLongLines) {
+  if (config.chopLongLines || config.col) {
     config.row = Math.max(config.row - offset, 0);
     return;
   }
