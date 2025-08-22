@@ -314,27 +314,46 @@ function chopStyledLine(styledLine: string): string {
 
   const ansis: { ansi: string, start: number, end: number }[] = [];
   STYLE_REGEX.lastIndex = 0;
-  let curr;
+  let ansi;
 
-  while ((curr = STYLE_REGEX.exec(styledLine)) !== null) {
+  while ((ansi = STYLE_REGEX.exec(styledLine)) !== null) {
     ansis.push({
-      ansi: curr[0],
-      start: curr.index,
+      ansi: ansi[0],
+      start: ansi.index,
       end: STYLE_REGEX.lastIndex
     });
   }
 
-  let c = 0, i = 0, currAnsi = 0, length = 0;
+  let c = 0, i = 0, curr = 0;
+
+  while (curr < ansis.length && c < config.col && i < styledLine.length) {
+    const concatChars = c + ansis[curr].start - i;
+
+    if (concatChars < config.col) {
+      line.push(ansis[curr].ansi);
+      c = concatChars;
+      i = ansis[curr].end;
+      curr++;
+    } else {
+      i += config.col - c;
+      c = config.col;
+    }
+  }
+
+  if (i === styledLine.length) return line.join('');
+
+  let length = 0;
 
   while (length < config.screenWidth && i < styledLine.length) {
-    if (currAnsi < ansis.length && i === ansis[currAnsi].start) {
-      line.push(ansis[currAnsi].ansi);
-      i = ansis[currAnsi].end;
-      currAnsi++;
+    if (curr < ansis.length && i === ansis[curr].start) {
+      line.push(ansis[curr].ansi);
+      i = ansis[curr].end;
+      curr++;
       continue;
     }
 
     if (length === config.screenWidth - 1 && c !== visualLength - 1) {
+      while (curr < ansis.length) line.push(ansis[curr++].ansi);
       line.push('\x1b[7m>\x1b[0m');
       break;
     }
@@ -342,6 +361,11 @@ function chopStyledLine(styledLine: string): string {
     if (c >= config.col) {
       line.push(styledLine[i]);
       length++;
+    }
+
+    if (length === config.screenWidth) {
+      while (curr < ansis.length) line.push(ansis[curr++].ansi);
+      break;
     }
 
     c++;
