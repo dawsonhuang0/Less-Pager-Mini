@@ -12,6 +12,8 @@ import {
   INVERSE_OFF
 } from './constants';
 
+const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
+
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
  * width.
@@ -248,6 +250,14 @@ function visibleBufferLength(bufferLength: number): number {
 const isAscii = (segment: string): boolean => ASCII_REGEX.test(segment);
 
 /**
+ * Checks whether a given string contains ANSI style codes.
+ *
+ * @param line The input string to test.
+ * @returns `true` if ANSI style codes are present, otherwise `false`.
+ */
+const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
+
+/**
  * Calculates the total visual width of a string based on terminal character
  * widths.
  *
@@ -255,7 +265,7 @@ const isAscii = (segment: string): boolean => ASCII_REGEX.test(segment);
  * @returns The total visual width of the string in terminal columns.
  */
 function visualWidth(line: string): number {
-  if (STYLE_REGEX.test(line)) line = line.replace(STYLE_REGEX_G, '');
+  if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
 
   if (isAscii(line)) return line.length;
 
@@ -287,14 +297,14 @@ function chopLongLines(content: string[], lines: string[]): void {
       continue;
     }
 
-    if (STYLE_REGEX.test(line)) {
+    if (isStyled(line)) {
       lines.push(chopStyledLine(line));
       continue;
     }
 
     lines.push(
       line.length > maxCol
-        ? line.slice(config.col, maxCol - 1) + '\x1b[7m>\x1b[0m'
+        ? line.slice(config.col, maxCol - 1) + MORE_INDICATOR
         : line.slice(config.col)
     );
   }
@@ -321,28 +331,27 @@ function chopStyledLine(styledLine: string): string {
   let ansi, c = 0, i = 0;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    const concatChars = c + ansi.index - i;
+    const nextChar = c + ansi.index - i;
 
-    if (concatChars < config.col) {
+    if (nextChar <= config.col) {
       line.push(ansi[0]);
-      c = concatChars;
+      c = nextChar;
       i = STYLE_REGEX_G.lastIndex;
-      continue;
+    } else {
+      ansis.push({
+        ansi: ansi[0],
+        start: ansi.index,
+        end: STYLE_REGEX_G.lastIndex
+      });
     }
-
-    if (!ansis.length) {
-      i += config.col - c;
-      c = config.col;
-    }
-
-    ansis.push({
-      ansi: ansi[0],
-      start: ansi.index,
-      end: STYLE_REGEX_G.lastIndex
-    });
   }
 
-  if (i === styledLine.length) return line.join('');
+  if (visualLength <= config.col) return line.join('');
+
+  if (c !== config.col) {
+    i += config.col - c;
+    c = config.col;
+  }
 
   let length = 0, curr = 0;
 
@@ -354,22 +363,17 @@ function chopStyledLine(styledLine: string): string {
       continue;
     }
 
-    if (length === config.screenWidth - 1 && c !== visualLength - 1) {
-      while (curr < ansis.length) line.push(ansis[curr++].ansi);
-      line.push('\x1b[7m>\x1b[0m');
-      break;
-    }
-
-    if (c >= config.col) {
+    if (length < config.screenWidth - 1) {
       line.push(styledLine[i]);
-      length++;
-    }
+    } else {
+      const overflow = c !== visualLength - 1;
 
-    if (length === config.screenWidth) {
+      if (!overflow) line.push(styledLine[i]);
       while (curr < ansis.length) line.push(ansis[curr++].ansi);
-      break;
+      if (overflow) line.push(MORE_INDICATOR);
     }
 
+    length++;
     c++;
     i++;
   }
@@ -423,22 +427,22 @@ function chopLine(longLine: string, maxCol: number): string {
   i++;
 
   while (length < maxCol && i < segments.length) {
-    segmentWidth = visualWidth(segments[i]);
-    concatLength = length + segmentWidth;
+    concatLength = length + visualWidth(segments[i]);
 
-    if (concatLength >= maxCol && i !== segments.length - 1) {
+    if (
+      concatLength > maxCol ||
+      (concatLength === maxCol && i !== segments.length - 1)
+    ) {
       const remaining = maxCol - length - 1;
 
       if (isAscii(segments[i])) {
-        line.push(segments[i].slice(0, remaining) + '\x1b[7m>\x1b[0m');
+        line.push(segments[i].slice(0, remaining) + MORE_INDICATOR);
       } else {
-        line.push(`\x1b[7m${' '.repeat(remaining)}>\x1b[0m`);
+        line.push(`${INVERSE_ON}${' '.repeat(remaining)}>${INVERSE_OFF}`);
       }
-
-      break;
+    } else {
+      line.push(segments[i]);
     }
-
-    line.push(segments[i]);
 
     length = concatLength;
     i++;
