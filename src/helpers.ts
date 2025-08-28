@@ -293,7 +293,7 @@ function chopLongLines(content: string[], lines: string[]): void {
     const line = content[config.row + lines.length];
 
     if (!isAscii(line)) {
-      lines.push(chopLine(line, maxCol));
+      lines.push(chopLine(line));
       continue;
     }
 
@@ -385,10 +385,9 @@ function chopStyledLine(styledLine: string): string {
  * Truncates a long line to screen width and appends a `>` marker.
  *
  * @param longLine - The line to chop.
- * @param maxCol - The maximum visible column width.
  * @returns The chopped line with marker.
  */
-function chopLine(longLine: string, maxCol: number): string {
+function chopLine(longLine: string): string {
   const line: string[] = [];
 
   const segments = Array.from(longLine);
@@ -423,17 +422,17 @@ function chopLine(longLine: string, maxCol: number): string {
     );
   }
 
-  length = concatLength;
+  length = excess;
   i++;
 
-  while (length < maxCol && i < segments.length) {
+  while (length < config.screenWidth && i < segments.length) {
     concatLength = length + visualWidth(segments[i]);
 
     if (
-      concatLength > maxCol ||
-      (concatLength === maxCol && i !== segments.length - 1)
+      concatLength > config.screenWidth ||
+      (concatLength === config.screenWidth && i !== segments.length - 1)
     ) {
-      const remaining = maxCol - length - 1;
+      const remaining = config.screenWidth - length - 1;
 
       if (isAscii(segments[i])) {
         line.push(segments[i].slice(0, remaining) + MORE_INDICATOR);
