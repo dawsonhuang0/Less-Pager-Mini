@@ -108,9 +108,10 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdout.write(TITLE);
   process.stdout.write(ALTERNATE_CONSOLE_ON);
 
-  process.on('uncaughtException', () => {
+  process.on('uncaughtException', (error) => {
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
     process.stdout.write(CONSOLE_TITLE_RESET);
+    console.error(error);
     process.exit(1);
   });
 
