@@ -4,6 +4,9 @@ import wcwidth from 'wcwidth';
 
 import { config, mode } from './config';
 
+import { chopLongLines } from './chopLongLines';
+import { wrapLongLines } from './wrapLongLines';
+
 import {
   ASCII_REGEX,
   STYLE_REGEX,
@@ -11,8 +14,6 @@ import {
   INVERSE_ON,
   INVERSE_OFF
 } from './constants';
-
-const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
 
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
@@ -183,6 +184,47 @@ export function render(rawContent: string[], buffer: string[]): void {
 }
 
 /**
+ * Calculates the total visual width of a string based on terminal character
+ * widths.
+ *
+ * @param line - The input string to measure.
+ * @returns The total visual width of the string in terminal columns.
+ */
+export function visualWidth(line: string): number {
+  if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
+
+  if (isAscii(line)) return line.length;
+
+  const segments = Array.from(line);
+  let length = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    length += wcwidth(segments[i]);
+  }
+
+  return length;
+}
+
+/**
+ * Checks whether a given segment consists entirely of ASCII characters.
+ *
+ * - Matches characters in the range 0x00 to 0x7F.
+ * - Used to determine whether fast-path rendering can be applied.
+ *
+ * @param segment - A string segment to check.
+ * @returns Whether the segment is pure ASCII.
+ */
+export const isAscii = (segment: string): boolean => ASCII_REGEX.test(segment);
+
+/**
+ * Checks whether a given string contains ANSI style codes.
+ *
+ * @param line The input string to test.
+ * @returns `true` if ANSI style codes are present, otherwise `false`.
+ */
+export const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
+
+/**
  * Returns the prompt string to be shown at the bottom of the screen.
  *
  * - Typically returns `':'` to indicate the pager is awaiting user input.
@@ -236,307 +278,6 @@ function visibleBufferLength(bufferLength: number): number {
   const width = config.screenWidth - 1;
   const halfWidth = Math.floor(width / 2);
   return bufferLength - halfWidth * config.bufferOffset;
-}
-
-/**
- * Checks whether a given segment consists entirely of ASCII characters.
- *
- * - Matches characters in the range 0x00 to 0x7F.
- * - Used to determine whether fast-path rendering can be applied.
- *
- * @param segment - A string segment to check.
- * @returns Whether the segment is pure ASCII.
- */
-const isAscii = (segment: string): boolean => ASCII_REGEX.test(segment);
-
-/**
- * Checks whether a given string contains ANSI style codes.
- *
- * @param line The input string to test.
- * @returns `true` if ANSI style codes are present, otherwise `false`.
- */
-const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
-
-/**
- * Calculates the total visual width of a string based on terminal character
- * widths.
- *
- * @param line - The input string to measure.
- * @returns The total visual width of the string in terminal columns.
- */
-function visualWidth(line: string): number {
-  if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
-
-  if (isAscii(line)) return line.length;
-
-  const segments = Array.from(line);
-  let length = 0;
-
-  for (let i = 0; i < segments.length; i++) {
-    length += wcwidth(segments[i]);
-  }
-
-  return length;
-}
-
-/**
- * Chops long lines to fit screen width and fills the window.
- *
- * @param content - Full content lines.
- * @param lines - Output array of chopped lines.
- */
-function chopLongLines(content: string[], lines: string[]): void {
-  const maxRow = content.length - config.row;
-  const maxCol = config.screenWidth + config.col;
-
-  while (lines.length < config.window - 1 && lines.length < maxRow) {
-    const line = content[config.row + lines.length];
-
-    if (!isAscii(line)) {
-      lines.push(chopLine(line));
-      continue;
-    }
-
-    if (isStyled(line)) {
-      lines.push(chopStyledLine(line));
-      continue;
-    }
-
-    lines.push(
-      line.length > maxCol
-        ? line.slice(config.col, maxCol - 1) + MORE_INDICATOR
-        : line.slice(config.col)
-    );
-  }
-
-  mode.EOF = lines.length === maxRow;
-}
-
-/**
- * Chop a styled line to screen width.
- * 
- * - Keeps ANSI styles in place.
- * - Adds '>' if chopped.
- * 
- * @param styledLine Line with ANSI codes.
- * @returns Chopped line with styles.
- */
-function chopStyledLine(styledLine: string): string {
-  const line: string[] = [];
-
-  const visualLength = styledLine.replace(STYLE_REGEX_G, '').length;
-
-  const ansis: { ansi: string, start: number, end: number }[] = [];
-  STYLE_REGEX_G.lastIndex = 0;
-  let ansi, c = 0, i = 0;
-
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    const nextChar = c + ansi.index - i;
-
-    if (nextChar <= config.col) {
-      line.push(ansi[0]);
-      c = nextChar;
-      i = STYLE_REGEX_G.lastIndex;
-    } else {
-      ansis.push({
-        ansi: ansi[0],
-        start: ansi.index,
-        end: STYLE_REGEX_G.lastIndex
-      });
-    }
-  }
-
-  if (visualLength <= config.col) return line.join('');
-
-  if (c !== config.col) {
-    i += config.col - c;
-    c = config.col;
-  }
-
-  let length = 0, curr = 0;
-
-  while (length < config.screenWidth && i < styledLine.length) {
-    if (curr < ansis.length && i === ansis[curr].start) {
-      line.push(ansis[curr].ansi);
-      i = ansis[curr].end;
-      curr++;
-      continue;
-    }
-
-    if (length < config.screenWidth - 1) {
-      line.push(styledLine[i]);
-    } else {
-      const overflow = c !== visualLength - 1;
-
-      if (!overflow) line.push(styledLine[i]);
-      while (curr < ansis.length) line.push(ansis[curr++].ansi);
-      if (overflow) line.push(MORE_INDICATOR);
-    }
-
-    length++;
-    c++;
-    i++;
-  }
-
-  return line.join('');
-}
-
-/**
- * Truncates a long line to screen width and appends a `>` marker.
- *
- * @param longLine - The line to chop.
- * @returns The chopped line with marker.
- */
-function chopLine(longLine: string): string {
-  const line: string[] = [];
-
-  const segments = Array.from(longLine);
-  let length = 0;
-  let i = 0;
-
-  let segmentWidth = 0;
-  let concatLength = 0;
-
-  while (i < segments.length) {
-    segmentWidth = visualWidth(segments[i]);
-    concatLength = length + segmentWidth;
-
-    if (concatLength > config.col) break;
-
-    length = concatLength;
-    i++;
-  }
-
-  if (i === segments.length) return '';
-
-  const remaining = config.col - length;
-  const excess = segmentWidth - remaining;
-
-  if (isAscii(segments[i])) {
-    line.push(segments[i].slice(remaining));
-  } else {
-    line.push(
-      remaining
-        ? INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF
-        : segments[i]
-    );
-  }
-
-  length = excess;
-  i++;
-
-  while (length < config.screenWidth && i < segments.length) {
-    concatLength = length + visualWidth(segments[i]);
-
-    if (
-      concatLength > config.screenWidth ||
-      (concatLength === config.screenWidth && i !== segments.length - 1)
-    ) {
-      const remaining = config.screenWidth - length - 1;
-
-      if (isAscii(segments[i])) {
-        line.push(segments[i].slice(0, remaining) + MORE_INDICATOR);
-      } else {
-        line.push(`${INVERSE_ON}${' '.repeat(remaining)}>${INVERSE_OFF}`);
-      }
-    } else {
-      line.push(segments[i]);
-    }
-
-    length = concatLength;
-    i++;
-  }
-
-  return line.join('');
-}
-
-/**
- * Wraps lines into subrows to fit screen width and fills the window.
- *
- * @param content - Full content lines.
- * @param lines - Output array of wrapped lines.
- */
-function wrapLongLines(content: string[], lines: string[]): void {
-  const maxRow = content.length - config.row;
-
-  let row = 0;
-  let isCompleteLine = true;
-  let line = content[config.row];
-
-  if (config.subRow) {
-    isCompleteLine = partitionLine(lines, line, config.subRow);
-    row++;
-  }
-
-  while (lines.length < config.window - 1 && row < maxRow) {
-    line = content[config.row + row];
-
-    if (visualWidth(line) > config.screenWidth) {
-      isCompleteLine = partitionLine(lines, line, 0);
-    } else {
-      lines.push(line);
-    }
-
-    row++;
-  }
-
-  mode.EOF = isCompleteLine && row === maxRow;
-}
-
-/**
- * Wraps a long line into subrows and appends them to `lines`.
- *
- * - Starts from `subRowStart` for partial line display.
- * - Stops early if window limit is reached.
- *
- * @param lines - Output array for wrapped segments.
- * @param longLine - The line to split and wrap.
- * @param subRowStart - Starting subrow index (default 0).
- * @returns `true` if the line is fully wrapped, `false` if truncated.
- */
-function partitionLine(
-  lines: string[],
-  longLine: string,
-  subRowStart: number
-): boolean {
-  let line: string[] = [];
-
-  const segments = Array.from(longLine);
-  let length = 0;
-  let subRow = 0;
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-    const segmentWidth = visualWidth(segment);
-    const concatLength = length + segmentWidth;
-
-    if (concatLength < config.screenWidth) {
-      line.push(segment);
-      length = concatLength;
-      continue;
-    }
-
-    const overflow = concatLength > config.screenWidth;
-
-    if (subRow >= subRowStart) {
-      if (lines.length === config.window - 1) return false;
-
-      if (!overflow) line.push(segment);
-      lines.push(line.join(''));
-    }
-
-    line = overflow ? [segment] : [];
-    length = overflow ? segmentWidth : 0;
-
-    subRow++;
-  }
-
-  if (line.length && subRow >= subRowStart) {
-    if (lines.length === config.window - 1) return false;
-    lines.push(line.join(''));
-  }
-
-  return true;
 }
 
 /**

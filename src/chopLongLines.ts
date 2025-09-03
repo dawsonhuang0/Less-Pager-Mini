@@ -1,0 +1,191 @@
+import wcwidth from 'wcwidth';
+
+import { config, mode } from "./config";
+
+import { visualWidth, isStyled, isAscii } from "./helpers";
+
+import { INVERSE_ON, INVERSE_OFF, STYLE_REGEX_G } from "./constants";
+
+const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
+
+/**
+ * Chops long lines to fit screen width and fills the window.
+ *
+ * @param content - Full content lines.
+ * @param lines - Output array of chopped lines.
+ */
+export function chopLongLines(content: string[], lines: string[]): void {
+  const maxRow = content.length - config.row;
+  const maxCol = config.screenWidth + config.col;
+
+  while (lines.length < config.window - 1 && lines.length < maxRow) {
+    const line = content[config.row + lines.length];
+    lines.push(chop(line, maxCol));
+  }
+
+  mode.EOF = lines.length === maxRow;
+}
+
+/**
+ * Chooses the appropriate chopping strategy for a line.
+ *
+ * - Routes to styled/ascii/non-ascii handlers based on content type.
+ * - Adds `MORE_INDICATOR` if ASCII line exceeds screen width.
+ *
+ * @param line - The line of text to chop.
+ * @param maxCol - The maximum column position allowed.
+ * @returns The chopped line as a string.
+ */
+function chop(line: string, maxCol: number): string {
+  if (isStyled(line)) {
+    return isAscii(line)
+      ? chopStyledAsciiLine(line)
+      : chopStyledLine(line);
+  }
+  
+  if (isAscii(line)) {
+    return line.length > maxCol
+      ? line.slice(config.col, maxCol - 1) + MORE_INDICATOR
+      : line.slice(config.col);
+  }
+  
+  return chopLine(line);
+}
+
+/**
+ * Chop a styled line to screen width.
+ * 
+ * - Keeps ANSI styles in place.
+ * - Adds '>' if chopped.
+ * 
+ * @param styledLine Line with ANSI codes.
+ * @returns Chopped line with styles.
+ */
+function chopStyledAsciiLine(styledLine: string): string {
+  const line: string[] = [];
+
+  const visualLength = visualWidth(styledLine);
+
+  const ansis: { ansi: string, start: number, end: number }[] = [];
+  STYLE_REGEX_G.lastIndex = 0;
+  let ansi, char = 0, i = 0;
+
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+    const nextChar = char + ansi.index - i;
+
+    if (nextChar <= config.col) {
+      line.push(ansi[0]);
+      char = nextChar;
+      i = STYLE_REGEX_G.lastIndex;
+    } else {
+      ansis.push({
+        ansi: ansi[0],
+        start: ansi.index,
+        end: STYLE_REGEX_G.lastIndex
+      });
+    }
+  }
+
+  if (visualLength <= config.col) return line.join('');
+
+  if (char < config.col) {
+    i += config.col - char;
+    char = config.col;
+  }
+
+  let length = 0, curr = 0;
+
+  while (length < config.screenWidth && i < styledLine.length) {
+    if (curr < ansis.length && i === ansis[curr].start) {
+      line.push(ansis[curr].ansi);
+      i = ansis[curr].end;
+      curr++;
+      continue;
+    }
+
+    if (length < config.screenWidth - 1) {
+      line.push(styledLine[i]);
+    } else {
+      const overflow = char !== visualLength - 1;
+
+      if (!overflow) line.push(styledLine[i]);
+      while (curr < ansis.length) line.push(ansis[curr++].ansi);
+      if (overflow) line.push(MORE_INDICATOR);
+    }
+
+    length++;
+    char++;
+    i++;
+  }
+
+  return line.join('');
+}
+
+/**
+ * Truncates a long line to screen width and appends a `>` marker.
+ *
+ * @param longLine - The line to chop.
+ * @returns The chopped line with marker.
+ */
+function chopLine(longLine: string): string {
+  const line: string[] = [];
+
+  const segments = Array.from(longLine);
+  let length = 0;
+  let i = 0;
+
+  let segmentWidth = 0;
+  let concatLength = 0;
+
+  while (i < segments.length) {
+    segmentWidth = visualWidth(segments[i]);
+    concatLength = length + segmentWidth;
+
+    if (concatLength > config.col) break;
+
+    length = concatLength;
+    i++;
+  }
+
+  if (i === segments.length) return '';
+
+  const remaining = config.col - length;
+  const excess = segmentWidth - remaining;
+
+  if (isAscii(segments[i])) {
+    line.push(segments[i].slice(remaining));
+  } else {
+    line.push(
+      remaining
+        ? INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF
+        : segments[i]
+    );
+  }
+
+  length = excess;
+  i++;
+
+  while (length < config.screenWidth && i < segments.length) {
+    concatLength = length + visualWidth(segments[i]);
+
+    if (
+      concatLength > config.screenWidth ||
+      (concatLength === config.screenWidth && i !== segments.length - 1)
+    ) {
+      const remaining = config.screenWidth - length - 1;
+
+      if (isAscii(segments[i])) {
+        line.push(segments[i].slice(0, remaining) + MORE_INDICATOR);
+      } else {
+        line.push(`${INVERSE_ON}${' '.repeat(remaining)}>${INVERSE_OFF}`);
+      }
+    } else {
+      line.push(segments[i]);
+    }
+
+    length = concatLength;
+    i++;
+  }
+
+  return line.join('');
+}
