@@ -53,7 +53,7 @@ function chop(line: string, maxCol: number): string {
 }
 
 /**
- * Chop a styled line to screen width.
+ * Chop a styled ascii line to screen width.
  * 
  * - Keeps ANSI styles in place.
  * - Adds '>' if chopped.
@@ -116,6 +116,100 @@ function chopStyledAsciiLine(styledLine: string): string {
     length++;
     char++;
     i++;
+  }
+
+  return line.join('');
+}
+
+/**
+ * Chops a styled non-ascii line to fit screen width.
+ *
+ * - Preserves ANSI codes while respecting col/screen boundaries.
+ * - Appends overflow marker when line exceeds screen width.
+ *
+ * @param styledLine - The ANSI-styled line to chop.
+ * @returns Chopped line with styles and marker if needed.
+ */
+function chopStyledLine(styledLine: string): string {
+  const line: string[] = [];
+
+  const visualLength = visualWidth(styledLine);
+
+  const ansis: { ansi: string, start: number, end: number }[] = [];
+  STYLE_REGEX_G.lastIndex = 0;
+  let ansi, char = 0, i = 0, s = 0;
+
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+    const nextChar = char + ansi.index - i;
+
+    if (nextChar <= config.col) {
+      line.push(ansi[0]);
+      char = nextChar;
+      s += Array.from(styledLine.slice(i, ansi.index)).length;
+      i = STYLE_REGEX_G.lastIndex;
+    } else {
+      ansis.push({
+        ansi: ansi[0],
+        start: ansi.index,
+        end: STYLE_REGEX_G.lastIndex
+      });
+    }
+  }
+
+  if (visualLength <= config.col) return line.join('');
+
+  const unstyledLine = styledLine.replace(STYLE_REGEX_G, '');
+  const segments = Array.from(unstyledLine.slice(char));
+  s = 0;
+
+  let length = 0;
+
+  while (char < config.col && s < segments.length) {
+    const segmentWidth = wcwidth(segments[s]);
+    const nextChar = char + segmentWidth;
+
+    if (nextChar > config.col) {
+      const excess = nextChar - config.col;
+      line.push(INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF);
+      length = excess;
+    }
+
+    char = nextChar;
+    i += segments[s].length;
+    s++;
+  }
+
+  let curr = 0;
+
+  while (length < config.screenWidth && s < segments.length) {
+    if (curr < ansis.length && i === ansis[curr].start) {
+      line.push(ansis[curr].ansi);
+      i = ansis[curr].end;
+      curr++;
+      continue;
+    }
+
+    const segmentWidth = wcwidth(segments[s]);
+    const concatLength = length + segmentWidth;
+
+    if (concatLength < config.screenWidth) {
+      line.push(segments[s]);
+    } else {
+      const overflow = (
+        s !== segments.length - 1 || concatLength !== config.screenWidth
+      );
+
+      if (!overflow) line.push(segments[s]);
+      while (curr < ansis.length) line.push(ansis[curr++].ansi);
+      if (overflow) {
+        const remaining = config.screenWidth - length;
+        line.push(`${INVERSE_ON}${' '.repeat(remaining - 1)}>${INVERSE_OFF}`);
+      }
+    }
+
+    length = concatLength;
+    i += segments[s].length;
+    s++;
   }
 
   return line.join('');
