@@ -133,7 +133,17 @@ function chopStyledAsciiLine(styledLine: string): string {
 function chopStyledLine(styledLine: string): string {
   const line: string[] = [];
 
-  const visualLength = visualWidth(styledLine);
+  const unstyledLine = styledLine.replace(STYLE_REGEX_G, '');
+  const segments = Array.from(unstyledLine);
+
+  const segmentWidths = [];
+  let visualLength = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    const segmentWidth = wcwidth(segments[i]);
+    segmentWidths.push(segmentWidth);
+    visualLength += segmentWidth;
+  }
 
   const ansis: { ansi: string, start: number, end: number }[] = [];
   STYLE_REGEX_G.lastIndex = 0;
@@ -158,15 +168,10 @@ function chopStyledLine(styledLine: string): string {
 
   if (visualLength <= config.col) return line.join('');
 
-  const unstyledLine = styledLine.replace(STYLE_REGEX_G, '');
-  const segments = Array.from(unstyledLine.slice(char));
-  s = 0;
-
   let length = 0;
 
   while (char < config.col && s < segments.length) {
-    const segmentWidth = wcwidth(segments[s]);
-    const nextChar = char + segmentWidth;
+    const nextChar = char + segmentWidths[s];
 
     if (nextChar > config.col) {
       const excess = nextChar - config.col;
@@ -189,8 +194,7 @@ function chopStyledLine(styledLine: string): string {
       continue;
     }
 
-    const segmentWidth = wcwidth(segments[s]);
-    const concatLength = length + segmentWidth;
+    const concatLength = length + segmentWidths[s];
 
     if (concatLength < config.screenWidth) {
       line.push(segments[s]);
