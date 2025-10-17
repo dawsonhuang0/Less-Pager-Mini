@@ -14,9 +14,9 @@ export function lineForward(
   offset: number,
   ignoreEOF: boolean = false
 ): void {
-  let currSubRowMax = maxSubRow(content[config.row]);
+  let currMaxSubRow = maxSubRow(content[config.row]);
 
-  if (isEndPosition(ignoreEOF, content.length, currSubRowMax)) {
+  if (isEOF(ignoreEOF, content.length, currMaxSubRow)) {
     ringBell();
     return;
   }
@@ -30,30 +30,31 @@ export function lineForward(
     return;
   }
 
-  const rowEnd = ignoreEOF ? null : getEndPosition(content);
-  const maxRow = rowEnd ? rowEnd.maxRow : content.length - 1;
+  const EOF = ignoreEOF ? null : getEOF(content);
+  const maxRow = EOF ? EOF.maxRow : content.length - 1;
 
   while (offset > 0 && config.row <= maxRow) {
-    currSubRowMax = maxSubRow(content[config.row]);
-    if (config.row === maxRow && rowEnd) currSubRowMax = rowEnd.subRow;
+    currMaxSubRow = config.row === maxRow && EOF
+      ? EOF.subRow
+      : maxSubRow(content[config.row]);
 
-    if (config.subRow + offset <= currSubRowMax) {
+    if (config.subRow + offset <= currMaxSubRow) {
       config.subRow += offset;
       return;
     }
 
-    offset -= currSubRowMax - config.subRow + 1;
+    offset -= currMaxSubRow - config.subRow + 1;
 
     config.row++;
     config.subRow = 0;
   }
 
-  if (rowEnd && config.row > rowEnd.maxRow) {
-    config.row = rowEnd.maxRow;
-    config.subRow = rowEnd.subRow;
+  if (EOF && config.row > EOF.maxRow) {
+    config.row = EOF.maxRow;
+    config.subRow = EOF.subRow;
   } else if (config.row === content.length) {
     config.row = content.length - 1;
-    config.subRow = currSubRowMax;
+    config.subRow = currMaxSubRow;
   }
 }
 
@@ -238,17 +239,17 @@ export function setHalfScreenLeft(buffer: string[]): void {
  * @param ignoreEOF - If `true`, skips EOF check and only uses position
  *                    comparison.
  * @param contentLength - Total number of content rows.
- * @param currSubRowMax - The final sub-row index to compare against.
+ * @param currMaxSubRow - The final sub-row index to compare against.
  * @returns `true` if the current position is at the end; otherwise, `false`.
  */
-function isEndPosition(
+function isEOF(
   ignoreEOF: boolean,
   contentLength: number,
-  currSubRowMax: number
+  currMaxSubRow: number
 ): boolean {
   return (
     (!ignoreEOF && mode.EOF) ||
-    (config.row === contentLength - 1 && config.subRow === currSubRowMax)
+    (config.row === contentLength - 1 && config.subRow === currMaxSubRow)
   );
 }
 
@@ -258,31 +259,25 @@ function isEndPosition(
  * @param content - Full content lines.
  * @returns Object with `maxRow` and `subRow` for the end position.
  */
-function getEndPosition(content: string[]): {
+function getEOF(content: string[]): {
   maxRow: number,
   subRow: number
 } {
   let maxRow = content.length - 1;
   let subRow = 0;
-  let rowCount = 0;
+  let rows = 0;
 
   while (maxRow >= 0) {
-    const subRows = maxSubRow(content[maxRow]) + 1;
-    const rowSum = rowCount + subRows;
-  
-    if (rowSum >= config.window - 1) {
-      subRow = rowSum - config.window + 1;
-      break;
+    const currMaxSubRow = maxSubRow(content[maxRow]);
+    rows += currMaxSubRow + 1;
+
+    if (rows >= config.window - 1) {
+      subRow = rows - config.window + 1;
+      return { maxRow, subRow };
     }
-  
-    rowCount = rowSum;
+
     maxRow--;
   }
 
-  if (maxRow < 0) {
-    maxRow = 0;
-    subRow = 0;
-  }
-
-  return { maxRow, subRow };
+  return { maxRow: 0, subRow: 0 };
 }
