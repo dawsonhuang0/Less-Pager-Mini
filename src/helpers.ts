@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import wcswidth from 'wcwidth-o1';
+import { wcswidth } from 'wcwidth-o1';
 
 import { config, mode } from './config';
 
