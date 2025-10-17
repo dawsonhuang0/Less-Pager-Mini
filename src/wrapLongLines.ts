@@ -67,7 +67,7 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, row = 0, length = 0, i = 0, nextIndex = 0;
 
-  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     const nextLength = length + ansi.index - i;
 
     if (nextLength <= config.screenWidth) {
@@ -137,7 +137,9 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
    */
   function push(): boolean {
     if (lines.length + 1 === config.window - 1) {
-      while (ansi = STYLE_REGEX_G.exec(styledLine)) line.push(ansi[0]);
+      while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+        line.push(ansi[0]);
+      }
       lines.push(line.join(''));
       return false;
     }
@@ -168,7 +170,7 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, row = 0, length = 0, i = 0, s = 0;
 
-  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     while (i < ansi.index) {
       const charCount = segments[s].length;
       if (!pushLine()) return false;
@@ -233,7 +235,9 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
    */
   function push(): boolean {
     if (lines.length + 1 === config.window - 1) {
-      while (ansi = STYLE_REGEX_G.exec(styledLine)) line.push(ansi[0]);
+      while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+        line.push(ansi[0]);
+      }
       lines.push(line.join(''));
       return false;
     }

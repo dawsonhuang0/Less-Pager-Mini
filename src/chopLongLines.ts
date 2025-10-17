@@ -70,7 +70,7 @@ function chopStyledAsciiLine(styledLine: string): string {
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, char = 0, i = 0;
 
-  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     const lastIndex = STYLE_REGEX_G.lastIndex;
     const nextChar = char + ansi.index - i;
 
@@ -150,7 +150,7 @@ function chopStyledLine(styledLine: string): string {
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, char = 0, i = 0, s = 0;
 
-  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     const nextChar = char + ansi.index - i;
 
     if (nextChar <= config.col) {
