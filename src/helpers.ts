@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import wcwidth from 'wcwidth';
+import wcswidth from 'wcwidth-o1';
 
 import { config, mode } from './config';
 
@@ -25,8 +25,9 @@ import {
  * @param line - The string to measure.
  * @returns Number of sub-rows needed to display the line.
  */
-export const maxSubRow = (line: string): number =>
-  config.chopLongLines ? 0 : Math.floor(visualWidth(line) / config.screenWidth);
+export const maxSubRow = (line: string): number => config.chopLongLines
+  ? 0
+  : Math.floor(Math.max(visualWidth(line) - 1, 0) / config.screenWidth);
 
 /**
  * Converts a buffer string to a number.
@@ -192,17 +193,7 @@ export function render(rawContent: string[], buffer: string[]): void {
  */
 export function visualWidth(line: string): number {
   if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
-
-  if (isAscii(line)) return line.length;
-
-  const segments = Array.from(line);
-  let length = 0;
-
-  for (let i = 0; i < segments.length; i++) {
-    length += wcwidth(segments[i]);
-  }
-
-  return length;
+  return isAscii(line) ? line.length : wcswidth(line);
 }
 
 /**
