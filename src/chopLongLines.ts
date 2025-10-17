@@ -1,4 +1,4 @@
-import wcwidth from 'wcwidth';
+import wcwidth from 'wcwidth-o1';
 
 import { config, mode } from "./config";
 
@@ -64,26 +64,29 @@ function chop(line: string, maxCol: number): string {
 function chopStyledAsciiLine(styledLine: string): string {
   const line: string[] = [];
 
-  const visualLength = visualWidth(styledLine);
+  let visualLength = styledLine.length;
 
   const ansis: { ansi: string, start: number, end: number }[] = [];
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, char = 0, i = 0;
 
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
+    const lastIndex = STYLE_REGEX_G.lastIndex;
     const nextChar = char + ansi.index - i;
 
     if (nextChar <= config.col) {
       line.push(ansi[0]);
       char = nextChar;
-      i = STYLE_REGEX_G.lastIndex;
+      i = lastIndex;
     } else {
       ansis.push({
         ansi: ansi[0],
         start: ansi.index,
-        end: STYLE_REGEX_G.lastIndex
+        end: lastIndex
       });
     }
+
+    visualLength -= lastIndex - ansi.index;
   }
 
   if (visualLength <= config.col) return line.join('');
@@ -100,22 +103,21 @@ function chopStyledAsciiLine(styledLine: string): string {
       line.push(ansis[curr].ansi);
       i = ansis[curr].end;
       curr++;
-      continue;
-    }
-
-    if (length < config.screenWidth - 1) {
-      line.push(styledLine[i]);
     } else {
-      const overflow = char !== visualLength - 1;
+      if (length < config.screenWidth - 1) {
+        line.push(styledLine[i]);
+      } else {
+        const overflow = char !== visualLength - 1;
 
-      if (!overflow) line.push(styledLine[i]);
-      while (curr < ansis.length) line.push(ansis[curr++].ansi);
-      if (overflow) line.push(MORE_INDICATOR);
+        if (!overflow) line.push(styledLine[i]);
+        while (curr < ansis.length) line.push(ansis[curr++].ansi);
+        if (overflow) line.push(MORE_INDICATOR);
+      }
+
+      length++;
+      char++;
+      i++;
     }
-
-    length++;
-    char++;
-    i++;
   }
 
   return line.join('');
@@ -133,8 +135,7 @@ function chopStyledAsciiLine(styledLine: string): string {
 function chopStyledLine(styledLine: string): string {
   const line: string[] = [];
 
-  const unstyledLine = styledLine.replace(STYLE_REGEX_G, '');
-  const segments = Array.from(unstyledLine);
+  const segments = Array.from(styledLine.replace(STYLE_REGEX_G, ''));
 
   const segmentWidths = [];
   let visualLength = 0;
@@ -149,7 +150,7 @@ function chopStyledLine(styledLine: string): string {
   STYLE_REGEX_G.lastIndex = 0;
   let ansi, char = 0, i = 0, s = 0;
 
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+  while (ansi = STYLE_REGEX_G.exec(styledLine)) {
     const nextChar = char + ansi.index - i;
 
     if (nextChar <= config.col) {
