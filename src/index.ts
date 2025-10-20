@@ -105,6 +105,25 @@ async function filePager(
  * @param content - The content to be displayed in the pager.
  */
 async function contentPager(content: string[]): Promise<void> {
+  // @ts-ignore - TODO: Remove this ignore once all Actions implemented
+  const acts: Record<Actions, () => void> = {
+    FORCE_EXIT: () => { exit = true; },
+    EXIT: () => { exit = shouldExit(); },
+    HELP: () => prepareHelp(),
+    LINE_FORWARD: () => lineForward(content, bufferToNum(buffer) || 1),
+    LINE_BACKWARD: () => lineBackward(content, bufferToNum(buffer) || 1),
+    WINDOW_FORWARD: () => windowForward(content, buffer),
+    WINDOW_BACKWARD: () => windowBackward(content, buffer),
+    SET_WINDOW_FORWARD: () => setWindowForward(content, buffer),
+    SET_WINDOW_BACKWARD: () => setWindowBackward(content, buffer),
+    NO_EOF_WINDOW_FORWARD: () => windowForward(content, buffer, true),
+    SET_HALF_WINDOW_FORWARD: () => setHalfWindowForward(content, buffer),
+    SET_HALF_WINDOW_BACKWARD: () => setHalfWindowBackward(content, buffer),
+    SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(buffer),
+    SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(buffer),
+    REPAINT: () => {},
+  };
+
   process.stdout.write(TITLE);
   process.stdout.write(ALTERNATE_CONSOLE_ON);
 
@@ -160,69 +179,11 @@ async function contentPager(content: string[]): Promise<void> {
       continue;
     }
 
-    switch (action) {
-      case 'FORCE_EXIT':
-        exit = true;
-        break;
-
-      case 'EXIT':
-        exit = shouldExit();
-        break;
-
-      case 'HELP':
-        prepareHelp();
-        break;
-
-      case 'LINE_FORWARD':
-        lineForward(content, bufferToNum(buffer) || 1);
-        break;
-
-      case 'LINE_BACKWARD':
-        lineBackward(content, bufferToNum(buffer) || 1);
-        break;
-
-      case 'WINDOW_FORWARD':
-        windowForward(content, buffer);
-        break;
-
-      case 'WINDOW_BACKWARD':
-        windowBackward(content, buffer);
-        break;
-
-      case 'SET_WINDOW_FORWARD':
-        setWindowForward(content, buffer);
-        break;
-
-      case 'SET_WINDOW_BACKWARD':
-        setWindowBackward(content, buffer);
-        break;
-
-      case 'NO_EOF_WINDOW_FORWARD':
-        windowForward(content, buffer, true);
-        break;
-
-      case 'SET_HALF_WINDOW_FORWARD':
-        setHalfWindowForward(content, buffer);
-        break;
-
-      case 'SET_HALF_WINDOW_BACKWARD':
-        setHalfWindowBackward(content, buffer);
-        break;
-
-      case 'SET_HALF_SCREEN_RIGHT':
-        setHalfScreenRight(buffer);
-        break;
-
-      case 'SET_HALF_SCREEN_LEFT':
-        setHalfScreenLeft(buffer);
-        break;
-
-      case 'REPAINT':
-        break;
-  
-      default:
-        ringBell();
-        repaint = false;
+    if (action !== undefined && action in acts) {
+      acts[action]();
+    } else {
+      ringBell();
+      repaint = false;
     }
 
     buffer = [];
