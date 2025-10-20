@@ -105,7 +105,7 @@ async function filePager(
  * @param content - The content to be displayed in the pager.
  */
 async function contentPager(content: string[]): Promise<void> {
-  // @ts-ignore - TODO: Remove this ignore once all Actions implemented
+  // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
   const acts: Record<Actions, () => void> = {
     FORCE_EXIT: () => { exit = true; },
     EXIT: () => { exit = shouldExit(); },
