@@ -65,7 +65,7 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
   let line: string[] = [];
 
   STYLE_REGEX_G.lastIndex = 0;
-  let ansi, row = 0, length = 0, i = 0, nextIndex = 0;
+  let ansi: RegExpExecArray | null, row = 0, length = 0, i = 0, nextIndex = 0;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     const nextLength = length + ansi.index - i;
@@ -76,11 +76,9 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
     } else {
       nextIndex = i + config.screenWidth - length;
 
-      if (!pushLine()) return false;
-
-      while (nextIndex < ansi.index) {
-        if (!pushLine()) return false;
-      }
+      do {
+        if (!concat()) return false;
+      } while (nextIndex < ansi.index);
 
       if (i === ansi.index) {
         length = 0;
@@ -97,7 +95,7 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
   nextIndex = i + config.screenWidth - length;
 
   while (nextIndex < styledLine.length) {
-    if (!pushLine()) return false;
+    if (!concat()) return false;
   }
 
   if (row >= startRow) line.push(styledLine.slice(i));
@@ -105,7 +103,7 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
 
   return true;
 
-  // helpers
+  // helper
 
   /**
    * Pushes current line segment and advances to next line position.
@@ -115,38 +113,16 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
    * 
    * @returns `false` to stop processing, `true` to continue.
    */
-  function pushLine(): boolean {
+  function concat(): boolean {
     if (row >= startRow) {
       line.push(styledLine.slice(i, nextIndex));
-      if (!push()) return false;
+      if (!push(lines, line, styledLine, ansi)) return false;
+      line = [];
     }
     row++;
 
     i = nextIndex;
     nextIndex += config.screenWidth;
-    return true;
-  }
-
-  /**
-   * Pushes current line to output and checks window limit.
-   *
-   * - Collects remaining ANSI codes if window limit reached.
-   * - Resets line buffer for next line if continuing.
-   *
-   * @returns `true` if can continue wrapping, `false` if window full.
-   */
-  function push(): boolean {
-    if (lines.length + 1 === config.window - 1) {
-      while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-        line.push(ansi[0]);
-      }
-      lines.push(line.join(''));
-      return false;
-    }
-
-    lines.push(line.join(''));
-    line = [];
-
     return true;
   }
 }
@@ -168,12 +144,12 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
   let line: string[] = [];
 
   STYLE_REGEX_G.lastIndex = 0;
-  let ansi, row = 0, length = 0, i = 0, s = 0;
+  let ansi: RegExpExecArray | null, row = 0, length = 0, i = 0, s = 0;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     while (i < ansi.index) {
       const charCount = segments[s].length;
-      if (!pushLine()) return false;
+      if (!concat()) return false;
       i += charCount;
     }
 
@@ -182,7 +158,7 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
   }
 
   while (s < segments.length) {
-    if (!pushLine()) return false;
+    if (!concat()) return false;
   }
 
   if (line.length) lines.push(line.join(''));
@@ -199,7 +175,7 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
    *
    * @returns `true` if can continue, `false` if window limit reached.
    */
-  function pushLine(): boolean {
+  function concat(): boolean {
     const segmentWidth = wcwidth(segments[s]);
     const nextLength = length + segmentWidth;
 
@@ -209,7 +185,8 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
     } else {
       if (row >= startRow) {
         if (nextLength === config.screenWidth) line.push(segments[s]);
-        if (!push()) return false;
+        if (!push(lines, line, styledLine, ansi)) return false;
+        line = [];
       }
       row++;
 
@@ -222,29 +199,6 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
     }
 
     s++;
-    return true;
-  }
-
-  /**
-   * Pushes current line to output and checks window limit.
-   *
-   * - Collects remaining ANSI codes if window limit reached.
-   * - Resets line buffer for next line if continuing.
-   *
-   * @returns `true` if can continue wrapping, `false` if window full.
-   */
-  function push(): boolean {
-    if (lines.length + 1 === config.window - 1) {
-      while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-        line.push(ansi[0]);
-      }
-      lines.push(line.join(''));
-      return false;
-    }
-
-    lines.push(line.join(''));
-    line = [];
-
     return true;
   }
 }
@@ -279,12 +233,10 @@ function wrapAsciiLine(lines: string[], longLine: string): boolean {
     end += config.screenWidth;
   }
 
-  if (lines.length < config.window - 1) {
-    if (rows >= startRow) lines.push(longLine.slice(start));
-    return true;
-  }
+  if (lines.length >= config.window - 1) return false;
 
-  return false;
+  if (rows >= startRow) lines.push(longLine.slice(start));
+  return true;
 }
 
 /**
@@ -330,10 +282,40 @@ function wrapLine(lines: string[], longLine: string): boolean {
     c++;
   }
 
-  if (c === chars.length) {
-    if (line.length) lines.push(line.join(''));
-    return true;
+  if (c !== chars.length) return false;
+
+  if (line.length) lines.push(line.join(''));
+  return true;  
+}
+
+// helper
+
+/**
+ * Pushes current line to output and checks window limit.
+ *
+ * - Collects remaining ANSI codes if window limit reached.
+ * - Resets line buffer for next line if continuing.
+ *
+ * @param lines - Output array to append wrapped lines to.
+ * @param line - Current line buffer being built.
+ * @param styledLine - Original text with ANSI codes.
+ * @param ansi - Current ANSI match (for collecting remaining codes).
+ * @returns `true` if can continue wrapping, `false` if window full.
+ */
+function push(
+  lines: string[],
+  line: string[],
+  styledLine: string,
+  ansi: RegExpExecArray | null
+): boolean {
+  if (lines.length + 1 === config.window - 1) {
+    while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+      line.push(ansi[0]);
+    }
+    lines.push(line.join(''));
+    return false;
   }
 
-  return false;
+  lines.push(line.join(''));
+  return true;
 }
