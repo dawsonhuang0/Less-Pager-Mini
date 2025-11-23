@@ -16,11 +16,10 @@ const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
  */
 export function chopLongLines(content: string[], lines: string[]): void {
   const maxRow = content.length - config.row;
-  const maxCol = config.screenWidth + config.col;
 
   while (lines.length < config.window - 1 && lines.length < maxRow) {
     const line = content[config.row + lines.length];
-    lines.push(chop(line, maxCol));
+    lines.push(chop(line));
   }
 
   mode.EOF = lines.length === maxRow;
@@ -36,20 +35,16 @@ export function chopLongLines(content: string[], lines: string[]): void {
  * @param maxCol - The maximum column position allowed.
  * @returns The chopped line as a string.
  */
-function chop(line: string, maxCol: number): string {
+function chop(line: string): string {
   if (isStyled(line)) {
     return isAscii(line)
       ? chopStyledAsciiLine(line)
       : chopStyledLine(line);
   }
   
-  if (isAscii(line)) {
-    return line.length > maxCol
-      ? line.slice(config.col, maxCol - 1) + MORE_INDICATOR
-      : line.slice(config.col);
-  }
-  
-  return chopLine(line);
+  return isAscii(line)
+    ? chopAsciiLine(line)
+    : chopLine(line);
 }
 
 /**
@@ -218,6 +213,23 @@ function chopStyledLine(styledLine: string): string {
   }
 
   return line.join('');
+}
+
+/**
+ * Chops ASCII line to screen width and adds indicator if truncated.
+ *
+ * - Optimized for ASCII (no width calculation needed).
+ * - Slices from scroll position to fit screen width.
+ *
+ * @param longLine - ASCII text line to chop.
+ * @returns Chopped line with `>` indicator if needed.
+ */
+function chopAsciiLine(longLine: string): string {
+  const maxCol = config.screenWidth + config.col;
+
+  return longLine.length > maxCol
+    ? longLine.slice(config.col, maxCol - 1) + MORE_INDICATOR
+    : longLine.slice(config.col);
 }
 
 /**
