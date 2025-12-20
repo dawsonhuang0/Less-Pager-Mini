@@ -12,7 +12,10 @@ import {
   STYLE_REGEX,
   STYLE_REGEX_G,
   INVERSE_ON,
-  INVERSE_OFF
+  INVERSE_OFF,
+  BOLD_ON,
+  BOLD_OFF,
+  END_MARKER
 } from './constants';
 
 /**
@@ -277,13 +280,17 @@ function visibleBufferLength(bufferLength: number): number {
  * @param lines - The array of formatted lines to pad.
  */
 function padToEOF(lines: string[]): void {
-  while (!mode.INIT && lines.length < config.window - 1) {
-    lines.push('\x1b[1m~\x1b[0m');
+  if (!mode.INIT && config.window - lines.length > 1) {
+    lines.push(
+      BOLD_ON +
+      '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~' +
+      BOLD_OFF
+    );
   }
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
 
   if (!mode.BUFFERING && !mode.HELP && mode.EOF) {
-    lines.push('\x1b[7m(END)\x1b[0m');
+    lines.push(END_MARKER);
   }
 }
