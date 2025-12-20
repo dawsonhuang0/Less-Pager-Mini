@@ -21,7 +21,8 @@ import {
   delBufferChar,
   render,
   ringBell,
-  bufferToNum
+  bufferToNum,
+  getLastRow
 } from "./helpers";
 
 import {
@@ -142,6 +143,10 @@ async function contentPager(content: string[]): Promise<void> {
     config.halfWindow = Math.floor(config.window / 2);
     config.halfScreenWidth = Math.floor(config.screenWidth / 2);
 
+    const { lastRow, lastSubRow } = getLastRow(content);
+    config.lastRow = lastRow;
+    config.lastSubRow = lastSubRow;
+
     buffer = [];
     config.bufferOffset = 0;
     render(content, buffer);
@@ -154,6 +159,10 @@ async function contentPager(content: string[]): Promise<void> {
   let exit = false;
   let repaint = true;
   let buffer: string[] = [];
+
+  const { lastRow, lastSubRow } = getLastRow(content);
+  config.lastRow = lastRow;
+  config.lastSubRow = lastSubRow;
 
   let prevContent: string[] = [];
   let prevConfig = config;

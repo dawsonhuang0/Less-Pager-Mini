@@ -188,6 +188,37 @@ export function render(rawContent: string[], buffer: string[]): void {
 }
 
 /**
+ * Calculates the last content row and sub-row that fits in the current window.
+ * 
+ * - Works backwards from the end of content.
+ * - Accounts for wrapped lines that span multiple screen rows.
+ * 
+ * @param content - The full array of content lines.
+ * @returns Object containing the last visible row index and sub-row offset.
+ */
+export function getLastRow(content: string[]): {
+  lastRow: number,
+  lastSubRow: number
+} {
+  let lastRow = content.length - 1;
+  let rows = 0;
+
+  while (lastRow >= 0) {
+    const remaining = config.window - rows - 1;
+    const currSubRows = maxSubRow(content[lastRow]) + 1;
+
+    if (currSubRows >= remaining) {
+      return { lastRow, lastSubRow: currSubRows - remaining - 1 };
+    }
+
+    rows += currSubRows;
+    lastRow--;
+  }
+
+  return { lastRow: 0, lastSubRow: 0 };
+}
+
+/**
  * Calculates the total visual width of a string based on terminal character
  * widths.
  *
