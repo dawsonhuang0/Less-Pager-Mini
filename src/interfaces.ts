@@ -5,6 +5,10 @@ export interface Config {
   row: number;
   subRow: number;
 
+  // Last row & subRow without exceeding EOF
+  lastRow: number;
+  lastSubRow: number;
+
   col: number;
   setCol: number;
 
