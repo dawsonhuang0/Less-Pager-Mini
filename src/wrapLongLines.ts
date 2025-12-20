@@ -13,18 +13,12 @@ import { STYLE_REGEX_G } from './constants';
  * @param lines - Output array of wrapped lines.
  */
 export function wrapLongLines(content: string[], lines: string[]): void {
-  const maxRow = content.length - config.row;
+  let row = config.row;
 
-  let isCompleteWrap = true;
-  let row = 0;
-
-  while (lines.length < config.window - 1 && row < maxRow) {
-    const line = content[config.row + row];
-    isCompleteWrap = wrap(lines, line);
+  while (lines.length < config.window - 1 && row < content.length) {
+    wrap(lines, content[row]);
     row++;
   }
-
-  mode.EOF = isCompleteWrap && row === maxRow;
 }
 
 /**
@@ -37,7 +31,7 @@ export function wrapLongLines(content: string[], lines: string[]): void {
  * @param longLine - Text line to wrap (may contain ANSI/Unicode).
  * @returns `true` if fully processed, `false` if stopped at window limit.
  */
-function wrap(lines: string[], longLine: string): boolean {
+function wrap(lines: string[], longLine: string): void {
   if (isStyled(longLine)) {
     return isAscii(longLine)
       ? wrapStyledAsciiLine(lines, longLine)
@@ -213,17 +207,16 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
  * @param longLine - ASCII text line to wrap.
  * @returns `true` if fully processed, `false` if stopped at window limit.
  */
-function wrapAsciiLine(lines: string[], longLine: string): boolean {
+function wrapAsciiLine(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
-  let rows = 0;
 
   if (longLine.length <= config.screenWidth) {
-    if (rows >= startRow) lines.push(longLine);
-    return true;
+    if (startRow === 0) lines.push(longLine);
+    return;
   }
 
-  let start = 0;
-  let end = config.screenWidth;
+  let rows = 0;
+  let start = 0, end = config.screenWidth;
 
   while (lines.length < config.window - 1 && end < longLine.length) {
     if (rows >= startRow) lines.push(longLine.slice(start, end));
@@ -233,10 +226,9 @@ function wrapAsciiLine(lines: string[], longLine: string): boolean {
     end += config.screenWidth;
   }
 
-  if (lines.length >= config.window - 1) return false;
-
-  if (rows >= startRow) lines.push(longLine.slice(start));
-  return true;
+  if (lines.length < config.window - 1 && rows >= startRow) {
+    lines.push(longLine.slice(start));
+  }
 }
 
 /**
@@ -249,43 +241,32 @@ function wrapAsciiLine(lines: string[], longLine: string): boolean {
  * @param longLine - Unicode text line to wrap.
  * @returns `true` if fully processed, `false` if stopped at window limit.
  */
-function wrapLine(lines: string[], longLine: string): boolean {
+function wrapLine(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
   const chars = Array.from(longLine);
 
-  let line: string[] = [];
-  let length = 0, row = 0, c = 0;
+  let rows = 0;
+  let length = 0;
+  let start = 0, end = 0;
 
-  while (lines.length < config.window - 1 && c < chars.length) {
-    const charWidth = wcwidth(chars[c]);
-    const nextLength = length + charWidth;
+  while (lines.length < config.window - 1 && end < chars.length) {
+    const charWidth = wcwidth(chars[end]);
 
-    if (nextLength <= config.screenWidth) {
-      line.push(chars[c]);
+    if (length + charWidth > config.screenWidth) {
+      if (rows >= startRow) lines.push(chars.slice(start, end).join(''));
+      rows++;
+
+      length = 0;
+      start = end;
     }
 
-    if (nextLength >= config.screenWidth) {
-      if (row >= startRow) lines.push(line.join(''));
-      row++;
-
-      if (nextLength > config.screenWidth) {
-        line = [chars[c]];
-        length = charWidth;
-      } else {
-        line = [];
-        length = 0;
-      }
-    } else {
-      length = nextLength;
-    }
-
-    c++;
+    length += charWidth;
+    end++;
   }
 
-  if (c !== chars.length) return false;
-
-  if (line.length) lines.push(line.join(''));
-  return true;  
+  if (lines.length < config.window - 1 && rows >= startRow) {
+    lines.push(chars.slice(start).join(''));
+  }
 }
 
 // helper
