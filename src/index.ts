@@ -147,6 +147,8 @@ async function contentPager(content: string[]): Promise<void> {
     config.lastRow = lastRow;
     config.lastSubRow = lastSubRow;
 
+    mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
+
     buffer = [];
     config.bufferOffset = 0;
     render(content, buffer);
@@ -163,6 +165,8 @@ async function contentPager(content: string[]): Promise<void> {
   const { lastRow, lastSubRow } = getLastRow(content);
   config.lastRow = lastRow;
   config.lastSubRow = lastSubRow;
+
+  mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
 
   let prevContent: string[] = [];
   let prevConfig = config;
