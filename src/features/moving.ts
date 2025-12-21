@@ -14,32 +14,35 @@ export function lineForward(
   offset: number,
   ignoreEOF: boolean = false
 ): void {
-  let currMaxSubRow = maxSubRow(content[config.row]);
-
-  if (isEOF(ignoreEOF, content.length, currMaxSubRow)) {
+  if (mode.EOF && !ignoreEOF) {
     ringBell();
     return;
   }
 
   if (config.chopLongLines || config.col) {
-    const maxRow = ignoreEOF
-      ? content.length - 1
-      : Math.max(content.length - config.window + 1, 0);
+    const lastRow = Math.max(content.length - config.window + 1, 0);
 
-    config.row = Math.min(config.row + offset, maxRow);
+    config.row = Math.min(
+      config.row + offset,
+      ignoreEOF ? content.length - 1 : lastRow
+    );
+
+    mode.EOF = config.row >= lastRow;
     return;
   }
 
-  const EOF = ignoreEOF ? null : getEOF(content);
-  const maxRow = EOF ? EOF.maxRow : content.length - 1;
+  const maxRow = ignoreEOF ? content.length - 1 : config.lastRow;
 
-  while (offset > 0 && config.row <= maxRow) {
-    currMaxSubRow = config.row === maxRow && EOF
-      ? EOF.subRow
-      : maxSubRow(content[config.row]);
+  while (offset > 0 && config.row < maxRow) {
+    let currMaxSubRow = maxSubRow(content[config.row]);
 
     if (config.subRow + offset <= currMaxSubRow) {
       config.subRow += offset;
+
+      mode.EOF = config.row > config.lastRow || (
+        config.row === config.lastRow && config.subRow >= config.lastSubRow
+      );
+
       return;
     }
 
@@ -49,13 +52,14 @@ export function lineForward(
     config.subRow = 0;
   }
 
-  if (EOF && config.row > EOF.maxRow) {
-    config.row = EOF.maxRow;
-    config.subRow = EOF.subRow;
-  } else if (config.row === content.length) {
-    config.row = content.length - 1;
-    config.subRow = currMaxSubRow;
-  }
+  config.subRow = Math.min(
+    config.subRow + offset,
+    ignoreEOF ? maxSubRow(content[config.row]) : config.lastSubRow
+  );
+
+  mode.EOF = config.row > config.lastRow || (
+    config.row === config.lastRow && config.subRow >= config.lastSubRow
+  );
 }
 
 /**
@@ -69,7 +73,7 @@ export function lineForward(
  * @param offset - Lines or sub-rows to scroll backward.
  */
 export function lineBackward(content: string[], offset: number): void {
-  if (!config.row && !config.subRow) {
+  if (config.row === 0 && config.subRow === 0) {
     if (mode.INIT) mode.INIT = false;
     ringBell();
     return;
@@ -77,17 +81,38 @@ export function lineBackward(content: string[], offset: number): void {
 
   if (config.chopLongLines || config.col) {
     config.row = Math.max(config.row - offset, 0);
+
+    if (
+      mode.EOF &&
+      config.row < Math.max(content.length - config.window + 1, 0)
+    ) {
+      mode.EOF = false;
+    }
+
     return;
   }
 
   while (offset > 0 && config.row >= 0) {
     if (config.subRow >= offset) {
       config.subRow -= offset;
+
+      if (
+        mode.EOF &&
+        config.row === config.lastRow && config.subRow < config.lastSubRow
+      ) {
+        mode.EOF = false;
+      }
+
       return;
     }
 
     if (config.row === 0) {
       config.subRow = 0;
+
+      if (mode.EOF && config.lastRow === 0 && config.lastSubRow > 0) {
+        mode.EOF = false;
+      }
+
       return;
     }
 
@@ -227,57 +252,4 @@ export function setHalfScreenLeft(buffer: string[]): void {
   config.setCol = bufferToNum(buffer) || config.setCol;
   config.col -= config.setCol || config.halfScreenWidth;
   if (config.col < 0) config.col = 0;
-}
-
-/**
- * Determines whether the current viewport position is at the end of the
- * content.
- *
- * This check accounts for both EOF mode and the final row/subRow position
- * based on whether EOF should be ignored.
- *
- * @param ignoreEOF - If `true`, skips EOF check and only uses position
- *                    comparison.
- * @param contentLength - Total number of content rows.
- * @param currMaxSubRow - The final sub-row index to compare against.
- * @returns `true` if the current position is at the end; otherwise, `false`.
- */
-function isEOF(
-  ignoreEOF: boolean,
-  contentLength: number,
-  currMaxSubRow: number
-): boolean {
-  return (
-    (!ignoreEOF && mode.EOF) ||
-    (config.row === contentLength - 1 && config.subRow === currMaxSubRow)
-  );
-}
-
-/**
- * Calculates the last visible row and subrow for window clamping.
- *
- * @param content - Full content lines.
- * @returns Object with `maxRow` and `subRow` for the end position.
- */
-function getEOF(content: string[]): {
-  maxRow: number,
-  subRow: number
-} {
-  let maxRow = content.length - 1;
-  let subRow = 0;
-  let rows = 0;
-
-  while (maxRow >= 0) {
-    const currMaxSubRow = maxSubRow(content[maxRow]);
-    rows += currMaxSubRow + 1;
-
-    if (rows >= config.window - 1) {
-      subRow = rows - config.window + 1;
-      return { maxRow, subRow };
-    }
-
-    maxRow--;
-  }
-
-  return { maxRow: 0, subRow: 0 };
 }
