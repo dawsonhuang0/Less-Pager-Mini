@@ -15,7 +15,8 @@ import {
   INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
-  END_MARKER
+  END_MARKER,
+  STYLE_RESET
 } from './constants';
 
 /**
@@ -181,7 +182,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   const content = formatContent(rawContent);
   const prompt = getPrompt();
 
-  if (prompt) content.push(prompt + getBuffer(buffer));
+  if (prompt) content.push(STYLE_RESET + prompt + getBuffer(buffer));
 
   console.clear();
   process.stdout.write(content.join('\n'));
@@ -259,19 +260,17 @@ export const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
  * @returns The prompt string, or an empty string if suppressed.
  */
 function getPrompt(): string {
-  const helpPrompt = [
-    'HELP -- ' ,
-    mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more',
+  const helpPrompt = (
+    'HELP -- ' +
+    (mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more') +
     ', or q when done'
-  ].join('');
+  );
 
-  if (mode.HELP && !mode.BUFFERING) {
-    return [
-      INVERSE_ON,
-      helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)),
-      INVERSE_OFF
-    ].join('');
-  }
+  if (mode.HELP && !mode.BUFFERING) return (
+    INVERSE_ON +
+    helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)) +
+    INVERSE_OFF
+  );
 
   if (!mode.EOF || mode.BUFFERING) return ':';
 
