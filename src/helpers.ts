@@ -208,7 +208,7 @@ export function getLastRow(content: string[]): {
     const currSubRows = maxSubRow(content[lastRow]) + 1;
 
     if (currSubRows >= remaining) {
-      return { lastRow, lastSubRow: currSubRows - remaining - 1 };
+      return { lastRow, lastSubRow: currSubRows - remaining };
     }
 
     rows += currSubRows;
