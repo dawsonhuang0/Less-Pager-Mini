@@ -53,70 +53,71 @@ function wrap(lines: string[], longLine: string): void {
  * @param styledLine - ASCII text with ANSI codes.
  * @returns `true` if fully processed, `false` if stopped at window limit.
  */
-function wrapStyledAsciiLine(lines: string[], styledLine: string): boolean {
+function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
+
+  let rows = 0;
+  let length = 0;
+  let i = 0;
 
   let line: string[] = [];
 
   STYLE_REGEX_G.lastIndex = 0;
-  let ansi: RegExpExecArray | null, row = 0, length = 0, i = 0, nextIndex = 0;
+  let ansi: RegExpExecArray | null;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    const nextLength = length + ansi.index - i;
+    while (length + ansi.index - i > config.screenWidth) {
+      if (!push()) return;
+    }
 
-    if (nextLength <= config.screenWidth) {
-      if (row >= startRow) line.push(styledLine.slice(i, ansi.index));
-      length = nextLength;
-    } else {
-      nextIndex = i + config.screenWidth - length;
-
-      do {
-        if (!concat()) return false;
-      } while (nextIndex < ansi.index);
-
-      if (i === ansi.index) {
-        length = 0;
-      } else {
-        if (row >= startRow) line.push(styledLine.slice(i, ansi.index));
-        length = ansi.index - i;
-      }
+    if (rows >= startRow) {
+      line.push(styledLine.slice(i, ansi.index));
     }
 
     line.push(ansi[0]);
+
+    length += ansi.index - i;
     i = STYLE_REGEX_G.lastIndex;
   }
 
-  nextIndex = i + config.screenWidth - length;
-
-  while (nextIndex < styledLine.length) {
-    if (!concat()) return false;
+  while (i + config.screenWidth - length < styledLine.length) {
+    if (!push()) return;
   }
 
-  if (row >= startRow) line.push(styledLine.slice(i));
-  lines.push(line.join(''));
-
-  return true;
+  if (line.length) {
+    if (i !== styledLine.length) line.push(styledLine.slice(i));
+    lines.push(line.join(''));
+  } else {
+    lines.push(styledLine.slice(i));
+  }
 
   // helper
-
+  
   /**
-   * Pushes current line segment and advances to next line position.
-   * 
-   * - Stops processing if window limit reached.
-   * - Collects remaining ANSI codes on early exit.
-   * 
-   * @returns `false` to stop processing, `true` to continue.
+   * Pushes current line segment and advances position.
+   *
+   * - Appends wrapped text to output if past startRow.
+   * - Checks window limit and stops if reached.
+   *
+   * @returns `true` if can continue wrapping, `false` if window full.
    */
-  function concat(): boolean {
-    if (row >= startRow) {
-      line.push(styledLine.slice(i, nextIndex));
-      if (!push(lines, line, styledLine, ansi)) return false;
-      line = [];
-    }
-    row++;
+  function push(): boolean {
+    if (rows >= startRow) {
+      if (line.length) {
+        line.push(styledLine.slice(i, i + config.screenWidth - length));
+        lines.push(line.join(''));
+        line = [];
+      } else {
+        lines.push(styledLine.slice(i, i + config.screenWidth));
+      }
 
-    i = nextIndex;
-    nextIndex += config.screenWidth;
+      if (lines.length === config.window - 1) return false;
+    }
+
+    rows++;
+    i += config.screenWidth - length;
+    length = 0;
+
     return true;
   }
 }
@@ -205,7 +206,6 @@ function wrapStyledLine(lines: string[], styledLine: string): boolean {
  *
  * @param lines - Array to append wrapped lines to.
  * @param longLine - ASCII text line to wrap.
- * @returns `true` if fully processed, `false` if stopped at window limit.
  */
 function wrapAsciiLine(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
@@ -239,7 +239,6 @@ function wrapAsciiLine(lines: string[], longLine: string): void {
  *
  * @param lines - Array to append wrapped lines to.
  * @param longLine - Unicode text line to wrap.
- * @returns `true` if fully processed, `false` if stopped at window limit.
  */
 function wrapLine(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
