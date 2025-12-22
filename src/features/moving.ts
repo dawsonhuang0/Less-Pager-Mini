@@ -34,7 +34,7 @@ export function lineForward(
   const maxRow = ignoreEOF ? content.length - 1 : config.lastRow;
 
   while (offset > 0 && config.row < maxRow) {
-    let currMaxSubRow = maxSubRow(content[config.row]);
+    const currMaxSubRow = maxSubRow(content[config.row]);
 
     if (config.subRow + offset <= currMaxSubRow) {
       config.subRow += offset;

@@ -1,6 +1,6 @@
 import wcwidth from 'wcwidth-o1';
 
-import { config, mode } from './config';
+import { config } from './config';
 
 import { isStyled, isAscii } from './helpers';
 
