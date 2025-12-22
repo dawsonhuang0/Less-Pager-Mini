@@ -38,12 +38,7 @@ export function lineForward(
 
     if (config.subRow + offset <= currMaxSubRow) {
       config.subRow += offset;
-
-      mode.EOF = config.row > config.lastRow || (
-        config.row === config.lastRow && config.subRow >= config.lastSubRow
-      );
-
-      return;
+      break;
     }
 
     offset -= currMaxSubRow - config.subRow + 1;
@@ -52,10 +47,12 @@ export function lineForward(
     config.subRow = 0;
   }
 
-  config.subRow = Math.min(
-    config.subRow + offset,
-    ignoreEOF ? maxSubRow(content[config.row]) : config.lastSubRow
-  );
+  if (config.row === maxRow) {
+    config.subRow = Math.min(
+      config.subRow + offset,
+      ignoreEOF ? maxSubRow(content[config.row]) : config.lastSubRow
+    );
+  }
 
   mode.EOF = config.row > config.lastRow || (
     config.row === config.lastRow && config.subRow >= config.lastSubRow
@@ -95,31 +92,27 @@ export function lineBackward(content: string[], offset: number): void {
   while (offset > 0 && config.row >= 0) {
     if (config.subRow >= offset) {
       config.subRow -= offset;
-
-      if (
-        mode.EOF &&
-        config.row === config.lastRow && config.subRow < config.lastSubRow
-      ) {
-        mode.EOF = false;
-      }
-
-      return;
+      break;
     }
 
     if (config.row === 0) {
       config.subRow = 0;
-
-      if (mode.EOF && config.lastRow === 0 && config.lastSubRow > 0) {
-        mode.EOF = false;
-      }
-
-      return;
+      break;
     }
 
     offset -= config.subRow + 1;
 
     config.row--;
     config.subRow = maxSubRow(content[config.row]);
+  }
+
+  if (
+    mode.EOF && (
+      config.row < config.lastRow ||
+      (config.row === config.lastRow && config.subRow < config.lastSubRow)
+    )
+  ) {
+    mode.EOF = false;
   }
 }
 
