@@ -13,11 +13,12 @@ import { STYLE_REGEX_G } from './constants';
  * @param lines - Output array of wrapped lines.
  */
 export function wrapLongLines(content: string[], lines: string[]): void {
-  let row = config.row;
-
-  while (lines.length < config.window - 1 && row < content.length) {
+  for (
+    let row = config.row;
+    row < content.length && lines.length < config.window - 1;
+    row++
+  ) {
     wrap(lines, content[row]);
-    row++;
   }
 }
 
@@ -36,11 +37,11 @@ function wrap(lines: string[], longLine: string): void {
     return isAscii(longLine)
       ? wrapStyledAsciiLine(lines, longLine)
       : wrapStyledLine(lines, longLine);
+  } else {
+    return isAscii(longLine)
+      ? wrapAsciiLine(lines, longLine)
+      : wrapLine(lines, longLine);
   }
-
-  return isAscii(longLine)
-    ? wrapAsciiLine(lines, longLine)
-    : wrapLine(lines, longLine);
 }
 
 /**
