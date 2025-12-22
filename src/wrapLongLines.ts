@@ -56,10 +56,7 @@ function wrap(lines: string[], longLine: string): void {
 function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
 
-  let rows = 0;
-  let length = 0;
-  let i = 0;
-
+  let rows = 0, length = 0, i = 0;
   let line: string[] = [];
 
   STYLE_REGEX_G.lastIndex = 0;
@@ -132,68 +129,55 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
  * @param styledLine - Text with ANSI codes and Unicode characters.
  * @returns `true` if fully processed, `false` if stopped at window limit.
  */
-function wrapStyledLine(lines: string[], styledLine: string): boolean {
+function wrapStyledLine(lines: string[], styledLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
-  const segments = Array.from(styledLine.replace(STYLE_REGEX_G, ''));
 
+  let rows = 0, length = 0, i = 0;
   let line: string[] = [];
 
   STYLE_REGEX_G.lastIndex = 0;
-  let ansi: RegExpExecArray | null, row = 0, length = 0, i = 0, s = 0;
+  let ansi: RegExpExecArray | null;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    while (i < ansi.index) {
-      const charCount = segments[s].length;
-      if (!concat()) return false;
-      i += charCount;
-    }
-
+    if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
     line.push(ansi[0]);
     i = STYLE_REGEX_G.lastIndex;
   }
 
-  while (s < segments.length) {
-    if (!concat()) return false;
-  }
+  if (!join(Array.from(styledLine.slice(i)))) return;
 
   if (line.length) lines.push(line.join(''));
 
-  return true;
-
-  // helpers
+  // helper
 
   /**
-   * Processes one Unicode segment and handles line wrapping.
+   * Joins Unicode segments into wrapped lines.
    *
-   * - Calculates visual width and wraps if exceeding screen width.
-   * - Moves overflowing wide characters to next line.
+   * - Calculates visual width and wraps at screen boundary.
+   * - Respects startRow for partial rendering.
    *
+   * @param segments - Array of Unicode characters to process.
    * @returns `true` if can continue, `false` if window limit reached.
    */
-  function concat(): boolean {
-    const segmentWidth = wcwidth(segments[s]);
-    const nextLength = length + segmentWidth;
+  function join(segments: string[]): boolean {
+    for (let s = 0; s < segments.length; s++) {
+      const charWidth = wcwidth(segments[s]);
 
-    if (nextLength <= config.screenWidth) {
-      if (row >= startRow) line.push(segments[s]);
-      length = nextLength;
-    } else {
-      if (row >= startRow) {
-        if (nextLength === config.screenWidth) line.push(segments[s]);
-        if (!push(lines, line, styledLine, ansi)) return false;
-        line = [];
-      }
-      row++;
+      if (length + charWidth > config.screenWidth) {
+        if (rows >= startRow) {
+          lines.push(line.join(''));
+          if (lines.length === config.window - 1) return false;
+          line = [];
+        }
 
-      if (nextLength === config.screenWidth) {
         length = 0;
-      } else {
-        if (row >= startRow) line.push(segments[s]);
-        length = segmentWidth;
+        rows++;
       }
+
+      if (rows >= startRow) line.push(segments[s]);
+      length += charWidth;
     }
 
-    s++;
     return true;
   }
 }
@@ -266,36 +250,4 @@ function wrapLine(lines: string[], longLine: string): void {
   if (lines.length < config.window - 1 && rows >= startRow) {
     lines.push(chars.slice(start).join(''));
   }
-}
-
-// helper
-
-/**
- * Pushes current line to output and checks window limit.
- *
- * - Collects remaining ANSI codes if window limit reached.
- * - Resets line buffer for next line if continuing.
- *
- * @param lines - Output array to append wrapped lines to.
- * @param line - Current line buffer being built.
- * @param styledLine - Original text with ANSI codes.
- * @param ansi - Current ANSI match (for collecting remaining codes).
- * @returns `true` if can continue wrapping, `false` if window full.
- */
-function push(
-  lines: string[],
-  line: string[],
-  styledLine: string,
-  ansi: RegExpExecArray | null
-): boolean {
-  if (lines.length + 1 === config.window - 1) {
-    while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-      line.push(ansi[0]);
-    }
-    lines.push(line.join(''));
-    return false;
-  }
-
-  lines.push(line.join(''));
-  return true;
 }
