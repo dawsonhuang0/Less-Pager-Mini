@@ -120,7 +120,7 @@ export function ringBell(): void {
  * Formats content for display based on line wrapping configuration.
  *
  * - Chooses between chopping or wrapping long lines.
- * - Limits formatting to the current window range.
+ * - Appends ANSI reset code to prevent style bleeding.
  *
  * @param content - The full array of content lines to format.
  * @returns A formatted string array ready for rendering.
@@ -133,6 +133,8 @@ export function formatContent(content: string[]): string[] {
   } else {
     wrapLongLines(content, lines);
   }
+
+  lines[lines.length - 1] += STYLE_RESET;
 
   padToEOF(lines);
   return lines;
@@ -182,7 +184,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   const content = formatContent(rawContent);
   const prompt = getPrompt();
 
-  if (prompt) content.push(STYLE_RESET + prompt + getBuffer(buffer));
+  if (prompt) content.push(prompt + getBuffer(buffer));
 
   console.clear();
   process.stdout.write(content.join('\n'));
