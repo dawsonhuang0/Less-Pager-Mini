@@ -4,7 +4,7 @@ import { config } from './config';
 
 import { isStyled, isAscii } from './helpers';
 
-import { STYLE_REGEX_G } from './constants';
+import { STYLE_REGEX_G, STYLE_RESET } from './constants';
 
 /**
  * Wraps lines into subrows to fit screen width and fills the window.
@@ -72,7 +72,11 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
       line.push(styledLine.slice(i, ansi.index));
     }
 
-    line.push(ansi[0]);
+    if (rows < startRow && ansi[0] === STYLE_RESET) {
+      line = [];
+    } else {
+      line.push(ansi[0]);
+    }
 
     length += ansi.index - i;
     i = STYLE_REGEX_G.lastIndex;
@@ -141,7 +145,13 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
     if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
-    line.push(ansi[0]);
+
+    if (rows < startRow && ansi[0] === STYLE_RESET) {
+      line = [];
+    } else {
+      line.push(ansi[0]);
+    }
+
     i = STYLE_REGEX_G.lastIndex;
   }
 
