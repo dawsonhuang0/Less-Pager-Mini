@@ -23,4 +23,4 @@ export const UNDERLINE_ON = '\x1B[4m';
 export const UNDERLINE_OFF = '\x1B[24m';
 
 export const TILDE = BOLD_ON + '~' + BOLD_OFF;
-export const END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
+export const END_MARKER = STYLE_RESET + INVERSE_ON + '(END)' + INVERSE_OFF;
