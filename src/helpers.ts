@@ -134,8 +134,6 @@ export function formatContent(content: string[]): string[] {
     wrapLongLines(content, lines);
   }
 
-  lines[lines.length - 1] += STYLE_RESET;
-
   padToEOF(lines);
   return lines;
 }
@@ -269,12 +267,12 @@ function getPrompt(): string {
   );
 
   if (mode.HELP && !mode.BUFFERING) return (
-    INVERSE_ON +
+    STYLE_RESET + INVERSE_ON +
     helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)) +
     INVERSE_OFF
   );
 
-  if (!mode.EOF || mode.BUFFERING) return ':';
+  if (!mode.EOF || mode.BUFFERING) return STYLE_RESET + ':';
 
   return '';
 }
@@ -314,7 +312,7 @@ function visibleBufferLength(bufferLength: number): number {
 function padToEOF(lines: string[]): void {
   if (!mode.INIT && config.window - lines.length > 1) {
     lines.push(
-      BOLD_ON +
+      STYLE_RESET + BOLD_ON +
       '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~' +
       BOLD_OFF
     );
