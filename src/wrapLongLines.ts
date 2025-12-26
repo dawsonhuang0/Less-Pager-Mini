@@ -34,11 +34,11 @@ export function wrapLongLines(content: string[], lines: string[]): void {
  */
 function wrap(lines: string[], longLine: string): void {
   if (isStyled(longLine)) {
-    return isAscii(longLine)
+    isAscii(longLine)
       ? wrapStyledAsciiLine(lines, longLine)
       : wrapStyledLine(lines, longLine);
   } else {
-    return isAscii(longLine)
+    isAscii(longLine)
       ? wrapAsciiLine(lines, longLine)
       : wrapLine(lines, longLine);
   }
