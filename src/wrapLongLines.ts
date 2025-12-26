@@ -210,15 +210,16 @@ function wrapAsciiLine(lines: string[], longLine: string): void {
     return;
   }
 
-  let rows = 0;
-  let start = 0, end = config.screenWidth;
+  let rows = 0, start = 0;
 
-  while (lines.length < config.window - 1 && end < longLine.length) {
+  for (
+    let end = config.screenWidth;
+    end < longLine.length && lines.length < config.window - 1;
+    end += config.screenWidth
+  ) {
     if (rows >= startRow) lines.push(longLine.slice(start, end));
     rows++;
-
     start = end;
-    end += config.screenWidth;
   }
 
   if (lines.length < config.window - 1 && rows >= startRow) {
@@ -239,11 +240,13 @@ function wrapLine(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
   const chars = Array.from(longLine);
 
-  let rows = 0;
-  let length = 0;
-  let start = 0, end = 0;
+  let rows = 0, start = 0, length = 0;
 
-  while (lines.length < config.window - 1 && end < chars.length) {
+  for (
+    let end = 0;
+    end < chars.length && lines.length < config.window - 1;
+    end++
+  ) {
     const charWidth = wcwidth(chars[end]);
 
     if (length + charWidth > config.screenWidth) {
@@ -255,7 +258,6 @@ function wrapLine(lines: string[], longLine: string): void {
     }
 
     length += charWidth;
-    end++;
   }
 
   if (lines.length < config.window - 1 && rows >= startRow) {
