@@ -1,12 +1,27 @@
 import wcwidth from 'wcwidth-o1';
 
-import { config, mode } from "./config";
+import { config } from "./config";
 
-import { visualWidth, isStyled, isAscii } from "./helpers";
+import { isStyled, isAscii } from "./helpers";
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_REGEX_G } from "./constants";
+import {
+  INVERSE_ON,
+  INVERSE_OFF,
+  STYLE_REGEX_G,
+  STYLE_RESET
+} from "./constants";
 
-const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
+const getFillingSpace = (length: number): string =>
+  INVERSE_ON + ' '.repeat(length) + INVERSE_OFF;
+
+/**
+ * Creates a "more content" indicator with inverse ansi styling.
+ * 
+ * @param length - Width in columns
+ * @returns Inverse video string: '>' (width 1) or ' >' (width 2)
+ */
+const getMoreIndicator = (length: number): string =>
+  INVERSE_ON + ' '.repeat(length - 1) + '>' + INVERSE_OFF;
 
 /**
  * Chops long lines to fit screen width and fills the window.
@@ -15,36 +30,35 @@ const MORE_INDICATOR = INVERSE_ON + '>' + INVERSE_OFF;
  * @param lines - Output array of chopped lines.
  */
 export function chopLongLines(content: string[], lines: string[]): void {
-  const maxRow = content.length - config.row;
-
-  while (lines.length < config.window - 1 && lines.length < maxRow) {
-    const line = content[config.row + lines.length];
-    lines.push(chop(line));
+  for (
+    let row = config.row;
+    row < content.length && lines.length < config.window - 1;
+    row++
+  ) {
+    chop(lines, content[row]);
   }
-
-  mode.EOF = lines.length === maxRow;
 }
 
 /**
- * Chooses the appropriate chopping strategy for a line.
+ * Dispatches to appropriate chopping function based on line properties.
  *
- * - Routes to styled/ascii/non-ascii handlers based on content type.
- * - Adds `MORE_INDICATOR` if ASCII line exceeds screen width.
+ * - Routes styled lines to chopStyledAsciiLine or chopStyledLine.
+ * - Routes unstyled lines to chopAsciiLine or chopLine.
  *
- * @param line - The line of text to chop.
- * @param maxCol - The maximum column position allowed.
- * @returns The chopped line as a string.
+ * @param lines - Output array to append chopped line to.
+ * @param longLine - The line to chop.
+ * @param styles - ANSI style codes to prepend (defaults to '').
  */
-function chop(line: string): string {
-  if (isStyled(line)) {
-    return isAscii(line)
-      ? chopStyledAsciiLine(line)
-      : chopStyledLine(line);
+function chop(lines: string[], longLine: string, styles: string = ''): void {
+  if (isStyled(longLine)) {
+    isAscii(longLine)
+      ? chopStyledAsciiLine(longLine)
+      : chopStyledLine(longLine);
+  } else {
+    isAscii(longLine)
+      ? chopAsciiLine(lines, longLine, styles)
+      : chopLine(lines, longLine, styles);
   }
-  
-  return isAscii(line)
-    ? chopAsciiLine(line)
-    : chopLine(line);
 }
 
 /**
@@ -216,87 +230,82 @@ function chopStyledLine(styledLine: string): string {
 }
 
 /**
- * Chops ASCII line to screen width and adds indicator if truncated.
+ * Chops an ASCII line to fit screen width and appends to output.
  *
- * - Optimized for ASCII (no width calculation needed).
- * - Slices from scroll position to fit screen width.
+ * - Slices from col to screenWidth boundary.
+ * - Adds '>' indicator if content overflows.
  *
- * @param longLine - ASCII text line to chop.
- * @returns Chopped line with `>` indicator if needed.
+ * @param lines - Output array to append chopped line to.
+ * @param longLine - The ASCII line to chop.
+ * @param styles - ANSI style codes to prepend to output.
  */
-function chopAsciiLine(longLine: string): string {
-  const maxCol = config.screenWidth + config.col;
+function chopAsciiLine(
+  lines: string[],
+  longLine: string,
+  styles: string
+): void {
+  const start = config.col;
+  const end = start + config.screenWidth;
 
-  return longLine.length > maxCol
-    ? longLine.slice(config.col, maxCol - 1) + MORE_INDICATOR
-    : longLine.slice(config.col);
+  if (start >= longLine.length) {
+    lines.push('');
+  } else if (longLine.length > end) {
+    lines.push(
+      styles + longLine.slice(start, end - 1) + STYLE_RESET +
+      getMoreIndicator(1)
+    );
+  } else {
+    lines.push(styles + longLine.slice(start));
+  }
 }
 
 /**
- * Truncates a long line to screen width and appends a `>` marker.
+ * Chops a non-ASCII line to fit screen width and appends to output.
  *
- * @param longLine - The line to chop.
- * @returns The chopped line with marker.
+ * - Uses wcwidth for multi-byte character width calculation.
+ * - Adds filling space and overflow marker as needed.
+ *
+ * @param lines - Output array to append chopped line to.
+ * @param longLine - The line with multi-byte characters to chop.
+ * @param styles - ANSI style codes to prepend.
  */
-function chopLine(longLine: string): string {
-  const line: string[] = [];
+function chopLine(
+  lines: string[],
+  longLine: string,
+  styles: string
+): void {
+  const chars = Array.from(longLine);
 
-  const segments = Array.from(longLine);
-  let length = 0;
-  let i = 0;
+  let start = 0, length = 0;
 
-  let segmentWidth = 0;
-  let concatLength = 0;
-
-  while (i < segments.length) {
-    segmentWidth = visualWidth(segments[i]);
-    concatLength = length + segmentWidth;
-
-    if (concatLength > config.col) break;
-
-    length = concatLength;
-    i++;
+  for (; start < chars.length && length < config.col; start++) {
+    length += wcwidth(chars[start]);
   }
 
-  if (i === segments.length) return '';
+  length -= config.col;
 
-  const remaining = config.col - length;
-  const excess = segmentWidth - remaining;
-
-  if (isAscii(segments[i])) {
-    line.push(segments[i].slice(remaining));
-  } else {
-    line.push(
-      remaining
-        ? INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF
-        : segments[i]
-    );
+  if (start === chars.length) {
+    lines.push(length > 0 ? STYLE_RESET + getFillingSpace(length) : '');
+    return;
   }
 
-  length = excess;
-  i++;
+  styles = STYLE_RESET + (length > 0 ? getFillingSpace(length) : '') + styles;
+  let end = start;
 
-  while (length < config.screenWidth && i < segments.length) {
-    concatLength = length + visualWidth(segments[i]);
+  for (; end < chars.length; end++) {
+    const charWidth = wcwidth(chars[end]);
 
-    if (
-      concatLength > config.screenWidth ||
-      (concatLength === config.screenWidth && i !== segments.length - 1)
-    ) {
-      const remaining = config.screenWidth - length - 1;
-
-      if (isAscii(segments[i])) {
-        line.push(segments[i].slice(0, remaining) + MORE_INDICATOR);
-      } else {
-        line.push(`${INVERSE_ON}${' '.repeat(remaining)}>${INVERSE_OFF}`);
-      }
-    } else {
-      line.push(segments[i]);
+    if (end === chars.length - 1 && length + charWidth <= config.screenWidth) {
+      lines.push(styles + chars.slice(start).join(''));
+      return;
     }
 
-    length = concatLength;
-    i++;
+    if (length + charWidth >= config.screenWidth) break;
+    length += charWidth;
   }
 
-  return line.join('');
+  lines.push(
+    styles + chars.slice(start, end).join('') + STYLE_RESET +
+    getMoreIndicator(config.screenWidth - length)
+  );
 }
