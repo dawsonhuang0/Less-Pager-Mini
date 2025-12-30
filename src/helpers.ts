@@ -15,8 +15,7 @@ import {
   INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
-  END_MARKER,
-  STYLE_RESET
+  END_MARKER
 } from './constants';
 
 /**
@@ -267,12 +266,12 @@ function getPrompt(): string {
   );
 
   if (mode.HELP && !mode.BUFFERING) return (
-    STYLE_RESET + INVERSE_ON +
+    INVERSE_ON +
     helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)) +
     INVERSE_OFF
   );
 
-  if (!mode.EOF || mode.BUFFERING) return STYLE_RESET + ':';
+  if (!mode.EOF || mode.BUFFERING) return ':';
 
   return '';
 }
@@ -312,7 +311,7 @@ function visibleBufferLength(bufferLength: number): number {
 function padToEOF(lines: string[]): void {
   if (!mode.INIT && config.window - lines.length > 1) {
     lines.push(
-      STYLE_RESET + BOLD_ON +
+      BOLD_ON +
       '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~' +
       BOLD_OFF
     );

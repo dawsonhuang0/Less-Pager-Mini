@@ -69,10 +69,8 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
     }
 
     if (rows >= startRow) {
-      line.push(styledLine.slice(i, ansi.index));
-    }
-
-    if (rows < startRow && ansi[0] === STYLE_RESET) {
+      line.push(styledLine.slice(i, STYLE_REGEX_G.lastIndex));
+    } else if (ansi[0] === STYLE_RESET) {
       line = [];
     } else {
       line.push(ansi[0]);
@@ -86,12 +84,7 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
     if (!push()) return;
   }
 
-  if (line.length) {
-    if (i !== styledLine.length) line.push(styledLine.slice(i));
-    lines.push(line.join(''));
-  } else {
-    lines.push(styledLine.slice(i));
-  }
+  lines.push(line.join('') + styledLine.slice(i) + STYLE_RESET);
 
   // helper
   
@@ -105,15 +98,16 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
    */
   function push(): boolean {
     if (rows >= startRow) {
-      if (line.length) {
-        line.push(styledLine.slice(i, i + config.screenWidth - length));
-        lines.push(line.join(''));
-        line = [];
-      } else {
-        lines.push(styledLine.slice(i, i + config.screenWidth));
+      lines.push(
+        line.join('') + styledLine.slice(i, i + config.screenWidth - length)
+      );
+
+      if (lines.length === config.window - 1) {
+        lines[lines.length - 1] += STYLE_RESET;
+        return false;
       }
 
-      if (lines.length === config.window - 1) return false;
+      line = [];
     }
 
     rows++;
@@ -144,7 +138,10 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
   let ansi: RegExpExecArray | null;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
+    if (!join(Array.from(styledLine.slice(i, ansi.index)))) {
+      lines[lines.length - 1] += STYLE_RESET;
+      return;
+    }
 
     if (rows < startRow && ansi[0] === STYLE_RESET) {
       line = [];
@@ -155,9 +152,12 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
     i = STYLE_REGEX_G.lastIndex;
   }
 
-  if (!join(Array.from(styledLine.slice(i)))) return;
+  if (!join(Array.from(styledLine.slice(i)))) {
+    lines[lines.length - 1] += STYLE_RESET;
+    return;
+  }
 
-  if (line.length) lines.push(line.join(''));
+  if (line.length) lines.push(line.join('') + STYLE_RESET);
 
   // helper
 
