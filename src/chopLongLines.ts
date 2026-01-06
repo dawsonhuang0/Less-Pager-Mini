@@ -14,12 +14,6 @@ import {
 const getFillingSpace = (length: number): string =>
   INVERSE_ON + ' '.repeat(length) + INVERSE_OFF;
 
-/**
- * Creates a "more content" indicator with inverse ansi styling.
- * 
- * @param length - Width in columns
- * @returns Inverse video string: '>' (width 1) or ' >' (width 2)
- */
 const getMoreIndicator = (length: number): string =>
   INVERSE_ON + ' '.repeat(length - 1) + '>' + INVERSE_OFF;
 
@@ -47,186 +41,158 @@ export function chopLongLines(content: string[], lines: string[]): void {
  *
  * @param lines - Output array to append chopped line to.
  * @param longLine - The line to chop.
- * @param styles - ANSI style codes to prepend (defaults to '').
  */
-function chop(lines: string[], longLine: string, styles: string = ''): void {
+function chop(lines: string[], longLine: string): void {
   if (isStyled(longLine)) {
     isAscii(longLine)
-      ? chopStyledAsciiLine(longLine)
-      : chopStyledLine(longLine);
+      ? chopStyledAsciiLine(lines, longLine)
+      : chopStyledLine(lines, longLine);
   } else {
     isAscii(longLine)
-      ? chopAsciiLine(lines, longLine, styles)
-      : chopLine(lines, longLine, styles);
+      ? chopAsciiLine(lines, longLine)
+      : chopLine(lines, longLine);
   }
 }
 
 /**
- * Chop a styled ascii line to screen width.
- * 
- * - Keeps ANSI styles in place.
- * - Adds '>' if chopped.
- * 
- * @param styledLine Line with ANSI codes.
- * @returns Chopped line with styles.
- */
-function chopStyledAsciiLine(styledLine: string): string {
-  const line: string[] = [];
-
-  let visualLength = styledLine.length;
-
-  const ansis: { ansi: string, start: number, end: number }[] = [];
-  STYLE_REGEX_G.lastIndex = 0;
-  let ansi, char = 0, i = 0;
-
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    const lastIndex = STYLE_REGEX_G.lastIndex;
-    const nextChar = char + ansi.index - i;
-
-    if (nextChar <= config.col) {
-      line.push(ansi[0]);
-      char = nextChar;
-      i = lastIndex;
-    } else {
-      ansis.push({
-        ansi: ansi[0],
-        start: ansi.index,
-        end: lastIndex
-      });
-    }
-
-    visualLength -= lastIndex - ansi.index;
-  }
-
-  if (visualLength <= config.col) return line.join('');
-
-  if (char < config.col) {
-    i += config.col - char;
-    char = config.col;
-  }
-
-  let length = 0, curr = 0;
-
-  while (length < config.screenWidth && i < styledLine.length) {
-    if (curr < ansis.length && i === ansis[curr].start) {
-      line.push(ansis[curr].ansi);
-      i = ansis[curr].end;
-      curr++;
-    } else {
-      if (length < config.screenWidth - 1) {
-        line.push(styledLine[i]);
-      } else {
-        const overflow = char !== visualLength - 1;
-
-        if (!overflow) line.push(styledLine[i]);
-        while (curr < ansis.length) line.push(ansis[curr++].ansi);
-        if (overflow) line.push(MORE_INDICATOR);
-      }
-
-      length++;
-      char++;
-      i++;
-    }
-  }
-
-  return line.join('');
-}
-
-/**
- * Chops a styled non-ascii line to fit screen width.
+ * Chops a styled ASCII line to fit screen width.
  *
  * - Preserves ANSI codes while respecting col/screen boundaries.
- * - Appends overflow marker when line exceeds screen width.
+ * - Appends overflow marker when content exceeds screen width.
  *
- * @param styledLine - The ANSI-styled line to chop.
- * @returns Chopped line with styles and marker if needed.
+ * @param lines - Output array to append chopped line to.
+ * @param styledLine - The ANSI-styled ASCII line to chop.
  */
-function chopStyledLine(styledLine: string): string {
-  const line: string[] = [];
+function chopStyledAsciiLine(lines: string[], styledLine: string): void {
+  let i = 0, length = 0;
+  let line: string[] = [];
 
-  const segments = Array.from(styledLine.replace(STYLE_REGEX_G, ''));
+  STYLE_REGEX_G.lastIndex = 0;
+  let ansi: RegExpExecArray | null;
 
-  const segmentWidths = [];
-  let visualLength = 0;
+  while (
+    (ansi = STYLE_REGEX_G.exec(styledLine)) !== null &&
+    length + ansi.index - i < config.col
+  ) {
+    if (ansi[0] === STYLE_RESET) {
+      line = [];
+    } else {
+      line.push(ansi[0]);
+    }
 
-  for (let i = 0; i < segments.length; i++) {
-    const segmentWidth = wcwidth(segments[i]);
-    segmentWidths.push(segmentWidth);
-    visualLength += segmentWidth;
+    length += ansi.index - i;
+    i = STYLE_REGEX_G.lastIndex;
   }
 
-  const ansis: { ansi: string, start: number, end: number }[] = [];
-  STYLE_REGEX_G.lastIndex = 0;
-  let ansi, char = 0, i = 0, s = 0;
+  i += config.col - length;
+  length = 0;
 
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    const nextChar = char + ansi.index - i;
-
-    if (nextChar <= config.col) {
-      line.push(ansi[0]);
-      char = nextChar;
-      s += Array.from(styledLine.slice(i, ansi.index)).length;
+  if (ansi !== null) do {
+    if (length + ansi.index - i < config.screenWidth) {
+      line.push(styledLine.slice(i, STYLE_REGEX_G.lastIndex));
+      length += ansi.index - i;
       i = STYLE_REGEX_G.lastIndex;
     } else {
-      ansis.push({
-        ansi: ansi[0],
-        start: ansi.index,
-        end: STYLE_REGEX_G.lastIndex
-      });
-    }
-  }
+      let overflow = length + ansi.index - i > config.screenWidth;
+      let lastIndex = STYLE_REGEX_G.lastIndex;
 
-  if (visualLength <= config.col) return line.join('');
-
-  let length = 0;
-
-  while (char < config.col && s < segments.length) {
-    const nextChar = char + segmentWidths[s];
-
-    if (nextChar > config.col) {
-      const excess = nextChar - config.col;
-      line.push(INVERSE_ON + ' '.repeat(excess) + INVERSE_OFF);
-      length = excess;
-    }
-
-    char = nextChar;
-    i += segments[s].length;
-    s++;
-  }
-
-  let curr = 0;
-
-  while (length < config.screenWidth && s < segments.length) {
-    if (curr < ansis.length && i === ansis[curr].start) {
-      line.push(ansis[curr].ansi);
-      i = ansis[curr].end;
-      curr++;
-      continue;
-    }
-
-    const concatLength = length + segmentWidths[s];
-
-    if (concatLength < config.screenWidth) {
-      line.push(segments[s]);
-    } else {
-      const overflow = (
-        s !== segments.length - 1 || concatLength !== config.screenWidth
-      );
-
-      if (!overflow) line.push(segments[s]);
-      while (curr < ansis.length) line.push(ansis[curr++].ansi);
-      if (overflow) {
-        const remaining = config.screenWidth - length;
-        line.push(`${INVERSE_ON}${' '.repeat(remaining - 1)}>${INVERSE_OFF}`);
+      while (!overflow && (ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+        overflow = lastIndex !== ansi.index;
+        lastIndex = STYLE_REGEX_G.lastIndex;
       }
+
+      push(overflow || lastIndex !== styledLine.length);
+      return;
+    }
+  } while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null);
+
+  push(length + styledLine.length - i > config.screenWidth);
+
+  // helper
+  function push(overflow: boolean): void {
+    if (overflow) {
+      lines.push(
+        line.join('') +
+        styledLine.slice(i, i + config.screenWidth - length - 1) +
+        STYLE_RESET + getMoreIndicator(1)
+      );
+    } else {
+      lines.push(line.join('') + styledLine.slice(i) + STYLE_RESET);
+    }
+  }
+}
+
+/**
+ * Chops a styled non-ASCII line to fit screen width.
+ *
+ * - Uses wcwidth for Unicode character width calculation.
+ * - Adds filling space for wide characters crossing boundaries.
+ *
+ * @param lines - Output array to append chopped line to.
+ * @param styledLine - The ANSI-styled line with Unicode characters to chop.
+ */
+function chopStyledLine(lines: string[], styledLine: string): void {
+  const endCol = config.col + config.screenWidth;
+
+  let i = 0, length = 0;
+  let line: string[] = [''];
+
+  STYLE_REGEX_G.lastIndex = 0;
+  let ansi: RegExpExecArray | null;
+
+  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
+    if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
+
+    if (length < config.col && ansi[0] === STYLE_RESET) {
+      line = [''];
+    } else {
+      line.push(ansi[0]);
     }
 
-    length = concatLength;
-    i += segments[s].length;
-    s++;
+    i = STYLE_REGEX_G.lastIndex;
   }
 
-  return line.join('');
+  if (join(Array.from(styledLine.slice(i)))) {
+    lines.push(line.join('') + STYLE_RESET);
+  }
+
+  // helper
+  function join(chars: string[]): boolean {
+    for (let c = 0; c < chars.length; c++) {
+      const charWidth = wcwidth(chars[c]);
+
+      if (length + charWidth < endCol) {
+        if (length >= config.col) {
+          line.push(chars[c]);
+        } else if (length + charWidth >= config.col) {
+          line[0] = getFillingSpace(length + charWidth - config.col);
+        }
+
+        length += charWidth;
+        continue;
+      }
+      
+      let overflow = length + charWidth > endCol || c !== chars.length - 1;
+      let lastIndex = styledLine.length;
+
+      while (!overflow && ansi !== null) {
+        lastIndex = STYLE_REGEX_G.lastIndex;
+        ansi = STYLE_REGEX_G.exec(styledLine);
+      }
+
+      if (overflow || lastIndex !== styledLine.length) {
+        lines.push(
+          line.join('') + STYLE_RESET + getMoreIndicator(endCol - length)
+        );
+      } else {
+        lines.push(line.join('') + chars[c] + STYLE_RESET);
+      }
+
+      return false;
+    }
+
+    return true;
+  }
 }
 
 /**
@@ -237,26 +203,16 @@ function chopStyledLine(styledLine: string): string {
  *
  * @param lines - Output array to append chopped line to.
  * @param longLine - The ASCII line to chop.
- * @param styles - ANSI style codes to prepend to output.
  */
-function chopAsciiLine(
-  lines: string[],
-  longLine: string,
-  styles: string
-): void {
+function chopAsciiLine(lines: string[], longLine: string): void {
   const start = config.col;
   const end = start + config.screenWidth;
 
-  if (start >= longLine.length) {
-    lines.push('');
-  } else if (longLine.length > end) {
-    lines.push(
-      styles + longLine.slice(start, end - 1) + STYLE_RESET +
-      getMoreIndicator(1)
-    );
-  } else {
-    lines.push(styles + longLine.slice(start));
-  }
+  lines.push(
+    longLine.length > end
+      ? longLine.slice(start, end - 1) + getMoreIndicator(1)
+      : longLine.slice(start)
+  );
 }
 
 /**
@@ -267,13 +223,8 @@ function chopAsciiLine(
  *
  * @param lines - Output array to append chopped line to.
  * @param longLine - The line with multi-byte characters to chop.
- * @param styles - ANSI style codes to prepend.
  */
-function chopLine(
-  lines: string[],
-  longLine: string,
-  styles: string
-): void {
+function chopLine(lines: string[], longLine: string): void {
   const chars = Array.from(longLine);
 
   let start = 0, length = 0;
@@ -283,29 +234,29 @@ function chopLine(
   }
 
   length -= config.col;
+  const fillingSpace = getFillingSpace(Math.max(length, 0));
 
   if (start === chars.length) {
-    lines.push(length > 0 ? STYLE_RESET + getFillingSpace(length) : '');
+    lines.push(fillingSpace);
     return;
   }
 
-  styles = STYLE_RESET + (length > 0 ? getFillingSpace(length) : '') + styles;
-  let end = start;
-
-  for (; end < chars.length; end++) {
+  for (let end = start; end < chars.length; end++) {
     const charWidth = wcwidth(chars[end]);
 
-    if (end === chars.length - 1 && length + charWidth <= config.screenWidth) {
-      lines.push(styles + chars.slice(start).join(''));
+    if (
+      length + charWidth > config.screenWidth ||
+      (length + charWidth === config.screenWidth && end !== chars.length - 1)
+    ) {
+      lines.push(
+        fillingSpace + chars.slice(start, end).join('') +
+        getMoreIndicator(config.screenWidth - length)
+      );
       return;
     }
 
-    if (length + charWidth >= config.screenWidth) break;
     length += charWidth;
   }
 
-  lines.push(
-    styles + chars.slice(start, end).join('') + STYLE_RESET +
-    getMoreIndicator(config.screenWidth - length)
-  );
+  lines.push(fillingSpace + chars.slice(start).join(''));
 }
