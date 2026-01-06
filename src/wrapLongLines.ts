@@ -87,15 +87,6 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
   lines.push(line.join('') + styledLine.slice(i) + STYLE_RESET);
 
   // helper
-  
-  /**
-   * Pushes current line segment and advances position.
-   *
-   * - Appends wrapped text to output if past startRow.
-   * - Checks window limit and stops if reached.
-   *
-   * @returns `true` if can continue wrapping, `false` if window full.
-   */
   function push(): boolean {
     if (rows >= startRow) {
       lines.push(
@@ -160,19 +151,9 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
   if (line.length) lines.push(line.join('') + STYLE_RESET);
 
   // helper
-
-  /**
-   * Joins Unicode segments into wrapped lines.
-   *
-   * - Calculates visual width and wraps at screen boundary.
-   * - Respects startRow for partial rendering.
-   *
-   * @param segments - Array of Unicode characters to process.
-   * @returns `true` if can continue, `false` if window limit reached.
-   */
-  function join(segments: string[]): boolean {
-    for (let s = 0; s < segments.length; s++) {
-      const charWidth = wcwidth(segments[s]);
+  function join(chars: string[]): boolean {
+    for (let c = 0; c < chars.length; c++) {
+      const charWidth = wcwidth(chars[c]);
 
       if (length + charWidth > config.screenWidth) {
         if (rows >= startRow) {
@@ -185,7 +166,7 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
         rows++;
       }
 
-      if (rows >= startRow) line.push(segments[s]);
+      if (rows >= startRow) line.push(chars[c]);
       length += charWidth;
     }
 
@@ -203,28 +184,29 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
  * @param longLine - ASCII text line to wrap.
  */
 function wrapAsciiLine(lines: string[], longLine: string): void {
-  const startRow = lines.length ? 0 : config.subRow;
-
   if (longLine.length <= config.screenWidth) {
-    if (startRow === 0) lines.push(longLine);
+    lines.push(longLine);
     return;
   }
 
+  const startRow = lines.length ? 0 : config.subRow;
   let rows = 0, start = 0;
 
   for (
     let end = config.screenWidth;
-    end < longLine.length && lines.length < config.window - 1;
+    end < longLine.length;
     end += config.screenWidth
   ) {
-    if (rows >= startRow) lines.push(longLine.slice(start, end));
+    if (rows >= startRow) {
+      lines.push(longLine.slice(start, end));
+      if (lines.length === config.window - 1) return;
+    }
+
     rows++;
     start = end;
   }
 
-  if (lines.length < config.window - 1 && rows >= startRow) {
-    lines.push(longLine.slice(start));
-  }
+  lines.push(longLine.slice(start));
 }
 
 /**
