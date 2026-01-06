@@ -129,10 +129,7 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
   let ansi: RegExpExecArray | null;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    if (!join(Array.from(styledLine.slice(i, ansi.index)))) {
-      lines[lines.length - 1] += STYLE_RESET;
-      return;
-    }
+    if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
 
     if (rows < startRow && ansi[0] === STYLE_RESET) {
       line = [];
@@ -143,33 +140,37 @@ function wrapStyledLine(lines: string[], styledLine: string): void {
     i = STYLE_REGEX_G.lastIndex;
   }
 
-  if (!join(Array.from(styledLine.slice(i)))) {
-    lines[lines.length - 1] += STYLE_RESET;
-    return;
+  if (join(Array.from(styledLine.slice(i)))) {
+    lines.push(line.join('') + STYLE_RESET);
   }
 
-  if (line.length) lines.push(line.join('') + STYLE_RESET);
+  // helpers
 
-  // helper
   function join(chars: string[]): boolean {
     for (let c = 0; c < chars.length; c++) {
       const charWidth = wcwidth(chars[c]);
 
       if (length + charWidth > config.screenWidth) {
-        if (rows >= startRow) {
-          lines.push(line.join(''));
-          if (lines.length === config.window - 1) return false;
-          line = [];
-        }
-
-        length = 0;
+        if (rows >= startRow && !push()) return false;
         rows++;
+        length = 0;
       }
 
       if (rows >= startRow) line.push(chars[c]);
       length += charWidth;
     }
 
+    return true;
+  }
+
+  function push(): boolean {
+    if (lines.length === config.window - 2) {
+      lines.push(line.join('') + STYLE_RESET);
+      return false;
+    }
+
+    lines.push(line.join(''));
+    line = [];
     return true;
   }
 }
