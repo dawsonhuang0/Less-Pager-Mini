@@ -224,17 +224,16 @@ function wrapLine(lines: string[], longLine: string): void {
 
   let rows = 0, start = 0, length = 0;
 
-  for (
-    let end = 0;
-    end < chars.length && lines.length < config.window - 1;
-    end++
-  ) {
+  for (let end = 0; end < chars.length; end++) {
     const charWidth = wcwidth(chars[end]);
 
     if (length + charWidth > config.screenWidth) {
-      if (rows >= startRow) lines.push(chars.slice(start, end).join(''));
-      rows++;
+      if (rows >= startRow) {
+        lines.push(chars.slice(start, end).join(''));
+        if (lines.length === config.window - 1) return;
+      }
 
+      rows++;
       length = 0;
       start = end;
     }
@@ -242,7 +241,5 @@ function wrapLine(lines: string[], longLine: string): void {
     length += charWidth;
   }
 
-  if (lines.length < config.window - 1 && rows >= startRow) {
-    lines.push(chars.slice(start).join(''));
-  }
+  lines.push(chars.slice(start).join(''));
 }
