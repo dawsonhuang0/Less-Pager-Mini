@@ -89,22 +89,23 @@ function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
   // helper
   function push(): boolean {
     if (rows >= startRow) {
-      lines.push(
-        line.join('') + styledLine.slice(i, i + config.screenWidth - length)
-      );
-
-      if (lines.length === config.window - 1) {
-        lines[lines.length - 1] += STYLE_RESET;
+      if (lines.length === config.window - 2) {
+        lines.push(
+          line.join('') +
+          styledLine.slice(i, i + config.screenWidth - length) + STYLE_RESET
+        );
         return false;
       }
 
+      lines.push(
+        line.join('') + styledLine.slice(i, i + config.screenWidth - length)
+      );
       line = [];
     }
 
     rows++;
     i += config.screenWidth - length;
     length = 0;
-
     return true;
   }
 }
