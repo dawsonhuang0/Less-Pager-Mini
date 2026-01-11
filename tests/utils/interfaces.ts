@@ -14,3 +14,8 @@ export interface TestCase {
   length: number;
   options: TextOptions;
 }
+
+export interface TestData {
+  chars: string[];
+  widths: number[];
+}

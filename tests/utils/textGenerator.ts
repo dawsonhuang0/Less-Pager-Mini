@@ -1,4 +1,4 @@
-import { TextOptions } from "./interfaces";
+import { TestData, TextOptions } from "./interfaces";
 
 import { RESET } from "./constants";
 
@@ -87,7 +87,7 @@ function getAnsi(): string {
  */
 export const getTextSuite = (
   lines: { length: number, options: TextOptions }[]
-): { chars: string[], widths: number[] }[] =>
+): TestData[] =>
   lines.map(({length, options}) => getText(length, options));
 
 /**
@@ -100,10 +100,7 @@ export const getTextSuite = (
  * @param options - Character ratios, ASCII mode, and ANSI toggle.
  * @returns Object with character array and corresponding width array.
  */
-function getText(length: number, options: TextOptions): {
-  chars: string[],
-  widths: number[]
-} {
+function getText(length: number, options: TextOptions): TestData {
   if (length === 0) return {
     chars: [options.ansi ? getAnsi() : ''],
     widths: [0]
