@@ -10,9 +10,7 @@
  */
 export async function readKey(): Promise<string> {
   if (!process.stdin.isTTY) {
-    throw new Error(
-      'Interactive terminal (TTY) is required to use this feature.'
-    );
+    throw new Error('Interactive terminal (TTY) is required.');
   }
 
   return new Promise(resolve => {
@@ -27,13 +25,11 @@ export async function readKey(): Promise<string> {
     const keyListener = (key: string) => {
       if (timer) {
         resolveKey('\x1B' + key);
+      } else if (key === '\x1B') {
+        timer = setTimeout(() => { resolveKey('\x1B'); }, 50);
+      } else {
+        resolveKey(key);
       }
-
-      if (key !== '\x1B') resolveKey(key);
-
-      timer = setTimeout(() => {
-        resolveKey('\x1B');
-      }, 50);
     };
 
     process.stdin.on('data', keyListener);
