@@ -125,52 +125,15 @@ async function contentPager(content: string[]): Promise<void> {
     REPAINT: () => {},
   };
 
-  process.stdout.write(TITLE);
-  process.stdout.write(ALTERNATE_CONSOLE_ON);
+  init();
 
-  process.on('uncaughtException', (error) => {
-    process.stdout.write(ALTERNATE_CONSOLE_OFF);
-    process.stdout.write(CONSOLE_TITLE_RESET);
-    console.error(error);
-    process.exit(1);
-  });
-
-  process.on('SIGWINCH', () => {
-    mode.INIT = false;
-
-    config.window = process.stdout.rows;
-    config.screenWidth = process.stdout.columns;
-    config.halfWindow = Math.floor(config.window / 2);
-    config.halfScreenWidth = Math.floor(config.screenWidth / 2);
-
-    const { lastRow, lastSubRow } = getLastRow(content);
-    config.lastRow = lastRow;
-    config.lastSubRow = lastSubRow;
-
-    mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
-
-    buffer = [];
-    config.bufferOffset = 0;
-    render(content, buffer);
-  });
-
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
+  let prevContent = content;
+  let prevConfig = config;
+  let prevMode = mode;
 
   let exit = false;
   let repaint = true;
   let buffer: string[] = [];
-
-  const { lastRow, lastSubRow } = getLastRow(content);
-  config.lastRow = lastRow;
-  config.lastSubRow = lastSubRow;
-
-  mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
-
-  let prevContent: string[] = [];
-  let prevConfig = config;
-  let prevMode = mode;
 
   while (!exit) {
     mode.BUFFERING = Boolean(buffer.length);
@@ -211,11 +174,49 @@ async function contentPager(content: string[]): Promise<void> {
 
   // helpers
 
-  /**
-   * Exits help mode if active, otherwise allows pager to exit.
-   *
-   * @returns `true` if should exit, `false` if returning from help.
-   */
+  function init() {
+    process.stdout.write(TITLE);
+    process.stdout.write(ALTERNATE_CONSOLE_ON);
+
+    process.on('uncaughtException', (error) => {
+      process.stdout.write(ALTERNATE_CONSOLE_OFF);
+      process.stdout.write(CONSOLE_TITLE_RESET);
+      console.error(error);
+      process.exit(1);
+    });
+
+    process.on('SIGWINCH', () => {
+      mode.INIT = false;
+
+      calculateDimensions();
+      calculateEOF();
+
+      buffer = [];
+      config.bufferOffset = 0;
+      render(content, buffer);
+    });
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
+    calculateEOF();
+  }
+
+  function calculateDimensions() {
+    config.window = process.stdout.rows;
+    config.screenWidth = process.stdout.columns;
+    config.halfWindow = Math.floor(config.window / 2);
+    config.halfScreenWidth = Math.floor(config.screenWidth / 2);
+  }
+
+  function calculateEOF() {
+    const { lastRow, lastSubRow } = getLastRow(content);
+    config.lastRow = lastRow;
+    config.lastSubRow = lastSubRow;
+    mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
+  }
+
   function shouldExit(): boolean {
     if (!mode.HELP) return true;
 
@@ -223,25 +224,26 @@ async function contentPager(content: string[]): Promise<void> {
     applyConfig(prevConfig);
     applyMode(prevMode);
 
-    mode.HELP = false;
+    calculateDimensions();
+    calculateEOF();
+
     return false;
   }
 
-  /**
-   * Enters help mode by saving current state and loading help content.
-   */
   function prepareHelp(): void {
     if (mode.HELP) return;
-  
-    prevContent = content;
+
     prevConfig = config;
-    prevMode = mode;
-  
     resetConfig();
+
+    prevMode = mode;
     resetMode();
-  
-    mode.HELP = true;
+
+    prevContent = content;
     content = help;
+    calculateEOF();
+
+    mode.HELP = true;
   }
 }
 
