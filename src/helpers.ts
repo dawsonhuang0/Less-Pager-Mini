@@ -151,6 +151,7 @@ export function addBufferChar(buffer: string[], key: string): void {
   }
 
   buffer.push(key);
+  mode.BUFFERING = true;
 }
 
 /**
@@ -161,11 +162,14 @@ export function addBufferChar(buffer: string[], key: string): void {
  * @param buffer - Current input buffer array.
  */
 export function delBufferChar(buffer: string[]): void {
+  if (buffer.length === 0) return;
+
   if (visibleBufferLength(buffer.length) === 0) {
     config.bufferOffset--;
   }
 
   buffer.pop();
+  if (buffer.length === 0) mode.BUFFERING = false;
 }
 
 /**
