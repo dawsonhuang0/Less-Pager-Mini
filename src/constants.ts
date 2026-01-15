@@ -11,6 +11,11 @@ export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
 export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
+export const MOUSE_ON = '\x1b[?1000h';
+export const MOUSE_OFF = '\x1b[?1000l';
+export const MOUSE_SGR_ON = '\x1b[?1006h';
+export const MOUSE_SGR_OFF = '\x1b[?1006l';
+
 export const STYLE_RESET = '\x1b[0m';
 
 export const INVERSE_ON = '\x1b[7m';

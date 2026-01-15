@@ -11,7 +11,6 @@ import {
 
 import { help } from "./lessHelp";
 
-import { readKey } from "./readKey";
 import { getAction } from "./normalKeys";
 
 import {
@@ -43,7 +42,11 @@ import {
   CONSOLE_TITLE_END,
   CONSOLE_TITLE_RESET,
   ALTERNATE_CONSOLE_ON,
-  ALTERNATE_CONSOLE_OFF
+  ALTERNATE_CONSOLE_OFF,
+  MOUSE_ON,
+  MOUSE_OFF,
+  MOUSE_SGR_ON,
+  MOUSE_SGR_OFF
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
@@ -66,6 +69,10 @@ export default async function pager(
   preserveFormat: boolean = false,
   examineFile: boolean = false
 ): Promise<void> {
+  if (!process.stdin.isTTY) {
+    throw new Error('Less-pager-mini requires interactive terminal (TTY).');
+  }
+
   if (examineFile) {
     await filePager(inputToFilePaths(input), preserveFormat);
     return;
@@ -108,9 +115,11 @@ async function filePager(
 async function contentPager(content: string[]): Promise<void> {
   // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
   const acts: Record<Actions, () => void> = {
-    FORCE_EXIT: () => { exit = true; },
-    EXIT: () => { exit = shouldExit(); },
+    FORCE_EXIT: () => exit(),
+    EXIT: () => { if (!exitHelp()) exit(); },
     HELP: () => prepareHelp(),
+    ADD_BUFFER: () => addBufferChar(buffer, key),
+    DEL_BUFFER: () => delBufferChar(buffer),
     LINE_FORWARD: () => lineForward(content, bufferToNum(buffer) || 1),
     LINE_BACKWARD: () => lineBackward(content, bufferToNum(buffer) || 1),
     WINDOW_FORWARD: () => windowForward(content, buffer),
@@ -131,46 +140,59 @@ async function contentPager(content: string[]): Promise<void> {
   let prevConfig = config;
   let prevMode = mode;
 
-  let exit = false;
-  let repaint = true;
+  let key = '';
   let buffer: string[] = [];
+  let escTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
-  while (!exit) {
-    mode.BUFFERING = Boolean(buffer.length);
+  let lastRenderTime = 0;
+  let repaint = false;
+  paint();
 
-    if (repaint) render(content, buffer);
-    repaint = true;
+  let exit = () => {};
 
-    const key = await readKey();
+  process.stdin.on('data', async (data: Buffer) => {
+    key = data.toString();
 
-    if (key >= '0' && key <= '9') {
-      addBufferChar(buffer, key);
-      continue;
+    if (escTimer) {
+      clearTimeout(escTimer);
+      escTimer = undefined;
+      act(getAction('\x1B' + key));
+    } else if (key === '\x1B') {
+      escTimer = setTimeout(() => {
+        escTimer = undefined;
+        act('ESC');
+      }, 50);
+    } else if (key.startsWith('\x1B[<64')) {
+      act('LINE_BACKWARD');
+    } else if (key.startsWith('\x1B[<65')) {
+      act('LINE_FORWARD');
+    } else if (!key.startsWith('\x1B[<')) {
+      act(getAction(key));
     }
 
-    const action: Actions | undefined = getAction(key);
+    if (repaint) paint();
 
-    if (action === 'BACKSPACE' && buffer.length) {
-      delBufferChar(buffer);
-      continue;
+    // helper
+    function act(action: Actions | undefined): void {
+      if (action !== undefined && action in acts) {
+        acts[action]();
+        repaint = true;
+      } else {
+        ringBell();
+      }
+
+      if (action !== 'ADD_BUFFER' && action !== 'DEL_BUFFER') {
+        buffer = [];
+        config.bufferOffset = 0;
+      }
     }
+  });
 
-    if (action !== undefined && action in acts) {
-      acts[action]();
-    } else {
-      ringBell();
-      repaint = false;
-    }
+  await new Promise<void>((resolve) => {
+    exit = resolve;
+  });
 
-    buffer = [];
-    config.bufferOffset = 0;
-  }
-
-  process.stdin.setRawMode(false);
-  process.stdin.pause();
-
-  process.stdout.write(ALTERNATE_CONSOLE_OFF);
-  process.stdout.write(CONSOLE_TITLE_RESET);
+  cleanUp();
 
   // helpers
 
@@ -178,9 +200,15 @@ async function contentPager(content: string[]): Promise<void> {
     process.stdout.write(TITLE);
     process.stdout.write(ALTERNATE_CONSOLE_ON);
 
+    process.stdout.write(MOUSE_ON);
+    process.stdout.write(MOUSE_SGR_ON);
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
     process.on('uncaughtException', (error) => {
-      process.stdout.write(ALTERNATE_CONSOLE_OFF);
-      process.stdout.write(CONSOLE_TITLE_RESET);
+      cleanUp();
       console.error(error);
       process.exit(1);
     });
@@ -196,29 +224,34 @@ async function contentPager(content: string[]): Promise<void> {
       render(content, buffer);
     });
 
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
-
     calculateEOF();
   }
 
-  function calculateDimensions() {
+  function calculateDimensions(): void {
     config.window = process.stdout.rows;
     config.screenWidth = process.stdout.columns;
     config.halfWindow = Math.floor(config.window / 2);
     config.halfScreenWidth = Math.floor(config.screenWidth / 2);
   }
 
-  function calculateEOF() {
+  function calculateEOF(): void {
     const { lastRow, lastSubRow } = getLastRow(content);
     config.lastRow = lastRow;
     config.lastSubRow = lastSubRow;
     mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
   }
 
-  function shouldExit(): boolean {
-    if (!mode.HELP) return true;
+  function paint() {
+    const now = performance.now();
+    if (now - lastRenderTime < 1) return;
+    lastRenderTime = now;
+
+    render(content, buffer);
+    repaint = false;
+  }
+
+  function exitHelp(): boolean {
+    if (!mode.HELP) return false;
 
     content = prevContent;
     applyConfig(prevConfig);
@@ -227,7 +260,7 @@ async function contentPager(content: string[]): Promise<void> {
     calculateDimensions();
     calculateEOF();
 
-    return false;
+    return true;
   }
 
   function prepareHelp(): void {
@@ -244,6 +277,17 @@ async function contentPager(content: string[]): Promise<void> {
     calculateEOF();
 
     mode.HELP = true;
+  }
+
+  function cleanUp(): void {
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+
+    process.stdout.write(MOUSE_SGR_OFF);
+    process.stdout.write(MOUSE_OFF);
+
+    process.stdout.write(ALTERNATE_CONSOLE_OFF);
+    process.stdout.write(CONSOLE_TITLE_RESET);
   }
 }
 
