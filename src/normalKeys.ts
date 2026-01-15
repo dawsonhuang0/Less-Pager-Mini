@@ -23,9 +23,21 @@ const keys: Record<string, Actions> = {
    * EOF - end-of-file
    */
 
-  // backspace
-  '\x08': 'BACKSPACE', // backspace
-  '\x7F': 'BACKSPACE', // delete
+  // add buffer
+  '0': 'ADD_BUFFER', // 0
+  '1': 'ADD_BUFFER', // 1
+  '2': 'ADD_BUFFER', // 2
+  '3': 'ADD_BUFFER', // 3
+  '4': 'ADD_BUFFER', // 4
+  '5': 'ADD_BUFFER', // 5
+  '6': 'ADD_BUFFER', // 6
+  '7': 'ADD_BUFFER', // 7
+  '8': 'ADD_BUFFER', // 8
+  '9': 'ADD_BUFFER', // 9
+
+  // delete buffer
+  '\x08': 'DEL_BUFFER', // backspace
+  '\x7F': 'DEL_BUFFER', // delete
 
   // command
   '\x3A': 'COMMAND', // :
