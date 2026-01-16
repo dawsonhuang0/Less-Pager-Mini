@@ -46,8 +46,8 @@ function getDefaultConfig(): Config {
   return {
     row: 0,
     subRow: 0,
-    lastRow: 0,
-    lastSubRow: 0,
+    endRow: 0,
+    endSubRow: 0,
     col: 0,
     setCol: 0,
     setWindow: 0,

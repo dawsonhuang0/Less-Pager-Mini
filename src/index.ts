@@ -236,8 +236,8 @@ async function contentPager(content: string[]): Promise<void> {
 
   function calculateEOF(): void {
     const { lastRow, lastSubRow } = getLastRow(content);
-    config.lastRow = lastRow;
-    config.lastSubRow = lastSubRow;
+    config.endRow = lastRow;
+    config.endSubRow = lastSubRow;
     mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
   }
 

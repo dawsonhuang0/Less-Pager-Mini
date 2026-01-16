@@ -31,7 +31,7 @@ export function lineForward(
     return;
   }
 
-  const maxRow = ignoreEOF ? content.length - 1 : config.lastRow;
+  const maxRow = ignoreEOF ? content.length - 1 : config.endRow;
 
   while (offset > 0 && config.row < maxRow) {
     const currMaxSubRow = maxSubRow(content[config.row]);
@@ -50,12 +50,12 @@ export function lineForward(
   if (config.row === maxRow) {
     config.subRow = Math.min(
       config.subRow + offset,
-      ignoreEOF ? maxSubRow(content[config.row]) : config.lastSubRow
+      ignoreEOF ? maxSubRow(content[config.row]) : config.endSubRow
     );
   }
 
-  mode.EOF = config.row > config.lastRow || (
-    config.row === config.lastRow && config.subRow >= config.lastSubRow
+  mode.EOF = config.row > config.endRow || (
+    config.row === config.endRow && config.subRow >= config.endSubRow
   );
 }
 
@@ -108,8 +108,8 @@ export function lineBackward(content: string[], offset: number): void {
 
   if (
     mode.EOF && (
-      config.row < config.lastRow ||
-      (config.row === config.lastRow && config.subRow < config.lastSubRow)
+      config.row < config.endRow ||
+      (config.row === config.endRow && config.subRow < config.endSubRow)
     )
   ) {
     mode.EOF = false;

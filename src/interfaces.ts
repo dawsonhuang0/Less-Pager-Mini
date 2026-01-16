@@ -6,8 +6,8 @@ export interface Config {
   subRow: number;
 
   // Last row & subRow without exceeding EOF
-  lastRow: number;
-  lastSubRow: number;
+  endRow: number;
+  endSubRow: number;
 
   col: number;
   setCol: number;
@@ -43,7 +43,8 @@ export type Mode =
  * behaviors. They are typically triggered by specific key presses.
  */
 export type Actions =
-  | 'BACKSPACE'
+  | 'ADD_BUFFER'
+  | 'DEL_BUFFER'
   | 'COMMAND'
   | 'Z_EXIT'
   | 'ESC'
