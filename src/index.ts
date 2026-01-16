@@ -184,6 +184,7 @@ async function contentPager(content: string[]): Promise<void> {
       if (action !== 'ADD_BUFFER' && action !== 'DEL_BUFFER') {
         buffer = [];
         config.bufferOffset = 0;
+        mode.BUFFERING = false;
       }
     }
   });
