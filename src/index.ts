@@ -141,8 +141,8 @@ async function contentPager(content: string[]): Promise<void> {
   let prevMode = mode;
 
   let key = '';
+  let escCount = 0;
   let buffer: string[] = [];
-  let escTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   let lastRenderTime = 0;
   let repaint = false;
@@ -153,15 +153,12 @@ async function contentPager(content: string[]): Promise<void> {
   process.stdin.on('data', async (data: Buffer) => {
     key = data.toString();
 
-    if (escTimer) {
-      clearTimeout(escTimer);
-      escTimer = undefined;
-      act(getAction('\x1B' + key));
-    } else if (key === '\x1B') {
-      escTimer = setTimeout(() => {
-        escTimer = undefined;
-        act('ESC');
-      }, 50);
+    if (key === '\x1B') {
+      escCount++;
+      if (escCount > 2) escCount = 1;
+    } else if (escCount) {
+      act(getAction('\x1B'.repeat(escCount) + key));
+      escCount = 0;
     } else if (key.startsWith('\x1B[<64')) {
       act('LINE_BACKWARD');
     } else if (key.startsWith('\x1B[<65')) {
