@@ -46,7 +46,9 @@ import {
   MOUSE_ON,
   MOUSE_OFF,
   MOUSE_SGR_ON,
-  MOUSE_SGR_OFF
+  MOUSE_SGR_OFF,
+  SCROLL_UP_REGEX,
+  SCROLL_DOWN_REGEX
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
@@ -159,9 +161,9 @@ async function contentPager(content: string[]): Promise<void> {
     } else if (escCount) {
       act(getAction('\x1B'.repeat(escCount) + key));
       escCount = 0;
-    } else if (key.startsWith('\x1B[<64')) {
+    } else if (SCROLL_UP_REGEX.test(key)) {
       act('LINE_BACKWARD');
-    } else if (key.startsWith('\x1B[<65')) {
+    } else if (SCROLL_DOWN_REGEX.test(key)) {
       act('LINE_FORWARD');
     } else if (!key.startsWith('\x1B[<')) {
       act(getAction(key));

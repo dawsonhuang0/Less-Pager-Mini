@@ -15,7 +15,8 @@ import {
   INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
-  END_MARKER
+  END_MARKER,
+  CONSOLE_CLEAR
 } from './constants';
 
 /**
@@ -187,8 +188,7 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   if (prompt) content.push(prompt + getBuffer(buffer));
 
-  console.clear();
-  process.stdout.write(content.join('\n'));
+  process.stdout.write(CONSOLE_CLEAR + content.join('\n'));
 }
 
 /**

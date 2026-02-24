@@ -8,13 +8,19 @@ export const CONSOLE_TITLE_START = '\x1b]0;';
 export const CONSOLE_TITLE_END = '\x07';
 export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
 
+export const CONSOLE_CLEAR = '\x1b[2J\x1b[H';
+
 export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
 export const MOUSE_ON = '\x1b[?1000h';
 export const MOUSE_OFF = '\x1b[?1000l';
+
 export const MOUSE_SGR_ON = '\x1b[?1006h';
 export const MOUSE_SGR_OFF = '\x1b[?1006l';
+
+export const SCROLL_UP_REGEX = /^\x1b\[<64;.*?M/;
+export const SCROLL_DOWN_REGEX = /^\x1b\[<65;.*?M/;
 
 export const STYLE_RESET = '\x1b[0m';
 
