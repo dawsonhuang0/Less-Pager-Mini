@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { wcswidth } from 'wcwidth-o1';
+import { strWidth } from 'char-width';
 
 import { config, mode } from './config';
 
@@ -11,6 +11,7 @@ import {
   ASCII_REGEX,
   STYLE_REGEX,
   STYLE_REGEX_G,
+  STYLE_RESET,
   INVERSE_ON,
   INVERSE_OFF,
   BOLD_ON,
@@ -188,7 +189,8 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   if (prompt) content.push(prompt + getBuffer(buffer));
 
-  process.stdout.write(CONSOLE_CLEAR + content.join('\n'));
+  process.stdout.write(CONSOLE_CLEAR);
+  process.stdout.write(content.join('\n'));
 }
 
 /**
@@ -223,6 +225,21 @@ export function getLastRow(content: string[]): {
 }
 
 /**
+ * Recalculates the EOF anchor position for the current window size.
+ *
+ * - Stores the last window-fitting row and sub-row in `config`.
+ * - Sets `mode.EOF` when the whole content already fits the window.
+ *
+ * @param content - The full array of content lines.
+ */
+export function calculateEOF(content: string[]): void {
+  const { lastRow, lastSubRow } = getLastRow(content);
+  config.endRow = lastRow;
+  config.endSubRow = lastSubRow;
+  mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
+}
+
+/**
  * Calculates the total visual width of a string based on terminal character
  * widths.
  *
@@ -231,8 +248,36 @@ export function getLastRow(content: string[]): {
  */
 export function visualWidth(line: string): number {
   if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
-  return isAscii(line) ? line.length : wcswidth(line);
+  return isAscii(line) ? line.length : strWidth(line);
 }
+
+/**
+ * Appends a style reset to a line only if a style is still open at its end.
+ *
+ * - Prevents style bleeding without emitting redundant reset codes.
+ *
+ * @param line - The line to terminate.
+ * @returns The line with styles guaranteed closed.
+ */
+export function withReset(line: string): string {
+  const i = line.lastIndexOf(STYLE_RESET);
+  const tail = i === -1 ? line : line.slice(i + STYLE_RESET.length);
+  return STYLE_REGEX.test(tail) ? line + STYLE_RESET : line;
+}
+
+const segmenter = new Intl.Segmenter();
+
+/**
+ * Splits a line into grapheme clusters.
+ *
+ * - Keeps multi-code-point sequences (ZWJ emoji, variation selectors,
+ *   combining marks) together as single units.
+ *
+ * @param line - The string to split.
+ * @returns Array of grapheme clusters.
+ */
+export const splitChars = (line: string): string[] =>
+  Array.from(segmenter.segment(line), ({ segment }) => segment);
 
 /**
  * Checks whether a given segment consists entirely of ASCII characters.

@@ -1,5 +1,8 @@
 import { Config, Mode } from "./interfaces";
 
+const DEFAULT_WINDOW = 24;
+const DEFAULT_COLUMN = 80;
+
 /**
  * Global configuration for pager rendering and navigation.
  */
@@ -44,6 +47,8 @@ export function resetMode(): void {
 
 function getDefaultConfig(): Config {
   return {
+    windowContent: new Array(process.stdout.rows ?? DEFAULT_WINDOW).fill(''),
+    startLine: 0,
     row: 0,
     subRow: 0,
     endRow: 0,
@@ -52,10 +57,10 @@ function getDefaultConfig(): Config {
     setCol: 0,
     setWindow: 0,
     setHalfWindow: 0,
-    window: process.stdout.rows ?? 24,
-    halfWindow: Math.floor((process.stdout.rows ?? 24) / 2),
-    screenWidth: process.stdout.columns ?? 80,
-    halfScreenWidth: Math.floor((process.stdout.columns ?? 80) / 2),
+    window: process.stdout.rows ?? DEFAULT_WINDOW,
+    halfWindow: Math.floor((process.stdout.rows ?? DEFAULT_WINDOW) / 2),
+    screenWidth: process.stdout.columns ?? DEFAULT_COLUMN,
+    halfScreenWidth: Math.floor((process.stdout.columns ?? DEFAULT_COLUMN) / 2),
     chopLongLines: false,
     indentation: 2,
     bufferOffset: 0,

@@ -6,7 +6,11 @@ import { Actions } from "./interfaces";
  * @param key - A single-character string from user input.
  * @returns The corresponding `Actions` type if defined, otherwise `undefined`.
  */
-export const getAction = (key: string): Actions | undefined => keys[key];
+export function getAction(key: string): Actions | undefined {
+  if (key.startsWith('\x1b[<64;')) return 'LINE_BACKWARD';
+  if (key.startsWith('\x1b[<65;')) return 'LINE_FORWARD';
+  return keys[key];
+}
 
 /**
  * Maps single-character key inputs to their corresponding pager actions.

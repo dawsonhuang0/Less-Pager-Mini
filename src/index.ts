@@ -21,7 +21,7 @@ import {
   render,
   ringBell,
   bufferToNum,
-  getLastRow
+  calculateEOF
 } from "./helpers";
 
 import {
@@ -34,7 +34,9 @@ import {
   setHalfWindowForward,
   setHalfWindowBackward,
   setHalfScreenRight,
-  setHalfScreenLeft
+  setHalfScreenLeft,
+  lastCol,
+  firstCol
 } from "./features/moving";
 
 import {
@@ -43,12 +45,8 @@ import {
   CONSOLE_TITLE_RESET,
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
-  MOUSE_ON,
-  MOUSE_OFF,
-  MOUSE_SGR_ON,
-  MOUSE_SGR_OFF,
-  SCROLL_UP_REGEX,
-  SCROLL_DOWN_REGEX
+  ALTERNATE_SCROLL_OFF,
+  ALTERNATE_SCROLL_ON
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
@@ -133,79 +131,60 @@ async function contentPager(content: string[]): Promise<void> {
     SET_HALF_WINDOW_BACKWARD: () => setHalfWindowBackward(content, buffer),
     SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(buffer),
     SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(buffer),
+    LAST_COL: () => lastCol(content),
+    FIRST_COL: () => firstCol(),
     REPAINT: () => {},
+    DROP_INPUT_REPAINT: () => {},
   };
 
-  init();
-
-  let prevContent = content;
-  let prevConfig = config;
-  let prevMode = mode;
-
-  let key = '';
-  let escCount = 0;
-  let buffer: string[] = [];
-
-  let lastRenderTime = 0;
-  let repaint = false;
-  paint();
-
+  let prevContent = content, prevConfig = config, prevMode = mode;
+  let key = '', escCount = 0, buffer: string[] = [];
   let exit = () => {};
 
-  process.stdin.on('data', async (data: Buffer) => {
+  init();
+  render(content, buffer);
+
+  process.stdin.on('data', keyHandler);
+  await new Promise<void>((resolve) => { exit = resolve; });
+  cleanUp();
+
+  // helpers
+
+  function act(action: Actions | undefined): void {
+    if (action !== undefined && action in acts) {
+      acts[action]();
+      render(content, buffer);
+    } else {
+      ringBell();
+    }
+
+    if (action !== 'ADD_BUFFER' && action !== 'DEL_BUFFER') {
+      buffer = [];
+      config.bufferOffset = 0;
+      mode.BUFFERING = false;
+    }
+  }
+
+  function keyHandler(data: Buffer): void {
     key = data.toString();
 
     if (key === '\x1B') {
       escCount++;
       if (escCount > 2) escCount = 1;
-    } else if (escCount) {
+    } else {
       act(getAction('\x1B'.repeat(escCount) + key));
       escCount = 0;
-    } else if (SCROLL_UP_REGEX.test(key)) {
-      act('LINE_BACKWARD');
-    } else if (SCROLL_DOWN_REGEX.test(key)) {
-      act('LINE_FORWARD');
-    } else if (!key.startsWith('\x1B[<')) {
-      act(getAction(key));
     }
-
-    if (repaint) paint();
-
-    // helper
-    function act(action: Actions | undefined): void {
-      if (action !== undefined && action in acts) {
-        acts[action]();
-        repaint = true;
-      } else {
-        ringBell();
-      }
-
-      if (action !== 'ADD_BUFFER' && action !== 'DEL_BUFFER') {
-        buffer = [];
-        config.bufferOffset = 0;
-        mode.BUFFERING = false;
-      }
-    }
-  });
-
-  await new Promise<void>((resolve) => {
-    exit = resolve;
-  });
-
-  cleanUp();
-
-  // helpers
+  }
 
   function init() {
-    process.stdout.write(TITLE);
-    process.stdout.write(ALTERNATE_CONSOLE_ON);
-
-    process.stdout.write(MOUSE_ON);
-    process.stdout.write(MOUSE_SGR_ON);
-
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
+
+    process.stdout.write(TITLE);
+    process.stdout.write(ALTERNATE_CONSOLE_ON);
+    process.stdout.write(ALTERNATE_SCROLL_ON);
 
     process.on('uncaughtException', (error) => {
       cleanUp();
@@ -217,14 +196,19 @@ async function contentPager(content: string[]): Promise<void> {
       mode.INIT = false;
 
       calculateDimensions();
-      calculateEOF();
+      calculateEOF(content);
+
+      if (config.windowContent.length !== config.window) {
+        config.windowContent = new Array(config.window).fill('');
+        config.startLine = 0;
+      }
 
       buffer = [];
       config.bufferOffset = 0;
       render(content, buffer);
     });
 
-    calculateEOF();
+    calculateEOF(content);
   }
 
   function calculateDimensions(): void {
@@ -232,22 +216,6 @@ async function contentPager(content: string[]): Promise<void> {
     config.screenWidth = process.stdout.columns;
     config.halfWindow = Math.floor(config.window / 2);
     config.halfScreenWidth = Math.floor(config.screenWidth / 2);
-  }
-
-  function calculateEOF(): void {
-    const { lastRow, lastSubRow } = getLastRow(content);
-    config.endRow = lastRow;
-    config.endSubRow = lastSubRow;
-    mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
-  }
-
-  function paint() {
-    const now = performance.now();
-    if (now - lastRenderTime < 1) return;
-    lastRenderTime = now;
-
-    render(content, buffer);
-    repaint = false;
   }
 
   function exitHelp(): boolean {
@@ -258,7 +226,7 @@ async function contentPager(content: string[]): Promise<void> {
     applyMode(prevMode);
 
     calculateDimensions();
-    calculateEOF();
+    calculateEOF(content);
 
     return true;
   }
@@ -274,20 +242,18 @@ async function contentPager(content: string[]): Promise<void> {
 
     prevContent = content;
     content = help;
-    calculateEOF();
+    calculateEOF(content);
 
     mode.HELP = true;
   }
 
   function cleanUp(): void {
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
-
-    process.stdout.write(MOUSE_SGR_OFF);
-    process.stdout.write(MOUSE_OFF);
-
+    process.stdout.write(ALTERNATE_SCROLL_OFF);
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
     process.stdout.write(CONSOLE_TITLE_RESET);
+
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
   }
 }
 

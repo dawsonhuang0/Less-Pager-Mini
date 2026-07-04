@@ -58,6 +58,6 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "wcwidth-o1": "^2.0.3"
+    "char-width": "^1.0.0"
   }
 }

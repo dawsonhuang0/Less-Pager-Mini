@@ -13,6 +13,9 @@ export const CONSOLE_CLEAR = '\x1b[2J\x1b[H';
 export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
+export const ALTERNATE_SCROLL_ON = '\x1b[?1007h';
+export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
+
 export const MOUSE_ON = '\x1b[?1000h';
 export const MOUSE_OFF = '\x1b[?1000l';
 

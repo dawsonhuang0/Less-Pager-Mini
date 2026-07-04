@@ -2,6 +2,9 @@
  * Global configuration options for the pager display and behavior.
  */
 export interface Config {
+  windowContent: string[];
+  startLine: number;
+
   row: number;
   subRow: number;
 

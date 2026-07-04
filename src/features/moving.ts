@@ -1,4 +1,4 @@
-import { maxSubRow, ringBell, bufferToNum } from "../helpers";
+import { maxSubRow, ringBell, bufferToNum, visualWidth } from "../helpers";
 
 import { config, mode } from "../config";
 
@@ -245,4 +245,32 @@ export function setHalfScreenLeft(buffer: string[]): void {
   config.setCol = bufferToNum(buffer) || config.setCol;
   config.col -= config.setCol || config.halfScreenWidth;
   if (config.col < 0) config.col = 0;
+}
+
+/**
+ * Scrolls right to the last column displayed.
+ *
+ * - Shifts the view so the longest currently displayed line ends at the
+ *   right edge of the screen.
+ *
+ * @param content - Full content lines.
+ */
+export function lastCol(content: string[]): void {
+  if (mode.INIT) mode.INIT = false;
+
+  let maxWidth = 0;
+
+  const end = Math.min(config.row + config.window - 1, content.length);
+  for (let row = config.row; row < end; row++) {
+    maxWidth = Math.max(maxWidth, visualWidth(content[row]));
+  }
+
+  config.col = Math.max(maxWidth - config.screenWidth, 0);
+}
+
+/**
+ * Scrolls left to the first column.
+ */
+export function firstCol(): void {
+  config.col = 0;
 }

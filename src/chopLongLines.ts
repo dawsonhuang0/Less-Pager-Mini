@@ -1,8 +1,8 @@
-import wcwidth from 'wcwidth-o1';
+import { strWidth } from 'char-width';
 
 import { config } from "./config";
 
-import { isStyled, isAscii } from "./helpers";
+import { isStyled, isAscii, splitChars, withReset } from "./helpers";
 
 import {
   INVERSE_ON,
@@ -12,7 +12,7 @@ import {
 } from "./constants";
 
 const getFillingSpace = (length: number): string =>
-  INVERSE_ON + ' '.repeat(length) + INVERSE_OFF;
+  length > 0 ? INVERSE_ON + ' '.repeat(length) + INVERSE_OFF : '';
 
 const getMoreIndicator = (length: number): string =>
   INVERSE_ON + ' '.repeat(length - 1) + '>' + INVERSE_OFF;
@@ -44,13 +44,15 @@ export function chopLongLines(content: string[], lines: string[]): void {
  */
 function chop(lines: string[], longLine: string): void {
   if (isStyled(longLine)) {
-    isAscii(longLine)
-      ? chopStyledAsciiLine(lines, longLine)
-      : chopStyledLine(lines, longLine);
+    if (isAscii(longLine)) {
+      chopStyledAsciiLine(lines, longLine);
+    } else {
+      chopStyledLine(lines, longLine);
+    }
+  } else if (isAscii(longLine)) {
+    chopAsciiLine(lines, longLine);
   } else {
-    isAscii(longLine)
-      ? chopAsciiLine(lines, longLine)
-      : chopLine(lines, longLine);
+    chopLine(lines, longLine);
   }
 }
 
@@ -112,12 +114,13 @@ function chopStyledAsciiLine(lines: string[], styledLine: string): void {
   function push(overflow: boolean): void {
     if (overflow) {
       lines.push(
-        line.join('') +
-        styledLine.slice(i, i + config.screenWidth - length - 1) +
-        STYLE_RESET + getMoreIndicator(1)
+        withReset(
+          line.join('') +
+          styledLine.slice(i, i + config.screenWidth - length - 1)
+        ) + getMoreIndicator(1)
       );
     } else {
-      lines.push(line.join('') + styledLine.slice(i) + STYLE_RESET);
+      lines.push(withReset(line.join('') + styledLine.slice(i)));
     }
   }
 }
@@ -125,7 +128,7 @@ function chopStyledAsciiLine(lines: string[], styledLine: string): void {
 /**
  * Chops a styled non-ASCII line to fit screen width.
  *
- * - Uses wcwidth for Unicode character width calculation.
+ * - Uses charWidth for Unicode character width calculation.
  * - Adds filling space for wide characters crossing boundaries.
  *
  * @param lines - Output array to append chopped line to.
@@ -141,7 +144,7 @@ function chopStyledLine(lines: string[], styledLine: string): void {
   let ansi: RegExpExecArray | null;
 
   while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    if (!join(Array.from(styledLine.slice(i, ansi.index)))) return;
+    if (!join(splitChars(styledLine.slice(i, ansi.index)))) return;
 
     if (length < config.col && ansi[0] === STYLE_RESET) {
       line = [''];
@@ -152,27 +155,27 @@ function chopStyledLine(lines: string[], styledLine: string): void {
     i = STYLE_REGEX_G.lastIndex;
   }
 
-  if (join(Array.from(styledLine.slice(i)))) {
-    lines.push(line.join('') + STYLE_RESET);
+  if (join(splitChars(styledLine.slice(i)))) {
+    lines.push(withReset(line.join('')));
   }
 
   // helper
   function join(chars: string[]): boolean {
     for (let c = 0; c < chars.length; c++) {
-      const charWidth = wcwidth(chars[c]);
+      const width = strWidth(chars[c]);
 
-      if (length + charWidth < endCol) {
+      if (length + width < endCol) {
         if (length >= config.col) {
           line.push(chars[c]);
-        } else if (length + charWidth >= config.col) {
-          line[0] = getFillingSpace(length + charWidth - config.col);
+        } else if (length + width >= config.col) {
+          line[0] = getFillingSpace(length + width - config.col);
         }
 
-        length += charWidth;
+        length += width;
         continue;
       }
-      
-      let overflow = length + charWidth > endCol || c !== chars.length - 1;
+
+      const overflow = length + width > endCol || c !== chars.length - 1;
       let lastIndex = styledLine.length;
 
       while (!overflow && ansi !== null) {
@@ -182,10 +185,10 @@ function chopStyledLine(lines: string[], styledLine: string): void {
 
       if (overflow || lastIndex !== styledLine.length) {
         lines.push(
-          line.join('') + STYLE_RESET + getMoreIndicator(endCol - length)
+          withReset(line.join('')) + getMoreIndicator(endCol - length)
         );
       } else {
-        lines.push(line.join('') + chars[c] + STYLE_RESET);
+        lines.push(withReset(line.join('') + chars[c]));
       }
 
       return false;
@@ -218,19 +221,19 @@ function chopAsciiLine(lines: string[], longLine: string): void {
 /**
  * Chops a non-ASCII line to fit screen width and appends to output.
  *
- * - Uses wcwidth for multi-byte character width calculation.
+ * - Uses charWidth for multi-byte character width calculation.
  * - Adds filling space and overflow marker as needed.
  *
  * @param lines - Output array to append chopped line to.
  * @param longLine - The line with multi-byte characters to chop.
  */
 function chopLine(lines: string[], longLine: string): void {
-  const chars = Array.from(longLine);
+  const chars = splitChars(longLine);
 
   let start = 0, length = 0;
 
   for (; start < chars.length && length < config.col; start++) {
-    length += wcwidth(chars[start]);
+    length += strWidth(chars[start]);
   }
 
   length -= config.col;
@@ -242,11 +245,11 @@ function chopLine(lines: string[], longLine: string): void {
   }
 
   for (let end = start; end < chars.length; end++) {
-    const charWidth = wcwidth(chars[end]);
+    const width = strWidth(chars[end]);
 
     if (
-      length + charWidth > config.screenWidth ||
-      (length + charWidth === config.screenWidth && end !== chars.length - 1)
+      length + width > config.screenWidth ||
+      (length + width === config.screenWidth && end !== chars.length - 1)
     ) {
       lines.push(
         fillingSpace + chars.slice(start, end).join('') +
@@ -255,7 +258,7 @@ function chopLine(lines: string[], longLine: string): void {
       return;
     }
 
-    length += charWidth;
+    length += width;
   }
 
   lines.push(fillingSpace + chars.slice(start).join(''));
