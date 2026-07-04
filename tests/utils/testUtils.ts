@@ -5,7 +5,8 @@ import { formatContent } from '../../src/helpers';
 import {
   lineForward,
   lineBackward,
-  windowForward
+  windowForward,
+  windowBackward
 } from '../../src/features/moving';
 
 /**
@@ -59,12 +60,13 @@ export function implementLineBackward(
 }
 
 /**
- * 
- * @param content 
- * @param steps 
- * @param consecutive 
- * @param expectedOutputs 
- * @param expectedLines 
+ * Moves forward through content by windows and checks expected output lines.
+ *
+ * @param content - Full content array.
+ * @param steps - Buffer string; empty means default window size.
+ * @param consecutive - Whether to move one window at a time.
+ * @param expectedOutputs - Lines expected after movement.
+ * @param expectedLines - Line indices to validate (default: [0]).
  */
 export function implementWindowForward(
   content: string[],
@@ -81,6 +83,35 @@ export function implementWindowForward(
     windowForward(content, steps.split(''));
   } else if (numSteps === -1) {
     windowForward(content, []);
+  }
+
+  checkOutputs(content, expectedOutputs, expectedLines);
+}
+
+/**
+ * Moves backward through content by windows and checks expected output lines.
+ *
+ * @param content - Full content array.
+ * @param steps - Buffer string; empty means default window size.
+ * @param consecutive - Whether to move one window at a time.
+ * @param expectedOutputs - Lines expected after movement.
+ * @param expectedLines - Line indices to validate (default: [0]).
+ */
+export function implementWindowBackward(
+  content: string[],
+  steps: string,
+  consecutive: boolean,
+  expectedOutputs: string[],
+  expectedLines: number[] = [0]
+) {
+  const numSteps = parseInt(steps, 10) || -1;
+
+  if (consecutive) {
+    for (let i = 0; i < numSteps; i++) windowBackward(content, []);
+  } else if (numSteps > 0) {
+    windowBackward(content, steps.split(''));
+  } else if (numSteps === -1) {
+    windowBackward(content, []);
   }
 
   checkOutputs(content, expectedOutputs, expectedLines);

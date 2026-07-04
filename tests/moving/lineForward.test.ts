@@ -6,7 +6,11 @@ import { text, content } from '../utils/mockContent';
 
 import { implementLineForward } from '../utils/testUtils';
 
+import { calculateEOF } from '../../src/helpers';
+
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
+
+import { CYAN, RESET, YELLOW, MAGENTA, UNDERLINE } from '../utils/constants';
 
 const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
@@ -31,6 +35,8 @@ describe('chopLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
+    calculateEOF(lessContent);
+
     // `(END)` should not be at bottom at first load with content rows less than window
     implementLineForward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
@@ -48,7 +54,7 @@ describe('chopLongLines', () => {
   it('forwards multiple lines into chopped line', () => {
     implementLineForward(content, 12, false, [text[12]]);
 
-    implementLineForward(content, 1, false, ['14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementLineForward(content, 1, false, ['14 ' + CYAN + '这是一段非常非常长的中文文本' + RESET + '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
     implementLineForward(content, 1, false, [text[14]]);
   });
 
@@ -71,6 +77,8 @@ describe('wrapLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
+    calculateEOF(lessContent);
+
     // `(END)` should not be at bottom at first load with content rows less than window
     implementLineForward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
@@ -79,15 +87,17 @@ describe('wrapLongLines', () => {
   });
 
   it('forwards to wrapped line and continue until exit wrapped line', () => {
+    calculateEOF(content);
+
     implementLineForward(content, 22, false, [text[20]]);
 
     const line22 = text[21];
 
     const expectOutputs = [
-      line22.slice(0, 80),
-      line22.slice(80, 160),
-      line22.slice(160, 240),
-      line22.slice(240),
+      line22.slice(0, 103),
+      YELLOW + line22.slice(103, 210),
+      MAGENTA + line22.slice(210, 306),
+      UNDERLINE + line22.slice(306),
       text[22]
     ];
 

@@ -25,10 +25,11 @@ npx vitest tests/moving/
 ## Test Structure
 
 ### Feature Tests
-- `moving/`: Tests for navigation features (lineForward, lineBackward, windowForward)
+- `moving/`: Tests for navigation features (lineForward, lineBackward, windowForward, windowBackward, setWindow, halfWindow, columns)
 - `jumping/`: Tests for jump-to-position features (planned/incomplete)
-- `normalKeys.test.ts`: Tests for key-to-action mapping
-- `readKey.test.ts`: Tests for async keyboard input reading
+- `normalKeys.test.ts`: Tests for key-to-action mapping (including SGR mouse scroll and ESC combinations)
+- `helpers.test.ts`: Tests for helper functions (input conversion, buffer management, EOF calculation, width measurement)
+- `graphemes.test.ts`: Tests that ZWJ emoji sequences survive wrap/chop boundaries intact
 
 ### Test Utilities
 - `utils/mockContent.ts`: Mock content for testing with various character types (ASCII, CJK, emoji, long lines)
@@ -70,7 +71,7 @@ Navigation tests typically:
 Long lines exceeding `config.screenWidth` are broken into "sub-rows" when wrapping is enabled. Tests must account for both `row` (content line) and `subRow` (position within wrapped line).
 
 ### Character Width Handling
-The pager uses `wcwidth-o1` to calculate visual width:
+The pager uses `char-width` to calculate visual width:
 - ASCII characters: width 1
 - CJK characters (你, 好): width 2 each
 - Emoji: typically width 2

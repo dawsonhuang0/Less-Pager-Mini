@@ -6,7 +6,11 @@ import { text, content } from '../utils/mockContent';
 
 import { implementWindowForward } from '../utils/testUtils';
 
+import { calculateEOF } from '../../src/helpers';
+
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
+
+import { CYAN, RESET, YELLOW } from '../utils/constants';
 
 const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
@@ -31,6 +35,8 @@ describe('chopLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
+    calculateEOF(lessContent);
+
     // `(END)` should not be at bottom at first load with content rows less than window
     implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
@@ -53,7 +59,7 @@ describe('chopLongLines', () => {
   it('forwards into chopped line', () => {
     implementWindowForward(content, '12', false, [text[12]]);
 
-    implementWindowForward(content, '1', false, ['14 这是一段非常非常长的中文文本，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementWindowForward(content, '1', false, ['14 ' + CYAN + '这是一段非常非常长的中文文本' + RESET + '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
     implementWindowForward(content, '1', false, [text[14]]);
   });
 
@@ -74,6 +80,8 @@ describe('wrapLongLines', () => {
   it('does not forward when content lines are less than window', () => {
     const lessContent = content.slice(0, 6);
 
+    calculateEOF(lessContent);
+
     // `(END)` should not be at bottom at first load with content rows less than window
     implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
@@ -84,9 +92,11 @@ describe('wrapLongLines', () => {
   const lastLine = text[30];
 
   it('forwards to wrapped line and continue until exit wrapped line', () => {
+    calculateEOF(content);
+
     implementWindowForward(content, '1', false, [text[1]]);
 
-    implementWindowForward(content, '', false, [text[21].slice(80, 160)]);
+    implementWindowForward(content, '', false, [YELLOW + text[21].slice(103, 210)]);
     implementWindowForward(content, '', false, [lastLine, END_MARKER], [0, 23]);
   });
 
