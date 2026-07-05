@@ -145,24 +145,9 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 ## Roadmap
 
 - [ ] COMMAND MODE
-- [ ] MOVING
-  - [x] Forward one line
-  - [x] Backward one line
-  - [x] Forward N line
-  - [x] Backward N line
-  - [x] Forward one window
-  - [x] Backward one window
-  - [x] Forward one window and set window to N
-  - [x] Backward one window and set window to N
-  - [x] Forward one window, but don't stop at EOF
-  - [x] Forward one half-window and set half-window to N
-  - [x] Backward one half-window and set half-window to N
-  - [x] Right one or N positions half screen width
-  - [x] Left one or N positions half screen width
-  - [ ] Right to last column
-  - [ ] Left  to first column
+- [x] MOVING
+- [x] SEARCHING
 - [ ] JUMPING
-- [ ] SEARCHING
 - [ ] CHANGING FILES
 - [ ] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
