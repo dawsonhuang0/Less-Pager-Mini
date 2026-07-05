@@ -51,6 +51,7 @@ beforeEach(() => {
   search.highlight = true;
   search.subs = new Set();
   search.filters = [];
+  search.history = [];
   search.message = '';
 });
 
@@ -164,6 +165,57 @@ describe('search prompt', () => {
     expect(search.input?.chars.join('')).toBe('!');
     expect(search.input?.invert).toBe(false);
     expect(searchPrompt()).toBe('/!');
+  });
+});
+
+describe('search history', () => {
+  it('recalls previous patterns with Up and Down arrows', () => {
+    doSearch('/', 'alpha');
+    doSearch('/', 'bravo');
+
+    startSearch('/', 1);
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('bravo');
+
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('alpha');
+
+    // oldest entry: Up stays put
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('alpha');
+
+    searchInputKey('\x1B[B');
+    expect(search.input?.chars.join('')).toBe('bravo');
+  });
+
+  it('restores the typed text when navigating back down', () => {
+    doSearch('/', 'alpha');
+
+    startSearch('/', 1);
+    type('bra');
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('alpha');
+
+    searchInputKey('\x1B[B');
+    expect(search.input?.chars.join('')).toBe('bra');
+  });
+
+  it('is shared between searches and filters', () => {
+    startSearch('&', 1);
+    type('delta');
+    execFilter();
+
+    startSearch('?', 1);
+    searchInputKey('\x1BOA');
+    expect(search.input?.chars.join('')).toBe('delta');
+  });
+
+  it('skips consecutive duplicates and empty patterns', () => {
+    doSearch('/', 'alpha');
+    doSearch('/', 'alpha');
+    doSearch('/', '');
+
+    expect(search.history).toEqual(['alpha']);
   });
 });
 

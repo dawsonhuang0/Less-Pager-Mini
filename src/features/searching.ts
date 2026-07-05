@@ -25,6 +25,11 @@ interface SearchInput {
   subs: Set<number>;    // ^S digit
   litNext: boolean;     // ^L pending: next char is literal
   subPrompt: boolean;   // ^S pending: awaiting sub-pattern digit
+
+  /** History entry being recalled with Up/Down, or null when typing. */
+  histIndex: number | null;
+  /** Text typed before history navigation began. */
+  typed: string[] | null;
 }
 
 interface Filter {
@@ -50,6 +55,8 @@ interface SearchState {
   filters: Filter[];
   /** Case sensitivity: 0 sensitive, 1 smart (-i), 2 always ignore (-I). */
   caseless: 0 | 1 | 2;
+  /** Previously entered patterns, shared by `/`, `?` and `&` like less. */
+  history: string[];
   /** Transient status message shown at the prompt. */
   message: string;
 }
@@ -63,8 +70,11 @@ export const search: SearchState = {
   subs: new Set(),
   filters: [],
   caseless: 0,
+  history: [],
   message: '',
 };
+
+const HISTORY_LIMIT = 100;
 
 let globalRegex: RegExp | null = null;
 let compiledPattern = '';
@@ -101,6 +111,8 @@ export function startSearch(type: '/' | '?' | '&', count: number): void {
     subs: new Set(),
     litNext: false,
     subPrompt: false,
+    histIndex: null,
+    typed: null,
   };
 }
 
@@ -162,6 +174,16 @@ export function searchInputKey(key: string): 'pending' | 'run' | 'cancel' {
     return 'pending';
   }
 
+  if (key === '\x1B[A' || key === '\x1BOA') {
+    historyPrev(input);
+    return 'pending';
+  }
+
+  if (key === '\x1B[B' || key === '\x1BOB') {
+    historyNext(input);
+    return 'pending';
+  }
+
   if (key.startsWith('\x1B')) return 'pending';
 
   if (!input.chars.length && handleModifier(input, key)) return 'pending';
@@ -206,6 +228,46 @@ const displayChar = (char: string): string => {
   if (char >= '\x20') return char;
   return '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
 };
+
+function historyPrev(input: SearchInput): void {
+  const history = search.history;
+  if (!history.length) return;
+
+  if (input.histIndex === null) {
+    input.typed = [...input.chars];
+    input.histIndex = history.length - 1;
+  } else if (input.histIndex > 0) {
+    input.histIndex--;
+  } else {
+    return;
+  }
+
+  input.chars = [...history[input.histIndex]];
+}
+
+function historyNext(input: SearchInput): void {
+  const history = search.history;
+  if (input.histIndex === null) return;
+
+  if (input.histIndex < history.length - 1) {
+    input.histIndex++;
+    input.chars = [...history[input.histIndex]];
+  } else {
+    input.histIndex = null;
+    input.chars = input.typed ?? [];
+    input.typed = null;
+  }
+}
+
+function addHistory(pattern: string): void {
+  const history = search.history;
+
+  // skip empty patterns and consecutive duplicates, like cmd_addhist
+  if (!pattern || history[history.length - 1] === pattern) return;
+
+  history.push(pattern);
+  if (history.length > HISTORY_LIMIT) history.shift();
+}
 
 function handleModifier(input: SearchInput, key: string): boolean {
   // search-only modifiers are literal pattern characters in a filter
@@ -280,6 +342,8 @@ export function execSearch(content: string[]): void {
   const pattern = input.chars.join('');
   const dir: 1 | -1 = input.type === '?' ? -1 : 1;
 
+  addHistory(pattern);
+
   if (pattern) {
     if (!compile(pattern, input.noRegex, input.invert)) return;
     search.subs = new Set(input.subs);
@@ -315,6 +379,8 @@ export function execFilter(): LineFilter | null | undefined {
   search.input = null;
 
   const pattern = input.chars.join('');
+
+  addHistory(pattern);
 
   if (!pattern) {
     search.filters = [];

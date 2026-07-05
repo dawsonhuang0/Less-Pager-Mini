@@ -52,6 +52,8 @@ import {
 
 import { option, startOption, optionKey } from "./features/options";
 
+import { loadHistory, saveHistory } from "./histfile";
+
 import {
   CONSOLE_TITLE_START,
   CONSOLE_TITLE_END,
@@ -250,6 +252,8 @@ async function contentPager(content: string[]): Promise<void> {
   }
 
   function init() {
+    loadHistory();
+
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
@@ -320,6 +324,8 @@ async function contentPager(content: string[]): Promise<void> {
   }
 
   function cleanUp(): void {
+    saveHistory();
+
     process.stdout.write(ALTERNATE_SCROLL_OFF);
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
     process.stdout.write(CONSOLE_TITLE_RESET);
