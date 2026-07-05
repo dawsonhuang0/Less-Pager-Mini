@@ -16,6 +16,11 @@ export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 export const ALTERNATE_SCROLL_ON = '\x1b[?1007h';
 export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
 
+// terminfo smkx/rmkx (DECCKM + DECKPAM), like less's keypad init;
+// Apple Terminal converts wheel scrolling to arrow keys in this mode
+export const KEYPAD_ON = '\x1b[?1h\x1b=';
+export const KEYPAD_OFF = '\x1b[?1l\x1b>';
+
 export const MOUSE_ON = '\x1b[?1000h';
 export const MOUSE_OFF = '\x1b[?1000l';
 

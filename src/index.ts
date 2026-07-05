@@ -61,7 +61,9 @@ import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
   ALTERNATE_SCROLL_OFF,
-  ALTERNATE_SCROLL_ON
+  ALTERNATE_SCROLL_ON,
+  KEYPAD_ON,
+  KEYPAD_OFF
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
@@ -261,6 +263,7 @@ async function contentPager(content: string[]): Promise<void> {
     process.stdout.write(TITLE);
     process.stdout.write(ALTERNATE_CONSOLE_ON);
     process.stdout.write(ALTERNATE_SCROLL_ON);
+    process.stdout.write(KEYPAD_ON);
 
     process.on('uncaughtException', (error) => {
       cleanUp();
@@ -326,6 +329,7 @@ async function contentPager(content: string[]): Promise<void> {
   function cleanUp(): void {
     saveHistory();
 
+    process.stdout.write(KEYPAD_OFF);
     process.stdout.write(ALTERNATE_SCROLL_OFF);
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
     process.stdout.write(CONSOLE_TITLE_RESET);
