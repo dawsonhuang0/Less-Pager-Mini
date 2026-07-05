@@ -3,6 +3,7 @@
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
+    "types": ["node"],
     "module": "commonjs",
     "target": "esnext",
     "strict": true,
