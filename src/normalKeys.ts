@@ -1,6 +1,27 @@
 import { Actions } from "./interfaces";
 
 /**
+ * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),
+ * an ESC-prefixed combination, or a single code point.
+ */
+const KEY_SEQUENCE_REGEX =
+  // eslint-disable-next-line no-control-regex
+  /\x1B\[[\x20-\x3F]*[\x40-\x7E]|\x1BO[\x40-\x7E]|\x1B[\s\S]|[\s\S]/gu;
+
+/**
+ * Splits raw terminal input into individual key sequences.
+ *
+ * - Terminals batch rapid input (mouse wheel, held keys, pastes) into one
+ *   stdin chunk; each contained sequence must be handled separately.
+ *
+ * @param data - Raw input chunk from stdin.
+ * @returns Array of individual key sequences.
+ */
+export function splitKeys(data: string): string[] {
+  return data.match(KEY_SEQUENCE_REGEX) ?? [];
+}
+
+/**
  * Maps a key press to a corresponding pager action.
  *
  * @param key - A single-character string from user input.
@@ -83,6 +104,7 @@ const keys: Record<string, Actions> = {
   '\x0E': 'LINE_FORWARD', // ^N
   '\x0D': 'LINE_FORWARD', // CR
   '\x1B[B': 'LINE_FORWARD', // ARROW DOWN
+  '\x1BOB': 'LINE_FORWARD', // ARROW DOWN (SS3 / application mode)
 
   // (*) backward one line (or (N) lines)
   '\x79': 'LINE_BACKWARD', // y
@@ -91,6 +113,7 @@ const keys: Record<string, Actions> = {
   '\x0B': 'LINE_BACKWARD', // ^K
   '\x10': 'LINE_BACKWARD', // ^P
   '\x1B[A': 'LINE_BACKWARD', // ARROW UP
+  '\x1BOA': 'LINE_BACKWARD', // ARROW UP (SS3 / application mode)
 
   // (*) forward one window (or (N) lines)
   '\x66': 'WINDOW_FORWARD', // f
@@ -123,10 +146,12 @@ const keys: Record<string, Actions> = {
   // (*) right one half screen width (or (N) positions)
   '\x1B)': 'SET_HALF_SCREEN_RIGHT', // ESC-)
   '\x1B[C': 'SET_HALF_SCREEN_RIGHT', // RIGHT ARROW
+  '\x1BOC': 'SET_HALF_SCREEN_RIGHT', // RIGHT ARROW (SS3 / application mode)
 
   // (*) left one half screen width (or (N) positions)
   '\x1B(': 'SET_HALF_SCREEN_LEFT', // ESC-(
   '\x1B[D': 'SET_HALF_SCREEN_LEFT', // LEFT ARROW
+  '\x1BOD': 'SET_HALF_SCREEN_LEFT', // LEFT ARROW (SS3 / application mode)
 
   // right to last column displayed
   '\x1B}': 'LAST_COL', // ESC-}

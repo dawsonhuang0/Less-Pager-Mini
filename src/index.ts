@@ -11,7 +11,7 @@ import {
 
 import { help } from "./lessHelp";
 
-import { getAction } from "./normalKeys";
+import { getAction, splitKeys } from "./normalKeys";
 
 import {
   inputToFilePaths,
@@ -38,6 +38,19 @@ import {
   lastCol,
   firstCol
 } from "./features/moving";
+
+import {
+  search,
+  startSearch,
+  searchInputKey,
+  execSearch,
+  execFilter,
+  repeatSearch,
+  toggleHighlight,
+  clearHighlight
+} from "./features/searching";
+
+import { option, startOption, optionKey } from "./features/options";
 
 import {
   CONSOLE_TITLE_START,
@@ -135,7 +148,23 @@ async function contentPager(content: string[]): Promise<void> {
     FIRST_COL: () => firstCol(),
     REPAINT: () => {},
     DROP_INPUT_REPAINT: () => {},
+    SEARCH_FORWARD: () => startSearch('/', bufferToNum(buffer) || 1),
+    SEARCH_BACKWARD: () => startSearch('?', bufferToNum(buffer) || 1),
+    REPEAT_SEARCH: () => repeatSearch(content, bufferToNum(buffer) || 1, false),
+    REVERSE_SEARCH: () => repeatSearch(content, bufferToNum(buffer) || 1, true),
+    HIGHLIGHT_TOGGLE: () => toggleHighlight(),
+    CLEAR_SEARCH: () => clearHighlight(),
+    PATTERN_ONLY: () => {
+      if (mode.HELP) {
+        ringBell();
+      } else {
+        startSearch('&', bufferToNum(buffer) || 1);
+      }
+    },
+    TAG_COMMAND: () => startOption(key === '_' ? '_' : '-'),
   };
+
+  const fullContent = content;
 
   let prevContent = content, prevConfig = config, prevMode = mode;
   let key = '', escCount = 0, buffer: string[] = [];
@@ -153,7 +182,6 @@ async function contentPager(content: string[]): Promise<void> {
   function act(action: Actions | undefined): void {
     if (action !== undefined && action in acts) {
       acts[action]();
-      render(content, buffer);
     } else {
       ringBell();
     }
@@ -163,10 +191,44 @@ async function contentPager(content: string[]): Promise<void> {
       config.bufferOffset = 0;
       mode.BUFFERING = false;
     }
+
+    render(content, buffer);
   }
 
   function keyHandler(data: Buffer): void {
-    key = data.toString();
+    for (const sequence of splitKeys(data.toString())) handleKey(sequence);
+  }
+
+  function handleKey(sequence: string): void {
+    key = sequence;
+
+    const hadMessage = search.message !== '';
+    search.message = '';
+
+    // RETURN only dismisses a pending message; other keys act normally
+    if (hadMessage && key === '\x0D') {
+      render(content, buffer);
+      return;
+    }
+
+    if (search.input) {
+      if (searchInputKey(key) === 'run') {
+        if (search.input.type === '&') {
+          applyFilter();
+        } else {
+          execSearch(content);
+        }
+      }
+
+      render(content, buffer);
+      return;
+    }
+
+    if (option.pending) {
+      optionKey(key);
+      render(content, buffer);
+      return;
+    }
 
     if (key === '\x1B') {
       escCount++;
@@ -175,6 +237,16 @@ async function contentPager(content: string[]): Promise<void> {
       act(getAction('\x1B'.repeat(escCount) + key));
       escCount = 0;
     }
+  }
+
+  function applyFilter(): void {
+    const filter = execFilter();
+    if (filter === undefined) return;
+
+    content = filter ? fullContent.filter(filter) : fullContent;
+    config.row = 0;
+    config.subRow = 0;
+    calculateEOF(content);
   }
 
   function init() {

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { getAction } from '../src/normalKeys';
+import { getAction, splitKeys } from '../src/normalKeys';
 
 it('valid keys should have their corresponding event as result', () => {
   const validKeys = ['\x08', '\x7F', 'q', ':', 'g', 'G'];
@@ -39,6 +39,30 @@ it('maps ESC combinations', () => {
   expect(getAction('\x1B(')).toBe('SET_HALF_SCREEN_LEFT');
   expect(getAction('\x1B}')).toBe('LAST_COL');
   expect(getAction('\x1B{')).toBe('FIRST_COL');
+});
+
+it('splits batched wheel scrolls into individual arrow keys', () => {
+  expect(splitKeys('\x1B[B\x1B[B\x1B[B')).toEqual(['\x1B[B', '\x1B[B', '\x1B[B']);
+  expect(splitKeys('\x1B[A\x1B[B')).toEqual(['\x1B[A', '\x1B[B']);
+});
+
+it('splits batched SGR mouse sequences', () => {
+  expect(splitKeys('\x1b[<65;10;20M\x1b[<65;10;20M'))
+    .toEqual(['\x1b[<65;10;20M', '\x1b[<65;10;20M']);
+});
+
+it('splits plain character runs into single keys', () => {
+  expect(splitKeys('12j')).toEqual(['1', '2', 'j']);
+});
+
+it('keeps ESC combinations and lone ESC intact', () => {
+  expect(splitKeys('\x1Bv')).toEqual(['\x1Bv']);
+  expect(splitKeys('\x1B')).toEqual(['\x1B']);
+  expect(splitKeys('\x1B[1;5C')).toEqual(['\x1B[1;5C']);
+});
+
+it('splits astral characters as whole code points', () => {
+  expect(splitKeys('a😀b')).toEqual(['a', '😀', 'b']);
 });
 
 it('maps window movement keys', () => {
