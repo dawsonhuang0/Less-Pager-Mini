@@ -22,4 +22,13 @@ export default defineConfig([
       "semi": ["error", "always"],
     }
   },
+
+  // TS: core no-unused-vars false-positives on type annotations;
+  // @typescript-eslint/no-unused-vars covers it
+  {
+    files: ["**/*.{ts,mts,cts}"],
+    rules: {
+      "no-unused-vars": "off",
+    }
+  },
 ]);
