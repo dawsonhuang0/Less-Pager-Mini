@@ -23,7 +23,14 @@ import {
   BOLD_ON,
   BOLD_OFF,
   END_MARKER,
-  CONSOLE_CLEAR
+  CURSOR_HOME,
+  CLEAR_LINE,
+  CLEAR_BELOW,
+  SCROLL_UP,
+  SCROLL_DOWN,
+  CURSOR_TO,
+  SYNC_ON,
+  SYNC_OFF
 } from './constants';
 
 /**
@@ -187,11 +194,25 @@ export function delBufferChar(buffer: string[]): void {
   if (buffer.length === 0) mode.BUFFERING = false;
 }
 
+let prevRows: string[] | null = null;
+
+/**
+ * Forgets the previously rendered frame, forcing the next render to redraw
+ * the whole screen. Call when entering a fresh screen (session start).
+ */
+export function resetRender(): void {
+  prevRows = null;
+}
+
 /**
  * Renders the given content to the terminal.
  *
- * - Clears the screen before writing.
- * - Outputs the content directly to `stdout`.
+ * - When the new frame is the previous one scrolled by k rows, emits a
+ *   terminal scroll and redraws only the exposed rows, like less.
+ * - Otherwise overwrites all rows in place; the screen is never cleared,
+ *   so there is no blank frame to flicker.
+ * - Each frame is a single write, wrapped in synchronized output markers
+ *   for terminals that support atomic rendering.
  *
  * @param rawContent - The string content to display in the terminal.
  * @param buffer - Array of buffer characters.
@@ -202,8 +223,84 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   if (prompt) content.push(prompt + getBuffer(buffer));
 
-  process.stdout.write(CONSOLE_CLEAR);
-  process.stdout.write(content.join('\n'));
+  const rows = content.join('\n').split('\n');
+
+  // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
+  // and the parked cursor untouched, like less
+  if (prevRows && sameRows(prevRows, rows)) return;
+
+  const frame = scrolledFrame(rows) ?? fullFrame(rows);
+
+  prevRows = rows;
+  process.stdout.write(frame);
+}
+
+const drawRow = (rows: string[], row: number): string =>
+  CURSOR_TO(row + 1, 1) + CLEAR_LINE + rows[row];
+
+// park the cursor after the prompt row's content, like less's
+// command-line position at the lower left
+function parkCursor(rows: string[]): string {
+  const last = rows[rows.length - 1];
+  const col = Math.min(visualWidth(last) + 1, config.screenWidth);
+  return CURSOR_TO(rows.length, col);
+}
+
+function sameRows(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+
+  return true;
+}
+
+function fullFrame(rows: string[]): string {
+  const body = rows.map(row => CLEAR_LINE + row).join('\n');
+  return SYNC_ON + CURSOR_HOME + body + CLEAR_BELOW + parkCursor(rows) +
+    SYNC_OFF;
+}
+
+/**
+ * Builds a minimal frame when the screen content only scrolled.
+ *
+ * - The bottom (prompt) row is excluded from shift matching and always
+ *   redrawn, like less reprinting its prompt after scrolling.
+ *
+ * @returns The frame, or null when the change is not a pure scroll.
+ */
+function scrolledFrame(rows: string[]): string | null {
+  const prev = prevRows;
+  const n = rows.length;
+
+  if (!prev || prev.length !== n || n < 3) return null;
+
+  for (let k = 1; k < n - 1; k++) {
+    // scrolled forward: new rows show what was k rows lower
+    if (rows[0] === prev[k] && shifted(rows, prev, k)) {
+      let frame = SYNC_ON + SCROLL_UP(k);
+      for (let r = n - 1 - k; r < n; r++) frame += drawRow(rows, r);
+      return frame + parkCursor(rows) + SYNC_OFF;
+    }
+
+    // scrolled backward: new rows show what was k rows higher
+    if (rows[k] === prev[0] && shifted(prev, rows, k)) {
+      let frame = SYNC_ON + SCROLL_DOWN(k);
+      for (let r = 0; r < k; r++) frame += drawRow(rows, r);
+      return frame + drawRow(rows, n - 1) + parkCursor(rows) + SYNC_OFF;
+    }
+  }
+
+  return null;
+}
+
+function shifted(top: string[], bottom: string[], k: number): boolean {
+  for (let i = 0; i <= top.length - 2 - k; i++) {
+    if (top[i] !== bottom[i + k]) return false;
+  }
+
+  return true;
 }
 
 /**

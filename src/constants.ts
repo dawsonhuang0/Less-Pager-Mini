@@ -10,6 +10,20 @@ export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
 
 export const CONSOLE_CLEAR = '\x1b[2J\x1b[H';
 
+export const CURSOR_HOME = '\x1b[H';
+export const CLEAR_LINE = '\x1b[K';
+export const CLEAR_BELOW = '\x1b[J';
+
+export const SCROLL_UP = (n: number): string => `\x1b[${n}S`;
+export const SCROLL_DOWN = (n: number): string => `\x1b[${n}T`;
+export const CURSOR_TO = (row: number, col: number): string =>
+  `\x1b[${row};${col}H`;
+
+// synchronized output (mode 2026): supporting terminals render the
+// whole frame atomically; others ignore it
+export const SYNC_ON = '\x1b[?2026h';
+export const SYNC_OFF = '\x1b[?2026l';
+
 export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 

@@ -19,6 +19,7 @@ import {
   addBufferChar,
   delBufferChar,
   render,
+  resetRender,
   ringBell,
   bufferToNum,
   calculateEOF
@@ -150,8 +151,8 @@ async function contentPager(content: string[]): Promise<void> {
     SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(buffer),
     LAST_COL: () => lastCol(content),
     FIRST_COL: () => firstCol(),
-    REPAINT: () => {},
-    DROP_INPUT_REPAINT: () => {},
+    REPAINT: () => resetRender(),
+    DROP_INPUT_REPAINT: () => resetRender(),
     SEARCH_FORWARD: () => startSearch('/', bufferToNum(buffer) || 1),
     SEARCH_BACKWARD: () => startSearch('?', bufferToNum(buffer) || 1),
     REPEAT_SEARCH: () => repeatSearch(content, bufferToNum(buffer) || 1, false),
@@ -169,6 +170,7 @@ async function contentPager(content: string[]): Promise<void> {
   };
 
   const fullContent = content;
+  const processTitle = process.title;
 
   let prevContent = content, prevConfig = config, prevMode = mode;
   let key = '', escCount = 0, buffer: string[] = [];
@@ -255,10 +257,16 @@ async function contentPager(content: string[]): Promise<void> {
 
   function init() {
     loadHistory();
+    resetRender();
 
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
+
+    // the kernel process name (what Terminal shows for less itself) is
+    // fixed at exec time; the OSC title is the best an interpreted
+    // program can do, and process.title at least fixes ps output
+    process.title = 'less-pager-mini';
 
     process.stdout.write(TITLE);
     process.stdout.write(ALTERNATE_CONSOLE_ON);
@@ -274,6 +282,7 @@ async function contentPager(content: string[]): Promise<void> {
     process.on('SIGWINCH', () => {
       mode.INIT = false;
 
+      resetRender();
       calculateDimensions();
       calculateEOF(content);
 
@@ -333,6 +342,8 @@ async function contentPager(content: string[]): Promise<void> {
     process.stdout.write(ALTERNATE_SCROLL_OFF);
     process.stdout.write(ALTERNATE_CONSOLE_OFF);
     process.stdout.write(CONSOLE_TITLE_RESET);
+
+    process.title = processTitle;
 
     process.stdin.setRawMode(false);
     process.stdin.pause();
