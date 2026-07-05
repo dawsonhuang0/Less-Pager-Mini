@@ -26,6 +26,7 @@ npx vitest tests/moving/
 
 ### Feature Tests
 - `moving/`: Tests for navigation features (lineForward, lineBackward, windowForward, windowBackward, setWindow, halfWindow, columns)
+- `searching/`: Tests for `/` `?` `n` `N` search, pattern modifiers, match highlighting and the `&` display filter
 - `jumping/`: Tests for jump-to-position features (planned/incomplete)
 - `normalKeys.test.ts`: Tests for key-to-action mapping (including SGR mouse scroll and ESC combinations)
 - `helpers.test.ts`: Tests for helper functions (input conversion, buffer management, EOF calculation, width measurement)

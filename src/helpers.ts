@@ -7,6 +7,12 @@ import { config, mode } from './config';
 import { chopLongLines } from './chopLongLines';
 import { wrapLongLines } from './wrapLongLines';
 
+import { getLayout } from './lineLayout';
+
+import { search, searchPrompt } from './features/searching';
+
+import { option } from './features/options';
+
 import {
   ASCII_REGEX,
   STYLE_REGEX,
@@ -23,16 +29,23 @@ import {
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen
  * width.
- * 
+ *
  * - Returns 0 if line-chopping is enabled.
- * - Otherwise, calculates how many full rows the visual width spans.
- * 
+ * - Styled or Unicode lines use the cached layout, so the count always
+ *   matches what the renderer actually emits.
+ *
  * @param line - The string to measure.
  * @returns Number of sub-rows needed to display the line.
  */
-export const maxSubRow = (line: string): number => config.chopLongLines
-  ? 0
-  : Math.floor(Math.max(visualWidth(line) - 1, 0) / config.screenWidth);
+export function maxSubRow(line: string): number {
+  if (config.chopLongLines) return 0;
+
+  if (!isStyled(line) && isAscii(line)) {
+    return Math.floor(Math.max(line.length - 1, 0) / config.screenWidth);
+  }
+
+  return getLayout(line).rowStart.length - 1;
+}
 
 /**
  * Converts a buffer string to a number.
@@ -308,6 +321,15 @@ export const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
  * @returns The prompt string, or an empty string if suppressed.
  */
 function getPrompt(): string {
+  const inputPrompt = searchPrompt();
+  if (inputPrompt !== null) return inputPrompt;
+
+  if (option.pending) return option.pending;
+
+  if (search.message) {
+    return INVERSE_ON + search.message + '  (press RETURN)' + INVERSE_OFF;
+  }
+
   const helpPrompt = (
     'HELP -- ' +
     (mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more') +
@@ -368,7 +390,11 @@ function padToEOF(lines: string[]): void {
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
 
-  if (!mode.BUFFERING && !mode.HELP && mode.EOF) {
+  // search input, option input and messages replace the bottom line
+  if (
+    !mode.BUFFERING && !mode.HELP && mode.EOF &&
+    !search.input && !search.message && !option.pending
+  ) {
     lines.push(END_MARKER);
   }
 }

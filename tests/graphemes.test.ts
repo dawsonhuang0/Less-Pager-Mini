@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { config, mode } from '../src/config';
 
-import { formatContent } from '../src/helpers';
+import { formatContent, maxSubRow } from '../src/helpers';
 
 import { INVERSE_ON, INVERSE_OFF } from '../src/constants';
 
@@ -44,5 +44,32 @@ describe('chopLongLines', () => {
     const output = formatContent([FAMILY.repeat(3)]);
 
     expect(output[0]).toBe(FAMILY + INVERSE_ON + ' >' + INVERSE_OFF);
+  });
+});
+
+describe('layout consistency', () => {
+  it('maxSubRow always matches the rows the renderer emits', () => {
+    config.chopLongLines = false;
+    config.screenWidth = 80;
+    config.window = 200;
+
+    // odd-width prefix forces greedy packing to differ from width division
+    const line = 'a' + '好'.repeat(500);
+    const output = formatContent([line]);
+
+    expect(output.length).toBe(maxSubRow(line) + 1);
+  });
+
+  it('recomputes layouts when the screen width changes', () => {
+    config.chopLongLines = false;
+
+    config.screenWidth = 80;
+    const wide = maxSubRow('好'.repeat(200));
+
+    config.screenWidth = 40;
+    const narrow = maxSubRow('好'.repeat(200));
+
+    expect(wide).toBe(4);
+    expect(narrow).toBe(9);
   });
 });

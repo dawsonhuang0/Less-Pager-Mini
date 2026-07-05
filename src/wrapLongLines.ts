@@ -1,10 +1,10 @@
-import { strWidth } from 'char-width';
-
 import { config } from './config';
 
-import { isStyled, isAscii, splitChars, withReset } from './helpers';
+import { isStyled, isAscii, withReset } from './helpers';
 
-import { STYLE_REGEX_G, STYLE_RESET } from './constants';
+import { getLayout, emitRow } from './lineLayout';
+
+import { highlightLine } from './features/searching';
 
 /**
  * Wraps lines into subrows to fit screen width and fills the window.
@@ -18,184 +18,65 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     row < content.length && lines.length < config.window - 1;
     row++
   ) {
-    wrap(lines, content[row]);
+    wrap(lines, highlightLine(content[row]));
   }
 }
 
 /**
- * Wraps a line by routing to the appropriate handler based on content type.
+ * Wraps a single line into rows.
  *
- * - Routes to styled/ascii/unicode handlers for optimal performance.
- * - Detects ANSI codes and character type to choose strategy.
+ * - Plain ASCII lines take a slicing fast path.
+ * - Styled or Unicode lines are emitted from their cached layout, so ANSI
+ *   codes and grapheme clusters never split at row boundaries.
  *
- * @param lines - Array to append wrapped lines to.
+ * @param lines - Array to append wrapped rows to.
  * @param longLine - Text line to wrap (may contain ANSI/Unicode).
- * @returns `true` if fully processed, `false` if stopped at window limit.
  */
 function wrap(lines: string[], longLine: string): void {
-  if (isStyled(longLine)) {
-    if (isAscii(longLine)) {
-      wrapStyledAsciiLine(lines, longLine);
-    } else {
-      wrapStyledLine(lines, longLine);
-    }
-  } else if (isAscii(longLine)) {
-    wrapAsciiLine(lines, longLine);
-  } else {
-    wrapLine(lines, longLine);
-  }
-}
-
-/**
- * Wraps a line with ANSI codes containing only ASCII characters.
- *
- * - Preserves ANSI escape sequences across line breaks.
- * - Optimized for ASCII (no charWidth calculation needed).
- *
- * @param lines - Array to append wrapped lines to.
- * @param styledLine - ASCII text with ANSI codes.
- * @returns `true` if fully processed, `false` if stopped at window limit.
- */
-function wrapStyledAsciiLine(lines: string[], styledLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
 
-  let rows = 0, length = 0, i = 0;
-  let line: string[] = [];
-
-  STYLE_REGEX_G.lastIndex = 0;
-  let ansi: RegExpExecArray | null;
-
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    while (length + ansi.index - i > config.screenWidth) {
-      if (!push()) return;
-    }
-
-    if (rows >= startRow) {
-      line.push(styledLine.slice(i, STYLE_REGEX_G.lastIndex));
-    } else if (ansi[0] === STYLE_RESET) {
-      line = [];
-    } else {
-      line.push(ansi[0]);
-    }
-
-    length += ansi.index - i;
-    i = STYLE_REGEX_G.lastIndex;
+  if (!isStyled(longLine) && isAscii(longLine)) {
+    wrapAsciiLine(lines, longLine, startRow);
+    return;
   }
 
-  while (i + config.screenWidth - length < styledLine.length) {
-    if (!push()) return;
-  }
+  const layout = getLayout(longLine);
+  const rows = layout.rowStart.length;
 
-  lines.push(withReset(line.join('') + styledLine.slice(i)));
+  for (let r = Math.min(startRow, rows - 1); r < rows; r++) {
+    let line = emitRow(layout, r);
 
-  // helper
-  function push(): boolean {
-    if (rows >= startRow) {
-      if (lines.length === config.window - 2) {
-        lines.push(
-          withReset(
-            line.join('') +
-            styledLine.slice(i, i + config.screenWidth - length)
-          )
-        );
-        return false;
-      }
+    // re-emit active styles when entering a line mid-way
+    if (r === startRow && r > 0) line = layout.rowStyle[r] + line;
 
-      lines.push(
-        line.join('') + styledLine.slice(i, i + config.screenWidth - length)
-      );
-      line = [];
-    }
+    const last = r === rows - 1;
+    const windowFull = lines.length === config.window - 2;
 
-    rows++;
-    i += config.screenWidth - length;
-    length = 0;
-    return true;
-  }
-}
+    lines.push(last || windowFull ? withReset(line) : line);
 
-/**
- * Wraps a line with ANSI codes and Unicode characters.
- *
- * - Preserves ANSI escape sequences across line breaks.
- * - Uses charWidth for proper CJK/emoji display width.
- *
- * @param lines - Array to append wrapped lines to.
- * @param styledLine - Text with ANSI codes and Unicode characters.
- * @returns `true` if fully processed, `false` if stopped at window limit.
- */
-function wrapStyledLine(lines: string[], styledLine: string): void {
-  const startRow = lines.length ? 0 : config.subRow;
-
-  let rows = 0, length = 0, i = 0;
-  let line: string[] = [];
-
-  STYLE_REGEX_G.lastIndex = 0;
-  let ansi: RegExpExecArray | null;
-
-  while ((ansi = STYLE_REGEX_G.exec(styledLine)) !== null) {
-    if (!join(splitChars(styledLine.slice(i, ansi.index)))) return;
-
-    if (rows < startRow && ansi[0] === STYLE_RESET) {
-      line = [];
-    } else {
-      line.push(ansi[0]);
-    }
-
-    i = STYLE_REGEX_G.lastIndex;
-  }
-
-  if (join(splitChars(styledLine.slice(i)))) {
-    lines.push(withReset(line.join('')));
-  }
-
-  // helpers
-
-  function join(chars: string[]): boolean {
-    for (let c = 0; c < chars.length; c++) {
-      const width = strWidth(chars[c]);
-
-      if (length + width > config.screenWidth) {
-        if (rows >= startRow && !push()) return false;
-        rows++;
-        length = 0;
-      }
-
-      if (rows >= startRow) line.push(chars[c]);
-      length += width;
-    }
-
-    return true;
-  }
-
-  function push(): boolean {
-    if (lines.length === config.window - 2) {
-      lines.push(withReset(line.join('')));
-      return false;
-    }
-
-    lines.push(line.join(''));
-    line = [];
-    return true;
+    if (windowFull) return;
   }
 }
 
 /**
  * Wraps a line containing only ASCII characters at screen width boundaries.
  *
- * - Optimized for pure ASCII (no charWidth calculation needed).
- * - Slices text at exact character positions (1 char = 1 column).
+ * - Optimized for pure ASCII (1 char = 1 column, no layout needed).
  *
- * @param lines - Array to append wrapped lines to.
+ * @param lines - Array to append wrapped rows to.
  * @param longLine - ASCII text line to wrap.
+ * @param startRow - First sub-row to emit.
  */
-function wrapAsciiLine(lines: string[], longLine: string): void {
+function wrapAsciiLine(
+  lines: string[],
+  longLine: string,
+  startRow: number
+): void {
   if (longLine.length <= config.screenWidth) {
     lines.push(longLine);
     return;
   }
 
-  const startRow = lines.length ? 0 : config.subRow;
   let rows = 0, start = 0;
 
   for (
@@ -213,39 +94,4 @@ function wrapAsciiLine(lines: string[], longLine: string): void {
   }
 
   lines.push(longLine.slice(start));
-}
-
-/**
- * Wraps a line containing Unicode characters at visual column boundaries.
- *
- * - Uses charWidth for CJK/emoji display width calculation.
- * - Moves overflowing wide characters to next line.
- *
- * @param lines - Array to append wrapped lines to.
- * @param longLine - Unicode text line to wrap.
- */
-function wrapLine(lines: string[], longLine: string): void {
-  const startRow = lines.length ? 0 : config.subRow;
-  const chars = splitChars(longLine);
-
-  let rows = 0, start = 0, length = 0;
-
-  for (let end = 0; end < chars.length; end++) {
-    const width = strWidth(chars[end]);
-
-    if (length + width > config.screenWidth) {
-      if (rows >= startRow) {
-        lines.push(chars.slice(start, end).join(''));
-        if (lines.length === config.window - 1) return;
-      }
-
-      rows++;
-      length = 0;
-      start = end;
-    }
-
-    length += width;
-  }
-
-  lines.push(chars.slice(start).join(''));
 }
