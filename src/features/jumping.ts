@@ -6,6 +6,8 @@ import { config, mode } from "../config";
 
 import { search } from "./searching";
 
+import { files } from "./files";
+
 /**
  * Jumps to line `lineNum` in the content, placing it at the top of the
  * screen (`g`, `<`, `ESC-<`).
@@ -238,9 +240,10 @@ function subRowStart(line: string, subRow: number): number {
 
 /**
  * A marked position: a content position plus the 1-based screen line it
- * occupied, like less's scrpos.
+ * occupied, like less's scrpos, and the file it belongs to (m_ifile).
  */
 interface Mark {
+  file: number;
   row: number;
   subRow: number;
   sline: number;
@@ -364,7 +367,8 @@ function setMark(
 
   if (lineNum) {
     userMarks.set(char, {
-        row: lineNum - 1,
+      file: files.index,
+      row: lineNum - 1,
       subRow: 0,
       sline: bottom ? config.window - 1 : 1,
     });
@@ -372,6 +376,7 @@ function setMark(
   }
 
   userMarks.set(char, bottom ? lastVisiblePosition(content) : {
+    file: files.index,
     row: config.row,
     subRow: config.subRow,
     sline: config.blankTop + 1,
@@ -393,7 +398,7 @@ function goMark(content: string[], char: string, sline: number): void {
 
   switch (char) {
     case '^':
-      mark = { row: 0, subRow: 0, sline: 0 };
+      mark = { file: files.index, row: 0, subRow: 0, sline: 0 };
       break;
 
     case '$': {
@@ -401,14 +406,15 @@ function goMark(content: string[], char: string, sline: number): void {
       const subRow = config.chopLongLines || config.col
         ? 0
         : maxSubRow(content[row]);
-      mark = { row, subRow, sline: config.window - 1 };
+      mark = { file: files.index, row, subRow, sline: config.window - 1 };
       break;
     }
 
     case '.':
     case ':':
       mark = {
-            row: config.row,
+        file: files.index,
+        row: config.row,
         subRow: config.subRow,
         sline: config.blankTop + 1,
       };
@@ -426,7 +432,7 @@ function goMark(content: string[], char: string, sline: number): void {
       }
 
       // an unset last mark means the beginning of the file, like less
-      mark = quoteMark ?? { row: 0, subRow: 0, sline: 1 };
+      mark = quoteMark ?? { file: files.index, row: 0, subRow: 0, sline: 1 };
       break;
 
     default:
@@ -446,6 +452,11 @@ function goMark(content: string[], char: string, sline: number): void {
         search.message = 'Mark not set';
         return;
       }
+  }
+
+  if (mark.file !== files.index) {
+    search.message = 'Mark not in current file';
+    return;
   }
 
   if (mark.row >= content.length) {
@@ -627,6 +638,7 @@ export function recordLastPosition(): void {
   if (mode.HELP) return;
 
   quoteMark = {
+    file: files.index,
     row: config.row,
     subRow: config.subRow,
     sline: config.blankTop + 1,
@@ -684,7 +696,8 @@ function lastVisiblePosition(content: string[]): Mark {
   if (config.chopLongLines || config.col) {
     const row = Math.min(config.row + steps, content.length - 1);
     return {
-        row,
+      file: files.index,
+      row,
       subRow: 0,
       sline: config.blankTop + 1 + (row - config.row),
     };
@@ -717,6 +730,7 @@ function lastVisiblePosition(content: string[]): Mark {
   }
 
   return {
+    file: files.index,
     row,
     subRow,
     sline: config.blankTop + 1 + taken,

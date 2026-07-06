@@ -48,7 +48,6 @@
 </details>
 
 
-
 ## Getting Started
 
 Follow these simple steps to install Less-Pager-Mini.
@@ -67,7 +66,6 @@ Install Less-Pager-Mini via npm:
 ```bash
 npm i less-pager-mini
 ```
-
 
 
 ## Usage
@@ -129,7 +127,6 @@ or
 ```
 
 
-
 ## About The Project
 
 Want to glance your array or objects, but scrolling through terminal feels painful? This tool got your back.  
@@ -142,34 +139,35 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - 📦 **Minimal Dependencies** – Lightweight, stable, and portable
 - 🖥️ **Pure Terminal UX** – Replicates 99% of the [`less`](https://github.com/gwsw/less) experience
 
+
 ## Roadmap
 
 - [ ] COMMAND MODE
 - [x] MOVING
 - [x] SEARCHING
-- [ ] JUMPING
-- [ ] CHANGING FILES
+- [-] JUMPING
+- [x] CHANGING FILES
 - [ ] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
 - [ ] Custom Key-Bindings
 - [x] Support wide-character (emoji, CJK, etc.) rendering
 - [x] Support help page
 
+
 ## Built With
 
-[![ANSI Escape Codes](https://img.shields.io/badge/ANSI%20Escape%20Codes-black?style=for-the-badge)](https://en.wikipedia.org/wiki/ANSI_escape_code)  
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org/)  
-[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org/)  
-[![ESLint](https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white&style=for-the-badge)](https://eslint.org/)  
-[![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white&style=for-the-badge)](https://vitest.dev/)  
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org/)
+[![ESLint](https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white&style=for-the-badge)](https://eslint.org/)
+[![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white&style=for-the-badge)](https://vitest.dev/)
 [![Husky](https://img.shields.io/badge/Husky-000000?logo=husky&logoColor=white&style=for-the-badge)](https://typicode.github.io/husky/)
+[![ANSI Escape Codes](https://img.shields.io/badge/ANSI%20Escape%20Codes-black?style=for-the-badge)](https://en.wikipedia.org/wiki/ANSI_escape_code)
 
 
 ## Feedback
 
 Found something odd or came up with a bright improvement?  
 Feel free to [open an issue](https://github.com/dawsonhuang0/Less-Pager-Mini/issues) — contributions and feedback are always welcome!
-
 
 
 ## Contributing
@@ -185,11 +183,9 @@ Please follow the coding style and write clear commit messages.
 Let’s make **Less-Pager-Mini** better together!
 
 
-
 ## Acknowledgments
 
 - Inspired by <code><a href="https://github.com/gwsw/less">less</a></code> by Mark Nudelman – the legendary terminal pager that set the standard.
-
 
 
 ## License

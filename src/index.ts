@@ -68,6 +68,22 @@ import {
   resetMarks
 } from "./features/jumping";
 
+import {
+  files,
+  examine,
+  initContent,
+  initFiles,
+  loadFile,
+  saveFilePosition,
+  stepFileTarget,
+  indexFileTarget,
+  startExamine,
+  examineKey,
+  expandExamineList,
+  setPreviousPath,
+  fileInfo
+} from "./features/files";
+
 import { option, startOption, optionKey } from "./features/options";
 
 import { loadHistory, saveHistory } from "./histfile";
@@ -109,13 +125,14 @@ export default async function pager(
   }
 
   if (examineFile) {
-    await filePager(inputToFilePaths(input), preserveFormat);
+    await filePager(inputToFilePaths(input));
     return;
   }
 
   const content = inputToString(input, preserveFormat);
   if (!content.length) return;
 
+  initContent(content);
   await contentPager(content);
 }
 
@@ -123,19 +140,25 @@ export default async function pager(
  * Displays the contents of provided file paths using the pager.
  *
  * - Ignores empty file path arrays.
- * - Converts file content to string arrays for rendering.
+ * - Opens the first readable file; the rest form the `:n`/`:p` list.
  *
  * @param filePaths - Array of file paths to display.
- * @param preserveFormat - Whether to preserve the file’s original formatting.
  */
-async function filePager(
-  filePaths: string[],
-  preserveFormat: boolean
-): Promise<void> {
+async function filePager(filePaths: string[]): Promise<void> {
   if (!filePaths.length) return;
 
-  // remove line below in the future
-  if (preserveFormat) console.log('TODO: preserveFormat not implemented yet');
+  initFiles(filePaths);
+
+  for (let i = 0; i < files.list.length; i++) {
+    const lines = loadFile(i);
+
+    if (lines) {
+      files.index = i;
+      files.newFile = true;
+      await contentPager(lines);
+      return;
+    }
+  }
 }
 
 /**
@@ -205,20 +228,40 @@ async function contentPager(content: string[]): Promise<void> {
     SET_MARK_BOTTOM: () => startSetMark(true, bufferToNum(buffer)),
     GO_MARK: () => startGoMark(bufferToNum(buffer)),
     CLEAR_MARK: () => startClearMark(),
+    OPEN_FILE: () => { if (!mode.HELP) startExamine(); },
+    NEXT_FILE: () => stepFile(1),
+    PREV_FILE: () => stepFile(-1),
+    INDEX_FILE: () => {
+      if (mode.HELP) {
+        ringBell();
+        return;
+      }
+
+      const target = indexFileTarget(bufferToNum(buffer) || 1);
+      if (target !== null) switchToFile(target);
+    },
+    REMOVE_FILE: () => removeFile(),
+    CURRENT_INFO: () => fileInfo(content),
   };
 
-  const fullContent = content;
+  let fullContent = content;
   const processTitle = process.title;
 
   let prevContent = content, prevConfig = config, prevMode = mode;
   let key = '', escCount = 0, buffer: string[] = [];
+  let exited = false;
   let exit = () => {};
 
   init();
   render(content, buffer);
 
   process.stdin.on('data', keyHandler);
-  await new Promise<void>((resolve) => { exit = resolve; });
+  await new Promise<void>((resolve) => {
+    exit = () => {
+      exited = true;
+      resolve();
+    };
+  });
   cleanUp();
 
   // helpers
@@ -238,7 +281,8 @@ async function contentPager(content: string[]): Promise<void> {
       mode.BUFFERING = false;
     }
 
-    render(content, buffer);
+    // quitting must not repaint over the final prompt, like less
+    if (!exited) render(content, buffer);
   }
 
   function keyHandler(data: Buffer): void {
@@ -288,15 +332,33 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
-    // ^X starts a two-key command (^X^X), like less's multi-key tables
-    if (config.keyPrefix === '\x18') {
-      const action = getAction('\x18' + key);
+    if (examine.pending) {
+      if (examineKey(key) === 'run') runExamine();
+      render(content, buffer);
+      return;
+    }
+
+    // ^X and : start two-key commands (^X^X, :n), like less's tables
+    if (config.keyPrefix === '\x18' || config.keyPrefix === ':') {
+      const prefix = config.keyPrefix;
+
+      // erase and newline cancel a prefix silently (CF_QUIT_ON_ERASE)
+      if (
+        key === '\x03' || key === '\x08' || key === '\x7F' ||
+        key === '\x0D' || key === '\x0A'
+      ) {
+        config.keyPrefix = '';
+        render(content, buffer);
+        return;
+      }
+
+      const action = getAction(prefix + key);
       if (action === undefined && key.length > 1) extraBells();
       act(action);
       return;
     }
 
-    if (key === '\x18' && !escCount) {
+    if ((key === '\x18' || key === ':') && !escCount) {
       config.keyPrefix = key;
       render(content, buffer);
       return;
@@ -340,6 +402,119 @@ async function contentPager(content: string[]): Promise<void> {
   function extraBells(): void {
     ringBell();
     ringBell();
+  }
+
+  /**
+   * Switches the session to another file entry, like less's edit_ifile:
+   * stores the position of the file being left, records the previous
+   * position, and restores the target's saved position.
+   */
+  function switchToFile(target: number): boolean {
+    const lines = loadFile(target);
+    if (!lines) return false;
+
+    saveFilePosition();
+    recordLastPosition();
+
+    // the file being left becomes '#', like less's old_ifile
+    if (files.index >= 0 && files.index !== target) {
+      setPreviousPath(files.list[files.index].path);
+    }
+
+    files.index = target;
+    files.newFile = true;
+
+    content = lines;
+    fullContent = lines;
+
+    const saved = files.list[target].saved;
+    config.row = saved ? saved.row : 0;
+    config.subRow = saved ? saved.subRow : 0;
+    config.blankTop = 0;
+
+    mode.INIT = false;
+    calculateEOF(content);
+
+    if (!mode.EOF) {
+      mode.EOF = config.row > config.endRow || (
+        config.row === config.endRow && config.subRow >= config.endSubRow
+      );
+    }
+
+    return true;
+  }
+
+  function stepFile(delta: 1 | -1): void {
+    if (mode.HELP) {
+      ringBell();
+      return;
+    }
+
+    const target = stepFileTarget(delta, bufferToNum(buffer) || 1);
+    if (target !== null) switchToFile(target);
+  }
+
+  function removeFile(): void {
+    if (mode.HELP || files.list.length <= 1) {
+      ringBell();
+      return;
+    }
+
+    const removed = files.index;
+    const target = removed < files.list.length - 1 ? removed + 1 : removed - 1;
+
+    if (!switchToFile(target)) return;
+
+    files.list.splice(removed, 1);
+    if (files.index > removed) files.index--;
+  }
+
+  /**
+   * Opens the files named at the `Examine: ` prompt, like less's
+   * edit_list: every name enters the list after the current file,
+   * unopenable ones drop out, and the first good one becomes current.
+   */
+  function runExamine(): void {
+    const names = expandExamineList(examine.text.trim());
+    examine.text = '';
+
+    // an empty answer re-examines the current file, like less
+    if (!names.length) {
+      if (files.index >= 0) switchToFile(files.index);
+      return;
+    }
+
+    let insertAt = files.index + 1;
+    let firstGood = -1;
+
+    for (const name of names) {
+      let at = files.list.findIndex(entry => entry.path === name);
+      let inserted = false;
+
+      if (at < 0) {
+        at = insertAt;
+        files.list.splice(at, 0, {
+          path: name,
+          lines: null,
+          size: 0,
+          saved: null,
+        });
+        inserted = true;
+      }
+
+      if (!loadFile(at)) {
+        if (inserted) files.list.splice(at, 1);
+        continue;
+      }
+
+      if (inserted) insertAt++;
+      if (firstGood < 0) firstGood = at;
+    }
+
+    if (firstGood >= 0) {
+      search.message = '';
+      switchToFile(firstGood);
+    }
   }
 
   function applyFilter(): void {
@@ -415,6 +590,18 @@ async function contentPager(content: string[]): Promise<void> {
 
     calculateDimensions();
     calculateEOF(content);
+
+    // calculateEOF only detects short content; restore the flag for a
+    // position at the end
+    if (!mode.EOF) {
+      mode.EOF = config.row > config.endRow || (
+        config.row === config.endRow && config.subRow >= config.endSubRow
+      );
+    }
+
+    // returning from help re-edits the file, so the name shows again
+    // like less's edit_ifile setting new_file
+    files.newFile = true;
 
     return true;
   }

@@ -3,8 +3,20 @@ import { expect, it } from 'vitest';
 import { getAction, splitKeys } from '../src/normalKeys';
 
 it('valid keys should have their corresponding event as result', () => {
-  const validKeys = ['\x08', '\x7F', 'q', ':', 'g', 'G'];
+  // ':' alone is a command prefix, not a key: its combos map instead
+  const validKeys = ['\x08', '\x7F', 'q', 'g', 'G'];
   validKeys.forEach(key => expect(getAction(key)).not.toBeUndefined());
+});
+
+it('maps : combos to file commands', () => {
+  expect(getAction(':e')).toBe('OPEN_FILE');
+  expect(getAction(':n')).toBe('NEXT_FILE');
+  expect(getAction(':p')).toBe('PREV_FILE');
+  expect(getAction(':x')).toBe('INDEX_FILE');
+  expect(getAction(':d')).toBe('REMOVE_FILE');
+  expect(getAction(':f')).toBe('CURRENT_INFO');
+  expect(getAction(':q')).toBe('EXIT');
+  expect(getAction(':')).toBeUndefined();
 });
 
 it('invalid keys should only have undefined as result', () => {

@@ -15,6 +15,8 @@ import { option } from './features/options';
 
 import { brackets, marks } from './features/jumping';
 
+import { files, examine, fileTitle, nextFileName } from './features/files';
+
 import {
   ASCII_REGEX,
   STYLE_REGEX,
@@ -443,6 +445,8 @@ function getPrompt(): string {
   if (marks.pending === "'") return 'goto mark: ';
   if (marks.pending === 'c') return 'clear mark: ';
 
+  if (examine.pending) return 'Examine: ' + examine.text;
+
   // pending multi-key prefix, echoed like less's A_PREFIX (" ^X"); a
   // single pending ESC leaves the prompt untouched, and each further
   // ESC echoes as a literal "ESC"
@@ -469,6 +473,22 @@ function getPrompt(): string {
     helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)) +
     INVERSE_OFF
   );
+
+  // a freshly opened file shows its name once, like less's %f (file i of
+  // m) prompt; at EOF the marker concatenates, as in s_proto:
+  // "f1 (file 1 of 3) (END) - Next: f2"
+  if (files.newFile && !mode.BUFFERING) {
+    files.newFile = false;
+    let title = fileTitle();
+
+    if (mode.EOF) {
+      const next = nextFileName();
+      title = [title, '(END)'].filter(Boolean).join(' ') +
+        (next ? ` - Next: ${next}` : '');
+    }
+
+    if (title) return INVERSE_ON + title + INVERSE_OFF;
+  }
 
   if (!mode.EOF || mode.BUFFERING) return ':';
 
@@ -536,11 +556,17 @@ function padToEOF(lines: string[]): void {
   // search input, option input and messages replace the bottom line
   if (
     !mode.BUFFERING && !mode.HELP && mode.EOF &&
-    !search.input && !search.message &&
+    !search.input && !search.message && !examine.pending &&
     !option.pending && !brackets.pending && !marks.pending &&
-    // an echoed key prefix (" ^X", " ESC") replaces the marker
+    !files.newFile &&
+    // an echoed key prefix (" :", " ^X", " ESC") replaces the marker
     (!config.keyPrefix || config.keyPrefix === '\x1B')
   ) {
-    lines.push(END_MARKER);
+    // with another file in the list, extend the marker like less's
+    // "(END) - Next: file" prompt
+    const next = nextFileName();
+    lines.push(
+      next ? INVERSE_ON + `(END) - Next: ${next}` + INVERSE_OFF : END_MARKER
+    );
   }
 }

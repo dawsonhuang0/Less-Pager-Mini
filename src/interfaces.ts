@@ -104,5 +104,9 @@ export type Actions =
   | 'GO_MARK'
   | 'CLEAR_MARK'
   | 'OPEN_FILE'
+  | 'NEXT_FILE'
+  | 'PREV_FILE'
+  | 'INDEX_FILE'
+  | 'REMOVE_FILE'
   | 'CURRENT_INFO'
   | 'VERSION';

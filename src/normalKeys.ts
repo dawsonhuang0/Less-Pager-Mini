@@ -64,8 +64,27 @@ const keys: Record<string, Actions> = {
   '\x08': 'DEL_BUFFER', // backspace
   '\x7F': 'DEL_BUFFER', // delete
 
-  // command
-  '\x3A': 'COMMAND', // :
+  // examine a new file
+  ':e': 'OPEN_FILE', // :e
+
+  // (*) examine the (N-th) next file from the command line
+  ':n': 'NEXT_FILE', // :n
+
+  // (*) examine the (N-th) previous file from the command line
+  ':p': 'PREV_FILE', // :p
+
+  // (*) examine the first (or N-th) file from the command line
+  ':x': 'INDEX_FILE', // :x
+
+  // delete the current file from the command line list
+  ':d': 'REMOVE_FILE', // :d
+
+  // print current file name
+  ':f': 'CURRENT_INFO', // :f
+
+  // exit
+  ':q': 'EXIT', // :q
+  ':Q': 'EXIT', // :Q
 
   // Z-exit
   '\x5A': 'Z_EXIT', // Z

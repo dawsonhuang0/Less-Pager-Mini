@@ -6,6 +6,8 @@ import { render, resetRender } from '../src/helpers';
 
 import { search } from '../src/features/searching';
 
+import { files, initFiles } from '../src/features/files';
+
 const content = Array.from({ length: 60 }, (_, i) => `line ${i}`);
 
 let writes: string[] = [];
@@ -149,6 +151,24 @@ describe('render', () => {
     // the " :" prompt takes the marker's line instead of adding one
     expect(frame).toContain(' :');
     expect(frame).not.toContain('(END)');
+  });
+
+  it('combines the new-file title with the END marker like og', () => {
+    initFiles(['x1', 'x2']);
+    files.index = 0;
+    files.newFile = true;
+    mode.EOF = true;
+
+    render(['a', 'b'], []);
+    expect(writes.join('')).toContain('x1 (file 1 of 2) (END) - Next: x2');
+
+    // any following frame drops the new-file part, keeping the marker
+    writes = [];
+    render(['a', 'b'], []);
+    expect(writes.join('')).toContain('(END) - Next: x2');
+    expect(writes.join('')).not.toContain('file 1 of 2');
+
+    initFiles([]);
   });
 
   it('parks the cursor after the prompt on every frame', () => {
