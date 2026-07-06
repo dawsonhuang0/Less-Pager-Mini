@@ -19,6 +19,14 @@ export function lineForward(
     return;
   }
 
+  // scrolling forward consumes blank rows padded above BOF first
+  if (config.blankTop) {
+    const consumed = Math.min(config.blankTop, offset);
+    config.blankTop -= consumed;
+    offset -= consumed;
+    if (!offset) return;
+  }
+
   if (config.chopLongLines || config.col) {
     const lastRow = Math.max(content.length - config.window + 1, 0);
 

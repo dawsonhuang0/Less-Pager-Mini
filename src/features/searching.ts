@@ -2,6 +2,8 @@ import { config, mode } from "../config";
 
 import { maxSubRow } from "../helpers";
 
+import { saveLastPosition } from "./jumping";
+
 import {
   STYLE_REGEX,
   STYLE_REGEX_G,
@@ -688,8 +690,11 @@ function lastVisibleRow(content: string[]): number {
 }
 
 function jumpTo(content: string[], row: number): void {
+  saveLastPosition(content, row, 0, 0);
+
   config.row = row;
   config.subRow = 0;
+  config.blankTop = 0;
 
   if (mode.INIT) mode.INIT = false;
 

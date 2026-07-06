@@ -13,6 +13,8 @@ import { search, searchPrompt } from './features/searching';
 
 import { option } from './features/options';
 
+import { brackets, marks } from './features/jumping';
+
 import {
   ASCII_REGEX,
   STYLE_REGEX,
@@ -149,6 +151,10 @@ export function ringBell(): void {
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
 
+  // blank rows above BOF from a bracket jump; only ever set with the top
+  // at (0,0), so pre-seeding does not disturb sub-row emission
+  for (let i = 0; i < config.blankTop; i++) lines.push('');
+
   if (config.chopLongLines || config.col) {
     chopLongLines(content, lines);
   } else {
@@ -221,7 +227,15 @@ export function render(rawContent: string[], buffer: string[]): void {
   const content = formatContent(rawContent);
   const prompt = getPrompt();
 
-  if (prompt) content.push(prompt + getBuffer(buffer));
+  // an echoed prefix replaces the number echo, like less's cmd_reset;
+  // a single pending ESC changes nothing
+  if (prompt) {
+    content.push(
+      config.keyPrefix && config.keyPrefix !== '\x1B'
+        ? prompt
+        : prompt + getBuffer(buffer)
+    );
+  }
 
   const rows = content.join('\n').split('\n');
 
@@ -423,6 +437,23 @@ function getPrompt(): string {
 
   if (option.pending) return option.pending;
 
+  if (brackets.pending) return 'Brackets: ' + brackets.chars;
+
+  if (marks.pending === 'm' || marks.pending === 'M') return 'set mark: ';
+  if (marks.pending === "'") return 'goto mark: ';
+  if (marks.pending === 'c') return 'clear mark: ';
+
+  // pending multi-key prefix, echoed like less's A_PREFIX (" ^X"); a
+  // single pending ESC leaves the prompt untouched, and each further
+  // ESC echoes as a literal "ESC"
+  if (config.keyPrefix && config.keyPrefix !== '\x1B') {
+    const echoed = config.keyPrefix[0] === '\x1B'
+      ? 'ESC'.repeat(config.keyPrefix.length - 1)
+      : Array.from(config.keyPrefix, prChar).join('');
+
+    return ' ' + echoed;
+  }
+
   if (search.message) {
     return INVERSE_ON + search.message + '  (press RETURN)' + INVERSE_OFF;
   }
@@ -442,6 +473,21 @@ function getPrompt(): string {
   if (!mode.EOF || mode.BUFFERING) return ':';
 
   return '';
+}
+
+/**
+ * Renders a key in printable form like less's prchar: control characters
+ * in caret notation, ESC as `ESC`.
+ *
+ * @param char - Single character to render.
+ */
+function prChar(char: string): string {
+  const code = char.charCodeAt(0);
+
+  if (code === 0x1B) return 'ESC';
+  if (code < 0x20) return '^' + String.fromCharCode(code ^ 0x40);
+
+  return char;
 }
 
 /**
@@ -490,7 +536,10 @@ function padToEOF(lines: string[]): void {
   // search input, option input and messages replace the bottom line
   if (
     !mode.BUFFERING && !mode.HELP && mode.EOF &&
-    !search.input && !search.message && !option.pending
+    !search.input && !search.message &&
+    !option.pending && !brackets.pending && !marks.pending &&
+    // an echoed key prefix (" ^X", " ESC") replaces the marker
+    (!config.keyPrefix || config.keyPrefix === '\x1B')
   ) {
     lines.push(END_MARKER);
   }

@@ -8,6 +8,10 @@ export interface Config {
   row: number;
   subRow: number;
 
+  // Blank rows displayed above the beginning of the content, like less
+  // padding the top when a jump target lands near BOF (jump_loc/forw)
+  blankTop: number;
+
   // Last row & subRow without exceeding EOF
   endRow: number;
   endSubRow: number;
@@ -28,6 +32,10 @@ export interface Config {
 
   indentation: number;
   bufferOffset: number;
+
+  // Pending multi-key command prefix (^X, ESC), echoed at the prompt like
+  // less's A_PREFIX state
+  keyPrefix: string;
 }
 
 /**
@@ -91,6 +99,10 @@ export type Actions =
   | 'SQUARE_BRACKET_LEFT'
   | 'CUSTOM_BRACKET_RIGHT'
   | 'CUSTOM_BRACKET_LEFT'
+  | 'SET_MARK'
+  | 'SET_MARK_BOTTOM'
+  | 'GO_MARK'
+  | 'CLEAR_MARK'
   | 'OPEN_FILE'
   | 'CURRENT_INFO'
   | 'VERSION';

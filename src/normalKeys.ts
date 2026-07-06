@@ -216,6 +216,19 @@ const keys: Record<string, Actions> = {
   '\x29': 'ROUND_BRACKET_LEFT', // )
   '\x5D': 'SQUARE_BRACKET_LEFT', // ]
 
+  // mark the current top line with <letter>
+  '\x6D': 'SET_MARK', // m
+
+  // mark the current bottom line with <letter>
+  '\x4D': 'SET_MARK_BOTTOM', // M
+
+  // (*) go to a previously marked position
+  '\x27': 'GO_MARK', // '
+  '\x18\x18': 'GO_MARK', // ^X^X
+
+  // clear a mark
+  '\x1Bm': 'CLEAR_MARK', // ESC-m
+
   // (*) find close bracket <c2>
   '\x1B\x06': 'CUSTOM_BRACKET_RIGHT', // ESC-^F
 

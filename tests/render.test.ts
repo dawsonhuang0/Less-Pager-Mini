@@ -16,6 +16,7 @@ beforeEach(() => {
   config.subRow = 0;
   config.col = 0;
   config.bufferOffset = 0;
+  config.keyPrefix = '';
   config.screenWidth = 80;
   config.window = 24;
   config.chopLongLines = true;
@@ -104,6 +105,50 @@ describe('render', () => {
     render(content, []);
 
     expect(writes.length).toBe(1);
+  });
+
+  it('echoes a pending key prefix and hides the number buffer', () => {
+    mode.BUFFERING = true;
+    config.keyPrefix = '\x18';
+    render(content, ['1']);
+
+    // like less's A_PREFIX prompt: " ^X", replacing the digit echo
+    expect(writes[0]).toContain(' ^X');
+    expect(writes[0]).not.toContain('^X1');
+
+    // a lone pending ESC leaves the prompt untouched
+    writes = [];
+    resetRender();
+    config.keyPrefix = '\x1B';
+    render(content, ['1']);
+    expect(writes.join('')).not.toContain('ESC');
+    expect(writes.join('')).toContain(':1');
+
+    // further ESCs echo as literal "ESC" and replace the number echo
+    writes = [];
+    resetRender();
+    config.keyPrefix = '\x1B\x1B';
+    render(content, ['1']);
+    expect(writes.join('')).toContain(' ESC');
+    expect(writes.join('')).not.toContain('ESC1');
+
+    writes = [];
+    resetRender();
+    config.keyPrefix = '\x1B\x1B\x1B';
+    render(content, []);
+    expect(writes.join('')).toContain(' ESCESC');
+  });
+
+  it('replaces the END marker with an echoed key prefix', () => {
+    mode.EOF = true;
+    config.keyPrefix = ':';
+
+    render(['a', 'b'], []);
+    const frame = writes.join('');
+
+    // the " :" prompt takes the marker's line instead of adding one
+    expect(frame).toContain(' :');
+    expect(frame).not.toContain('(END)');
   });
 
   it('parks the cursor after the prompt on every frame', () => {

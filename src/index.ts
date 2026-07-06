@@ -51,6 +51,23 @@ import {
   clearHighlight
 } from "./features/searching";
 
+import {
+  firstLine,
+  lastLine,
+  percentLine,
+  matchBracket,
+  brackets,
+  startBrackets,
+  bracketsKey,
+  marks,
+  marksKey,
+  startSetMark,
+  startGoMark,
+  startClearMark,
+  recordLastPosition,
+  resetMarks
+} from "./features/jumping";
+
 import { option, startOption, optionKey } from "./features/options";
 
 import { loadHistory, saveHistory } from "./histfile";
@@ -167,6 +184,27 @@ async function contentPager(content: string[]): Promise<void> {
       }
     },
     TAG_COMMAND: () => startOption(key === '_' ? '_' : '-'),
+    FIRST_LINE: () => firstLine(content, bufferToNum(buffer) || 1),
+    LAST_LINE: () => lastLine(content, bufferToNum(buffer)),
+    PERCENT_LINE: () => percentLine(content, bufferToNum(buffer)),
+    CURLY_BRACKET_RIGHT: () =>
+      matchBracket(content, '{', '}', true, bufferToNum(buffer) || 1),
+    ROUND_BRACKET_RIGHT: () =>
+      matchBracket(content, '(', ')', true, bufferToNum(buffer) || 1),
+    SQUARE_BRACKET_RIGHT: () =>
+      matchBracket(content, '[', ']', true, bufferToNum(buffer) || 1),
+    CURLY_BRACKET_LEFT: () =>
+      matchBracket(content, '{', '}', false, bufferToNum(buffer) || 1),
+    ROUND_BRACKET_LEFT: () =>
+      matchBracket(content, '(', ')', false, bufferToNum(buffer) || 1),
+    SQUARE_BRACKET_LEFT: () =>
+      matchBracket(content, '[', ']', false, bufferToNum(buffer) || 1),
+    CUSTOM_BRACKET_RIGHT: () => startBrackets(true, bufferToNum(buffer) || 1),
+    CUSTOM_BRACKET_LEFT: () => startBrackets(false, bufferToNum(buffer) || 1),
+    SET_MARK: () => startSetMark(false, bufferToNum(buffer)),
+    SET_MARK_BOTTOM: () => startSetMark(true, bufferToNum(buffer)),
+    GO_MARK: () => startGoMark(bufferToNum(buffer)),
+    CLEAR_MARK: () => startClearMark(),
   };
 
   const fullContent = content;
@@ -186,6 +224,8 @@ async function contentPager(content: string[]): Promise<void> {
   // helpers
 
   function act(action: Actions | undefined): void {
+    config.keyPrefix = '';
+
     if (action !== undefined && action in acts) {
       acts[action]();
     } else {
@@ -236,13 +276,70 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
+    if (brackets.pending) {
+      bracketsKey(content, key);
+      render(content, buffer);
+      return;
+    }
+
+    if (marks.pending) {
+      marksKey(content, key);
+      render(content, buffer);
+      return;
+    }
+
+    // ^X starts a two-key command (^X^X), like less's multi-key tables
+    if (config.keyPrefix === '\x18') {
+      const action = getAction('\x18' + key);
+      if (action === undefined && key.length > 1) extraBells();
+      act(action);
+      return;
+    }
+
+    if (key === '\x18' && !escCount) {
+      config.keyPrefix = key;
+      render(content, buffer);
+      return;
+    }
+
     if (key === '\x1B') {
-      escCount++;
-      if (escCount > 2) escCount = 1;
+      // like less: leading ESCs are pending and unechoed (one normally,
+      // three when a number is being entered, where digit mode's
+      // editchar loop swallows them); further ones echo as literal
+      // "ESC", a third literal is invalid and resets to one (the
+      // " ESC" <-> " ESCESC" cycle), and any number of pending ESCs
+      // still decodes as a single ESC prefix
+      const absorb = buffer.length ? 3 : 1;
+
+      if (escCount - absorb >= 2) {
+        // " ESCESC" resets to " ESC" silently
+        escCount = absorb + 1;
+      } else {
+        escCount++;
+        const literals = escCount - absorb;
+
+        // og rings when the second literal lands (" ESC" -> " ESCESC")
+        // and when the first lands after swallowed digit-mode input
+        if (literals === 2 || (literals === 1 && absorb === 3)) {
+          ringBell();
+        }
+      }
+
+      config.keyPrefix = '\x1B'.repeat(Math.max(escCount - absorb, 0) + 1);
+      render(content, buffer);
     } else {
-      act(getAction('\x1B'.repeat(escCount) + key));
+      const action = getAction(escCount ? '\x1B' + key : key);
+      if (action === undefined && escCount && key.length > 1) extraBells();
+      act(action);
       escCount = 0;
     }
+  }
+
+  // og reprocesses the leftover bytes of a special key after a failed
+  // prefix combo, ringing for each — ESC + an arrow key rings three times
+  function extraBells(): void {
+    ringBell();
+    ringBell();
   }
 
   function applyFilter(): void {
@@ -252,11 +349,13 @@ async function contentPager(content: string[]): Promise<void> {
     content = filter ? fullContent.filter(filter) : fullContent;
     config.row = 0;
     config.subRow = 0;
+    config.blankTop = 0;
     calculateEOF(content);
   }
 
   function init() {
     loadHistory();
+    resetMarks();
     resetRender();
 
     process.stdin.setRawMode(true);
@@ -293,6 +392,7 @@ async function contentPager(content: string[]): Promise<void> {
 
       buffer = [];
       config.bufferOffset = 0;
+      config.blankTop = 0;
       render(content, buffer);
     });
 
@@ -321,6 +421,10 @@ async function contentPager(content: string[]): Promise<void> {
 
   function prepareHelp(): void {
     if (mode.HELP) return;
+
+    // leaving the current content records the previous position, like
+    // less's edit_ifile calling lastmark when switching to the help file
+    recordLastPosition();
 
     prevConfig = config;
     resetConfig();

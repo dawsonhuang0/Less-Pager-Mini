@@ -51,6 +51,7 @@ function getDefaultConfig(): Config {
     startLine: 0,
     row: 0,
     subRow: 0,
+    blankTop: 0,
     endRow: 0,
     endSubRow: 0,
     col: 0,
@@ -64,6 +65,7 @@ function getDefaultConfig(): Config {
     chopLongLines: false,
     indentation: 2,
     bufferOffset: 0,
+    keyPrefix: '',
   };
 }
 
