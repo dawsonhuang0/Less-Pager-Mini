@@ -4,10 +4,10 @@ import { strWidth } from 'char-width';
 
 import { config, mode } from './config';
 
-import { chopLongLines } from './chopLongLines';
-import { wrapLongLines } from './wrapLongLines';
+import { chopLongLines } from './lines/chopLongLines';
+import { wrapLongLines } from './lines/wrapLongLines';
 
-import { getLayout } from './lineLayout';
+import { getLayout } from './lines/lineLayout';
 
 import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
 

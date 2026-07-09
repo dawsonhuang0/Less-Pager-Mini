@@ -1,10 +1,10 @@
-import { config } from './config';
+import { config } from '../config';
 
-import { isStyled, isAscii, withReset } from './helpers';
+import { isStyled, isAscii, withReset } from '../helpers';
 
 import { getLayout, emitRow } from './lineLayout';
 
-import { highlightLine } from './features/searching';
+import { highlightLine } from '../features/searching';
 
 /**
  * Wraps lines into subrows to fit screen width and fills the window.

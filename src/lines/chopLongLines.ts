@@ -1,12 +1,12 @@
-import { config } from "./config";
+import { config } from "../config";
 
-import { isStyled, isAscii, withReset } from "./helpers";
+import { isStyled, isAscii, withReset } from "../helpers";
 
 import { getLayout } from "./lineLayout";
 
-import { highlightLine } from "./features/searching";
+import { highlightLine } from "../features/searching";
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "./constants";
+import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "../constants";
 
 const getFillingSpace = (length: number): string =>
   length > 0 ? INVERSE_ON + ' '.repeat(length) + INVERSE_OFF : '';

@@ -1,6 +1,6 @@
 import { ringBell, maxSubRow, isAscii, isStyled } from "../helpers";
 
-import { getLayout } from "../lineLayout";
+import { getLayout } from "../lines/lineLayout";
 
 import { config, mode } from "../config";
 

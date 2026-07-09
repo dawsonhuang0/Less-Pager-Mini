@@ -1,10 +1,10 @@
 import { strWidth } from 'char-width';
 
-import { config } from './config';
+import { config } from '../config';
 
-import { isAscii, splitChars } from './helpers';
+import { isAscii, splitChars } from '../helpers';
 
-import { STYLE_REGEX_G, STYLE_RESET } from './constants';
+import { STYLE_REGEX_G, STYLE_RESET } from '../constants';
 
 /**
  * Pre-computed layout of a single content line.
