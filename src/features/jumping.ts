@@ -522,6 +522,48 @@ function jumpLoc(
 }
 
 /**
+ * Resolves a mark character to its content row for the `|` command,
+ * like less's markpos.
+ *
+ * @param content - Full content lines.
+ * @param char - Mark letter or predefined mark.
+ * @returns The row, or null with a message set.
+ */
+export function markRow(content: string[], char: string): number | null {
+  switch (char) {
+    case '^': return 0;
+    case '$': return content.length - 1;
+    case '.': case ':': return config.row;
+    case ';': return lastVisiblePosition(content).row;
+  }
+
+  let mark: Mark | undefined;
+
+  if (char === "'") {
+    mark = quoteMark ?? { file: files.index, row: 0, subRow: 0, sline: 1 };
+  } else {
+    if (!MARK_LETTER_REGEX.test(char)) {
+      search.message = `Invalid mark letter ${char}`;
+      return null;
+    }
+
+    mark = userMarks.get(char);
+
+    if (!mark) {
+      search.message = 'Mark not set';
+      return null;
+    }
+  }
+
+  if (mark.file !== files.index) {
+    search.message = 'Mark not in current file';
+    return null;
+  }
+
+  return Math.min(mark.row, content.length - 1);
+}
+
+/**
  * Records the current position into the quote mark when a jump takes one
  * of less's full-repaint paths, mirroring which jump_loc branches call
  * lastmark.

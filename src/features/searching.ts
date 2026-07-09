@@ -61,6 +61,9 @@ interface SearchState {
   history: string[];
   /** Transient status message shown at the prompt. */
   message: string;
+  /** Follow-up messages shown as each one is dismissed, like less's
+   *  consecutive blocking error() calls. */
+  messageQueue: string[];
 }
 
 export const search: SearchState = {
@@ -74,6 +77,7 @@ export const search: SearchState = {
   caseless: 0,
   history: [],
   message: '',
+  messageQueue: [],
 };
 
 const HISTORY_LIMIT = 100;

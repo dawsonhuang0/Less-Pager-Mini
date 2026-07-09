@@ -254,7 +254,7 @@ export function expandExamineList(text: string): string[] {
  * Substitutes `%` with the current filename and `#` with the previous
  * one, doubling to escape, like filename.c's fexpand.
  */
-function fexpand(text: string): string {
+export function fexpand(text: string): string {
   let expanded = '';
 
   for (let i = 0; i < text.length; i++) {
@@ -316,7 +316,7 @@ function splitWords(text: string): string[] {
  * Expands a leading `~` and `$VAR`/`${VAR}` references, as the shell
  * would during less's glob step. Unset variables expand to nothing.
  */
-function expandHomeEnv(word: string): string {
+export function expandHomeEnv(word: string): string {
   let expanded = word;
 
   if (expanded === '~' || expanded.startsWith('~/')) {
