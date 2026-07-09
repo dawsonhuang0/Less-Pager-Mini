@@ -142,14 +142,14 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 
 ## Roadmap
 
-- [ ] COMMAND MODE
+- [x] COMMAND MODE
 - [x] MOVING
 - [x] SEARCHING
 - [-] JUMPING
 - [x] CHANGING FILES
 - [x] MISCELLANEOUS COMMANDS
-- [ ] OPTIONS
-- [ ] LINE EDITING
+- [-] OPTIONS
+- [x] LINE EDITING
 - [ ] Custom Key-Bindings
 - [x] Support wide-character (emoji, CJK, etc.) rendering
 - [x] Support help page
