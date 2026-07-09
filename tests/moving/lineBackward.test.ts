@@ -40,8 +40,8 @@ describe('chopLongLines', () => {
     // `(END)` should not be at bottom at first load with content rows less than window
     implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
-    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 7]);
-    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 7]);
+    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
   it('backwards 2 lines', () => {
@@ -88,8 +88,8 @@ describe('wrapLongLines', () => {
     // `(END)` should not be at bottom at first load with content rows less than window
     implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
-    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 7]);
-    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 7]);
+    implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
   it('forwards to the end of wrapped line and backwards until exit wrapped line', () => {

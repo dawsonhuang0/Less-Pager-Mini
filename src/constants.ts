@@ -1,8 +1,41 @@
 /* eslint-disable no-control-regex */
 
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
-export const STYLE_REGEX = /\x1b\[[0-9;]*m/;
-export const STYLE_REGEX_G = /\x1b\[[0-9;]*m/g;
+
+// escape-sequence recognition, like line.c's ansi_step: any run of
+// middle characters after ESC, closed by an end character
+const DEFAULT_MID_CHARS = '0123456789:;[?!"\'#%()*+ ';
+const DEFAULT_END_CHARS = 'm';
+
+/** Escapes a character for a regex character class. */
+const classEscape = (text: string): string =>
+  text.replace(/[\\\]^-]/g, '\\$&');
+
+/** Builds the sequence regex from mid and end character sets. */
+function styleRegex(mid: string, end: string, flags: string): RegExp {
+  // an end character never acts as a middle one, like is_ansi_middle
+  const pureMid = [...mid].filter(ch => !end.includes(ch)).join('');
+
+  return new RegExp(
+    `\\x1b[${classEscape(pureMid)}]*[${classEscape(end)}]`, flags
+  );
+}
+
+export let STYLE_REGEX = styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, '');
+export let STYLE_REGEX_G =
+  styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, 'g');
+
+/**
+ * Rebuilds the sequence regexes from $LESSANSIMIDCHARS and
+ * $LESSANSIENDCHARS, like init_line.
+ */
+export function initAnsiChars(): void {
+  const mid = process.env.LESSANSIMIDCHARS || DEFAULT_MID_CHARS;
+  const end = process.env.LESSANSIENDCHARS || DEFAULT_END_CHARS;
+
+  STYLE_REGEX = styleRegex(mid, end, '');
+  STYLE_REGEX_G = styleRegex(mid, end, 'g');
+}
 
 export const CONSOLE_TITLE_START = '\x1b]0;';
 export const CONSOLE_TITLE_END = '\x07';

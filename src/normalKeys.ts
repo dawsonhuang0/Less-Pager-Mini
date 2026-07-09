@@ -102,6 +102,18 @@ const keys: Record<string, Actions> = {
   // run shell command
   '\x21': 'SHELL_COMMAND', // !
 
+  // run shell command, expanded like a prompt
+  '\x23': 'PSHELL_COMMAND', // #
+
+  // pipe file between current pos & mark to shell command
+  '\x7C': 'PIPE_COMMAND', // |
+
+  // save input to a file
+  '\x73': 'SAVE_FILE', // s
+
+  // edit the current file with $VISUAL or $EDITOR
+  '\x76': 'EDIT_FILE', // v
+
   // quit current feature
   '\x03': 'QUIT', // ^C
 
@@ -122,6 +134,7 @@ const keys: Record<string, Actions> = {
   '\x6A': 'LINE_FORWARD', // j
   '\x0E': 'LINE_FORWARD', // ^N
   '\x0D': 'LINE_FORWARD', // CR
+  '\x0A': 'LINE_FORWARD', // LF
   '\x1B[B': 'LINE_FORWARD', // ARROW DOWN
   '\x1BOB': 'LINE_FORWARD', // ARROW DOWN (SS3 / application mode)
 
@@ -143,6 +156,14 @@ const keys: Record<string, Actions> = {
   // (*) backward one window (or (N) lines)
   '\x62': 'WINDOW_BACKWARD', // b
   '\x02': 'WINDOW_BACKWARD', // ^B
+  't': 'NEXT_TAG', // (*) t
+  'T': 'PREV_TAG', // (*) T
+
+  'J': 'FORCE_LINE_FORWARD', // (*) J
+  'K': 'FORCE_LINE_BACKWARD', // (*) K
+  'Y': 'FORCE_LINE_BACKWARD', // (*) Y
+  'P': 'GO_POS', // (N) P
+
   '\x1Bv': 'WINDOW_BACKWARD', // ESC-v
 
   // (*) forward one window (and set window to (N))
@@ -153,6 +174,19 @@ const keys: Record<string, Actions> = {
 
   // (*) forward one window but don't stop at EOF
   '\x1B\x20': 'NO_EOF_WINDOW_FORWARD', // ESC-SPACE
+  '\x1Bb': 'FORCE_WINDOW_BACKWARD', // (*) ESC-b
+  '\x1Bj': 'NEWLINE_FORWARD', // (*) ESC-j
+  '\x1Bk': 'NEWLINE_BACKWARD', // (*) ESC-k
+
+
+  // forward forever, like "tail -f"
+  '\x46': 'FOLLOW', // F
+
+  // like F, ringing the bell when the search pattern matches new data
+  '\x1Bf': 'FOLLOW_BELL', // ESC-f
+
+  // like F, but stop when the search pattern is found
+  '\x1BF': 'FOLLOW_HILITE', // ESC-F
 
   // (*) forward one half-window (and set half-window to (N))
   '\x64': 'SET_HALF_WINDOW_FORWARD', // d
@@ -196,11 +230,11 @@ const keys: Record<string, Actions> = {
 
   // (*) repeat previous search (for (N)-th occurrence)
   '\x6E': 'REPEAT_SEARCH', // n
-  '\x1Bn': 'REPEAT_SEARCH', // ESC-n
+  '\x1Bn': 'SPAN_REPEAT_SEARCH', // ESC-n (spans the file list)
 
   // (*) repeat previous search in reverse direction
   '\x4E': 'REVERSE_SEARCH', // N
-  '\x1BN': 'REVERSE_SEARCH', // ESC-N
+  '\x1BN': 'SPAN_REVERSE_SEARCH', // ESC-N (spans the file list)
 
   // undo (toggle) search highlighting
   '\x1Bu': 'HIGHLIGHT_TOGGLE', // ESC-u

@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 
-import { formatContent } from '../../src/helpers';
+import { screenRows } from '../../src/helpers';
 
 import {
   lineForward,
@@ -129,7 +129,7 @@ function checkOutputs(
   expectedOutputs: string[],
   expectedLines: number[]
 ) {
-  const output = formatContent(content);
+  const output = screenRows(content, []);
 
   for (let i = 0; i < expectedLines.length; i++) {
     expect(output[expectedLines[i]]).toBe(expectedOutputs[i]);

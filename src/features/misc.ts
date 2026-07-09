@@ -14,7 +14,7 @@ import {
 
 import { filenameComplete } from "./files";
 
-import { optNoHistDups, optAutosaveAction } from "./options";
+import { optNoHistDups, optAutosaveAction } from "../options";
 
 import { search } from "./searching";
 
@@ -82,6 +82,16 @@ export const miscInput = {
 export const pipeMark = {
   pending: false,
   char: '',
+  /** Second mark of the || form; empty for the single-mark form. */
+  char2: '',
+  /** Which || mark is being read ('' = single-mark prompt). */
+  stage: '' as '' | 'first' | 'second',
+  /** ^N toggled the prompt into line-number entry (v707). */
+  lineMode: false,
+  /** Digits typed in line-number mode. */
+  num: '',
+  /** Resolved rows: [first] or [first, second]. */
+  rows: [] as number[],
 };
 
 /**
@@ -281,6 +291,11 @@ export function startLogFile(force: boolean): void {
 export function startPipe(): void {
   pipeMark.pending = true;
   pipeMark.char = '';
+  pipeMark.char2 = '';
+  pipeMark.stage = '';
+  pipeMark.lineMode = false;
+  pipeMark.num = '';
+  pipeMark.rows = [];
 }
 
 /**
@@ -294,22 +309,90 @@ export function startPipe(): void {
  * @returns True when the mark was taken and the command prompt opens.
  */
 export function pipeMarkKey(content: string[], key: string): boolean {
-  pipeMark.pending = false;
+  let c = key[0];
 
-  if (
-    key === '\x03' || key.startsWith('\x1B') ||
-    key === '\x08' || key === '\x7F' ||
-    key === '\x0D' || key === '\x0A'
-  ) {
+  const abort = (): false => {
+    pipeMark.pending = false;
+    pipeMark.stage = '';
+    return false;
+  };
+
+  // ^N toggles between mark and line-number entry, like get_pipe_pos
+  if (c === '\x0E') {
+    pipeMark.lineMode = !pipeMark.lineMode;
+    pipeMark.num = '';
     return false;
   }
 
-  pipeMark.char = key[0];
+  // a resolved row advances || to its next mark, or opens the prompt
+  const took = (row: number): boolean => {
+    if (pipeMark.stage === 'first') {
+      pipeMark.rows = [row];
+      pipeMark.stage = 'second';
+      pipeMark.lineMode = false;
+      pipeMark.num = '';
+      return false;
+    }
 
-  if (markRow(content, pipeMark.char) === null) return false;
+    pipeMark.rows.push(row);
+    pipeMark.pending = false;
+    pipeMark.stage = '';
+    startMiscInput('|');
+    return true;
+  };
 
-  startMiscInput('|');
-  return true;
+  if (pipeMark.lineMode) {
+    if (c >= '0' && c <= '9') {
+      pipeMark.num += c;
+      return false;
+    }
+
+    if (c === '\x08' || c === '\x7F') {
+      if (!pipeMark.num) return abort();
+      pipeMark.num = pipeMark.num.slice(0, -1);
+      return false;
+    }
+
+    if (c === '\x0D' || c === '\x0A') {
+      const lnum = parseInt(pipeMark.num, 10);
+      pipeMark.num = '';
+
+      if (!lnum || lnum > content.length) {
+        search.message = 'Invalid line number';
+        return abort();
+      }
+
+      return took(lnum - 1);
+    }
+
+    if (c === '\x03' || key.startsWith('\x1B')) return abort();
+
+    ringBell();
+    return false;
+  }
+
+  if (
+    c === '\x03' || key.startsWith('\x1B') ||
+    c === '\x08' || c === '\x7F'
+  ) {
+    return abort();
+  }
+
+  // RETURN picks the current position, like get_pipe_pos's newline
+  if (c === '\x0D' || c === '\x0A') c = '.';
+
+  // || reads two marks and pipes exactly the section between them
+  if (pipeMark.stage === '' && c === '|') {
+    pipeMark.stage = 'first';
+    pipeMark.rows = [];
+    return false;
+  }
+
+  const row = markRow(content, c);
+  if (row === null) return abort();
+
+  if (pipeMark.stage !== 'second') pipeMark.char = c;
+  return took(row);
 }
 
 /**

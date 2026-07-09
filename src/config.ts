@@ -1,7 +1,9 @@
 import { Config, Mode } from "./interfaces";
 
-const DEFAULT_WINDOW = 24;
-const DEFAULT_COLUMN = 80;
+// fallbacks when the terminal reports no size, like screen.c's
+// DEF_SC_HEIGHT/DEF_SC_WIDTH
+export const DEFAULT_WINDOW = 24;
+export const DEFAULT_COLUMN = 80;
 
 /**
  * Global configuration for pager rendering and navigation.
@@ -46,8 +48,12 @@ export function resetMode(): void {
 }
 
 function getDefaultConfig(): Config {
+  // a zero size (some pseudo-terminals) falls back like og's scrsize
+  const rows = process.stdout.rows || DEFAULT_WINDOW;
+  const columns = process.stdout.columns || DEFAULT_COLUMN;
+
   return {
-    windowContent: new Array(process.stdout.rows ?? DEFAULT_WINDOW).fill(''),
+    windowContent: new Array(rows).fill(''),
     startLine: 0,
     row: 0,
     subRow: 0,
@@ -58,14 +64,15 @@ function getDefaultConfig(): Config {
     setCol: 0,
     setWindow: 0,
     setHalfWindow: 0,
-    window: process.stdout.rows ?? DEFAULT_WINDOW,
-    halfWindow: Math.floor((process.stdout.rows ?? DEFAULT_WINDOW) / 2),
-    screenWidth: process.stdout.columns ?? DEFAULT_COLUMN,
-    halfScreenWidth: Math.floor((process.stdout.columns ?? DEFAULT_COLUMN) / 2),
+    window: rows,
+    halfWindow: Math.floor(rows / 2),
+    screenWidth: columns,
+    halfScreenWidth: Math.floor(columns / 2),
     chopLongLines: false,
     indentation: 2,
     bufferOffset: 0,
     keyPrefix: '',
+    attnRow: -1,
   };
 }
 
@@ -75,5 +82,9 @@ function getDefaultMode(): Record<Mode, boolean> {
     'EOF': false,
     'BUFFERING': false,
     'HELP': false,
+
+    // set at session start for terminals without cursor capabilities,
+    // like og's missing_cap; survives help-screen mode swaps
+    'DUMB': false,
   };
 }

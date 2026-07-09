@@ -1,10 +1,14 @@
 import { config } from '../config';
 
-import { isStyled, isAscii, withReset } from '../helpers';
+import { isStyled, isAscii, withReset, gutterFor, decoratedRows,
+  highlightRow } from '../helpers';
 
 import { getLayout, emitRow } from './lineLayout';
 
 import { highlightLine } from '../features/searching';
+
+import { optWordwrap } from '../options';
+
 
 /**
  * Wraps lines into subrows to fit screen width and fills the window.
@@ -13,12 +17,27 @@ import { highlightLine } from '../features/searching';
  * @param lines - Output array of wrapped lines.
  */
 export function wrapLongLines(content: string[], lines: string[]): void {
+  const decorated = decoratedRows();
+
   for (
     let row = config.row;
     row < content.length && lines.length < config.window - 1;
     row++
   ) {
-    wrap(lines, highlightLine(content[row]));
+    const before = lines.length;
+    wrap(lines, highlightLine(content[row], row));
+
+    if (decorated) {
+      // the first emitted row starts the line unless it resumes an
+      // earlier sub-row; the rest are continuations with blank gutters
+      const firstIsStart = before > 0 || config.subRow === 0;
+
+      for (let i = before; i < lines.length; i++) {
+        // -w and --status-line highlight the row in standout
+        lines[i] = gutterFor(content, row, i === before && firstIsStart) +
+          highlightRow(lines[i], row);
+      }
+    }
   }
 }
 
@@ -35,7 +54,8 @@ export function wrapLongLines(content: string[], lines: string[]): void {
 function wrap(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
 
-  if (!isStyled(longLine) && isAscii(longLine)) {
+  // --wordwrap boundaries live in the layout, even for plain lines
+  if (!optWordwrap() && !isStyled(longLine) && isAscii(longLine)) {
     wrapAsciiLine(lines, longLine, startRow);
     return;
   }

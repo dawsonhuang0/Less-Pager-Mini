@@ -38,7 +38,7 @@ import {
   option,
   startOption,
   optionKey
-} from '../../src/features/options';
+} from '../../src/options';
 
 import {
   markRow,

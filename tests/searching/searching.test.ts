@@ -15,7 +15,7 @@ import {
   highlightLine
 } from '../../src/features/searching';
 
-import { formatContent } from '../../src/helpers';
+import { screenRows } from '../../src/helpers';
 
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
 
@@ -188,17 +188,50 @@ describe('search history', () => {
     expect(search.input?.chars.join('')).toBe('bravo');
   });
 
-  it('bells past the newest entry, like og cmd_updown', () => {
+  it('only recalls patterns starting with the typed text', () => {
     doSearch('/', 'alpha');
+    doSearch('/', 'bravo');
 
     startSearch('/', 1);
-    type('alp');
+    type('al');
     searchInputKey('\x1B[A');
     expect(search.input?.chars.join('')).toBe('alpha');
 
-    // down past the newest entry stays put, like og's sentinel
+    // an unmatched prefix rings the bell and keeps the typed text
+    startSearch('/', 1);
+    type('zu');
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('zu');
+  });
+
+  it('latches the prefix until the pattern is edited', () => {
+    doSearch('/', 'alpha');
+    doSearch('/', 'alps');
+
+    startSearch('/', 1);
+    type('al');
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('alps');
+
+    // the latch stays "al", not the recalled "alps"
+    searchInputKey('\x1B[A');
+    expect(search.input?.chars.join('')).toBe('alpha');
+  });
+
+  it('wraps Down at a fresh prompt to the oldest pattern', () => {
+    doSearch('/', 'alpha');
+    doSearch('/', 'bravo');
+
+    startSearch('/', 1);
     searchInputKey('\x1B[B');
     expect(search.input?.chars.join('')).toBe('alpha');
+
+    // past the newest entry, Down rings and stays put
+    searchInputKey('\x1B[B');
+    expect(search.input?.chars.join('')).toBe('bravo');
+
+    searchInputKey('\x1B[B');
+    expect(search.input?.chars.join('')).toBe('bravo');
   });
 
   it('is shared between searches and filters', () => {
@@ -260,7 +293,7 @@ describe('execSearch', () => {
     doSearch('/', 'zulu');
 
     expect(config.row).toBe(0);
-    expect(search.message).toBe('Pattern not found');
+    expect(search.message).toMatch(/^Pattern not found: /);
   });
 
   it('reports when repeating with no previous pattern', () => {
@@ -292,7 +325,7 @@ describe('execSearch', () => {
 
   it('searches literally with ^R', () => {
     doSearch('/', '\x12a.pha');
-    expect(search.message).toBe('Pattern not found');
+    expect(search.message).toMatch(/^Pattern not found: /);
 
     config.row = 1;
     doSearch('/', 'a.pha');
@@ -454,12 +487,12 @@ describe('prompt replacement at (END)', () => {
   it('suppresses the END marker while typing a search', () => {
     mode.EOF = true;
 
-    const before = formatContent(content);
+    const before = screenRows(content, []);
     expect(before[before.length - 1]).toBe(END_MARKER);
 
     startSearch('/', 1);
 
-    const during = formatContent(content);
+    const during = screenRows(content, []);
     expect(during[during.length - 1]).not.toBe(END_MARKER);
   });
 
@@ -467,7 +500,7 @@ describe('prompt replacement at (END)', () => {
     mode.EOF = true;
     search.message = 'Pattern not found';
 
-    const during = formatContent(content);
+    const during = screenRows(content, []);
     expect(during[during.length - 1]).not.toBe(END_MARKER);
   });
 });

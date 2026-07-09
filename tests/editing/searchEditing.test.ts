@@ -6,7 +6,8 @@ import {
   search,
   startSearch,
   searchInputKey,
-  searchPrompt
+  searchPrompt,
+  execSearch
 } from '../../src/features/searching';
 
 import { cmd, cmdCol } from '../../src/features/cmdbuf';
@@ -115,5 +116,19 @@ describe('editing at the search prompt', () => {
     expect(cmd.offset).toBeGreaterThan(0);
     expect(cmdCol()).toBeLessThan(20);
     expect(searchPrompt()).toBe('/' + cmd.steps.slice(cmd.offset).join(''));
+  });
+});
+
+describe('messages with control characters', () => {
+  it('shows the missed pattern with ESC in display form, like og', () => {
+    for (let i = 0; i < 3; i++) {
+      searchInputKey('\x16'); // ^V literal
+      searchInputKey('\x1B');
+    }
+
+    expect(search.input?.chars.join('')).toBe('\x1B\x1B\x1B');
+
+    execSearch(['alpha', 'bravo']);
+    expect(search.message).toBe('Pattern not found: ESCESCESC');
   });
 });

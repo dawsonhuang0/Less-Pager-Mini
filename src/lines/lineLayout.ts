@@ -4,6 +4,8 @@ import { config } from '../config';
 
 import { isAscii, splitChars } from '../helpers';
 
+import { optWordwrap } from '../options';
+
 import { STYLE_REGEX_G, STYLE_RESET } from '../constants';
 
 /**
@@ -35,6 +37,7 @@ const CACHE_LIMIT = 5000;
 
 let cache = new Map<string, LineLayout>();
 let cacheWidth = 0;
+let cacheWordwrap = false;
 
 /**
  * Returns the cached layout for a line, building it on first access.
@@ -45,9 +48,10 @@ let cacheWidth = 0;
  * @returns The line's layout for the current screen width.
  */
 export function getLayout(line: string): LineLayout {
-  if (cacheWidth !== config.screenWidth) {
+  if (cacheWidth !== config.screenWidth || cacheWordwrap !== optWordwrap()) {
     cache = new Map();
     cacheWidth = config.screenWidth;
+    cacheWordwrap = optWordwrap();
   }
 
   let layout = cache.get(line);
@@ -79,6 +83,7 @@ export function emitRow(layout: LineLayout, row: number): string {
 
   const parts: string[] = [];
   let k = firstCode(layout, row === 0 ? start : start + 1);
+  let width = 0;
 
   for (let c = start; c < end; c++) {
     while (k < layout.codeIdx.length && layout.codeIdx[k] <= c) {
@@ -86,7 +91,11 @@ export function emitRow(layout: LineLayout, row: number): string {
       k++;
     }
 
+    // a space run swallowed by --wordwrap stays off the screen
+    if (width + layout.widths[c] > config.screenWidth) break;
+
     parts.push(layout.chars[c]);
+    width += layout.widths[c];
   }
 
   while (k < layout.codeIdx.length && layout.codeIdx[k] <= end) {
@@ -136,17 +145,7 @@ function buildLayout(line: string): LineLayout {
   prefix[0] = 0;
   for (let c = 0; c < chars.length; c++) prefix[c + 1] = prefix[c] + widths[c];
 
-  const rowStart = [0];
-  let len = 0;
-
-  for (let c = 0; c < chars.length; c++) {
-    if (len + widths[c] > config.screenWidth) {
-      rowStart.push(c);
-      len = 0;
-    }
-
-    len += widths[c];
-  }
+  const rowStart = buildRowStarts(chars, widths);
 
   const rowStyle = new Array<string>(rowStart.length);
   let active: string[] = [];
@@ -167,6 +166,57 @@ function buildLayout(line: string): LineLayout {
   }
 
   return { chars, widths, prefix, codeIdx, codes, rowStart, rowStyle };
+}
+
+const isSpace = (char: string): boolean => char === ' ' || char === '\t';
+
+/**
+ * Computes the sub-row boundaries: fixed width normally; --wordwrap
+ * breaks after the last space run, like less's forw_line_seg, where an
+ * overflowing space run is swallowed and a single long word still
+ * breaks hard at the screen edge.
+ */
+function buildRowStarts(chars: string[], widths: number[]): number[] {
+  const width = config.screenWidth;
+  const wordwrap = optWordwrap();
+  const rowStart = [0];
+
+  let len = 0;
+  let wrapAt = -1;          // after the last space run (wrap_pos)
+  let seenNonSpace = false; // like skipped_leading
+  let c = 0;
+
+  while (c < chars.length) {
+    if (len > 0 && len + widths[c] > width) {
+      let next = c;
+
+      if (wordwrap && isSpace(chars[c])) {
+        // the space itself no longer fits: swallow the run
+        while (next < chars.length && isSpace(chars[next])) next++;
+        if (next >= chars.length) break;
+      } else if (wordwrap && wrapAt > rowStart[rowStart.length - 1]) {
+        next = wrapAt;
+      }
+
+      rowStart.push(next);
+      len = 0;
+      wrapAt = -1;
+      seenNonSpace = false;
+      c = next;
+      continue;
+    }
+
+    if (isSpace(chars[c])) {
+      if (seenNonSpace) wrapAt = c + 1;
+    } else {
+      seenNonSpace = true;
+    }
+
+    len += widths[c];
+    c++;
+  }
+
+  return rowStart;
 }
 
 function firstCode(layout: LineLayout, threshold: number): number {

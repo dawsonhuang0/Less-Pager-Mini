@@ -20,6 +20,7 @@ import {
   startExamine,
   examineKey,
   expandExamineList,
+  addExamineHistory,
   setPreviousPath,
   fileTitle,
   nextFileName,
@@ -145,6 +146,108 @@ describe('examine prompt', () => {
     expect(examineKey('\x7F')).toBe('cancel');
     expect(examine.pending).toBe(false);
   });
+
+  it('recalls opened file names with Up/Down', () => {
+    addExamineHistory(fileA);
+    addExamineHistory(fileB);
+
+    startExamine();
+    examineKey('\x1B[A');
+    expect(examine.text).toBe(fileB);
+
+    examineKey('\x1B[A');
+    expect(examine.text).toBe(fileA);
+
+    // past the oldest entry, Up rings and stays put
+    examineKey('\x1B[A');
+    expect(examine.text).toBe(fileA);
+
+    examineKey('\x1B[B');
+    expect(examine.text).toBe(fileB);
+
+    // past the newest entry, Down rings and stays put
+    examineKey('\x1B[B');
+    expect(examine.text).toBe(fileB);
+  });
+
+  it('only recalls entries starting with the typed text', () => {
+    addExamineHistory('hello.txt');
+    addExamineHistory('main.txt');
+
+    startExamine();
+    for (const char of 'he') examineKey(char);
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('hello.txt');
+
+    // the latched prefix keeps filtering after the recall
+    examineKey('\x1B[B');
+    expect(examine.text).toBe('hello.txt');
+
+    // an unmatched prefix rings and keeps the typed text
+    startExamine();
+    examineKey('x');
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('x');
+    expect(examine.pending).toBe(true);
+  });
+
+  it('re-latches the prefix after editing the text', () => {
+    addExamineHistory('hello.txt');
+    addExamineHistory('help.txt');
+
+    startExamine();
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('help.txt');
+
+    // erasing a char latches "help.tx", which hello.txt cannot match
+    examineKey('\x7F');
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('help.tx');
+  });
+
+  it('wraps Down at a fresh prompt to the oldest entry', () => {
+    addExamineHistory('hello.txt');
+    addExamineHistory('main.txt');
+
+    startExamine();
+    examineKey('\x1B[B');
+    expect(examine.text).toBe('hello.txt');
+  });
+
+  it('skips consecutive duplicates and rings with no history', () => {
+    startExamine();
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('');
+    expect(examine.pending).toBe(true);
+
+    addExamineHistory(fileA);
+    addExamineHistory(fileA);
+    addExamineHistory(fileB);
+
+    startExamine();
+    examineKey('\x1B[A');
+    examineKey('\x1B[A');
+    expect(examine.text).toBe(fileA);
+
+    examineKey('\x1B[A');
+    expect(examine.text).toBe(fileA);
+  });
+
+  it('seeds the history with - for in-memory content', () => {
+    initContent(['x']);
+
+    startExamine();
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('-');
+  });
+
+  it('quotes recalled names containing spaces', () => {
+    addExamineHistory('with space.txt');
+
+    startExamine();
+    examineKey('\x1B[A');
+    expect(examine.text).toBe('"with space.txt"');
+  });
 });
 
 describe('examine expansion', () => {
@@ -253,6 +356,9 @@ describe('prompts and info', () => {
     config.col = 4;
 
     fileInfo(['a', 'b', 'c']);
-    expect(search.message).toBe('lines 1-3/3 byte 5/5 (END) (column 5)');
+
+    // e_proto's ?e branch ends with a space and ?c starts with one, so
+    // og prints two spaces between (END) and (column ...)
+    expect(search.message).toBe('lines 1-3/3 byte 5/5 (END)  (column 5)');
   });
 });

@@ -21,7 +21,14 @@ import {
 
 import { search } from "./searching";
 
-import { optNoHistDups, resetHeaderStart } from "./options";
+import { optNoHistDups, optQuotes, resetHeaderStart, checkModelines }
+  from "../options";
+
+import { decodeContent } from "./charset";
+
+import { prExpand, eqProto } from "./prompt";
+
+import { openAltFile, closeAltFile } from "./lessopen";
 
 /**
  * One entry in the command line file list, like less's ifile.
@@ -34,6 +41,8 @@ interface FileEntry {
   size: number;
   /** Saved screen position, like ifile.c's store_pos/get_pos. */
   saved: { row: number, subRow: number } | null;
+  /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
+  alt?: string;
 }
 
 /**
@@ -101,6 +110,12 @@ export function initContent(lines: string[]): void {
   files.newFile = false;
   examine.pending = false;
   examine.text = '';
+
+  // the pseudo-file is "opened" right away, like less reading stdin
+  examineHistory.length = 0;
+  addExamineHistory('-');
+  resetHeaderStart();
+  checkModelines(lines);
 }
 
 /**
@@ -135,20 +150,55 @@ export function loadFile(index: number): string[] | null {
 
   if (entry.lines) return entry.lines;
 
+  // a re-open replaces any previous $LESSOPEN product, like og's edit
+  // closing the old alt file first
+  closeAlt(entry);
+
+  // $LESSOPEN runs before the file itself opens (it may even handle
+  // directories), like edit_ifile calling open_altfile
+  const alt = openAltFile(entry.path);
+
+  if (alt) {
+    entry.size = alt.size;
+    entry.alt = alt.alt;
+    checkModelines(alt.lines);
+    return alt.lines;
+  }
+
   try {
     if (fs.statSync(entry.path).isDirectory()) {
       search.message = `${entry.path} is a directory`;
       return null;
     }
 
-    const data = fs.readFileSync(entry.path, 'utf8');
+    // bytes decode through the charset, like og's chardef classes:
+    // invalid UTF-8 bytes survive as markers for $LESSBINFMT
+    const data = decodeContent(fs.readFileSync(entry.path));
     entry.size = fs.statSync(entry.path).size;
 
-    return (data.endsWith('\n') ? data.slice(0, -1) : data).split('\n');
+    const lines = (data.endsWith('\n') ? data.slice(0, -1) : data)
+      .split('\n');
+
+    // --modelines scans the head of each opened file, like edit_ifile
+    // calling check_modelines
+    checkModelines(lines);
+
+    return lines;
   } catch (error) {
     search.message = `${entry.path}: ${errorText(error)}`;
     return null;
   }
+}
+
+/**
+ * Runs $LESSCLOSE for an entry's $LESSOPEN product and forgets it,
+ * like og's close_altfile when a file is left.
+ */
+export function closeAlt(entry: FileEntry | undefined): void {
+  if (!entry || !entry.alt) return;
+
+  closeAltFile(entry.alt, entry.path);
+  entry.alt = undefined;
 }
 
 /**
@@ -390,6 +440,9 @@ export function expandHomeEnv(word: string): string {
  * @param pattern - The pattern to expand.
  */
 function glob(pattern: string): string[] {
+  // like lglob: expansion is disabled under LESSSECURE
+  if (!secureAllow('glob')) return [pattern];
+
   if (!/[*?[]/.test(pattern)) return [pattern];
 
   const absolute = pattern.startsWith('/');
@@ -548,11 +601,20 @@ function wordStart(text: string): number {
 }
 
 function unquote(word: string): string {
-  return word.replace(/"/g, '');
+  const { open, close } = optQuotes();
+  let out = word;
+
+  if (open) out = out.split(open).join('');
+  if (close && close !== open) out = out.split(close).join('');
+
+  return out;
 }
 
+// filenames with spaces take the -" quote characters, like less
 function quoteIfNeeded(name: string): string {
-  return /[ "]/.test(name) ? `"${name.replace(/"/g, '')}"` : name;
+  const { open, close } = optQuotes();
+  if (!open || !/[ "]/.test(name)) return name;
+  return open + unquote(name) + close;
 }
 
 /**
@@ -579,31 +641,15 @@ export function nextFileName(): string {
 }
 
 /**
- * Reports the current file name and position (`=`, `^G`, `:f`), formatted
- * like less's e_proto:
- * `name (file i of m) lines T-B/N byte b/s P% (column c)`.
+ * Reports the current file name and position (`=`, `^G`, `:f`) by
+ * expanding less's e_proto (changeable with -P=).
  *
  * @param content - Displayed content lines.
  */
 export function fileInfo(content: string[]): void {
   if (mode.HELP) return;
 
-  const entry = files.list[files.index];
-  const name = entry && entry.path !== '-' ? entry.path + ' ' : '';
-  const multi = files.list.length > 1
-    ? `(file ${files.index + 1} of ${files.list.length}) `
-    : '';
-
-  const bottom = bottomRow(content);
-  const size = Math.max(entry ? entry.size : 0, 1);
-  const byte = Math.min(byteOffset(content, bottom + 1), size);
-
-  const tail = mode.EOF ? '(END)' : `${percentage(byte, size)}%`;
-  const column = config.col ? ` (column ${config.col + 1})` : '';
-
-  search.message =
-    `${name}${multi}lines ${config.row + 1}-${bottom + 1}/${content.length}` +
-    ` byte ${byte}/${size} ${tail}${column}`;
+  search.message = prExpand(content, eqProto());
 }
 
 /**
@@ -611,7 +657,7 @@ export function fileInfo(content: string[]): void {
  *
  * @param content - Displayed content lines.
  */
-function bottomRow(content: string[]): number {
+export function bottomRow(content: string[]): number {
   let steps = config.window - 2 - config.blankTop;
 
   if (config.chopLongLines || config.col) {
@@ -640,7 +686,7 @@ function bottomRow(content: string[]): number {
  * @param content - Content lines.
  * @param row - Row whose starting offset to compute.
  */
-function byteOffset(content: string[], row: number): number {
+export function byteOffset(content: string[], row: number): number {
   let bytes = 0;
 
   for (let i = 0; i < row && i < content.length; i++) {
@@ -653,7 +699,7 @@ function byteOffset(content: string[], row: number): number {
 /**
  * Integer percentage, rounded half to even like less's percentage().
  */
-function percentage(num: number, den: number): number {
+export function percentage(num: number, den: number): number {
   const scaled = num * 100;
   let pct = Math.floor(scaled / den);
   const rem = scaled % den;
@@ -665,7 +711,7 @@ function percentage(num: number, den: number): number {
 /**
  * Renders a file open error like less's errno messages.
  */
-function errorText(error: unknown): string {
+export function errorText(error: unknown): string {
   const code = (error as { code?: string }).code;
 
   switch (code) {

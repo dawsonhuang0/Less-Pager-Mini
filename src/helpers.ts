@@ -9,15 +9,54 @@ import { wrapLongLines } from './lines/wrapLongLines';
 
 import { getLayout } from './lines/lineLayout';
 
+import { search, searchPrompt, lineMatches } from './features/searching';
+
+import {
+  option,
+  optQuiet,
+  optNoVbell,
+  optClearRepaint,
+  optTildes,
+  optPrType,
+  optLinenums,
+  optLinenumWidth,
+  optStatusCol,
+  optStatusColWidth,
+  optSqueeze,
+  optCtldisp,
+  optBackScroll,
+  optForwScroll,
+  optHeader,
+  vlinenum,
+  optStatusLine,
+  optProcBackspace,
+  optProcTab,
+  optProcReturn,
+  optWordwrap,
+  optHiliteTarget,
+  gutterWidth,
+  nextTabStop,
+  optBsMode
+} from './options';
+
+import { prExpand, prProto, hProto, wProto } from './features/prompt';
+
+import { colored, attrText } from './features/color';
+
+import { rawByteOf, binByteText, utfBinText, ubinChar }
+  from './features/charset';
+
 import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
 
-import { search, searchPrompt } from './features/searching';
+import { follow } from './features/follow';
 
-import { option } from './features/options';
+import { brackets, marks, markAtRow } from './features/jumping';
 
-import { brackets, marks } from './features/jumping';
+import { files, examine } from './features/files';
 
-import { files, examine, fileTitle, nextFileName } from './features/files';
+import { miscInput, pipeMark, overwrite,
+  miscPromptLabel
+} from './features/misc';
 
 import {
   ASCII_REGEX,
@@ -28,7 +67,8 @@ import {
   INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
-  END_MARKER,
+  UNDERLINE_ON,
+  UNDERLINE_OFF,
   CURSOR_HOME,
   CLEAR_LINE,
   CLEAR_BELOW,
@@ -53,7 +93,8 @@ import {
 export function maxSubRow(line: string): number {
   if (config.chopLongLines) return 0;
 
-  if (!isStyled(line) && isAscii(line)) {
+  // --wordwrap boundaries live in the layout, even for plain lines
+  if (!optWordwrap() && !isStyled(line) && isAscii(line)) {
     return Math.floor(Math.max(line.length - 1, 0) / config.screenWidth);
   }
 
@@ -114,7 +155,10 @@ export function inputToString(
 ): string[] {
   switch (typeof input) {
     case 'string':
-      return input.split('\n');
+      // a trailing newline ends the last line, it does not add an
+      // empty one, like less reading a pipe
+      return (input.endsWith('\n') ? input.slice(0, -1) : input)
+        .split('\n');
 
     case 'undefined':
       return ['undefined'];
@@ -134,13 +178,269 @@ export function inputToString(
   return [];
 }
 
+// controls, raw-byte markers and unicode binaries all transform
+const CONTROL_REGEX =
+  // eslint-disable-next-line no-control-regex
+  /[\x00-\x08\x0B-\x1F\x7F\t\uE000-\uE0FF\uFFFD\p{Cn}\p{Co}\p{Cs}]/u;
+
 /**
- * Triggers an audible bell sound in the terminal.
+ * Prepares raw lines for display: -s squeezes runs of blank lines, tabs
+ * expand at the -x stops, and control characters follow -r/-R.
  *
- * Sends the ASCII bell character (`\x07`) to `stdout`.
+ * @param lines - Raw content lines.
+ * @returns The display lines.
  */
-export function ringBell(): void {
+export function transformContent(lines: string[]): string[] {
+  const squeeze = optSqueeze();
+  const out: string[] = [];
+  let blank = false;
+
+  for (const raw of lines) {
+    if (squeeze && raw === '') {
+      if (blank) continue;
+      blank = true;
+    } else {
+      blank = false;
+    }
+
+    out.push(CONTROL_REGEX.test(raw) ? transformLine(raw) : raw);
+  }
+
+  return out;
+}
+
+/**
+ * Expands tabs and converts control characters in one line, like less's
+ * do_append: caret notation in standout unless -r passes them raw; -R
+ * (the default here) lets ANSI style sequences through.
+ */
+function transformLine(line: string): string {
+  const ctldisp = optCtldisp();
+  let out = '';
+  let col = 0;
+  let i = 0;
+
+  // backspace handling, like line.c: --proc-backspace overrides the
+  // -u/-U mode; og's DEFAULT is overstrike processing (BS_SPECIAL)
+  if (line.includes('\x08')) {
+    const pb = optProcBackspace();
+
+    if (pb === 1 || (pb === 0 && optBsMode() === 0)) {
+      line = procBackspaces(line);
+    } else if (pb === 0 && optBsMode() === 1) {
+      // -u: the backspace really overprints, leaving plain text
+      // eslint-disable-next-line no-control-regex
+      while (/.\x08/.test(line)) line = line.replace(/.\x08/g, '');
+    }
+    // otherwise \b renders as the ^H control char below
+  }
+
+  // --proc-return deletes a carriage return before the newline
+  if (optProcReturn() === 1 && line.endsWith('\r')) {
+    line = line.slice(0, -1);
+  }
+
+  while (i < line.length) {
+    const char = line[i];
+
+    // --proc-tab as ^I falls through to the control char display
+    if (char === '\t' && optProcTab() !== 2) {
+      const stop = nextTabStop(col);
+      out += ' '.repeat(stop - col);
+      col = stop;
+      i++;
+      continue;
+    }
+
+    if (char === '\x1B' && ctldisp === 2) {
+      const ansi = STYLE_REGEX_G;
+      ansi.lastIndex = i;
+      const match = ansi.exec(line);
+
+      if (match && match.index === i) {
+        out += match[0];
+        i += match[0].length;
+        continue;
+      }
+    }
+
+    // a raw undecodable byte displays with $LESSBINFMT, like og's
+    // binary chars (<XX> in standout / the BIN color)
+    const rawByte = rawByteOf(char);
+
+    if (rawByte >= 0) {
+      const text = binByteText(rawByte);
+      out += text;
+      col += text.replace(STYLE_REGEX_G, '').length;
+      i++;
+      continue;
+    }
+
+    // a unicode char with no sane display uses $LESSUTFBINFMT
+    if (char >= '\x80' && ubinChar(char)) {
+      const code = line.codePointAt(i) ?? 0;
+      const text = utfBinText(code);
+      out += text;
+      col += text.replace(STYLE_REGEX_G, '').length;
+      i += String.fromCodePoint(code).length;
+      continue;
+    }
+
+    if (char < ' ' || char === '\x7F') {
+      if (ctldisp === 1) {
+        out += char;
+        col++;
+      } else {
+        const caret = char === '\x7F'
+          ? '^?'
+          : '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
+        out += colored('ctrl', caret, INVERSE_ON, INVERSE_OFF);
+        col += 2;
+      }
+
+      i++;
+      continue;
+    }
+
+    out += char;
+    col += char >= '\x80' ? strWidth(char) : 1;
+    i++;
+  }
+
+  return out;
+}
+
+/**
+ * Converts nroff-style overstrikes for --proc-backspace: `X\bX` prints
+ * bold and `_\bX` underlined, leftover backspaces just erase.
+ */
+function procBackspaces(line: string): string {
+  /* eslint-disable no-control-regex */
+  return line
+    .replace(/_\x08(.)/g, (_, c: string) => attrText('underline', c))
+    .replace(/(.)\x08\1/g, (_, c: string) => attrText('bold', c))
+    .replace(/.\x08(.)/g, '$1');
+  /* eslint-enable no-control-regex */
+}
+
+/**
+ * Builds the left gutter for a display row: the -J status column and
+ * the -N line number field. Empty when neither option is on.
+ *
+ * @param content - Display lines.
+ * @param row - The content row of this display row.
+ * @param lineStart - False for a wrapped line's continuation rows.
+ */
+export function gutterFor(
+  content: string[],
+  row: number,
+  lineStart: boolean
+): string {
+  let gutter = '';
+
+  if (optStatusCol()) {
+    let char = ' ';
+
+    if (lineStart) {
+      const mark = markAtRow(row);
+      char = mark || (lineMatches(content[row]) ? '*' : ' ');
+    }
+
+    // mark letters take the M color, like AT_COLOR_MARK
+    const pad = char.padEnd(optStatusColWidth());
+    gutter += char === ' ' ? pad : colored('mark', pad);
+  }
+
+  if (optLinenums() === 2) {
+    // --no-number-headers blanks the header lines' numbers (0)
+    const num = lineStart ? vlinenum(row + 1) : 0;
+
+    gutter += num
+      ? colored('linenum', String(num).padStart(optLinenumWidth())) + ' '
+      : ' '.repeat(optLinenumWidth() + 1);
+  }
+
+  return gutter;
+}
+
+/** True when display rows carry a gutter or the -w attn highlight. */
+export const decoratedRows = (): boolean =>
+  gutterWidth() > 0 || config.attnRow >= 0 || optStatusLine();
+
+/**
+ * Applies the row highlight for -w attn and --status-line marks: with
+ * --status-line the standout spans the entire screen width, like less.
+ *
+ * @param text - The formatted row text.
+ * @param row - The content row.
+ * @returns The row, highlighted when it is the attn or a marked line.
+ */
+export function highlightRow(text: string, row: number): string {
+  const marked = optStatusLine() && markAtRow(row) !== '';
+  if (row !== config.attnRow && !marked) return text;
+
+  if (optStatusLine()) {
+    const pad = config.screenWidth - visualWidth(text);
+    if (pad > 0) text += ' '.repeat(pad);
+  }
+
+  // --hilite-target rows take the J color, marked rows M, -w attn W
+  const kind = row === config.attnRow
+    ? (optHiliteTarget() ? 'target' : 'attn')
+    : 'mark';
+
+  return colored(kind, text, INVERSE_ON, INVERSE_OFF);
+}
+
+// the second of the last eof/bof bell, like og rate limiting eof_bell
+let lastEofBell = 0;
+
+/** Forgets the eof bell rate limit, like a fresh less process. */
+export function resetBellTimer(): void {
+  lastEofBell = 0;
+}
+
+/**
+ * Rings the terminal bell.
+ *
+ * - Like less's lbell/eof_bell: `-q` replaces eof/bof bells with the
+ *   visual bell, `-Q` replaces every bell, and --no-vbell suppresses
+ *   the flash. Eof/bof bells ring at most once per second.
+ *
+ * @param kind - `eof` for end/beginning-of-file bells, `error` otherwise.
+ */
+export function ringBell(kind: 'error' | 'eof' = 'error'): void {
+  const quiet = optQuiet();
+
+  if (kind === 'eof') {
+    const now = Math.floor(Date.now() / 1000);
+    if (now === lastEofBell) return;
+    lastEofBell = now;
+
+    if (quiet !== 0) {
+      visualBell();
+      return;
+    }
+  }
+
+  if (quiet === 2) {
+    visualBell();
+    return;
+  }
+
   process.stdout.write('\x07');
+}
+
+/**
+ * Flashes the screen with ~100ms of reverse video, like og's vbell
+ * writing the terminfo flash capability.
+ */
+function visualBell(): void {
+  // a dumb terminal has no flash capability, like og's empty vb
+  if (optNoVbell() || mode.DUMB) return;
+
+  process.stdout.write('\x1B[?5h');
+  setTimeout(() => process.stdout.write('\x1B[?5l'), 100);
 }
 
 /**
@@ -166,7 +466,71 @@ export function formatContent(content: string[]): string[] {
   }
 
   padToEOF(lines);
-  return lines;
+  return overlayHeaderLines(content, lines);
+}
+
+/**
+ * Replaces the top screen rows with the --header lines, like less's
+ * overlay_header: rendered from the header start row without horizontal
+ * shift, the last one underlined unless the screen top sits exactly at
+ * the header start (no gap below it).
+ *
+ * @param content - Full content lines.
+ * @param lines - The formatted screen lines.
+ * @returns The screen lines with the header rows in place.
+ */
+function overlayHeaderLines(content: string[], lines: string[]): string[] {
+  const header = optHeader();
+  if (header.lines <= 0 || mode.HELP) return lines;
+
+  const saved = {
+    row: config.row,
+    subRow: config.subRow,
+    col: config.col,
+    blankTop: config.blankTop,
+    window: config.window,
+  };
+
+  config.row = header.start;
+  config.subRow = 0;
+  config.col = 0;
+  config.blankTop = 0;
+  config.window = header.lines + 1;
+
+  const rows: string[] = [];
+
+  if (config.chopLongLines) {
+    chopLongLines(content, rows);
+  } else {
+    wrapLongLines(content, rows);
+  }
+
+  config.row = saved.row;
+  config.subRow = saved.subRow;
+  config.col = saved.col;
+  config.blankTop = saved.blankTop;
+  config.window = saved.window;
+
+  // the tilde padding block holds several rows in one entry
+  const flat = lines.join('\n').split('\n');
+
+  const seamless = saved.row === header.start && saved.subRow === 0 &&
+    saved.blankTop === 0;
+
+  for (let i = 0; i < header.lines && i < flat.length; i++) {
+    let row = colored('header', rows[i] ?? '');
+
+    if (i === header.lines - 1 && !seamless) {
+      // inner resets would drop the underline for the rest of the row
+      row = UNDERLINE_ON +
+        row.split(STYLE_RESET).join(STYLE_RESET + UNDERLINE_ON) +
+        UNDERLINE_OFF;
+    }
+
+    flat[i] = row;
+  }
+
+  return flat;
 }
 
 /**
@@ -206,10 +570,6 @@ export function delBufferChar(buffer: string[]): void {
 
 let prevRows: string[] | null = null;
 
-// the parked cursor column of the last frame, so pure cursor
-// movement at a prompt still repositions it on unchanged screens
-let prevCursorCol = -1;
-
 /**
  * Forgets the previously rendered frame, forcing the next render to redraw
  * the whole screen. Call when entering a fresh screen (session start).
@@ -217,6 +577,11 @@ let prevCursorCol = -1;
 export function resetRender(): void {
   prevRows = null;
   prevCursorCol = -1;
+}
+
+/** The most recently rendered screen rows, for --redraw-on-quit. */
+export function lastScreen(): string[] | null {
+  return prevRows;
 }
 
 /**
@@ -232,9 +597,104 @@ export function resetRender(): void {
  * @param rawContent - The string content to display in the terminal.
  * @param buffer - Array of buffer characters.
  */
+// the parked cursor column of the last frame, so pure cursor
+// movement at a prompt still repositions it on unchanged screens
+let prevCursorCol = -1;
+
 export function render(rawContent: string[], buffer: string[]): void {
+  const rows = screenRows(rawContent, buffer);
+
+  // og (v618+) starts at the lower left of the alt screen and lets
+  // the first paint scroll upward: a short first screen sits just
+  // above the bottom prompt, its blank rows on top
+  if (mode.INIT && !mode.DUMB && rows.length < config.window) {
+    rows.unshift(...Array(config.window - rows.length).fill(''));
+  }
+
+  // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
+  // and the parked cursor untouched, like less — but arrow movement
+  // inside the command buffer must still move the cursor
+  if (prevRows && sameRows(prevRows, rows)) {
+    const col = cmd.active && !mode.DUMB ? cursorCol(rows) : -1;
+
+    if (col >= 0 && col !== prevCursorCol) {
+      prevCursorCol = col;
+      process.stdout.write(CURSOR_TO(rows.length, col));
+    }
+
+    return;
+  }
+
+  if (mode.DUMB) {
+    const frame = dumbFrame(prevRows, rows);
+    prevRows = rows;
+    process.stdout.write(frame);
+    return;
+  }
+
+  // -c repaints instead of scrolling
+  const frame = (optClearRepaint() ? null : scrolledFrame(rows)) ??
+    fullFrame(rows);
+
+  prevRows = rows;
+  prevCursorCol = cmd.active ? cursorCol(rows) : -1;
+  process.stdout.write(frame);
+}
+
+/**
+ * Repaints for a terminal without cursor addressing, like og drawing
+ * with the dumb entry's caps: attribute strings are empty (styles
+ * stripped; og's default caret mode never emits raw file escapes
+ * either) and nothing is ever erased.
+ *
+ * - A bottom-line change overwrites in place after a bare `\r`; a
+ *   shorter line leaves the old tail visible, like og without `el`.
+ * - A forward scroll prints only the newly exposed lines and the
+ *   prompt, letting the terminal scroll.
+ * - Anything else repaints behind the dumb `clear` of two newlines.
+ */
+function dumbFrame(prev: string[] | null, rows: string[]): string {
+  const plain = rows.map(row => row.replace(STYLE_REGEX_G, ''));
+  const last = plain.length - 1;
+
+  if (prev && prev.length === plain.length) {
+    const prevPlain = prev.map(row => row.replace(STYLE_REGEX_G, ''));
+
+    let same = 0;
+    while (same < last && plain[same] === prevPlain[same]) same++;
+
+    // only the bottom (prompt) line changed
+    if (same === last) return '\r' + plain[last];
+
+    // scrolled forward: the old rows moved up by k
+    for (let k = 1; k < last; k++) {
+      if (plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)) {
+        return '\r' +
+          plain.slice(last - k, last).map(row => row + '\n').join('') +
+          plain[last];
+      }
+    }
+  }
+
+  // the first paint just prints, like og's initial forw; only later
+  // full repaints go behind the dumb `clear` of two newlines
+  return (prev ? '\n\n' : '') + plain.join('\n');
+}
+
+/**
+ * Composes the full screen: the formatted content rows plus the bottom
+ * prompt line (expanded prototype, input prompt or message).
+ *
+ * @param rawContent - The string content to display.
+ * @param buffer - Array of buffer characters.
+ * @returns The screen rows, top to bottom.
+ */
+export function screenRows(
+  rawContent: string[],
+  buffer: string[]
+): string[] {
   const content = formatContent(rawContent);
-  const prompt = getPrompt();
+  const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;
   // a single pending ESC changes nothing
@@ -246,34 +706,15 @@ export function render(rawContent: string[], buffer: string[]): void {
     );
   }
 
-  const rows = content.join('\n').split('\n');
-
-  // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
-  // and the parked cursor untouched, like less — but arrow movement
-  // inside the command buffer must still move the cursor
-  if (prevRows && sameRows(prevRows, rows)) {
-    const col = cmd.active ? cursorCol(rows) : -1;
-
-    if (col >= 0 && col !== prevCursorCol) {
-      prevCursorCol = col;
-      process.stdout.write(CURSOR_TO(rows.length, col));
-    }
-
-    return;
-  }
-
-  const frame = scrolledFrame(rows) ?? fullFrame(rows);
-
-  prevRows = rows;
-  prevCursorCol = cmd.active ? cursorCol(rows) : -1;
-  process.stdout.write(frame);
+  return content.join('\n').split('\n');
 }
 
 const drawRow = (rows: string[], row: number): string =>
   CURSOR_TO(row + 1, 1) + CLEAR_LINE + rows[row];
 
 // park the cursor after the prompt row's content, like less's
-// command-line position at the lower left
+// command-line position at the lower left; an open command buffer
+// places it at the editing position instead
 function parkCursor(rows: string[]): string {
   return CURSOR_TO(rows.length, cursorCol(rows));
 }
@@ -296,10 +737,15 @@ function sameRows(a: string[], b: string[]): boolean {
   return true;
 }
 
+// LESS_TERMCAP_SUSPEND/RESUME (v684) replace the strings wrapped
+// around screen updates; our default is the sync-update pair
+const syncOn = (): string => process.env.LESS_TERMCAP_SUSPEND ?? SYNC_ON;
+const syncOff = (): string => process.env.LESS_TERMCAP_RESUME ?? SYNC_OFF;
+
 function fullFrame(rows: string[]): string {
   const body = rows.map(row => CLEAR_LINE + row).join('\n');
-  return SYNC_ON + CURSOR_HOME + body + CLEAR_BELOW + parkCursor(rows) +
-    SYNC_OFF;
+  return syncOn() + CURSOR_HOME + body + CLEAR_BELOW + parkCursor(rows) +
+    syncOff();
 }
 
 /**
@@ -317,18 +763,24 @@ function scrolledFrame(rows: string[]): string | null {
   if (!prev || prev.length !== n || n < 3) return null;
 
   for (let k = 1; k < n - 1; k++) {
-    // scrolled forward: new rows show what was k rows lower
+    // scrolled forward: new rows show what was k rows lower; -y limits
+    // how far the screen scrolls before repainting instead
     if (rows[0] === prev[k] && shifted(rows, prev, k)) {
-      let frame = SYNC_ON + SCROLL_UP(k);
+      if (optForwScroll() >= 0 && k > optForwScroll()) return null;
+
+      let frame = syncOn() + SCROLL_UP(k);
       for (let r = n - 1 - k; r < n; r++) frame += drawRow(rows, r);
-      return frame + parkCursor(rows) + SYNC_OFF;
+      return frame + parkCursor(rows) + syncOff();
     }
 
-    // scrolled backward: new rows show what was k rows higher
+    // scrolled backward: new rows show what was k rows higher; -h is
+    // the backward scroll limit
     if (rows[k] === prev[0] && shifted(prev, rows, k)) {
-      let frame = SYNC_ON + SCROLL_DOWN(k);
+      if (optBackScroll() >= 0 && k > optBackScroll()) return null;
+
+      let frame = syncOn() + SCROLL_DOWN(k);
       for (let r = 0; r < k; r++) frame += drawRow(rows, r);
-      return frame + drawRow(rows, n - 1) + parkCursor(rows) + SYNC_OFF;
+      return frame + drawRow(rows, n - 1) + parkCursor(rows) + syncOff();
     }
   }
 
@@ -451,17 +903,51 @@ export const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
 /**
  * Returns the prompt string to be shown at the bottom of the screen.
  *
- * - Typically returns `':'` to indicate the pager is awaiting user input.
- * - Suppressed if an EOF marker like `(END)` is already displayed.
- * - May adapt based on the current mode (e.g. buffering, EOF).
+ * - Input prompts and messages take precedence; otherwise the -P
+ *   prototype for the current -m/-M style expands like less, falling
+ *   back to `:` when it comes out empty.
  *
- * @returns The prompt string, or an empty string if suppressed.
+ * @param content - Display lines, for prompt expansion.
+ * @returns The prompt string.
  */
-function getPrompt(): string {
+function getPrompt(content: string[]): string {
   const inputPrompt = searchPrompt();
   if (inputPrompt !== null) return inputPrompt;
 
-  if (option.pending) return option.pending;
+  if (option.pending) {
+    if (option.spec && option.spec.prompt) {
+      return option.spec.prompt + option.param;
+    }
+
+    if (option.name !== null) {
+      return option.pending + option.pending + option.name;
+    }
+
+    return option.pending + option.flag;
+  }
+
+  if (pipeMark.pending) {
+    const which = pipeMark.stage === 'first' ? 'first '
+      : pipeMark.stage === 'second' ? 'second ' : '';
+
+    // ^N swaps the mark prompt for line-number entry, like v707
+    return pipeMark.lineMode
+      ? `|${which}line number: ` + pipeMark.num
+      : `|${which}mark: `;
+  }
+
+  if (miscInput.pending) {
+    // the pipe command reuses the shell prompt, like less's
+    // start_mca(A_PIPE, "!", ...); the buffer renders its own carets
+    return miscPromptLabel(miscInput.pending) + cmdDisplay();
+  }
+
+  if (overwrite.pending) {
+    return overwrite.reminder
+      ? 'Overwrite, Append, Don\'t log, or Quit? (Type "O", "A", "D" or "Q") '
+      : `Warning: "${overwrite.file}" exists; ` +
+        'Overwrite, Append, Don\'t log, or Quit? ';
+  }
 
   if (brackets.pending) return 'Brackets: ' + brackets.chars;
 
@@ -483,40 +969,40 @@ function getPrompt(): string {
   }
 
   if (search.message) {
-    return INVERSE_ON + search.message + '  (press RETURN)' + INVERSE_OFF;
+    return colored('error', search.message + '  (press RETURN)',
+      INVERSE_ON, INVERSE_OFF);
   }
 
-  const helpPrompt = (
-    'HELP -- ' +
-    (mode.EOF ? 'END -- Press g to see it again' : 'Press RETURN for more') +
-    ', or q when done'
-  );
-
-  if (mode.HELP && !mode.BUFFERING) return (
-    INVERSE_ON +
-    helpPrompt.slice(Math.max(helpPrompt.length - config.screenWidth + 2, 0)) +
-    INVERSE_OFF
-  );
-
-  // a freshly opened file shows its name once, like less's %f (file i of
-  // m) prompt; at EOF the marker concatenates, as in s_proto:
-  // "f1 (file 1 of 3) (END) - Next: f2"
-  if (files.newFile && !mode.BUFFERING) {
-    files.newFile = false;
-    let title = fileTitle();
-
-    if (mode.EOF) {
-      const next = nextFileName();
-      title = [title, '(END)'].filter(Boolean).join(' ') +
-        (next ? ` - Next: ${next}` : '');
-    }
-
-    if (title) return INVERSE_ON + title + INVERSE_OFF;
+  // the F command waits with the -Pw prompt, like og's wait_message
+  if (follow.active) {
+    return colored('prompt', prExpand(content, wProto()),
+      INVERSE_ON, INVERSE_OFF);
   }
 
-  if (!mode.EOF || mode.BUFFERING) return ':';
+  if (mode.BUFFERING) return ':';
 
-  return '';
+  if (mode.HELP) {
+    const helpPrompt = prExpand(content, hProto());
+
+    return colored(
+      'prompt',
+      helpPrompt.slice(
+        Math.max(helpPrompt.length - config.screenWidth + 2, 0)
+      ),
+      INVERSE_ON,
+      INVERSE_OFF
+    );
+  }
+
+  // the bottom line expands the -P prototype of the -m/-M style; the
+  // short prompt shows a new file's name once (?n) and the (END)
+  // marker with the next file, like s_proto
+  const text = prExpand(content, prProto(optPrType()));
+  if (files.newFile) files.newFile = false;
+
+  if (!text) return ':';
+
+  return colored('prompt', text, INVERSE_ON, INVERSE_OFF);
 }
 
 /**
@@ -567,30 +1053,15 @@ function visibleBufferLength(bufferLength: number): number {
  * @param lines - The array of formatted lines to pad.
  */
 function padToEOF(lines: string[]): void {
-  if (!mode.INIT && config.window - lines.length > 1) {
-    lines.push(
-      BOLD_ON +
-      '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~' +
+  // -~ pads with blank lines instead of tildes
+  if (!mode.INIT && config.window - lines.length > 1 && optTildes()) {
+    lines.push(colored(
+      'tilde',
+      '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~',
+      BOLD_ON,
       BOLD_OFF
-    );
+    ));
   }
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
-
-  // search input, option input and messages replace the bottom line
-  if (
-    !mode.BUFFERING && !mode.HELP && mode.EOF &&
-    !search.input && !search.message && !examine.pending &&
-    !option.pending && !brackets.pending && !marks.pending &&
-    !files.newFile &&
-    // an echoed key prefix (" :", " ^X", " ESC") replaces the marker
-    (!config.keyPrefix || config.keyPrefix === '\x1B')
-  ) {
-    // with another file in the list, extend the marker like less's
-    // "(END) - Next: file" prompt
-    const next = nextFileName();
-    lines.push(
-      next ? INVERSE_ON + `(END) - Next: ${next}` + INVERSE_OFF : END_MARKER
-    );
-  }
 }

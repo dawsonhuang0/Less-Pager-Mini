@@ -8,6 +8,9 @@ import { search } from "./searching";
 
 import { files } from "./files";
 
+import { jumpSindex, optHeader, optHiliteTarget, optWordwrap }
+  from "../options";
+
 /**
  * Jumps to line `lineNum` in the content, placing it at the top of the
  * screen (`g`, `<`, `ESC-<`).
@@ -15,7 +18,7 @@ import { files } from "./files";
  * - Reports an error like less when the line does not exist.
  *
  * @param content - Full content lines.
- * @param lineNum - 1-based target line number.
+ * @param lineNum - 1-based target line number, or 0 when none was given.
  */
 export function firstLine(content: string[], lineNum: number): void {
   if (lineNum > content.length) {
@@ -23,7 +26,11 @@ export function firstLine(content: string[], lineNum: number): void {
     return;
   }
 
-  jumpToRow(content, lineNum - 1);
+  // like A_GOLINE: without a number the -j target is ignored, so no
+  // blank lines appear before the beginning of the file
+  const sindex = lineNum > 0 ? jumpSindex() : 0;
+
+  jumpLoc(content, Math.max(lineNum, 1) - 1, 0, sindex);
 }
 
 /**
@@ -43,7 +50,7 @@ export function lastLine(content: string[], lineNum: number): void {
   }
 
   if (config.row === config.endRow && config.subRow === config.endSubRow) {
-    ringBell();
+    ringBell('eof');
     return;
   }
 
@@ -72,6 +79,28 @@ export function percentLine(content: string[], percent: number): void {
   if (rem > 50 || (rem === 50 && row % 2 === 1)) row++;
 
   jumpToRow(content, Math.min(row, content.length - 1));
+}
+
+/**
+ * Jumps to a byte offset in the content (`P`), like less's jump_pos:
+ * the line containing the offset lands on the -j target line.
+ *
+ * @param content - Full content lines.
+ * @param offset - Byte offset, 0 for the beginning.
+ */
+export function goPos(content: string[], offset: number): void {
+  let row = 0;
+  let bytes = 0;
+
+  while (row + 1 < content.length) {
+    const next = bytes + Buffer.byteLength(content[row]) + 1;
+    if (next > offset) break;
+
+    bytes = next;
+    row++;
+  }
+
+  jumpLoc(content, row, 0, jumpSindex());
 }
 
 /**
@@ -220,7 +249,8 @@ export function matchBracket(
 function subRowStart(line: string, subRow: number): number {
   if (subRow === 0) return 0;
 
-  if (!isStyled(line) && isAscii(line)) {
+  // --wordwrap boundaries live in the layout, even for plain lines
+  if (!optWordwrap() && !isStyled(line) && isAscii(line)) {
     return subRow * config.screenWidth;
   }
 
@@ -255,6 +285,65 @@ const userMarks = new Map<string, Mark>();
 
 // the "last mark" addressed by the apostrophe (less's LASTMARK)
 let quoteMark: Mark | null = null;
+
+/**
+ * A mark restored from the history file (less's file_marks): the mark
+ * letter, its screen line, byte position and file name.
+ */
+export interface FileMark {
+  char: string;
+  sline: number;
+  pos: number;
+  path: string;
+}
+
+let fileMarks: FileMark[] = [];
+
+/** Stores marks parsed from the history file's `.mark` section. */
+export function setFileMarks(restored: FileMark[]): void {
+  fileMarks = restored;
+}
+
+/** The history-file marks, re-saved and merged by saveHistory. */
+export function getFileMarks(): FileMark[] {
+  return fileMarks;
+}
+
+/** Lists the active user marks, for --save-marks persistence. */
+export function allMarks(): { char: string, mark: Mark }[] {
+  return [...userMarks].map(([char, mark]) => ({ char, mark }));
+}
+
+/**
+ * Applies history-file marks to a freshly examined file, converting
+ * byte positions back to rows, like less resolving file_marks.
+ *
+ * @param index - The examined entry's index in the file list.
+ * @param lines - The file's content lines.
+ */
+export function adoptFileMarks(index: number, lines: string[]): void {
+  const path = files.list[index]?.path;
+  if (!path || path === '-') return;
+
+  for (const restored of fileMarks) {
+    if (restored.path !== path || userMarks.has(restored.char)) continue;
+
+    let bytes = 0, row = 0;
+
+    while (row < lines.length - 1 && bytes < restored.pos) {
+      bytes += Buffer.byteLength(lines[row]) + 1;
+      if (bytes > restored.pos) break;
+      row++;
+    }
+
+    userMarks.set(restored.char, {
+      file: index,
+      row,
+      subRow: 0,
+      sline: restored.sline,
+    });
+  }
+}
 
 /**
  * Mark command state: which prompt is open (`set mark: `, `goto mark: `,
@@ -296,6 +385,20 @@ export function startGoMark(n: number): void {
 export function startClearMark(): void {
   marks.pending = 'c';
   marks.n = 0;
+}
+
+/**
+ * Returns the letter of a user mark on a content row of the current
+ * file, for the -J status column, or an empty string.
+ *
+ * @param row - Content row to look up.
+ */
+export function markAtRow(row: number): string {
+  for (const [char, mark] of userMarks) {
+    if (mark.file === files.index && mark.row === row) return char;
+  }
+
+  return '';
 }
 
 /**
@@ -506,16 +609,29 @@ function clearMark(char: string): void {
  * @param subRow - Target sub-row.
  * @param sindex - 0-based screen row to place the target on.
  */
-function jumpLoc(
+export function jumpLoc(
   content: string[],
   row: number,
   subRow: number,
   sindex: number
 ): void {
+  // a jump above the pinned header lands at their start, like less's
+  // jump_loc clamping the target through after_header_pos
+  const header = optHeader();
+
+  if (header.lines > 0 && row < header.start) {
+    row = header.start;
+    subRow = 0;
+  }
+
   if (targetScreenRow(content, row, subRow) === sindex) {
-    ringBell();
+    ringBell('eof');
     return;
   }
+
+  // jumps forget the -w unread highlight, like less; --hilite-target
+  // highlights the landing line instead
+  config.attnRow = optHiliteTarget() ? row : -1;
 
   saveLastPosition(content, row, subRow, sindex);
   placeAt(content, row, subRow, sindex);
@@ -732,6 +848,46 @@ function bottomPosition(
  *
  * @param content - Full content lines.
  */
+/**
+ * Sets the mouse mark `#` at a clicked screen line (0-based), like
+ * og's mouse_button_left calling setmark('#', y, 0).
+ */
+export function setMouseMark(content: string[], y: number): void {
+  const steps = Math.max(y - config.blankTop, 0);
+  let row = config.row;
+  let subRow = config.subRow;
+
+  if (config.chopLongLines || config.col) {
+    row = Math.min(row + steps, content.length - 1);
+    subRow = 0;
+  } else {
+    for (let s = 0; s < steps; s++) {
+      if (subRow < maxSubRow(content[row])) {
+        subRow++;
+      } else if (row < content.length - 1) {
+        row++;
+        subRow = 0;
+      } else {
+        break;
+      }
+    }
+  }
+
+  userMarks.set('#', {
+    file: files.index,
+    row,
+    subRow,
+    sline: y + 1,
+  });
+}
+
+/**
+ * Jumps to the mouse mark, like mouse_button_right's gomark('#', 0).
+ */
+export function goMouseMark(content: string[]): void {
+  goMark(content, '#', 0);
+}
+
 function lastVisiblePosition(content: string[]): Mark {
   let steps = config.window - 2 - config.blankTop;
 
@@ -832,13 +988,13 @@ function placeAt(
 }
 
 /**
- * Places a content row at the top of the screen and refreshes EOF state.
+ * Places a content row on the -j target line and refreshes EOF state.
  *
  * @param content - Full content lines.
  * @param row - 0-based target row.
  */
 function jumpToRow(content: string[], row: number): void {
-  jumpLoc(content, row, 0, 0);
+  jumpLoc(content, row, 0, jumpSindex());
 }
 
 /**

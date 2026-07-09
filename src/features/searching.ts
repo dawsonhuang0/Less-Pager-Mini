@@ -7,6 +7,7 @@ import { config, mode } from "../config";
 
 import {
   cmd,
+  stepText,
   cmdOpen,
   cmdClose,
   cmdChar,
@@ -17,10 +18,22 @@ import {
 
 import { maxSubRow, } from "../helpers";
 
-import { saveLastPosition } from "./jumping";
+import { jumpLoc } from "./jumping";
 
-import { optNoHistDups, optDefSearchType, optAutosaveAction }
-  from "./options";
+import {
+  jumpSindex,
+  optHowSearch,
+  optHiliteSearch,
+  optNoHistDups,
+  optHeader,
+  optNoSearchHeaders,
+  optDefSearchType,
+  optAutosaveAction,
+  optMatchShift,
+  optIntrChar
+} from "../options";
+
+import { colored, ColorKind } from "./color";
 
 import {
   STYLE_REGEX,
@@ -544,6 +557,7 @@ export function clearHighlight(): void {
   globalRegex = null;
   search.subs = new Set();
   search.highlight = true;
+  lastMatchRow = -1;
 }
 
 /**
@@ -551,14 +565,74 @@ export function clearHighlight(): void {
  *
  * - Matches are found on the ANSI-stripped text, then mapped back onto the
  *   raw line so existing styles are preserved.
+ * - `-G` disables highlighting; `-g` highlights only the row the last
+ *   search landed on, like less's hilite_search states.
  *
  * @param line - The raw content line.
+ * @param row - The content row, for the -g single-match mode.
  * @returns The line with matches highlighted, or unchanged.
  */
-export function highlightLine(line: string): string {
+/** The subsearch color kind for ^S group n (AT_COLOR_SUBSEARCH). */
+const subColorKind = (n: number): ColorKind =>
+  `sub${Math.min(Math.max(n, 1), 5)}` as ColorKind;
+
+/**
+ * Pushes a match's highlight ranges: the whole match takes the search
+ * color, while capture groups 1-5 carve out their own subsearch
+ * colors, like og assigning AT_COLOR_SUBSEARCH to group matches.
+ */
+function pushMatchRanges(
+  ranges: [number, number, ColorKind][],
+  match: RegExpExecArray
+): void {
+  const start = match.index;
+  const end = match.index + match[0].length;
+  const groups: [number, number, ColorKind][] = [];
+
+  if (match.indices) {
+    for (let n = 1; n <= 5 && n < match.indices.length; n++) {
+      const span = match.indices[n];
+
+      if (span && span[1] > span[0]) {
+        groups.push([span[0], span[1], subColorKind(n)]);
+      }
+    }
+  }
+
+  if (!groups.length) {
+    ranges.push([start, end, 'search']);
+    return;
+  }
+
+  // split the match at every group boundary; the innermost (last)
+  // covering group colors each piece
+  const points = [start, end];
+  for (const [gs, ge] of groups) points.push(gs, ge);
+  points.sort((a, b) => a - b);
+
+  for (let i = 0; i + 1 < points.length; i++) {
+    const segStart = points[i];
+    const segEnd = points[i + 1];
+    if (segEnd <= segStart) continue;
+
+    let kind: ColorKind = 'search';
+
+    for (const [gs, ge, gKind] of groups) {
+      if (gs <= segStart && segEnd <= ge) kind = gKind;
+    }
+
+    ranges.push([segStart, segEnd, kind]);
+  }
+}
+
+export function highlightLine(line: string, row: number = -1): string {
   if (!globalRegex || !search.regex || !search.highlight || search.invert) {
     return line;
   }
+
+  const hilite = optHiliteSearch();
+  if (hilite === 0) return line;
+  if (hilite === 1 && row !== lastMatchRow) return line;
 
   if (!line) return line;
 
@@ -586,7 +660,7 @@ export function highlightLine(line: string): string {
 
   const stripped = tokens.map(token => token.text).join('');
 
-  const ranges: [number, number][] = [];
+  const ranges: [number, number, ColorKind][] = [];
   globalRegex.lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -594,10 +668,13 @@ export function highlightLine(line: string): string {
     if (search.subs.size && match.indices) {
       for (const n of search.subs) {
         const span = match.indices[n];
-        if (span && span[1] > span[0]) ranges.push([span[0], span[1]]);
+
+        if (span && span[1] > span[0]) {
+          ranges.push([span[0], span[1], subColorKind(n)]);
+        }
       }
     } else if (match[0]) {
-      ranges.push([match.index, match.index + match[0].length]);
+      pushMatchRanges(ranges, match);
     }
 
     if (match.index === globalRegex.lastIndex) globalRegex.lastIndex++;
@@ -638,7 +715,9 @@ export function highlightLine(line: string): string {
       }
 
       const end = Math.min(rangeEnd - start, text.length);
-      out.push(INVERSE_ON + text.slice(pos, end) + INVERSE_OFF);
+      out.push(colored(
+        ranges[r][2], text.slice(pos, end), INVERSE_ON, INVERSE_OFF
+      ));
       pos = end;
     }
   }
@@ -699,15 +778,68 @@ function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
 function matchesLine(line: string): boolean {
   const regex = search.regex;
   if (!regex) return false;
-  return testRegex(regex, stripStyles(line), search.subs) !== search.invert;
+
+  let text = stripStyles(line);
+
+  // like cvt_text: overstrikes collapse (CVT_BS) and a trailing
+  // carriage return drops (CVT_CRLF) before matching
+  /* eslint-disable no-control-regex */
+  while (/[^\x08]\x08/.test(text)) {
+    text = text.replace(/[^\x08]\x08/g, '');
+  }
+  /* eslint-enable no-control-regex */
+  if (text.endsWith('\r')) text = text.slice(0, -1);
+
+  // --no-search-header-columns cuts the pinned columns off before
+  // matching, like search.c's skip_columns
+  if (optNoSearchHeaders().cols && optHeader().cols > 0) {
+    text = skipColumns(text, optHeader().cols);
+  }
+
+  return testRegex(regex, text, search.subs) !== search.invert;
+}
+
+/**
+ * Strips the first `cols` visual columns off a plain-text line.
+ */
+function skipColumns(text: string, cols: number): string {
+  if (isAsciiText(text)) return text.slice(cols);
+
+  const chars = [...text];
+  let width = 0;
+  let i = 0;
+
+  while (i < chars.length && width < cols) {
+    width += strWidth(chars[i]);
+    i++;
+  }
+
+  return chars.slice(i).join('');
+}
+
+const isAsciiText = (text: string): boolean =>
+  // eslint-disable-next-line no-control-regex
+  /^[\x00-\x7F]*$/.test(text);
+
+/**
+ * Whether a row is excluded from searches by --no-search-header-lines.
+ */
+function searchSkipsRow(row: number): boolean {
+  if (!optNoSearchHeaders().lines) return false;
+
+  const header = optHeader();
+  return header.lines > 0 && row >= header.start &&
+    row < header.start + header.lines;
 }
 
 /**
  * Finds the N-th match and jumps to it.
  *
- * - Fresh searches include the displayed screen, matching less's default:
- *   forward starts at the top displayed line, backward at the bottom one.
- * - Repeats (`afterTarget`) start strictly past the current top line.
+ * - Start positions follow -a/-A, like less's search_pos: the default
+ *   (state 2) includes the whole displayed screen for fresh searches,
+ *   `-a` skips the screen entirely, and state 0 starts fresh searches
+ *   at the -j target line like repeats.
+ * - Repeats (`afterTarget`) start just past the target line.
  */
 function findMatch(
   content: string[],
@@ -721,33 +853,236 @@ function findMatch(
 
   if (fromStart) {
     first = dir > 0 ? 0 : content.length - 1;
-  } else if (afterTarget) {
-    first = config.row + dir;
+  } else if (afterTarget || optHowSearch() === 0) {
+    const target = Math.min(config.row + jumpSindex(), content.length - 1);
+    first = dir > 0 ? target + 1 : target - 1;
+  } else if (optHowSearch() === 1) {
+    first = dir > 0 ? lastVisibleRow(content) + 1 : config.row - 1;
   } else {
     first = dir > 0 ? config.row : lastVisibleRow(content);
   }
 
-  let remaining = count;
+  const state = { remaining: count };
+  const main = scanRange(content, first, dir, null, state);
 
-  for (let row = first; row >= 0 && row < content.length; row += dir) {
-    if (matchesLine(content[row]) && --remaining === 0) {
-      jumpTo(content, row);
+  if (main === 'stop') return;
+
+  if (main !== 'miss') {
+    jumpTo(content, main);
+    return;
+  }
+
+  if (wrap) {
+    const start = dir > 0 ? 0 : content.length - 1;
+    const wrapped = scanRange(content, start, dir, first, state);
+
+    if (wrapped === 'stop') return;
+
+    if (wrapped !== 'miss') {
+      jumpTo(content, wrapped);
+
+      // ^W wrap reports where the search resumed, like og's
+      // search_wrapped message
+      search.message = dir > 0
+        ? 'Search hit bottom; continuing at top'
+        : 'Search hit top; continuing at bottom';
       return;
     }
   }
 
-  if (wrap) {
-    let row = dir > 0 ? 0 : content.length - 1;
+  // og shows the pattern in the miss message (v693); control chars
+  // print in display form (ESC, ^X) like og's message line
+  search.message = compiledPattern
+    ? `Pattern not found: ${displayText(compiledPattern)}`
+    : 'Pattern not found';
+}
 
-    for (; row !== first && row >= 0 && row < content.length; row += dir) {
-      if (matchesLine(content[row]) && --remaining === 0) {
-        jumpTo(content, row);
-        return;
-      }
-    }
+/** Formats embedded control characters like og's prchar. */
+const displayText = (text: string): string =>
+  Array.from(text, stepText).join('');
+
+// the reusable guard context; its step slot changes per run
+let guardContext: { step: () => void } | null = null;
+let guardScript: vm.Script | null = null;
+
+/**
+ * Drives a slice function inside vm timeouts: V8's backtracking
+ * regexes can hang forever on a catastrophic pattern (og's POSIX
+ * engine does not blow up), and terminating a vm script is the only
+ * way to stop a match mid-flight. Slices self-limit to ~100ms, so the
+ * timeout only fires when one match call hangs.
+ *
+ * @param slice - Scans for a while; true when the work is finished.
+ * @returns How the run ended: the guard tripped (`complex`) or the
+ *          user interrupted (`stop`).
+ */
+function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
+  if (!guardContext || !guardScript) {
+    guardContext = vm.createContext({ step: () => {} }) as
+      { step: () => void };
+    guardScript = new vm.Script('step()');
   }
 
-  search.message = 'Pattern not found';
+  let finished = false;
+  guardContext.step = () => { finished = slice(); };
+
+  try {
+    for (;;) {
+      try {
+        guardScript.runInContext(
+          guardContext as vm.Context, { timeout: 1000 }
+        );
+      } catch {
+        return 'complex';
+      }
+
+      if (finished) return 'done';
+
+      // ctrl-C and the --intr char abort between slices, like
+      // search_range's ABORT_SIGS checks
+      if (searchInterrupted()) return 'stop';
+    }
+  } finally {
+    guardContext.step = () => {};
+  }
+}
+
+/**
+ * Scans a row range for the remaining matches in guarded slices.
+ *
+ * @param until - Exclusive stop row for a wrapped scan, or null.
+ * @returns The matching row, `miss`, or `stop` after an interrupt or
+ *          a dropped catastrophic pattern.
+ */
+function scanRange(
+  content: string[],
+  from: number,
+  dir: 1 | -1,
+  until: number | null,
+  state: { remaining: number }
+): number | 'miss' | 'stop' {
+  let row = from;
+  let hit = -1;
+
+  const outcome = guardedSlices(() => {
+    const deadline = Date.now() + 100;
+    let steps = 0;
+
+    while (row >= 0 && row < content.length && row !== until) {
+      if (!searchSkipsRow(row) && matchesLine(content[row]) &&
+        --state.remaining === 0) {
+        hit = row;
+        return true;
+      }
+
+      row += dir;
+
+      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
+    }
+
+    return true;
+  });
+
+  if (outcome === 'complex') {
+    dropPattern();
+    return 'stop';
+  }
+
+  if (outcome === 'stop') return 'stop';
+  return hit >= 0 ? hit : 'miss';
+}
+
+/**
+ * Drops a pattern that hung the regex engine, so highlighting can
+ * never run it again.
+ */
+function dropPattern(): void {
+  search.regex = null;
+  search.highlight = false;
+  search.message = 'Pattern too complex';
+}
+
+/**
+ * Applies a `&` display filter in the same guarded slices as a search.
+ *
+ * @param lines - Full content lines.
+ * @param filter - The combined filter matcher.
+ * @returns The kept lines, or null when the filter must be dropped
+ *          (catastrophic pattern) or the user interrupted.
+ */
+export function filterLines(
+  lines: string[],
+  filter: (line: string) => boolean
+): string[] | null {
+  const kept: string[] = [];
+  let at = 0;
+
+  const outcome = guardedSlices(() => {
+    const deadline = Date.now() + 100;
+    let steps = 0;
+
+    while (at < lines.length) {
+      if (filter(lines[at])) kept.push(lines[at]);
+      at++;
+
+      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
+    }
+
+    return true;
+  });
+
+  if (outcome === 'complex') {
+    search.filters = [];
+    search.message = 'Pattern too complex';
+    return null;
+  }
+
+  if (outcome === 'stop') return null;
+  return kept;
+}
+
+// the last synchronous interrupt poll, at most one per ~100ms of scan
+let lastInterruptPoll = 0;
+
+/**
+ * Polls the terminal in the middle of a long synchronous search, like
+ * og's read layer watching for the interrupt: while a search runs the
+ * event loop cannot deliver keys, so the raw tty is read directly.
+ * Ctrl-C goes back on the stream so -K can still quit at the prompt;
+ * other typed keys queue as normal input.
+ *
+ * @returns True when the search should abort.
+ */
+function searchInterrupted(): boolean {
+  if (!process.stdin.isTTY) return false;
+
+  const now = Date.now();
+  if (now - lastInterruptPoll < 100) return false;
+  lastInterruptPoll = now;
+
+  const data = Buffer.alloc(64);
+  let n: number;
+
+  try {
+    n = fs.readSync(0, data, 0, data.length, null);
+  } catch {
+    // EAGAIN: nothing typed
+    return false;
+  }
+
+  if (n <= 0) return false;
+
+  const text = data.subarray(0, n).toString();
+
+  if (text.includes('\x03')) {
+    process.stdin.unshift(Buffer.from('\x03'));
+    return true;
+  }
+
+  if (text.includes(optIntrChar())) return true;
+
+  process.stdin.unshift(data.subarray(0, n));
+  return false;
 }
 
 /**
@@ -774,20 +1109,57 @@ function lastVisibleRow(content: string[]): number {
 }
 
 function jumpTo(content: string[], row: number): void {
-  saveLastPosition(content, row, 0, 0);
-
-  config.row = row;
-  config.subRow = 0;
-  config.blankTop = 0;
-
   if (mode.INIT) mode.INIT = false;
 
-  if (config.chopLongLines || config.col) {
-    const lastRow = Math.max(content.length - config.window + 1, 0);
-    mode.EOF = config.row >= lastRow;
+  lastMatchRow = row;
+
+  // matches land on the -j target line, like search calling jump_loc
+  jumpLoc(content, row, 0, jumpSindex());
+
+  shiftVisible(content, row);
+}
+
+/**
+ * Shifts the screen horizontally so the match is visible, like
+ * search.c's shift_visible: an off-screen match lands --match-shift
+ * columns from the left edge.
+ */
+function shiftVisible(content: string[], row: number): void {
+  if (!config.chopLongLines || !search.regex || search.invert) return;
+
+  const text = stripStyles(content[row]);
+  const match = search.regex.exec(text);
+  if (!match) return;
+
+  const startCol = strWidth(text.slice(0, match.index));
+  const endCol = startCol + strWidth(match[0]);
+  const swidth = config.screenWidth - 1;
+  let newCol: number;
+
+  if (endCol < swidth) {
+    // the whole match fits the unshifted screen
+    newCol = 0;
+  } else if (startCol > config.col && endCol < config.col + swidth) {
+    // already visible; leave the shift unchanged
+    newCol = config.col;
   } else {
-    mode.EOF = config.row > config.endRow || (
-      config.row === config.endRow && config.subRow >= config.endSubRow
-    );
+    const eolCol = strWidth(text) - swidth;
+
+    newCol = startCol >= eolCol
+      ? eolCol
+      : startCol < optMatchShift() ? 0 : startCol - optMatchShift();
   }
+
+  config.col = Math.max(newCol, 0);
+}
+
+/**
+ * Whether a content line matches the current search pattern, for the
+ * -J status column marker.
+ *
+ * @param line - The raw content line.
+ */
+export function lineMatches(line: string): boolean {
+  if (!search.regex || !search.highlight) return false;
+  return matchesLine(line);
 }

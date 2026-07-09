@@ -27,8 +27,8 @@ function addCases(
   ratios: TextRatio
 ): TestCase[] {
   return Array.from({ length: 4 }, (_, i) => {
-    let ascii = i % 2 === 1;
-    let ansi = i >= 2;
+    const ascii = i % 2 === 1;
+    const ansi = i >= 2;
 
     return {
       name: `${name}${ascii ? ' + Ascii' : ''}${ansi ? ' + Ansi' : ''}`,

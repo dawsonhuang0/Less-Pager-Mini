@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-control-regex
 export const STYLE_REGEX = /\x1b\[[0-9;]*m/;
 
 /**

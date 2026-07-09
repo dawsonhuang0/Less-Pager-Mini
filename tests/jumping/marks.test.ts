@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config, mode } from '../../src/config';
 
-import { calculateEOF } from '../../src/helpers';
+import { calculateEOF, resetBellTimer } from '../../src/helpers';
 
 import { search } from '../../src/features/searching';
 
@@ -41,6 +41,9 @@ const goMark = (char: string, n = 0, c = content): void => {
 };
 
 beforeEach(() => {
+  // eof/bof bells rate limit to one per second, like og's eof_bell
+  resetBellTimer();
+
   config.row = 0;
   config.subRow = 0;
   config.col = 0;
@@ -189,6 +192,7 @@ describe('previous position', () => {
     expect(writeSpy).toHaveBeenCalledWith('\x07');
 
     writeSpy.mockClear();
+    resetBellTimer();
     goMark("'");
     expect(writeSpy).toHaveBeenCalledWith('\x07');
   });

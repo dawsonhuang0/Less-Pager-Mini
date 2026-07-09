@@ -36,6 +36,10 @@ export interface Config {
   // Pending multi-key command prefix (^X, ESC), echoed at the prompt like
   // less's A_PREFIX state
   keyPrefix: string;
+
+  // First unread content row highlighted by -w/-W, -1 when unset, like
+  // less's show_attn position
+  attnRow: number;
 }
 
 /**
@@ -45,7 +49,8 @@ export type Mode =
   | 'INIT'
   | 'EOF'
   | 'BUFFERING'
-  | 'HELP';
+  | 'HELP'
+  | 'DUMB';
 
 /**
  * Represents all possible key-based actions in the pager.
@@ -62,6 +67,7 @@ export type Actions =
   | 'TAG_COMMAND'
   | 'ADD_COMMAND'
   | 'SHELL_COMMAND'
+  | 'PSHELL_COMMAND'
   | 'QUIT'
   | 'HELP'
   | 'EXIT'
@@ -99,14 +105,31 @@ export type Actions =
   | 'SQUARE_BRACKET_LEFT'
   | 'CUSTOM_BRACKET_RIGHT'
   | 'CUSTOM_BRACKET_LEFT'
+  | 'FOLLOW'
+  | 'FOLLOW_BELL'
+  | 'FOLLOW_HILITE'
   | 'SET_MARK'
   | 'SET_MARK_BOTTOM'
   | 'GO_MARK'
   | 'CLEAR_MARK'
+  | 'PIPE_COMMAND'
+  | 'SAVE_FILE'
+  | 'EDIT_FILE'
   | 'OPEN_FILE'
   | 'NEXT_FILE'
   | 'PREV_FILE'
   | 'INDEX_FILE'
   | 'REMOVE_FILE'
   | 'CURRENT_INFO'
-  | 'VERSION';
+  | 'NOACTION'
+  | 'VERSION'
+  | 'FORCE_LINE_FORWARD'
+  | 'FORCE_LINE_BACKWARD'
+  | 'FORCE_WINDOW_BACKWARD'
+  | 'NEWLINE_FORWARD'
+  | 'NEWLINE_BACKWARD'
+  | 'GO_POS'
+  | 'SPAN_REPEAT_SEARCH'
+  | 'SPAN_REVERSE_SEARCH'
+  | 'NEXT_TAG'
+  | 'PREV_TAG';
