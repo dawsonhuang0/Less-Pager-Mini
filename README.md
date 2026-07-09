@@ -147,8 +147,9 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [x] SEARCHING
 - [-] JUMPING
 - [x] CHANGING FILES
-- [ ] MISCELLANEOUS COMMANDS
+- [x] MISCELLANEOUS COMMANDS
 - [ ] OPTIONS
+- [ ] LINE EDITING
 - [ ] Custom Key-Bindings
 - [x] Support wide-character (emoji, CJK, etc.) rendering
 - [x] Support help page
