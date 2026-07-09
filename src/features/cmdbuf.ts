@@ -460,10 +460,28 @@ type Decoded =
   | { kind: 'insert', text: string };
 
 /**
- * Decodes an edit key, like editchar: the erase and kill characters
- * first, then the edittable with pending-prefix assembly for ESC
- * combos typed key by key. An unrecognized sequence inserts its
- * first char and ungets the rest, like og's CC_PASS + ungetcc.
+ * The longest N where the last N chars of `str` equal the first N of
+ * `goal`, like decode.c's cmd_match.
+ */
+function suffixMatch(str: string, goal: string): number {
+  for (let n = Math.min(str.length, goal.length); n > 0; n--) {
+    if (str.endsWith(goal.slice(0, n))) return n;
+  }
+
+  return 0;
+}
+
+// og collects at most this many chars for one command (MAX_CMDLEN)
+const MAX_CMDLEN = 16;
+
+/**
+ * Decodes an edit key, like editchar over cmd_decode: the erase and
+ * kill characters first, then og's SUFFIX matching — the collected
+ * sequence resolves when its tail equals a whole table entry (any
+ * garbage before it is discarded), stays pending while its tail is a
+ * proper prefix of one, and otherwise inserts its first char and
+ * replays the rest like CC_PASS + ungetcc. This is why an ESC flood
+ * shows nothing until a following key settles it, like og.
  */
 function editKey(key: string): Decoded {
   if (!cmd.prefix) {
@@ -475,38 +493,47 @@ function editKey(key: string): Decoded {
   }
 
   const candidate = cmd.prefix + key;
-  const exact = EDIT_KEYS[candidate];
+  let matchLen = 0;
+  let action: EditAction | 'prefix' | null = null;
 
-  if (exact !== undefined) {
-    cmd.prefix = '';
-    return { kind: 'action', action: exact };
+  // like cmd_decode: later entries win ties, full suffix match takes
+  // the entry's action, partial keeps collecting
+  for (const [seq, act] of Object.entries(EDIT_KEYS)) {
+    const n = suffixMatch(candidate, seq);
+    if (n === 0 || n < matchLen) continue;
+
+    action = n === seq.length ? act : 'prefix';
+    matchLen = n;
   }
 
-  for (const seq of Object.keys(EDIT_KEYS)) {
-    if (seq.length > candidate.length && seq.startsWith(candidate)) {
+  if (action !== null && action !== 'prefix') {
+    cmd.prefix = '';
+    return { kind: 'action', action };
+  }
+
+  if (action === 'prefix') {
+    if (candidate.length < MAX_CMDLEN) {
       cmd.prefix = candidate;
       return { kind: 'pending' };
     }
+
+    // og's editchar stops collecting at MAX_CMDLEN and the tail is
+    // simply lost: only the first char inserts
+    cmd.prefix = '';
+    return { kind: 'insert', text: candidate[0] };
   }
 
   cmd.prefix = '';
 
-  if (candidate.length > 1 && candidate.startsWith('\x1B')) {
-    // a dead ESC combo: insert the ESC, replay the rest
+  if (candidate.length > 1) {
+    // dead sequence: insert the first char, replay the rest
     ungot.push(...candidate.slice(1));
-    return { kind: 'insert', text: '\x1B' };
+    return { kind: 'insert', text: candidate[0] };
   }
 
   return { kind: 'insert', text: candidate };
 }
 
-/**
- * Processes one key at a text prompt, like cmd_char: line-editing
- * keys act, everything else inserts at the cursor.
- *
- * @param key - The raw key (a complete escape sequence or text).
- * @returns `quit` aborts the prompt; `pass` means unhandled here.
- */
 export function cmdChar(key: string): CmdResult {
   if (cmd.literal) {
     cmd.literal = false;

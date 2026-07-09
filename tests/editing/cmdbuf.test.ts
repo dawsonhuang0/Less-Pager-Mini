@@ -169,6 +169,27 @@ describe('ESC sequence handling', () => {
     expect(cmdText()).toBe('\x1Bq');
     expect(cmdDisplay()).toBe('ESCq');
   });
+
+  it('holds an ESC flood pending until a key settles it', () => {
+    // og's suffix matching: the tail ESC-ESC always prefixes
+    // ESC-ESC-arrow, so nothing resolves or displays
+    type('a', 'b');
+    type('\x1B', '\x1B', '\x1B', '\x1B');
+    expect(cmdText()).toBe('ab');
+
+    // a key completing an edit entry fires it and DISCARDS the flood
+    type('x'); // tail ESC-x = delete under cursor (no-op at end)
+    expect(cmdText()).toBe('ab');
+    expect(cmd.prefix).toBe('');
+  });
+
+  it('dumps a flood as text when the key makes it invalid', () => {
+    type('\x1B', '\x1B', '\x1B');
+    type('d'); // no entry tail matches ESC-d
+
+    expect(cmdText()).toBe('\x1B\x1B\x1Bd');
+    expect(cmdDisplay()).toBe('ESCESCESCd');
+  });
 });
 
 describe('history recall', () => {
