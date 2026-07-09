@@ -17,22 +17,10 @@ import {
 
 import { maxSubRow, } from "../helpers";
 
-import { jumpLoc } from "./jumping";
+import { saveLastPosition } from "./jumping";
 
-import {
-  jumpSindex,
-  optHowSearch,
-  optHiliteSearch,
-  optNoHistDups,
-  optHeader,
-  optNoSearchHeaders,
-  optDefSearchType,
-  optAutosaveAction,
-  optMatchShift,
-  optIntrChar
-} from "./options";
-
-import { colored, ColorKind } from "./color";
+import { optNoHistDups, optDefSearchType, optAutosaveAction }
+  from "./options";
 
 import {
   STYLE_REGEX,
@@ -58,10 +46,10 @@ interface SearchInput {
   litNext: boolean;     // ^L pending: next char is literal
   subPrompt: boolean;   // ^S pending: awaiting sub-pattern digit
 
-  /** History entry being recalled with Up/Down, or null when typing. */
-  histIndex: number | null;
-  /** Text typed before history navigation began. */
-  typed: string[] | null;
+  /** Position when the prompt opened, restored by --incsearch. */
+  originRow: number;
+  originSubRow: number;
+  originEof: boolean;
 }
 
 interface Filter {

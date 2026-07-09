@@ -52,3 +52,31 @@ export function optionKey(key: string): void {
 
   search.message = `There is no ${char} option`;
 }
+
+
+// ---- forward stubs for the line-editing layer ----
+// The real implementations arrive with the OPTIONS section; these
+// keep the defaults og uses when the options are untouched.
+
+/** True when --no-histdups removes duplicate history entries. */
+export const optNoHistDups = (): boolean => false;
+
+/** True when --autosave writes the history file for an action. */
+export const optAutosaveAction = (action: string): boolean => {
+  void action;
+  return false;
+};
+
+/** The --search-options preset modifiers (all off by default). */
+export const optDefSearchType = () => ({
+  invert: false,
+  fromStart: false,
+  pastEof: false,
+  keep: false,
+  noRegex: false,
+  wrap: false,
+  subs: [] as number[],
+});
+
+/** Forgets the tracked --header start (no headers yet). */
+export function resetHeaderStart(): void {}

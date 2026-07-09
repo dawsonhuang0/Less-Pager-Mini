@@ -21,14 +21,7 @@ import {
 
 import { search } from "./searching";
 
-import { optNoHistDups, optQuotes, resetHeaderStart, checkModelines }
-  from "./options";
-
-import { decodeContent } from "./charset";
-
-import { prExpand, eqProto } from "./prompt";
-
-import { openAltFile, closeAltFile } from "./lessopen";
+import { optNoHistDups, resetHeaderStart } from "./options";
 
 /**
  * One entry in the command line file list, like less's ifile.

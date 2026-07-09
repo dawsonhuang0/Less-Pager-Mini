@@ -188,16 +188,17 @@ describe('search history', () => {
     expect(search.input?.chars.join('')).toBe('bravo');
   });
 
-  it('restores the typed text when navigating back down', () => {
+  it('bells past the newest entry, like og cmd_updown', () => {
     doSearch('/', 'alpha');
 
     startSearch('/', 1);
-    type('bra');
+    type('alp');
     searchInputKey('\x1B[A');
     expect(search.input?.chars.join('')).toBe('alpha');
 
+    // down past the newest entry stays put, like og's sentinel
     searchInputKey('\x1B[B');
-    expect(search.input?.chars.join('')).toBe('bra');
+    expect(search.input?.chars.join('')).toBe('alpha');
   });
 
   it('is shared between searches and filters', () => {
