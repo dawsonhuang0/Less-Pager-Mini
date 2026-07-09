@@ -4,6 +4,8 @@ import path from 'path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { setShellHistory } from '../../src/features/misc';
+
 import { search } from '../../src/features/searching';
 
 import { loadHistory, saveHistory } from '../../src/histfile';
@@ -18,6 +20,7 @@ beforeEach(() => {
   delete process.env.LESSHISTSIZE;
 
   search.history = [];
+  setShellHistory([]);
 });
 
 afterEach(() => {
@@ -70,6 +73,9 @@ describe('saveHistory', () => {
   });
 
   it('creates the file when none exists', () => {
+    // forget marks restored by earlier tests, like a fresh run
+    loadHistory();
+
     search.history = ['zeta'];
 
     saveHistory();

@@ -1,8 +1,38 @@
+import fs from 'fs';
+import vm from 'vm';
+
+import { strWidth } from 'char-width';
+
 import { config, mode } from "../config";
 
-import { maxSubRow } from "../helpers";
+import {
+  cmd,
+  cmdOpen,
+  cmdClose,
+  cmdChar,
+  cmdUngot,
+  cmdDisplay,
+  cmdPrompt
+} from "./cmdbuf";
 
-import { saveLastPosition } from "./jumping";
+import { maxSubRow, } from "../helpers";
+
+import { jumpLoc } from "./jumping";
+
+import {
+  jumpSindex,
+  optHowSearch,
+  optHiliteSearch,
+  optNoHistDups,
+  optHeader,
+  optNoSearchHeaders,
+  optDefSearchType,
+  optAutosaveAction,
+  optMatchShift,
+  optIntrChar
+} from "./options";
+
+import { colored, ColorKind } from "./color";
 
 import {
   STYLE_REGEX,
@@ -82,9 +112,23 @@ export const search: SearchState = {
 
 const HISTORY_LIMIT = 100;
 
+/**
+ * Points the recall spot past the newest entry, for when the history
+ * is replaced wholesale (loading the history file).
+ */
+export function resetHistoryRecall(): void {
+  if (cmd.active && cmd.history === search.history) {
+    cmd.histPos = search.history.length;
+    cmd.updownMatch = -1;
+  }
+}
+
 let globalRegex: RegExp | null = null;
 let compiledPattern = '';
 let compiledLiteral = false;
+
+// the row the last search landed on, highlighted alone by -g
+let lastMatchRow = -1;
 
 /**
  * Changes case sensitivity (-i / -I) and recompiles the current pattern so
@@ -104,22 +148,71 @@ export function chgCaseless(caseless: 0 | 1 | 2): void {
  * @param count - N-th occurrence to find.
  */
 export function startSearch(type: '/' | '?' | '&', count: number): void {
+  // --search-options presets the modifiers for every search
+  const defaults = optDefSearchType();
+
   search.input = {
     type,
     chars: [],
     count,
-    invert: false,
-    fromStart: false,
-    pastEof: false,
-    keep: false,
-    noRegex: false,
-    wrap: false,
-    subs: new Set(),
+    invert: defaults.invert,
+    fromStart: defaults.fromStart,
+    pastEof: defaults.pastEof,
+    keep: defaults.keep,
+    noRegex: defaults.noRegex,
+    wrap: defaults.wrap,
+    subs: new Set(defaults.subs),
     litNext: false,
     subPrompt: false,
-    histIndex: null,
-    typed: null,
+    originRow: config.row,
+    originSubRow: config.subRow,
+    originEof: mode.EOF,
   };
+
+  // the shared command buffer holds the pattern; set_mlist points
+  // the recall spot back at the newest entry
+  cmdOpen(searchPrompt() ?? type, { history: search.history });
+}
+
+/**
+ * Restores the position captured when the search prompt opened, like
+ * less's incremental search undoing on cancel or pattern change.
+ */
+export function restoreSearchOrigin(input: {
+  originRow: number,
+  originSubRow: number,
+  originEof: boolean,
+}): void {
+  config.row = input.originRow;
+  config.subRow = input.originSubRow;
+  mode.EOF = input.originEof;
+}
+
+/**
+ * Searches while the pattern is being typed (--incsearch): each change
+ * restarts from the original position; failures stay silent.
+ *
+ * @param content - Full content lines.
+ */
+export function incrementalSearch(content: string[]): void {
+  const input = search.input;
+  if (!input || input.type === '&') return;
+
+  restoreSearchOrigin(input);
+
+  const pattern = input.chars.join('');
+  if (!pattern) return;
+
+  const message = search.message;
+
+  if (compile(pattern, input.noRegex, input.invert)) {
+    search.subs = new Set(input.subs);
+    const dir: 1 | -1 = input.type === '?' ? -1 : 1;
+    findMatch(content, dir, input.count, input.fromStart, input.wrap, false);
+  }
+
+  // errors wait for RETURN, like less's incsearch staying quiet
+  search.message = message;
 }
 
 /**
@@ -128,7 +221,8 @@ export function startSearch(type: '/' | '?' | '&', count: number): void {
  * - CR submits, ^C cancels, backspace edits (and cancels on empty).
  * - While the pattern is empty, modifier keys toggle search flags like
  *   less (^N/!, ^E/*, ^F/@, ^K, ^R, ^S, ^W, ^L).
- * - Escape sequences (arrows etc.) are ignored.
+ * - Up/Down recall previous patterns starting with the typed text,
+ *   like cmdbuf.c's cmd_updown; other escape sequences are ignored.
  *
  * @param key - Raw key input.
  * @returns `run` to execute, `cancel` when aborted, otherwise `pending`.
@@ -149,53 +243,61 @@ export function searchInputKey(key: string): 'pending' | 'run' | 'cancel' {
       }
     }
 
+    cmdPrompt(searchPrompt() ?? input.type);
     return 'pending';
   }
 
-  if (key === '\x0D') return 'run';
+  // keys inside a pending ESC combo go to the editor first, like
+  // og's editchar collecting the sequence with getcc
+  if (!cmd.prefix) {
+    if (key === '\x0D' || key === '\x0A') return 'run';
 
-  if (key === '\x03') {
-    search.input = null;
-    return 'cancel';
-  }
-
-  if (key === '\x08' || key === '\x7F') {
-    if (input.litNext) {
-      input.litNext = false;
-      return 'pending';
-    }
-
-    if (!input.chars.length) {
+    if (key === '\x03') {
       search.input = null;
+      cmdClose();
       return 'cancel';
     }
 
-    input.chars.pop();
-    return 'pending';
+    if (input.litNext) {
+      // ^L latched: the next char is a literal pattern char
+      input.litNext = false;
+      cmdChar('\x16'); // EC_LITERAL
+      const result = feedKey(input, key);
+      cmdPrompt(searchPrompt() ?? input.type);
+      return result;
+    }
+
+    if (
+      !cmd.steps.length && !cmd.literal && handleModifier(input, key)
+    ) {
+      cmdPrompt(searchPrompt() ?? input.type);
+      return 'pending';
+    }
   }
 
-  if (input.litNext) {
-    input.litNext = false;
-    input.chars.push(...key);
-    return 'pending';
+  return feedKey(input, key);
+}
+
+/**
+ * Feeds a key through the command buffer, replaying any chars a dead
+ * escape sequence ungets, like og's ungetcc loop.
+ */
+function feedKey(
+  input: SearchInput,
+  key: string
+): 'pending' | 'run' | 'cancel' {
+  const result = cmdChar(key);
+  input.chars = [...cmd.steps];
+
+  if (result === 'quit') {
+    search.input = null;
+    cmdClose();
+    return 'cancel';
   }
 
-  if (key === '\x1B[A' || key === '\x1BOA') {
-    historyPrev(input);
-    return 'pending';
-  }
-
-  if (key === '\x1B[B' || key === '\x1BOB') {
-    historyNext(input);
-    return 'pending';
-  }
-
-  if (key.startsWith('\x1B')) return 'pending';
-
-  if (!input.chars.length && handleModifier(input, key)) return 'pending';
-
-  for (const char of key) {
-    if (char >= '\x20') input.chars.push(char);
+  for (let u = cmdUngot(); u !== null; u = cmdUngot()) {
+    const replayed = searchInputKey(u);
+    if (replayed !== 'pending') return replayed;
   }
 
   return 'pending';
@@ -226,53 +328,39 @@ export function searchPrompt(): string | null {
 
   prompt += input.type === '&' ? '&/' : input.type;
 
-  return prompt + input.chars.map(displayChar).join('');
+  return prompt + cmdDisplay();
 }
 
-const displayChar = (char: string): string => {
-  if (char === '\x7F') return '^?';
-  if (char >= '\x20') return char;
-  return '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
-};
+// history autosave hook, registered by the pager to avoid a module
+// cycle with histfile.ts
+let autosaveHook: () => void = () => {};
 
-function historyPrev(input: SearchInput): void {
-  const history = search.history;
-  if (!history.length) return;
-
-  if (input.histIndex === null) {
-    input.typed = [...input.chars];
-    input.histIndex = history.length - 1;
-  } else if (input.histIndex > 0) {
-    input.histIndex--;
-  } else {
-    return;
-  }
-
-  input.chars = [...history[input.histIndex]];
+/** Registers the --autosave history file writer. */
+export function onAutosave(fn: () => void): void {
+  autosaveHook = fn;
 }
 
-function historyNext(input: SearchInput): void {
-  const history = search.history;
-  if (input.histIndex === null) return;
-
-  if (input.histIndex < history.length - 1) {
-    input.histIndex++;
-    input.chars = [...history[input.histIndex]];
-  } else {
-    input.histIndex = null;
-    input.chars = input.typed ?? [];
-    input.typed = null;
-  }
-}
-
+/**
+ * Records an accepted pattern, like cmd_accept: empty and repeated
+ * patterns stay out, the list caps at less's history size, and
+ * --autosave writes the file right away.
+ */
 function addHistory(pattern: string): void {
-  const history = search.history;
+  if (!pattern) return;
 
-  // skip empty patterns and consecutive duplicates, like cmd_addhist
-  if (!pattern || history[history.length - 1] === pattern) return;
+  // --no-histdups drops older copies from anywhere in the list
+  if (optNoHistDups()) {
+    search.history = search.history.filter(entry => entry !== pattern);
+  }
 
-  history.push(pattern);
-  if (history.length > HISTORY_LIMIT) history.shift();
+  const last = search.history[search.history.length - 1];
+
+  if (pattern !== last) {
+    search.history.push(pattern);
+    if (search.history.length > HISTORY_LIMIT) search.history.shift();
+  }
+
+  if (optAutosaveAction('/')) autosaveHook();
 }
 
 function handleModifier(input: SearchInput, key: string): boolean {
@@ -280,7 +368,9 @@ function handleModifier(input: SearchInput, key: string): boolean {
   const searchOnly = (toggle: () => void): boolean => {
     if (input.type === '&') {
       if (key < '\x20') {
-        input.chars.push(key);
+        cmdChar('\x16'); // EC_LITERAL
+        cmdChar(key);
+        input.chars = [...cmd.steps];
         return true;
       }
 
@@ -344,6 +434,7 @@ export function execSearch(content: string[]): void {
   const input = search.input;
   if (!input) return;
   search.input = null;
+  cmdClose();
 
   const pattern = input.chars.join('');
   const dir: 1 | -1 = input.type === '?' ? -1 : 1;
@@ -383,6 +474,7 @@ export function execFilter(): LineFilter | null | undefined {
   const input = search.input;
   if (!input) return undefined;
   search.input = null;
+  cmdClose();
 
   const pattern = input.chars.join('');
 

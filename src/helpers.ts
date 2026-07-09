@@ -9,13 +9,53 @@ import { wrapLongLines } from './wrapLongLines';
 
 import { getLayout } from './lineLayout';
 
-import { search, searchPrompt } from './features/searching';
+import { search, searchPrompt, lineMatches } from './features/searching';
 
-import { option } from './features/options';
+import {
+  option,
+  optQuiet,
+  optNoVbell,
+  optClearRepaint,
+  optTildes,
+  optPrType,
+  optLinenums,
+  optLinenumWidth,
+  optStatusCol,
+  optStatusColWidth,
+  optSqueeze,
+  optCtldisp,
+  optBackScroll,
+  optForwScroll,
+  optHeader,
+  vlinenum,
+  optStatusLine,
+  optProcBackspace,
+  optProcTab,
+  optProcReturn,
+  optWordwrap,
+  optHiliteTarget,
+  gutterWidth,
+  nextTabStop
+} from './features/options';
 
-import { brackets, marks } from './features/jumping';
+import { prExpand, prProto, hProto, wProto } from './features/prompt';
 
-import { files, examine, fileTitle, nextFileName } from './features/files';
+import { colored, attrText } from './features/color';
+
+import { rawByteOf, binByteText, utfBinText, ubinChar }
+  from './features/charset';
+
+import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
+
+import { follow } from './features/follow';
+
+import { brackets, marks, markAtRow } from './features/jumping';
+
+import { files, examine } from './features/files';
+
+import { miscInput, pipeMark, overwrite,
+  miscPromptLabel
+} from './features/misc';
 
 import {
   ASCII_REGEX,
@@ -26,7 +66,8 @@ import {
   INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
-  END_MARKER,
+  UNDERLINE_ON,
+  UNDERLINE_OFF,
   CURSOR_HOME,
   CLEAR_LINE,
   CLEAR_BELOW,
@@ -210,6 +251,12 @@ let prevRows: string[] | null = null;
  */
 export function resetRender(): void {
   prevRows = null;
+  prevCursorCol = -1;
+}
+
+/** The most recently rendered screen rows, for --redraw-on-quit. */
+export function lastScreen(): string[] | null {
+  return prevRows;
 }
 
 /**
@@ -225,9 +272,104 @@ export function resetRender(): void {
  * @param rawContent - The string content to display in the terminal.
  * @param buffer - Array of buffer characters.
  */
+// the parked cursor column of the last frame, so pure cursor
+// movement at a prompt still repositions it on unchanged screens
+let prevCursorCol = -1;
+
 export function render(rawContent: string[], buffer: string[]): void {
+  const rows = screenRows(rawContent, buffer);
+
+  // og (v618+) starts at the lower left of the alt screen and lets
+  // the first paint scroll upward: a short first screen sits just
+  // above the bottom prompt, its blank rows on top
+  if (mode.INIT && !mode.DUMB && rows.length < config.window) {
+    rows.unshift(...Array(config.window - rows.length).fill(''));
+  }
+
+  // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
+  // and the parked cursor untouched, like less — but arrow movement
+  // inside the command buffer must still move the cursor
+  if (prevRows && sameRows(prevRows, rows)) {
+    const col = cmd.active && !mode.DUMB ? cursorCol(rows) : -1;
+
+    if (col >= 0 && col !== prevCursorCol) {
+      prevCursorCol = col;
+      process.stdout.write(CURSOR_TO(rows.length, col));
+    }
+
+    return;
+  }
+
+  if (mode.DUMB) {
+    const frame = dumbFrame(prevRows, rows);
+    prevRows = rows;
+    process.stdout.write(frame);
+    return;
+  }
+
+  // -c repaints instead of scrolling
+  const frame = (optClearRepaint() ? null : scrolledFrame(rows)) ??
+    fullFrame(rows);
+
+  prevRows = rows;
+  prevCursorCol = cmd.active ? cursorCol(rows) : -1;
+  process.stdout.write(frame);
+}
+
+/**
+ * Repaints for a terminal without cursor addressing, like og drawing
+ * with the dumb entry's caps: attribute strings are empty (styles
+ * stripped; og's default caret mode never emits raw file escapes
+ * either) and nothing is ever erased.
+ *
+ * - A bottom-line change overwrites in place after a bare `\r`; a
+ *   shorter line leaves the old tail visible, like og without `el`.
+ * - A forward scroll prints only the newly exposed lines and the
+ *   prompt, letting the terminal scroll.
+ * - Anything else repaints behind the dumb `clear` of two newlines.
+ */
+function dumbFrame(prev: string[] | null, rows: string[]): string {
+  const plain = rows.map(row => row.replace(STYLE_REGEX_G, ''));
+  const last = plain.length - 1;
+
+  if (prev && prev.length === plain.length) {
+    const prevPlain = prev.map(row => row.replace(STYLE_REGEX_G, ''));
+
+    let same = 0;
+    while (same < last && plain[same] === prevPlain[same]) same++;
+
+    // only the bottom (prompt) line changed
+    if (same === last) return '\r' + plain[last];
+
+    // scrolled forward: the old rows moved up by k
+    for (let k = 1; k < last; k++) {
+      if (plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)) {
+        return '\r' +
+          plain.slice(last - k, last).map(row => row + '\n').join('') +
+          plain[last];
+      }
+    }
+  }
+
+  // the first paint just prints, like og's initial forw; only later
+  // full repaints go behind the dumb `clear` of two newlines
+  return (prev ? '\n\n' : '') + plain.join('\n');
+}
+
+/**
+ * Composes the full screen: the formatted content rows plus the bottom
+ * prompt line (expanded prototype, input prompt or message).
+ *
+ * @param rawContent - The string content to display.
+ * @param buffer - Array of buffer characters.
+ * @returns The screen rows, top to bottom.
+ */
+export function screenRows(
+  rawContent: string[],
+  buffer: string[]
+): string[] {
   const content = formatContent(rawContent);
-  const prompt = getPrompt();
+  const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;
   // a single pending ESC changes nothing
@@ -239,27 +381,25 @@ export function render(rawContent: string[], buffer: string[]): void {
     );
   }
 
-  const rows = content.join('\n').split('\n');
-
-  // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
-  // and the parked cursor untouched, like less
-  if (prevRows && sameRows(prevRows, rows)) return;
-
-  const frame = scrolledFrame(rows) ?? fullFrame(rows);
-
-  prevRows = rows;
-  process.stdout.write(frame);
+  return content.join('\n').split('\n');
 }
 
 const drawRow = (rows: string[], row: number): string =>
   CURSOR_TO(row + 1, 1) + CLEAR_LINE + rows[row];
 
 // park the cursor after the prompt row's content, like less's
-// command-line position at the lower left
+// command-line position at the lower left; an open command buffer
+// places it at the editing position instead
 function parkCursor(rows: string[]): string {
+  return CURSOR_TO(rows.length, cursorCol(rows));
+}
+
+/** The parked cursor's 1-based column for the current frame. */
+function cursorCol(rows: string[]): number {
+  if (cmd.active) return Math.min(cmdCol() + 1, config.screenWidth);
+
   const last = rows[rows.length - 1];
-  const col = Math.min(visualWidth(last) + 1, config.screenWidth);
-  return CURSOR_TO(rows.length, col);
+  return Math.min(visualWidth(last) + 1, config.screenWidth);
 }
 
 function sameRows(a: string[], b: string[]): boolean {
@@ -445,7 +585,7 @@ function getPrompt(): string {
   if (marks.pending === "'") return 'goto mark: ';
   if (marks.pending === 'c') return 'clear mark: ';
 
-  if (examine.pending) return 'Examine: ' + examine.text;
+  if (examine.pending) return 'Examine: ' + cmdDisplay();
 
   // pending multi-key prefix, echoed like less's A_PREFIX (" ^X"); a
   // single pending ESC leaves the prompt untouched, and each further

@@ -3,16 +3,74 @@ import path from 'path';
 
 import { secureAllow } from "./secure";
 
+import {
+  cmd,
+  cmdOpen,
+  cmdClose,
+  cmdChar,
+  cmdUngot,
+  cmdText
+} from "./cmdbuf";
+
+import { filenameComplete } from "./files";
+
+import { optNoHistDups, optAutosaveAction } from "./options";
+
 import { search } from "./searching";
 
 import { files, fexpand, expandHomeEnv } from "./files";
 
 import { markRow } from "./jumping";
 
+import { ringBell } from "../helpers";
+
 /**
  * Line-input state shared by the `!`, `#`, `|`, `s` (log file) and `+`
  * prompts.
  */
+/**
+ * Session shell-command history shared by `!`, `#` and `|`, like
+ * less's ml_shell; persisted in the history file's .shell section.
+ */
+export let shellHistory: string[] = [];
+
+/** Replaces the shell history (history file load). */
+export function setShellHistory(entries: string[]): void {
+  shellHistory = entries;
+
+  if (cmd.active && cmd.history === shellHistory) {
+    cmd.histPos = shellHistory.length;
+  }
+}
+
+/**
+ * Records an accepted shell command, like cmd_addhist for ml_shell.
+ */
+function addShellHistory(text: string): void {
+  if (!text) return;
+
+  if (optNoHistDups()) {
+    const kept = shellHistory.filter(entry => entry !== text);
+    shellHistory.length = 0;
+    shellHistory.push(...kept);
+  }
+
+  if (shellHistory[shellHistory.length - 1] !== text) {
+    shellHistory.push(text);
+    if (shellHistory.length > 100) shellHistory.shift();
+  }
+
+  if (optAutosaveAction('!')) autosaveHook();
+}
+
+// history autosave hook, registered by the pager like searching's
+let autosaveHook: () => void = () => {};
+
+/** Registers the --autosave history file writer. */
+export function onShellAutosave(fn: () => void): void {
+  autosaveHook = fn;
+}
+
 export const miscInput = {
   pending: '' as '' | '!' | '#' | '|' | 's' | 'S' | '+',
   text: '',
@@ -118,6 +176,31 @@ export function startMiscInput(
 ): void {
   miscInput.pending = kind;
   miscInput.text = '';
+
+  // shell prompts carry the ml_shell history and, with the log file
+  // prompts, filename completion; `+cmd` has neither, like og
+  const shell = kind === '!' || kind === '#' || kind === '|';
+
+  cmdOpen(miscPromptLabel(kind), {
+    history: shell ? shellHistory : null,
+    complete: kind === '+' ? null : filenameComplete,
+  });
+}
+
+/** The prompt label for each misc input kind, like start_mca's. */
+export function miscPromptLabel(
+  kind: '!' | '#' | '|' | 's' | 'S' | '+'
+): string {
+  const prompts = {
+    '!': '!',
+    '#': '#',
+    '|': '!',
+    '+': '+',
+    's': 'log file: ',
+    'S': 'Log file: ',
+  };
+
+  return prompts[kind];
 }
 
 /**
@@ -127,30 +210,46 @@ export function startMiscInput(
  * @returns `run` to execute, `pending` or `cancel`.
  */
 export function miscInputKey(key: string): 'run' | 'pending' | 'cancel' {
-  if (key === '\x0D' || key === '\x0A') {
-    miscInput.pending = '';
-    return 'run';
+  const kind = miscInput.pending;
+
+  if (!cmd.prefix) {
+    if (key === '\x0D' || key === '\x0A') {
+      miscInput.pending = '';
+      miscInput.text = cmdText();
+      cmdClose();
+
+      if (kind === '!' || kind === '#' || kind === '|') {
+        // ^P prefixed commands still join the history bare, like og
+        // eslint-disable-next-line no-control-regex
+        addShellHistory(miscInput.text.replace(/^\x10/, ''));
+      }
+
+      return 'run';
+    }
+
+    if (key === '\x03') {
+      miscInput.pending = '';
+      miscInput.text = '';
+      cmdClose();
+      return 'cancel';
+    }
   }
 
-  if (key === '\x03' || key.startsWith('\x1B')) {
+  const result = cmdChar(key);
+  miscInput.text = cmdText();
+
+  if (result === 'quit') {
     miscInput.pending = '';
     miscInput.text = '';
+    cmdClose();
     return 'cancel';
   }
 
-  if (key === '\x08' || key === '\x7F') {
-    if (!miscInput.text) {
-      miscInput.pending = '';
-      return 'cancel';
-    }
-
-    miscInput.text = miscInput.text.slice(0, -1);
-    return 'pending';
+  for (let u = cmdUngot(); u !== null; u = cmdUngot()) {
+    const replayed = miscInputKey(u);
+    if (replayed !== 'pending') return replayed;
   }
 
-  // ^P enters literally, like less's cmdbuf: it suppresses the done
-  // message of the resulting command
-  if (key >= ' ' || key === '\x10') miscInput.text += key;
   return 'pending';
 }
 

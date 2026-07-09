@@ -267,7 +267,11 @@ describe('misc input editing', () => {
     expect(miscInput.pending).toBe('');
 
     startMiscInput('+');
-    expect(miscInputKey('\x1B')).toBe('cancel');
+
+    // ESC is an edit prefix now, like og; ^G aborts the prompt
+    expect(miscInputKey('\x1B')).toBe('pending');
+    expect(miscInputKey('\x07')).toBe('cancel');
+    expect(miscInput.pending).toBe('');
   });
 
   it('accepts a literal ^P but drops other control chars', () => {

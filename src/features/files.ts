@@ -5,7 +5,30 @@ import { config, mode } from "../config";
 
 import { maxSubRow, ringBell } from "../helpers";
 
+import { secureAllow } from "./secure";
+
+import {
+  cmd,
+  Completer,
+  cmdOpen,
+  cmdClose,
+  cmdChar,
+  cmdUngot,
+  cmdText,
+  cmdRight,
+  cmdReplaceRange
+} from "./cmdbuf";
+
 import { search } from "./searching";
+
+import { optNoHistDups, optQuotes, resetHeaderStart, checkModelines }
+  from "./options";
+
+import { decodeContent } from "./charset";
+
+import { prExpand, eqProto } from "./prompt";
+
+import { openAltFile, closeAltFile } from "./lessopen";
 
 /**
  * One entry in the command line file list, like less's ifile.
@@ -44,9 +67,15 @@ export const examine = {
 // the previously examined file, for '#' expansion (less's old_ifile)
 let previousPath: string | null = null;
 
-// TAB completion state, like cmdbuf.c's in_completion/tk_* statics
+/**
+ * Session-only `Examine: ` history, like less's ml_examine: every
+ * opened file joins it, and it is never written to the history file.
+ */
+const examineHistory: string[] = [];
+
+// TAB completion state, like cmdbuf.c's tk_* statics; the cycling
+// flag itself lives in the shared buffer as cmd.inCompletion
 const completion = {
-  active: false,
   wordStart: 0,
   trials: [] as string[],
   index: 0,
@@ -97,6 +126,8 @@ export function initFiles(paths: string[]): void {
   files.newFile = false;
   examine.pending = false;
   examine.text = '';
+  examineHistory.length = 0;
+  resetHeaderStart();
 }
 
 /**
@@ -172,11 +203,43 @@ export function indexFileTarget(n: number): number | null {
 }
 
 /**
- * Opens the `Examine: ` prompt.
+ * Adds an opened file to the examine history, quoted like edit_ifile's
+ * cmd_addhist call: consecutive duplicates are skipped and
+ * --no-histdups drops older occurrences anywhere.
+ *
+ * @param filePath - Path of the file just opened.
+ */
+export function addExamineHistory(filePath: string): void {
+  const name = quoteIfNeeded(filePath);
+  if (!name) return;
+
+  if (examineHistory[examineHistory.length - 1] !== name) {
+    if (optNoHistDups()) {
+      const i = examineHistory.indexOf(name);
+      if (i !== -1) examineHistory.splice(i, 1);
+    }
+
+    examineHistory.push(name);
+  }
+
+  // Up at the next prompt starts from the newest entry, like
+  // cmd_addhist leaving curr_mp just past the added command
+  if (cmd.active && cmd.history === examineHistory) {
+    cmd.histPos = examineHistory.length;
+  }
+}
+
+/**
+ * Opens the `Examine: ` prompt over the shared command buffer.
  */
 export function startExamine(): void {
   examine.pending = true;
   examine.text = '';
+
+  cmdOpen('Examine: ', {
+    history: examineHistory,
+    complete: filenameComplete,
+  });
 }
 
 /**
@@ -185,50 +248,45 @@ export function startExamine(): void {
  * - Backspacing past the start aborts, like less's CF_QUIT_ON_ERASE.
  * - TAB / ^O cycle filename completions of the last word, ^L expands it
  *   to all matches, like cmdbuf.c's cmd_complete.
+ * - Up/Down recall previously opened file names starting with the
+ *   typed text, like cmdbuf.c's cmd_updown; editing the text starts
+ *   a fresh prefix match.
  *
  * @param key - Raw key input.
  * @returns `run` to open the entered path, `pending` or `cancel`.
  */
 export function examineKey(key: string): 'run' | 'pending' | 'cancel' {
-  if (key === '\x09') {
-    completeWord(1);
-    return 'pending';
+  if (!cmd.prefix) {
+    if (key === '\x0D' || key === '\x0A') {
+      examine.pending = false;
+      examine.text = cmdText();
+      cmdClose();
+      return 'run';
+    }
+
+    if (key === '\x03') {
+      examine.pending = false;
+      examine.text = '';
+      cmdClose();
+      return 'cancel';
+    }
   }
 
-  if (key === '\x0F' || key === '\x1B[Z' || key === '\x1B\x09') {
-    completeWord(-1);
-    return 'pending';
-  }
+  const result = cmdChar(key);
+  examine.text = cmdText();
 
-  if (key === '\x0C') {
-    expandWord();
-    return 'pending';
-  }
-
-  completion.active = false;
-
-  if (key === '\x0D' || key === '\x0A') {
-    examine.pending = false;
-    return 'run';
-  }
-
-  if (key === '\x03' || key.startsWith('\x1B')) {
+  if (result === 'quit') {
     examine.pending = false;
     examine.text = '';
+    cmdClose();
     return 'cancel';
   }
 
-  if (key === '\x08' || key === '\x7F') {
-    if (!examine.text) {
-      examine.pending = false;
-      return 'cancel';
-    }
-
-    examine.text = examine.text.slice(0, -1);
-    return 'pending';
+  for (let u = cmdUngot(); u !== null; u = cmdUngot()) {
+    const replayed = examineKey(u);
+    if (replayed !== 'pending') return replayed;
   }
 
-  if (key >= ' ') examine.text += key;
   return 'pending';
 }
 
@@ -418,14 +476,19 @@ function globRegex(segment: string): RegExp {
  *
  * @param direction - 1 to cycle forward, -1 backward.
  */
+/** Filename completion for any prompt, like cmd_complete. */
+export const filenameComplete: Completer = action => {
+  if (action === 'expand') expandWord();
+  else completeWord(action === 'complete' ? 1 : -1);
+};
+
 function completeWord(direction: 1 | -1): void {
-  if (!completion.active && !buildCompletions()) return;
+  if (!cmd.inCompletion && !buildCompletions()) return;
 
   const count = completion.trials.length;
   completion.index = (completion.index + direction + count) % count;
 
-  examine.text = examine.text.slice(0, completion.wordStart) +
-    completion.trials[completion.index];
+  cmdReplaceRange(completion.wordStart, completion.trials[completion.index]);
 }
 
 /**
@@ -433,11 +496,12 @@ function completeWord(direction: 1 | -1): void {
  * cmd_complete's EC_EXPAND.
  */
 function expandWord(): void {
-  completion.active = false;
+  cmd.inCompletion = false;
   if (!buildCompletions()) return;
 
-  examine.text = examine.text.slice(0, completion.wordStart) +
-    completion.trials.slice(0, -1).join(' ');
+  cmdReplaceRange(
+    completion.wordStart, completion.trials.slice(0, -1).join(' ')
+  );
 }
 
 /**
@@ -446,8 +510,20 @@ function expandWord(): void {
  * @returns False with a bell when nothing matches.
  */
 function buildCompletions(): boolean {
-  const start = wordStart(examine.text);
-  const word = examine.text.slice(start);
+  // put the cursor at the end of the word under it, like delimit_word
+  if (cmd.cur < cmd.steps.length && cmd.steps[cmd.cur] !== ' ') {
+    while (cmd.cur < cmd.steps.length && cmd.steps[cmd.cur] !== ' ') {
+      cmdRight();
+    }
+  }
+
+  if (cmd.cur === 0) {
+    ringBell();
+    return false;
+  }
+
+  const start = wordStart(cmd.steps.slice(0, cmd.cur).join(''));
+  const word = cmd.steps.slice(start, cmd.cur).join('');
   const matches = glob(expandHomeEnv(unquote(word)) + '*');
 
   if (matches.length === 1 && !fs.existsSync(matches[0])) {
@@ -455,7 +531,7 @@ function buildCompletions(): boolean {
     return false;
   }
 
-  completion.active = true;
+  cmd.inCompletion = true;
   completion.wordStart = start;
   completion.trials = [...matches.map(quoteIfNeeded), word];
   completion.index = -1;
