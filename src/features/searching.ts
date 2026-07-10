@@ -1053,7 +1053,7 @@ let lastInterruptPoll = 0;
  *
  * @returns True when the search should abort.
  */
-function searchInterrupted(): boolean {
+export function searchInterrupted(): boolean {
   if (!process.stdin.isTTY) return false;
 
   const now = Date.now();

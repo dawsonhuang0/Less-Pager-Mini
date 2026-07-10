@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 import { Actions } from "./interfaces";
 
 import {
@@ -185,6 +187,8 @@ import {
 
 import { initSecure, secureAllow } from "./features/secure";
 
+import { bigPager, BIG_FILE_THRESHOLD } from "./bigfile/session";
+
 import {
   userBinding,
   userIsPrefix,
@@ -268,6 +272,19 @@ export default async function pager(
  */
 async function filePager(filePaths: string[]): Promise<void> {
   if (!filePaths.length) return;
+
+  // huge files take the og-style windowed session: never loaded,
+  // read in blocks on demand (the ch.c model)
+  if (filePaths.length === 1) {
+    try {
+      if (fs.statSync(filePaths[0]).size >= BIG_FILE_THRESHOLD) {
+        await bigPager(filePaths[0]);
+        return;
+      }
+    } catch {
+      // fall through to the normal open error path
+    }
+  }
 
   initFiles(filePaths);
 
