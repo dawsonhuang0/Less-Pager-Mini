@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { getAction, splitKeys } from '../src/normalKeys';
+import { getAction, splitKeys } from '../src/keys';
 
 it('valid keys should have their corresponding event as result', () => {
   // ':' alone is a command prefix, not a key: its combos map instead

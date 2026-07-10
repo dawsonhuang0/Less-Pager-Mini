@@ -17,7 +17,7 @@ import {
 
 import { help } from "./lessHelp";
 
-import { getAction, splitKeys } from "./normalKeys";
+import { getAction, splitKeys } from "./keys";
 
 import {
   inputToFilePaths,

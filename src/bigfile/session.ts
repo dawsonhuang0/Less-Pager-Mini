@@ -7,7 +7,7 @@ import { getLayout, emitRow } from '../lines/lineLayout';
 
 import { config } from '../config';
 
-import { getAction, splitKeys } from '../normalKeys';
+import { getAction, splitKeys } from '../keys';
 
 import { forwLine, backLine } from './lineio';
 
