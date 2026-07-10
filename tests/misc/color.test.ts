@@ -9,7 +9,7 @@ import { initContent } from '../../src/features/files';
 
 import { option, startOption, optionKey } from '../../src/options';
 
-import { colorSgr, colored, attrText, resetColors }
+import { colorSgr, colored, attrText, resetColors, setColor }
   from '../../src/features/color';
 
 import { formatContent, calculateEOF } from '../../src/helpers';
@@ -149,5 +149,18 @@ describe('color application', () => {
 
     const line = highlightLine(content[0], 0);
     expect(line).toContain(INVERSE_ON + 'alpha' + INVERSE_OFF);
+  });
+});
+
+describe('lowercase -D types without --use-color, like og', () => {
+  it('recolors standout-rendered text once -Ds is set', () => {
+    expect(setColor('s9.7')).toBeNull();
+    const out = colored('search', 'hit', INVERSE_ON, INVERSE_OFF);
+    expect(out).not.toContain(INVERSE_ON);
+    expect(out).toMatch(/\x1b\[/);
+  });
+
+  it('refuses uppercase color types, like opt_D', () => {
+    expect(setColor('SG')).toBe('Set --use-color before changing colors');
   });
 });

@@ -233,6 +233,12 @@ export function colored(
     return open ? open + text + STYLE_RESET : text;
   }
 
+  // og's lowercase -D types recolor the base attributes regardless
+  // of --use-color: a standout fallback honors a configured -Ds
+  if (fallbackOn === INVERSE_ON && colorMap.standout) {
+    return attrText('standout', text);
+  }
+
   return fallbackOn ? fallbackOn + text + fallbackOff : text;
 }
 
