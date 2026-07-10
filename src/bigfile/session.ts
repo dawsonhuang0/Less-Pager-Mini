@@ -1,3 +1,5 @@
+import { keyboard } from '../keyboard';
+
 import { BlockFile } from './ch';
 import { BigView } from './screen';
 
@@ -49,8 +51,8 @@ export async function bigPager(path: string): Promise<void> {
   const bf = new BlockFile(path);
   const view = new BigView(bf);
 
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
+  keyboard().setRawMode(true);
+  keyboard().resume();
   process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
 
   config.window = process.stdout.rows || 24;
@@ -224,7 +226,7 @@ export async function bigPager(path: string): Promise<void> {
         switch (action) {
           case 'FORCE_EXIT':
           case 'EXIT':
-            process.stdin.off('data', onKey);
+            keyboard().off('data', onKey);
             resolve();
             return;
           case 'LINE_FORWARD': view.lineForward(n); break;
@@ -255,11 +257,11 @@ export async function bigPager(path: string): Promise<void> {
       }
     };
 
-    process.stdin.on('data', onKey);
+    keyboard().on('data', onKey);
     draw();
   });
 
   process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
-  process.stdin.pause();
+  keyboard().pause();
   bf.close();
 }

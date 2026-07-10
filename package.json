@@ -59,5 +59,8 @@
   },
   "dependencies": {
     "char-width": "^1.0.0"
+  },
+  "bin": {
+    "lmn": "dist/cli.js"
   }
 }

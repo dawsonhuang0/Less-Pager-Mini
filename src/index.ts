@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import { keyboard } from "./keyboard";
+
 import { Actions } from "./interfaces";
 
 import {
@@ -246,7 +248,7 @@ export default async function pager(
   preserveFormat: boolean = false,
   examineFile: boolean = false
 ): Promise<void> {
-  if (!process.stdin.isTTY) {
+  if (!keyboard().isTTY) {
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
 
@@ -552,14 +554,14 @@ async function contentPager(content: string[]): Promise<void> {
   // the warning (know_dumb) but not the degradation
   mode.DUMB = dumbTerminal();
 
-  if (mode.DUMB && process.stdin.isTTY && !optKnowDumb()) {
+  if (mode.DUMB && keyboard().isTTY && !optKnowDumb()) {
     process.stdout.write('WARNING: terminal is not fully functional\n');
     process.stdout.write('Press RETURN to continue ');
 
     // og's get_return accepts any key and quits on q
     if (await warnReturn() === 'q') {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
+      keyboard().setRawMode(false);
+      keyboard().pause();
       return;
     }
 
@@ -583,7 +585,7 @@ async function contentPager(content: string[]): Promise<void> {
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);
 
-  process.stdin.on('data', keyHandler);
+  keyboard().on('data', keyHandler);
   await new Promise<void>((resolve) => {
     exit = () => {
       exited = true;
@@ -1377,8 +1379,8 @@ async function contentPager(content: string[]): Promise<void> {
       : { stdio: ['pipe', 'inherit', 'inherit'], input });
 
     // raw single-key input for the done pause, still on the shell screen
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
+    keyboard().setRawMode(true);
+    keyboard().resume();
 
     if (doneMsg) {
       // the pipe reinits first, like pipe_data trashing the screen, so
@@ -1670,9 +1672,9 @@ async function contentPager(content: string[]): Promise<void> {
       config.startLine = 0;
     }
 
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
+    keyboard().setRawMode(true);
+    keyboard().resume();
+    keyboard().setEncoding('utf8');
 
     // the kernel process name (what Terminal shows for less itself) is
     // fixed at exec time; the OSC title is the best an interpreted
@@ -1760,8 +1762,8 @@ async function contentPager(content: string[]): Promise<void> {
     // execution continues here when the shell resumes us — or right
     // away when the kernel discards the stop (orphaned process
     // group); og's psignals resumes the same way after its kill()
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
+    keyboard().setRawMode(true);
+    keyboard().resume();
     enterScreen();
     calculateDimensions();
     calculateEOF(content);
@@ -1784,8 +1786,8 @@ async function contentPager(content: string[]): Promise<void> {
       }
     }
 
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
+    keyboard().setRawMode(false);
+    keyboard().pause();
   }
 
   function enterScreen(): void {
@@ -1917,9 +1919,9 @@ async function contentPager(content: string[]): Promise<void> {
     process.off('SIGHUP', onTerminate);
     process.off('SIGUSR1', onSigusr1);
 
-    process.stdin.off('data', keyHandler);
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
+    keyboard().off('data', keyHandler);
+    keyboard().setRawMode(false);
+    keyboard().pause();
   }
 }
 
@@ -1937,11 +1939,11 @@ function dumbTerminal(): boolean {
  * get_return before the screen initializes.
  */
 function warnReturn(): Promise<string> {
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
+  keyboard().setRawMode(true);
+  keyboard().resume();
 
   return new Promise(resolve => {
-    process.stdin.once('data', (data: Buffer) => {
+    keyboard().once('data', (data: Buffer) => {
       resolve(data.toString()[0] ?? '');
     });
   });

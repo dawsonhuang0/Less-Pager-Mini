@@ -67,8 +67,25 @@ Install Less-Pager-Mini via npm:
 npm i less-pager-mini
 ```
 
+If you want to use it directly from your terminal:
+
+```bash
+npm i -g less-pager-mini
+```
+
 
 ## Usage
+
+<h3>Terminal:</h3>
+
+Use `lmn` anywhere you'd use `less` — same keys, same flags:
+
+```bash
+lmn file.txt          # page a file
+lmn -N app.log        # any less option works
+cmd | lmn             # page piped output
+lmn huge-500GB.log    # giant files open instantly
+```
 
 <h3>JavaScript / TypeScript:</h3>
 
@@ -145,12 +162,14 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [x] COMMAND MODE
 - [x] MOVING
 - [x] SEARCHING
-- [-] JUMPING
+- [x] JUMPING
 - [x] CHANGING FILES
 - [x] MISCELLANEOUS COMMANDS
 - [-] OPTIONS
 - [x] LINE EDITING
 - [ ] Custom Key-Bindings
+- [x] Start up via `lmn` command directly from terminal
+- [x] Load 1TB file instantly
 - [x] Support wide-character (emoji, CJK, etc.) rendering
 - [x] Support help page
 
