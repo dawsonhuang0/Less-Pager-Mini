@@ -488,6 +488,16 @@ async function contentPager(content: string[]): Promise<void> {
 
   // -s, -x and -r reshape the displayed content when toggled
   onRebuild(() => {
+    // inside the help screen the help itself repaints (og's -D and
+    // friends carry O_REPAINT on the current file); the main content
+    // rebuild lands in the parked copy for when help exits
+    if (mode.HELP) {
+      prevContent = deriveContent();
+      content = transformContent(help);
+      calculateEOF(content);
+      return;
+    }
+
     content = deriveContent();
     config.row = Math.min(config.row, Math.max(content.length - 1, 0));
     config.subRow = 0;
