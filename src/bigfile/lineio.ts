@@ -9,8 +9,9 @@ import { decodeContent } from '../features/charset';
  */
 
 /** Pathological lines split at this many bytes (og grows linebuf;
- *  we bound memory instead — the renderer wraps/chops anyway). */
-export const MAX_LINE = 1 << 20;
+ *  we bound memory instead — the renderer wraps/chops anyway, and
+ *  every split segment costs a transform+layout per visible row). */
+export const MAX_LINE = 1 << 16;
 
 export interface ForwLine {
   text: string;
@@ -35,7 +36,10 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   const nl = bf.findNewline(pos, MAX_LINE);
 
   if (nl < 0) {
-    const end = Math.min(pos + MAX_LINE, bf.size);
+    // no newline in reach: cut at the absolute MAX_LINE grid so the
+    // same boundaries appear when walking backward
+    const grid = (Math.floor(pos / MAX_LINE) + 1) * MAX_LINE;
+    const end = Math.min(grid, bf.size);
     return {
       text: decodeContent(bf.readRange(pos, end - pos)),
       next: end,
@@ -59,11 +63,16 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
 export function backLine(bf: BlockFile, pos: number): BackLine | null {
   if (pos <= 0) return null;
 
-  // pos - 1 is the newline ending the previous line (or the last
-  // byte of a split segment); find the newline before it
-  const prevNl = bf.findNewlineBack(pos - 1, MAX_LINE);
-  const start = prevNl < 0 ? Math.max(pos - 1 - MAX_LINE, 0) : prevNl + 1;
-  const end = bf.readRange(pos - 1, 1)[0] === 0x0A ? pos - 1 : pos;
+  const endsAtNl = bf.readRange(pos - 1, 1)[0] === 0x0A;
+  const end = endsAtNl ? pos - 1 : pos;
+  const prevNl = bf.findNewlineBack(end, MAX_LINE);
+
+  // without a newline in reach the previous segment starts on the
+  // same absolute grid the forward walk cuts at
+  const grid = Math.floor((end - 1) / MAX_LINE) * MAX_LINE;
+  const start = prevNl < 0
+    ? Math.max(grid, 0)
+    : Math.max(prevNl + 1, endsAtNl ? 0 : grid);
 
   return {
     text: decodeContent(bf.readRange(start, end - start)),

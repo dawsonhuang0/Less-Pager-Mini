@@ -1,17 +1,21 @@
 import { keyboard } from '../keyboard';
 
 import { BlockFile } from './ch';
-import { BigView } from './screen';
+import { BigView, displayText } from './screen';
+
+import { getLayout, emitRow } from '../lines/lineLayout';
 
 import { config } from '../config';
 
 import { getAction, splitKeys } from '../normalKeys';
 
-import { transformContent } from '../helpers';
-
 import { forwLine, backLine } from './lineio';
 
-import { searchInterrupted } from '../features/searching';
+import { search, searchInterrupted } from '../features/searching';
+
+import { optPrType, optIntrChar } from '../options/shared';
+
+import { scanOptions } from '../options';
 
 import {
   cmd,
@@ -51,6 +55,9 @@ export async function bigPager(path: string): Promise<void> {
   const bf = new BlockFile(path);
   const view = new BigView(bf);
 
+  // $LESS (and lmn's command line riding it) applies here too
+  scanOptions(process.env.LESS ?? '', []);
+
   keyboard().setRawMode(true);
   keyboard().resume();
   process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
@@ -68,6 +75,21 @@ export async function bigPager(path: string): Promise<void> {
   let message = '';
 
   const searchHistory: string[] = [];
+
+  // marks and the quote mark, like og mark.c over POSITIONs
+  const marks = new Map<string, { pos: number, subRow: number }>();
+  let quoteMark: { pos: number, subRow: number } | null = null;
+  let marking: 'm' | "'" | '' = '';
+
+  // F follow state, like og's forw_loop
+  let following = false;
+  let followQueue: string[] = [];
+  let followTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Records the pre-jump position into the quote mark, like lastmark. */
+  const remember = (): void => {
+    quoteMark = { ...view.top };
+  };
 
   /**
    * Streams the file line by line for the pattern, like og's search
@@ -126,35 +148,59 @@ export async function bigPager(path: string): Promise<void> {
     const count = config.window - 1;
     const { rows } = view.visible(count);
 
-    const texts = transformContent(rows.map(r => r.text));
     const display: string[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const width = config.screenWidth - 1;
-      const text = texts[i] ?? '';
+    for (const row of rows) {
+      const text = displayText(row.text);
+      let out: string;
 
-      // chop mode with wrap sub-rows handled by the view; here each
-      // row clips to the screen (parity shifts arrive with search)
-      display.push(config.chopLongLines
-        ? text.slice(config.col, config.col + width)
-        : text.slice(rows[i].subRow * width, (rows[i].subRow + 1) * width));
+      if (config.chopLongLines || config.col) {
+        // chop: the layout's first row is exactly one screen width
+        out = emitRow(getLayout(text), 0);
+      } else {
+        out = emitRow(getLayout(text), row.subRow);
+      }
+
+      // highlight search matches in view, like og's hilites
+      if (pattern && search.highlight) {
+        const global = new RegExp(pattern.source,
+          pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+        out = out.replace(global,
+          m => (m ? INVERSE_ON + m + INVERSE_OFF : m));
+      }
+
+      display.push(out);
     }
 
     while (display.length < count) display.push('~');
 
     const percent = bf.size
-      ? Math.floor(((view.top.pos) * 100) / bf.size)
+      ? Math.floor((view.top.pos * 100) / bf.size)
       : 100;
     const name = first ? `${path} ` : '';
+
+    // og prompt styles: short shows ':', -m percent, -M the works
+    const base = optPrType() === 2
+      ? `${path} byte ${view.top.pos}/${bf.size} ${percent}%`
+      : optPrType() === 1
+        ? `${percent}%`
+        : ':';
+
     const prompt = searching
       ? searching + cmdDisplay()
-      : message
-        ? `${INVERSE_ON}${message}${INVERSE_OFF}`
-        : view.atEof
-          ? `${INVERSE_ON}${name}(END)${INVERSE_OFF}`
-          : first
-            ? `${INVERSE_ON}${name}${INVERSE_OFF}`
-            : `:${percent}%`;
+      : marking
+        ? (marking === 'm' ? 'set mark: ' : 'goto mark: ')
+        : following
+          ? `${INVERSE_ON}Waiting for data${INVERSE_OFF}`
+          : message
+            ? `${INVERSE_ON}${message}${INVERSE_OFF}`
+            : view.atEof
+              ? `${INVERSE_ON}${name}(END)${INVERSE_OFF}`
+              : first
+                ? `${INVERSE_ON}${name}${INVERSE_OFF}`
+                : optPrType() === 0
+                  ? base
+                  : `${INVERSE_ON}${base}${INVERSE_OFF}`;
 
     const body = display.map(r => CLEAR_LINE + r).join('\n');
     process.stdout.write(
@@ -163,11 +209,72 @@ export async function bigPager(path: string): Promise<void> {
     );
   };
 
+  /** Ends F follow mode and replays queued keys, like og. */
+  const endFollow = (): string[] => {
+    following = false;
+    if (followTimer) clearInterval(followTimer);
+    followTimer = null;
+
+    const queued = followQueue;
+    followQueue = [];
+    return queued;
+  };
+
   await new Promise<void>(resolve => {
     const onKey = (data: Buffer): void => {
       for (const key of splitKeys(data.toString())) {
         first = false;
         message = '';
+
+        // F wait: ^C / --intr return to paging, other keys queue as
+        // commands for afterwards, like og's forw_loop
+        if (following) {
+          if (key === '\x03' || key === optIntrChar()) {
+            const queued = endFollow();
+            draw();
+            for (const q of queued) onKey(Buffer.from(q));
+          } else {
+            followQueue.push(key);
+          }
+          continue;
+        }
+
+        // single-char mark prompts (m / ')
+        if (marking) {
+          const kind = marking;
+          marking = '';
+
+          if (!(key === '\x03' || key.startsWith('\x1B'))) {
+            if (kind === 'm') {
+              if (/^[a-zA-Z#]$/.test(key[0])) {
+                marks.set(key[0], { ...view.top });
+              } else {
+                message = `Invalid mark letter ${key[0]}`;
+              }
+            } else {
+              const target = key[0] === "'" || key === '\x18'
+                ? quoteMark
+                : key[0] === '^' ? { pos: 0, subRow: 0 }
+                : key[0] === '$' ? null
+                : marks.get(key[0]) ?? undefined;
+
+              if (key[0] === '$') {
+                remember();
+                view.gotoEnd(config.window);
+              } else if (target === undefined) {
+                message = /^[a-zA-Z#]$/.test(key[0])
+                  ? 'Mark not set'
+                  : `Invalid mark letter ${key[0]}`;
+              } else if (target) {
+                remember();
+                view.top = { ...target };
+              }
+            }
+          }
+
+          draw();
+          continue;
+        }
 
         // search prompt input runs through the shared line editor
         if (searching) {
@@ -176,9 +283,14 @@ export async function bigPager(path: string): Promise<void> {
 
             if (text) {
               try {
-                pattern = new RegExp(text);
+                // -i smart case / -I like og: caseless unless the
+                // pattern has uppercase under smart mode
+                const caseless = search.caseless === 2 ||
+                  (search.caseless === 1 && !/[A-Z]/.test(text));
+                pattern = new RegExp(text, caseless ? 'i' : '');
                 searchHistory.push(text);
                 lastDir = searching === '/' ? 1 : -1;
+                remember();
                 runSearch(lastDir, view.top.pos);
               } catch {
                 message = `Invalid pattern: ${text}`;
@@ -226,6 +338,7 @@ export async function bigPager(path: string): Promise<void> {
         switch (action) {
           case 'FORCE_EXIT':
           case 'EXIT':
+            if (followTimer) clearInterval(followTimer);
             keyboard().off('data', onKey);
             resolve();
             return;
@@ -243,12 +356,33 @@ export async function bigPager(path: string): Promise<void> {
           case 'SET_HALF_WINDOW_BACKWARD':
             view.lineBackward(Math.floor(config.window / 2));
             break;
-          case 'FIRST_LINE': view.gotoStart(); break;
-          case 'LAST_LINE': view.gotoEnd(config.window); break;
+          case 'FIRST_LINE': remember(); view.gotoStart(); break;
+          case 'LAST_LINE': remember(); view.gotoEnd(config.window); break;
           case 'PERCENT_LINE':
+            remember();
             view.gotoPercent(Math.min(parseInt(buffer.join(''), 10) || 0,
               100));
             break;
+          case 'SET_MARK': marking = 'm'; break;
+          case 'GO_MARK': marking = "'"; break;
+          case 'REPAINT':
+          case 'DROP_INPUT_REPAINT':
+            bf.refreshSize();
+            break;
+          case 'FOLLOW': {
+            // F: jump to the end and wait for data, like forw_loop
+            bf.refreshSize();
+            view.gotoEnd(config.window);
+            following = true;
+            followTimer = setInterval(() => {
+              const before = bf.size;
+              if (bf.refreshSize() > before) {
+                view.gotoEnd(config.window);
+                draw();
+              }
+            }, 100);
+            break;
+          }
           default: break;
         }
 

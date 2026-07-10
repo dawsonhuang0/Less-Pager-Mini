@@ -28,7 +28,17 @@ export class BlockFile {
 
   /** Re-checks the file length, for F follow and growing files. */
   refreshSize(): number {
-    this.size = fs.fstatSync(this.fd).size;
+    const size = fs.fstatSync(this.fd).size;
+
+    if (size !== this.size) {
+      // short (tail) blocks may have grown: drop them so the next
+      // read refetches, like og refilling partial buffers
+      for (const [index, block] of this.blocks) {
+        if (block.length < BLOCK_SIZE) this.blocks.delete(index);
+      }
+    }
+
+    this.size = size;
     return this.size;
   }
 

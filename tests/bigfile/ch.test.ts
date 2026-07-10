@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { BlockFile, BLOCK_SIZE } from '../../src/bigfile/ch';
 
-import { forwLine, backLine, lastLineStart }
+import { forwLine, backLine, lastLineStart, MAX_LINE }
   from '../../src/bigfile/lineio';
 
 import { opt } from '../../src/options/state';
@@ -110,11 +110,11 @@ describe('line reading', () => {
   });
 
   it('splits a pathological newline-less line at the cap', () => {
-    const bf = open('monster.txt', Buffer.alloc((1 << 20) + 10, 0x62));
+    const bf = open('monster.txt', Buffer.alloc(MAX_LINE + 10, 0x62));
 
     const l1 = forwLine(bf, 0);
     expect(l1?.split).toBe(true);
-    expect(l1?.next).toBe(1 << 20);
+    expect(l1?.next).toBe(MAX_LINE);
 
     const l2 = forwLine(bf, l1!.next);
     expect(l2?.text.length).toBe(10);
@@ -159,5 +159,22 @@ describe('terabyte-scale access', () => {
     expect(Date.now() - t0).toBeLessThan(500);
     bf.close();
     fs.rmSync(p);
+  });
+});
+
+describe('growing files (F follow)', () => {
+  it('serves appended data after refreshSize', () => {
+    const p = path.join(dir, 'grow.txt');
+    fs.writeFileSync(p, 'aaa\nbbb\n');
+    const bf = new BlockFile(p);
+
+    expect(forwLine(bf, 4)?.text).toBe('bbb');
+
+    fs.appendFileSync(p, 'ccc\n');
+    bf.refreshSize();
+
+    expect(lastLineStart(bf)).toBe(8);
+    expect(forwLine(bf, 8)?.text).toBe('ccc');
+    bf.close();
   });
 });

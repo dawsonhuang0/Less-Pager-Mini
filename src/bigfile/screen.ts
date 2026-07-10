@@ -4,7 +4,9 @@ import { forwLine, backLine, lastLineStart } from './lineio';
 
 import { config } from '../config';
 
-import { maxSubRow } from '../helpers';
+import { transformContent } from '../helpers';
+
+import { getLayout } from '../lines/lineLayout';
 
 /**
  * The visible-screen model for file-backed sessions, ported from
@@ -20,6 +22,11 @@ export interface ViewTop {
   subRow: number;
 }
 
+/** A line's display text: the normal content transform per line. */
+export function displayText(raw: string): string {
+  return transformContent([raw])[0] ?? '';
+}
+
 export class BigView {
   readonly bf: BlockFile;
   top: ViewTop = { pos: 0, subRow: 0 };
@@ -33,7 +40,7 @@ export class BigView {
   /** Display sub-rows a line occupies under the current mode. */
   private rowsOf(text: string): number {
     if (config.chopLongLines || config.col) return 1;
-    return maxSubRow(text) + 1;
+    return getLayout(displayText(text)).rowStart.length;
   }
 
   /**
@@ -49,15 +56,24 @@ export class BigView {
     let pos = this.top.pos;
     let sub = this.top.subRow;
     let endPos = pos;
+    let more = false;
 
-    while (rows.length < count) {
+    while (true) {
       const line = forwLine(this.bf, pos);
       if (!line) break;
 
       const total = this.rowsOf(line.text);
+      let s = sub;
 
-      for (let s = sub; s < total && rows.length < count; s++) {
+      for (; s < total && rows.length < count; s++) {
         rows.push({ text: line.text, pos, subRow: s });
+      }
+
+      if (rows.length >= count) {
+        // content past the bottom row means the end is not shown
+        more = s < total || line.next < this.bf.size;
+        endPos = line.next;
+        break;
       }
 
       endPos = line.next;
@@ -65,21 +81,8 @@ export class BigView {
       sub = 0;
     }
 
-    this.atEof = endPos >= this.bf.size && rows.length < count + 1 &&
-      (rows.length === 0 || this.lastRowShowsEnd(rows, count));
-
+    this.atEof = !more;
     return { rows, endPos };
-  }
-
-  private lastRowShowsEnd(
-    rows: { text: string, pos: number, subRow: number }[],
-    count: number
-  ): boolean {
-    if (rows.length < count) return true;
-
-    const last = rows[rows.length - 1];
-    return last.subRow === this.rowsOf(last.text) - 1 &&
-      forwLine(this.bf, last.pos)?.next === this.bf.size;
   }
 
   /** Scrolls forward n display rows, like forw(). */
@@ -159,7 +162,7 @@ export class BigView {
       size
     );
 
-    const nl = this.bf.findNewlineBack(pos, 1 << 20);
+    const nl = this.bf.findNewlineBack(pos, 1 << 16);
     this.top = { pos: nl < 0 ? 0 : nl + 1, subRow: 0 };
   }
 
