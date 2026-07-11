@@ -35,6 +35,7 @@ import {
   optWordwrap,
   optHiliteTarget,
   jumpSindex,
+  optIntrChar,
   gutterWidth,
   nextTabStop,
   optBsMode,
@@ -1043,9 +1044,12 @@ function getPrompt(content: string[]): string {
       INVERSE_ON, INVERSE_OFF);
   }
 
-  // the F command waits with the -Pw prompt, like og's wait_message
+  // the F command waits with the -Pw prompt plus ixerror's suffix,
+  // naming the --intr char: "... (^X or interrupt to abort)"
   if (follow.active) {
-    return colored('prompt', prExpand(content, wProto()),
+    return colored('prompt',
+      prExpand(content, wProto()) +
+        `... (${prChar(optIntrChar())} or interrupt to abort)`,
       INVERSE_ON, INVERSE_OFF);
   }
 

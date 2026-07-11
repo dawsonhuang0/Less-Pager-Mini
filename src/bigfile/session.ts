@@ -13,7 +13,7 @@ import { forwLine, backLine } from './lineio';
 
 import { search, searchInterrupted } from '../features/searching';
 
-import { displayPrType, optIntrChar } from '../options/shared';
+import { displayPrType, optIntrChar, prChar } from '../options/shared';
 
 import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt }
@@ -206,7 +206,8 @@ export async function bigPager(path: string): Promise<void> {
       : marking
         ? (marking === 'm' ? 'set mark: ' : 'goto mark: ')
         : following
-          ? `${INVERSE_ON}Waiting for data${INVERSE_OFF}`
+          ? INVERSE_ON + 'Waiting for data... (' +
+            `${prChar(optIntrChar())} or interrupt to abort)` + INVERSE_OFF
           : message
             ? `${INVERSE_ON}${message}${INVERSE_OFF}`
             : view.atEof
