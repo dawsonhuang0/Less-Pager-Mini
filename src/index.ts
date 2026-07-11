@@ -38,7 +38,7 @@ import {
   lastScreen
 } from "./helpers";
 
-import { maxSubRow, transformContent } from "./lines/helpers";
+import { maxSubRow, transformContent, visualWidth } from "./lines/helpers";
 
 import {
   lineForward,
@@ -117,7 +117,8 @@ import {
   closeAlt,
   binaryConfirm,
   revealSize,
-  pipeDraining
+  pipeDraining,
+  lineBase
 } from "./features/files";
 
 import {
@@ -172,6 +173,7 @@ import {
   applyBracketedPaste,
   hook,
   chopLine,
+  gutterWidth,
   getSwindow,
   initUnsupport,
   takeCliOptions,
@@ -573,6 +575,10 @@ async function contentPager(content: string[]): Promise<void> {
   // pipe data (F is the follow command)
   let pipeFirstFill = true;
 
+  // -F reads the pipe before any terminal init, like og's
+  // get_one_screen: nothing may reach the screen while it decides
+  let pipeProbing = false;
+
   // drag origins for --emouse hdrag/vdrag, like og's last_drag_x/y
   let lastDragX = -1;
   let lastDragY = -1;
@@ -710,13 +716,23 @@ async function contentPager(content: string[]): Promise<void> {
     Math.max(config.window - 1, 1)
   );
 
+  // -F on a pipe keeps reading until a screenful or EOF before any
+  // terminal init, like og's get_one_screen under F_UNTIL_SCREEN: an
+  // input that ends within one screen falls through to the cat below
+  if (
+    optQuitIfOneScreen() && !startup.dohelp && files.list.length <= 1 &&
+    files.list[files.index]?.streaming && pipeSource && pipeDecoder
+  ) {
+    await pipeOneScreenProbe();
+  }
+
   let totalRows = 0;
   for (const line of content) totalRows += maxSubRow(line) + 1;
 
   if (
     optQuitIfOneScreen() && !startup.dohelp && files.list.length <= 1 &&
     !files.list[files.index]?.streaming &&
-    totalRows + shellLines <= config.window
+    totalRows + shellLines <= config.window && !choppedColumns()
   ) {
     const rows: string[] = [];
 
@@ -951,6 +967,50 @@ async function contentPager(content: string[]): Promise<void> {
   }
 
   function handleKey(sequence: string): void {
+    dispatchKey(sequence);
+
+    // og's prompt() checks -F after every command returns to a true
+    // prompt: quit when the entire file is displayed, and either way
+    // the flag gets only one chance at this
+    if (!exited && optQuitIfOneScreen()) oneScreenQuit();
+  }
+
+  /**
+   * Quits at a true prompt when -F is set and the entire file is on
+   * screen, like og prompt()'s quit_if_one_screen check; whether it
+   * quits or not, the flag is cleared afterwards.
+   */
+  function oneScreenQuit(): void {
+    const atPrompt = !search.message && !option.pending &&
+      !search.input && !examine.pending && !miscInput.pending &&
+      !brackets.pending && !marks.pending && !mode.BUFFERING &&
+      !config.keyPrefix && !binaryConfirm.pending && !follow.active &&
+      !pipeDraining.active && !shellPause;
+
+    if (!atPrompt) return;
+
+    if (
+      !mode.HELP && mode.EOF && config.row === 0 &&
+      config.subRow === 0 && lineBase() === 0 &&
+      files.index >= files.list.length - 1 && !choppedColumns()
+    ) {
+      exit();
+      return;
+    }
+
+    opt.quitIfOneScreen = 0;
+  }
+
+  // og's forw_line clears quit_if_one_screen whenever a chopped or
+  // shifted line hides columns, so -F never quits over hidden text
+  function choppedColumns(): boolean {
+    if (!chopLine() && !config.col) return false;
+
+    const usable = config.screenWidth - gutterWidth();
+    return content.some(line => visualWidth(line) > usable);
+  }
+
+  function dispatchKey(sequence: string): void {
     key = sequence;
 
     // the interrupt key abandons a G/% pipe drain, reporting like
@@ -2045,6 +2105,69 @@ async function contentPager(content: string[]): Promise<void> {
     };
   }
 
+  /**
+   * Reads the pipe until the content exceeds one screen or it ends,
+   * growing the session silently, like og's get_one_screen blocking
+   * in forw_line before the terminal initializes.
+   */
+  function pipeOneScreenProbe(): Promise<void> {
+    return new Promise(resolve => {
+      const stream = pipeSource!;
+      const decoder = pipeDecoder!;
+
+      const overOneScreen = (): boolean => {
+        let total = 0;
+
+        for (const line of content) {
+          total += maxSubRow(line) + 1;
+          if (total + shellLines > config.window) return true;
+        }
+
+        return false;
+      };
+
+      const finish = (): void => {
+        stream.off('data', onData);
+        stream.off('end', onEnd);
+        pipeProbing = false;
+
+        // a screenful is already buffered, so the initial fill's
+        // arrival-by-arrival painting is over before it begins
+        pipeFirstFill = content.length < config.window - 1;
+        resolve();
+      };
+
+      const onData = (chunk: Buffer): void => {
+        growPipe(decoder.push(chunk));
+
+        if (overOneScreen()) {
+          stream.pause();
+          finish();
+        }
+      };
+
+      const onEnd = (): void => {
+        growPipe(decoder.flush());
+
+        const entry = files.list[files.index];
+        if (entry) entry.streaming = false;
+        revealSize();
+        finish();
+      };
+
+      pipeProbing = true;
+
+      if (overOneScreen()) {
+        finish();
+        return;
+      }
+
+      stream.on('data', onData);
+      stream.on('end', onEnd);
+      stream.resume();
+    });
+  }
+
   /** Appends decoded pipe lines to the session, like ch growing. */
   function growPipe(raw: string[]): void {
     if (!raw.length) return;
@@ -2091,7 +2214,8 @@ async function contentPager(content: string[]): Promise<void> {
 
     // og displays lines only while the first screenful is filling;
     // once it completes, new pipe data never repaints an idle screen
-    if (pipeFirstFill && !exited && !shellPause && !pipeDrainTo) {
+    if (pipeFirstFill && !pipeProbing && !exited && !shellPause &&
+        !pipeDrainTo) {
       if (content.length >= config.window - 1) pipeFirstFill = false;
       render(content, buffer);
     }
