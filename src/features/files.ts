@@ -53,6 +53,11 @@ interface FileEntry {
   /** True while a pipe is still delivering data, like og's ch layer
    *  before read() returns end-of-file. */
   streaming?: boolean;
+  /** Early pipe data recycled away under memory pressure, like og's
+   *  ch_addbuf failure reusing the oldest buffer: these lines and
+   *  bytes are gone but still count in line numbers and offsets. */
+  discardedLines?: number;
+  discardedBytes?: number;
   /** Saved screen position, like ifile.c's store_pos/get_pos. */
   saved: { row: number, subRow: number } | null;
   /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
@@ -828,6 +833,15 @@ export const pipeDraining = {
   cancelMessage: '',
 };
 
+/** Lines recycled off the front of a streaming pipe (0 otherwise). */
+export function lineBase(): number {
+  return files.list[files.index]?.discardedLines ?? 0;
+}
+
+/** Bytes recycled off the front of a streaming pipe (0 otherwise). */
+export function byteBase(): number {
+  return files.list[files.index]?.discardedBytes ?? 0;
+}
 
 /**
  * Integer percentage, rounded half to even like less's percentage().

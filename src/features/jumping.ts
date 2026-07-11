@@ -6,7 +6,7 @@ import { config, mode } from "../config";
 
 import { search } from "./searching";
 
-import { files } from "./files";
+import { files, lineBase, byteBase } from "./files";
 
 import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
   optPermaMarks, optAutosaveAction } from "../options";
@@ -23,7 +23,24 @@ import { saveHistory } from "../histfile";
  * @param lineNum - 1-based target line number, or 0 when none was given.
  */
 export function firstLine(content: string[], lineNum: number): void {
-  if (lineNum > content.length) {
+  // recycled pipe data cannot be sought again, like og's discarded
+  // buffers failing ch_seek
+  const base = lineBase();
+
+  // og's jump_back for line 1 with the beginning recycled: land on
+  // the earliest retained data (ch_beg_seek) and still report it
+  if (base > 0 && lineNum <= 1) {
+    jumpLoc(content, 0, 0, lineNum > 0 ? jumpSindex() : 0);
+    search.message = 'Cannot seek to beginning of file';
+    return;
+  }
+
+  if (lineNum > 1 && lineNum <= base) {
+    search.message = `Cannot seek to line number ${lineNum}`;
+    return;
+  }
+
+  if (lineNum - base > content.length) {
     search.message = `Cannot seek to line number ${lineNum}`;
     return;
   }
@@ -32,7 +49,7 @@ export function firstLine(content: string[], lineNum: number): void {
   // blank lines appear before the beginning of the file
   const sindex = lineNum > 0 ? jumpSindex() : 0;
 
-  jumpLoc(content, Math.max(lineNum, 1) - 1, 0, sindex);
+  jumpLoc(content, Math.max(lineNum - base, 1) - 1, 0, sindex);
 }
 
 /**
@@ -91,6 +108,15 @@ export function percentLine(content: string[], percent: number): void {
  * @param offset - Byte offset, 0 for the beginning.
  */
 export function goPos(content: string[], offset: number): void {
+  // recycled pipe data cannot be sought again, like og's ch_seek
+  // failing on a discarded block
+  offset -= byteBase();
+
+  if (offset < 0) {
+    search.message = 'Cannot seek to that file position';
+    return;
+  }
+
   let row = 0;
   let bytes = 0;
 
@@ -282,6 +308,25 @@ interface Mark {
 }
 
 const MARK_LETTER_REGEX = /^[a-zA-Z#]$/;
+
+/**
+ * Shifts user marks after the front of a streaming pipe is recycled,
+ * like og's positions inside discarded buffers becoming unreadable:
+ * marks above the cut are lost.
+ *
+ * @param drop - Display rows removed from the front.
+ */
+export function shiftMarkRows(drop: number): void {
+  if (drop <= 0) return;
+
+  for (const [char, mark] of userMarks) {
+    if (mark.row < drop) {
+      userMarks.delete(char);
+    } else {
+      mark.row -= drop;
+    }
+  }
+}
 
 const userMarks = new Map<string, Mark>();
 

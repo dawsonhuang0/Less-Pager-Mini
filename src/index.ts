@@ -1,4 +1,5 @@
 import fs from 'fs';
+import v8 from 'v8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal } from "./keyboard";
 
@@ -83,6 +84,7 @@ import {
   startBrackets,
   bracketsKey,
   marks,
+  shiftMarkRows,
   marksKey,
   startSetMark,
   startGoMark,
@@ -269,6 +271,13 @@ const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
 // ch input); set by pagerPipe before the session starts
 let pipeSource: NodeJS.ReadableStream | null = null;
 let pipeDecoder: PipeDecoder | null = null;
+
+// og recycles pipe buffers when allocation fails; v8 aborts instead,
+// so the same fallback triggers near the heap limit
+const HEAP_LIMIT = v8.getHeapStatistics().heap_size_limit;
+
+const heapPressed = (): boolean =>
+  process.memoryUsage().heapUsed > HEAP_LIMIT * 0.7;
 
 // how many lines past the view the pipe may buffer before pausing,
 // like og reading a pipe only on demand (backpressure stops `yes`)
@@ -550,6 +559,12 @@ async function contentPager(content: string[]): Promise<void> {
   let pipePaused = false;
   let pipeDrainTo: (() => void) | null = null;
   let detachPipe: () => void = () => {};
+
+  // bytes of pipe data kept in memory before the oldest recycle
+  // away: -B limits it to the -b buffer space up front (ch.c's
+  // maxbufs for pipes); otherwise the budget locks in at the first
+  // sign of heap pressure, og's failed-allocation moment
+  let pipeBudget = Infinity;
 
   // og paints arriving lines only while the initial forw() fills the
   // first screenful; afterwards an idle pager never repaints on new
@@ -1931,14 +1946,40 @@ async function contentPager(content: string[]): Promise<void> {
 
   // ---- the streaming pipe, like og's lazy non-seekable reads ----
 
+  /** Bytes of pipe data currently held, past recycles excluded. */
+  function pipeRetained(): number {
+    const entry = files.list[files.index];
+    if (!entry) return 0;
+    return entry.size - (entry.discardedBytes ?? 0);
+  }
+
   /** Wires the still-delivering pipe into the session. */
   function attachPipe(): void {
     const stream = pipeSource!;
     const decoder = pipeDecoder!;
     pipeStream = stream;
 
+    // -B bounds a pipe to the -b buffer space, like og's maxbufs
+    // applying to non-seekable input when autobuf is off
+    pipeBudget = opt.autoBuffers
+      ? Infinity
+      : Math.max(opt.bufSpace, 64) * 1024;
+
+    let chunks = 0;
+
     const onData = (chunk: Buffer): void => {
       growPipe(decoder.push(chunk));
+
+      if (pipeRetained() > pipeBudget) {
+        shedPipe();
+      } else if (pipeBudget === Infinity && (++chunks & 31) === 0 &&
+                 heapPressed()) {
+        // og's allocation failure moment: from here on the oldest
+        // data recycles away instead of the process dying (ch_addbuf
+        // falling back to the tail buffer)
+        pipeBudget = Math.max(pipeRetained() / 2, 64 * 1024 * 1024);
+        shedPipe();
+      }
 
       // og reads a pipe only on demand: pause once far enough ahead
       // of the view, which blocks the writer (`yes` stops producing)
@@ -2036,6 +2077,53 @@ async function contentPager(content: string[]): Promise<void> {
       if (content.length >= config.window - 1) pipeFirstFill = false;
       render(content, buffer);
     }
+  }
+
+  /**
+   * Recycles the oldest half of the buffered pipe data, like og's
+   * ch_addbuf failure reusing the tail buffer: the early lines become
+   * unreachable (marks there are lost, like og's unreadable blocks),
+   * while line numbers and byte offsets keep counting from the true
+   * start via the entry's discarded bases.
+   */
+  function shedPipe(): void {
+    if (mode.HELP) return;
+
+    const entry = files.list[files.index];
+    if (!entry || !entry.streaming) return;
+
+    const drop = Math.floor(fullContent.length / 2);
+    if (drop < 1) return;
+
+    let bytes = 0;
+    for (let i = 0; i < drop; i++) {
+      bytes += Buffer.byteLength(fullContent[i]) + 1;
+    }
+
+    fullContent.splice(0, drop);
+    entry.discardedLines = (entry.discardedLines ?? 0) + drop;
+    entry.discardedBytes = (entry.discardedBytes ?? 0) + bytes;
+
+    let dropped = drop;
+
+    if (lastFilter || optSqueeze()) {
+      // squeezing and filters break the 1:1 raw-to-display mapping
+      const before = content.length;
+      content = deriveContent();
+      dropped = Math.max(before - content.length, 0);
+    } else {
+      content.splice(0, drop);
+    }
+
+    config.row = Math.max(config.row - dropped, 0);
+    if (config.attnRow >= 0) {
+      config.attnRow = config.attnRow >= dropped
+        ? config.attnRow - dropped
+        : -1;
+    }
+
+    shiftMarkRows(dropped);
+    calculateEOF(content);
   }
 
   /** Resumes a paused pipe when the view nears the buffered end. */

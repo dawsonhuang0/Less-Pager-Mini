@@ -6,8 +6,8 @@ import { config, mode } from "../config";
 
 import { visualWidth } from "../helpers";
 
-import { files, bottomRow, byteOffset, percentage, sizeIsKnown }
-  from "./files";
+import { files, bottomRow, byteOffset, percentage, sizeIsKnown,
+  byteBase } from "./files";
 
 import { opt, optLinenums, optQuotes, optHeader, vlinenum }
   from "../options";
@@ -260,8 +260,9 @@ function protochar(
 
   switch (char) {
     case 'b':
-      return out +
-        Math.min(byteOffset(content, whereRow(content, where)), size);
+      // recycled pipe data still counts in the offset (og positions)
+      return out + Math.min(
+        byteOffset(content, whereRow(content, where)) + byteBase(), size);
 
     case 'c': return out + (config.col + 1);
     case 'C': return out + (config.col + config.screenWidth);
@@ -304,7 +305,10 @@ function protochar(
     case 'p':
       return out + (sizeIsKnown(content)
         ? percentage(
-          Math.min(byteOffset(content, whereRow(content, where)), size),
+          Math.min(
+            byteOffset(content, whereRow(content, where)) + byteBase(),
+            size
+          ),
           size
         )
         : '?');
