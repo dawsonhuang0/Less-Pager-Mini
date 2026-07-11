@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 
+import { homeDir, LESSKEYIN_NAME, LESSKEYIN_SYS, LESSKEYFILE_NAME }
+  from "../platform";
+
 import { Actions } from "../interfaces";
 
 import { search } from "./searching";
@@ -358,6 +361,16 @@ export function loadLesskey(): void {
 
   if (process.env.LESSNOCONFIG) return;
 
+  // the system-wide table loads first, like decode.c's
+  // add_hometable("LESSKEYIN_SYSTEM", LESSKEYINFILE_SYS)
+  const sysFile = process.env.LESSKEYIN_SYSTEM || LESSKEYIN_SYS;
+
+  try {
+    parseLesskey(fs.readFileSync(sysFile, 'utf8'), sysFile);
+  } catch {
+    // a missing system file is the normal case
+  }
+
   // the content table is searched first in og, so it parses first
   // here (bindings keep the first definition, like cmd_search)
   const content = process.env.LESSKEY_CONTENT;
@@ -375,11 +388,9 @@ export function loadLesskey(): void {
   }
 
   // without a source file og falls back to the compiled binary file,
-  // $LESSKEY or ~/.less
+  // $LESSKEY or ~/.less (_less on Windows)
   const binary = process.env.LESSKEY ??
-    (process.env.HOME ? path.join(process.env.HOME, '.less') : null);
-
-  if (!binary) return;
+    path.join(homeDir(), LESSKEYFILE_NAME);
 
   try {
     parseLesskeyBinary(fs.readFileSync(binary));
@@ -544,13 +555,13 @@ function lesskeyFile(): string | null {
     if (fs.existsSync(name)) return name;
   }
 
-  const home = process.env.HOME;
+  const home = homeDir();
   if (!home) return null;
 
   const config = path.join(home, '.config', 'lesskey');
   if (fs.existsSync(config)) return config;
 
-  return path.join(home, '.lesskey');
+  return path.join(home, LESSKEYIN_NAME);
 }
 
 /**

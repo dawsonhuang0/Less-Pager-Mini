@@ -4,6 +4,8 @@ import { secureAllow } from "./secure";
 
 import { spawnSync, SpawnSyncReturns } from 'child_process';
 
+import { shellArgv } from '../platform';
+
 import { search } from "./searching";
 
 import { shellQuote } from "./prompt";
@@ -41,12 +43,13 @@ function pctS(text: string): number {
   return count;
 }
 
-/** Runs a preprocessor command through $SHELL, like og's shellcmd;
- *  the pseudo-file's content feeds the child's stdin, like og letting
+/** Runs a preprocessor command through the shell, like og's shellcmd
+ *  ($SHELL -c on unix, %COMSPEC% /c on Windows like og's popen); the
+ *  pseudo-file's content feeds the child's stdin, like og letting
  *  the preprocessor inherit the input pipe. */
 function shellCmd(cmd: string, input?: string): SpawnSyncReturns<string> {
-  const shell = process.env.SHELL || '/bin/sh';
-  return spawnSync(shell, ['-c', cmd], { encoding: 'utf8', input });
+  const argv = shellArgv(cmd);
+  return spawnSync(argv[0], argv[1], { encoding: 'utf8', input });
 }
 
 /**

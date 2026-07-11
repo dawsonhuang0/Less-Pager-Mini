@@ -1,8 +1,9 @@
 import { secureAllow } from "./features/secure";
 
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
+
+import { homeDir, HISTFILE_NAME } from './platform';
 
 import { search, resetHistoryRecall } from './features/searching';
 
@@ -201,7 +202,7 @@ function histfilePath(mustExist: boolean): string | null {
     return env;
   }
 
-  const home = os.homedir();
+  const home = homeDir();
   const candidates: string[] = [];
 
   if (process.env.XDG_STATE_HOME) {
@@ -217,7 +218,8 @@ function histfilePath(mustExist: boolean): string | null {
   }
 
   if (home) {
-    candidates.push(path.join(home, '.lesshst'));
+    // ".lesshst" on unix, "_lesshst" on Windows (defines.wn)
+    candidates.push(path.join(home, HISTFILE_NAME));
   }
 
   for (const candidate of candidates) {
