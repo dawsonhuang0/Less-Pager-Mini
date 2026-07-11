@@ -565,7 +565,7 @@ export function writeLogFile(
  * Reports the pager's version (`V`), like less's dispversion.
  */
 export function versionMessage(): void {
-  search.message = 'less-pager-mini ' + packageVersion();
+  search.message = versionString();
 }
 
 /**
@@ -573,7 +573,11 @@ export function versionMessage(): void {
  * INIT printing and quitting before the pager starts.
  */
 export function printVersion(): void {
-  process.stdout.write('less-pager-mini ' + packageVersion() + '\n');
+  process.stdout.write(versionString() + '\n');
+}
+
+function versionString(): string {
+  return 'less-pager-mini ' + packageVersion() + ' (based on less 707x)';
 }
 
 let cachedVersion = '';

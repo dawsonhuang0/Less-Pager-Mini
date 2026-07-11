@@ -288,6 +288,6 @@ describe('misc input editing', () => {
 describe('version', () => {
   it('reports the package version', () => {
     versionMessage();
-    expect(search.message).toMatch(/^less-pager-mini \d+\.\d+\.\d+$/);
+    expect(search.message).toMatch(/^less-pager-mini \d+\.\d+\.\d+ \(based on less 707x\)$/);
   });
 });
