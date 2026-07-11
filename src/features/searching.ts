@@ -20,6 +20,8 @@ import { maxSubRow, } from "../helpers";
 
 import { jumpLoc } from "./jumping";
 
+import { revealSize } from "./files";
+
 import {
   jumpSindex,
   optHowSearch,
@@ -30,7 +32,8 @@ import {
   optDefSearchType,
   optAutosaveAction,
   optMatchShift,
-  optIntrChar
+  optIntrChar,
+  chopLine
 } from "../options";
 
 import { colored, ColorKind } from "./color";
@@ -879,6 +882,10 @@ function findMatch(
     if (wrapped === 'stop') return;
 
     if (wrapped !== 'miss') {
+      // a forward search that wrapped read through EOF first, so a
+      // pipe's length becomes known, like og's ch
+      if (dir > 0) revealSize();
+
       jumpTo(content, wrapped);
 
       // ^W wrap reports where the search resumed, like og's
@@ -889,6 +896,10 @@ function findMatch(
       return;
     }
   }
+
+  // a missed forward search scanned to the end of the input, which
+  // teaches og a pipe's length
+  if (dir > 0) revealSize();
 
   // og shows the pattern in the miss message (v693); control chars
   // print in display form (ESC, ^X) like og's message line
@@ -1092,7 +1103,7 @@ function lastVisibleRow(content: string[]): number {
   const last = content.length - 1;
   if (last < 0) return -1;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     return Math.min(config.row + config.window - 2, last);
   }
 
@@ -1125,7 +1136,7 @@ function jumpTo(content: string[], row: number): void {
  * columns from the left edge.
  */
 function shiftVisible(content: string[], row: number): void {
-  if (!config.chopLongLines || !search.regex || search.invert) return;
+  if (!chopLine() || !search.regex || search.invert) return;
 
   const text = stripStyles(content[row]);
   const match = search.regex.exec(text);
@@ -1162,4 +1173,55 @@ function shiftVisible(content: string[], row: number): void {
 export function lineMatches(line: string): boolean {
   if (!search.regex || !search.highlight) return false;
   return matchesLine(line);
+}
+
+/**
+ * The -J status column search char, like og's init_status_col: `*`
+ * for a match in the displayed part of the line, `<`/`>` for matches
+ * chopped off before/after the visible columns, `=` for both sides.
+ * Hidden highlights (ESC-u) and -G0 still mark the column, like og's
+ * is_hilited_attr status-column path ignoring hide_hilite; -g marks
+ * only the last search's match line.
+ *
+ * @param line - The raw content line.
+ * @param row - The content row, for the -g current-match gate.
+ */
+export function statusColChar(line: string, row: number): string {
+  if (!search.regex || !globalRegex || search.invert) return '';
+  if (optHiliteSearch() === 1 && row !== lastMatchRow) return '';
+
+  let text = stripStyles(line);
+
+  // the same cvt_text as matching: overstrikes collapse, CR drops
+  /* eslint-disable no-control-regex */
+  while (/[^\x08]\x08/.test(text)) {
+    text = text.replace(/[^\x08]\x08/g, '');
+  }
+  /* eslint-enable no-control-regex */
+  if (text.endsWith('\r')) text = text.slice(0, -1);
+
+  const ranges: { start: number, end: number }[] = [];
+  globalRegex.lastIndex = 0;
+
+  for (let m = globalRegex.exec(text); m; m = globalRegex.exec(text)) {
+    if (m[0]) ranges.push({ start: m.index, end: m.index + m[0].length });
+    if (m.index === globalRegex.lastIndex) globalRegex.lastIndex++;
+  }
+
+  if (!ranges.length) return '';
+
+  // wrapped lines display every part, so a match is always visible
+  if (!chopLine() && !config.col) return '*';
+
+  // og compares hilite positions against the displayed range; char
+  // indexes stand in for columns here
+  const left = config.col;
+  const right = config.col + config.screenWidth;
+  const before = ranges.some(r => r.start < left);
+  const after = ranges.some(r => r.end > right);
+
+  if (before && after) return '=';
+  if (before) return '<';
+  if (after) return '>';
+  return '*';
 }

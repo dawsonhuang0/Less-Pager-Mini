@@ -7,7 +7,9 @@ import {
   optPastEof,
   optStopOnFormFeed,
   optShiftCount,
-  setShiftCount
+  setShiftCount,
+  chopLine,
+  getSwindow
 } from "../options";
 
 import { bottomRow } from "./files";
@@ -54,6 +56,11 @@ export function lineForward(
   if (optPastEof()) ignoreEOF = true;
 
   if (mode.EOF && !ignoreEOF) {
+    // -e/-E move to the next file (or quit) on a forward move at
+    // end-of-file, like og's forward() checking get_quit_at_eof
+    // before the eof bell
+    if (eofForwardHook && eofForwardHook()) return;
+
     ringBell('eof');
     return;
   }
@@ -68,7 +75,7 @@ export function lineForward(
     if (!offset) return;
   }
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     // --form-feed stops the scroll with a \f line at the top
     if (optStopOnFormFeed()) {
       const limit = Math.min(config.row + offset, content.length - 1);
@@ -145,7 +152,7 @@ export function lineBackward(content: string[], offset: number): number {
   // backward movement forgets the -w unread highlight, like less
   config.attnRow = -1;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     // --form-feed also stops backward scrolls at a \f line
     if (optStopOnFormFeed()) {
       const limit = Math.max(config.row - offset, 0);
@@ -244,7 +251,7 @@ export function forceLineBackward(content: string[], offset: number): void {
  * @param offset - File lines to move forward.
  */
 export function newlineForward(content: string[], offset: number): void {
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     lineForward(content, offset);
     return;
   }
@@ -280,7 +287,7 @@ export function newlineForward(content: string[], offset: number): void {
  * @param offset - File lines to move backward.
  */
 export function newlineBackward(content: string[], offset: number): void {
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     lineBackward(content, offset);
     return;
   }
@@ -311,12 +318,21 @@ export function newlineBackward(content: string[], offset: number): void {
   }
 }
 
+// the -e forward-at-EOF handler, like og's forward() top: returns
+// true when it consumed the move (next file edited, or quitting)
+let eofForwardHook: (() => boolean) | null = null;
+
+/** Registers (or clears) the -e forward-at-EOF handler. */
+export function onEofForward(fn: (() => boolean) | null): void {
+  eofForwardHook = fn;
+}
+
 /**
  * Scrolls the view forward by a window size.
  *
  * - If `buffer` is a valid number, it overrides the default window size.
- * - Falls back to `config.setWindow` or `config.window - 1` if `buffer` is
- *   invalid.
+ * - Falls back to the -z scroll window (og's get_swindow) if `buffer`
+ *   is invalid.
  * - If `ignoreEOF` is `true`, allows scrolling beyond (END) without clamping.
  *
  * @param content - The full content to paginate.
@@ -332,7 +348,7 @@ export function windowForward(
 
   lineForward(
     content,
-    bufferToNum(buffer) || config.setWindow || config.window - 1,
+    bufferToNum(buffer) || getSwindow(),
     ignoreEOF
   );
 }
@@ -341,8 +357,7 @@ export function windowForward(
  * Moves the view backward by one window.
  *
  * - If `buffer` is a valid number, uses it as the offset.
- * - Otherwise, uses `config.setWindow` if set, or defaults to
- *   `config.window - 1`.
+ * - Otherwise, uses the -z scroll window (og's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
@@ -350,7 +365,7 @@ export function windowForward(
 export function windowBackward(content: string[], buffer: string[]): void {
   lineBackward(
     content,
-    bufferToNum(buffer) || config.setWindow || config.window - 1
+    bufferToNum(buffer) || getSwindow()
   );
 }
 
@@ -358,30 +373,28 @@ export function windowBackward(content: string[], buffer: string[]): void {
  * Sets a custom window size using the given `buffer`, and scrolls forward.
  *
  * - If `buffer` is a valid number, updates `config.setWindow` with it.
- * - Then scrolls forward by `config.setWindow` or falls back to
- *   `config.window - 1`.
+ * - Then scrolls forward by the -z scroll window (og's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
  */
 export function setWindowForward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
-  lineForward(content, config.setWindow || config.window - 1);
+  lineForward(content, getSwindow());
 }
 
 /**
  * Sets a custom window size using the given `buffer`, and scrolls backward.
  *
  * - If `buffer` is a valid number, updates `config.setWindow` with it.
- * - Then scrolls backward by `config.setWindow` or falls back to
- *   `config.window - 1`.
+ * - Then scrolls backward by the -z scroll window (og's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
  */
 export function setWindowBackward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
-  lineBackward(content, config.setWindow || config.window - 1);
+  lineBackward(content, getSwindow());
 }
 
 /**

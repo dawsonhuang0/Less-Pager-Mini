@@ -3,6 +3,7 @@ import { BlockFile } from './ch';
 import { forwLine, backLine, lastLineStart } from './lineio';
 
 import { config } from '../config';
+import { chopLine } from '../options';
 
 import { transformContent } from '../helpers';
 
@@ -39,7 +40,7 @@ export class BigView {
 
   /** Display sub-rows a line occupies under the current mode. */
   private rowsOf(text: string): number {
-    if (config.chopLongLines || config.col) return 1;
+    if (chopLine() || config.col) return 1;
     return getLayout(displayText(text)).rowStart.length;
   }
 

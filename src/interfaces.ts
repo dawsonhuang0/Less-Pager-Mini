@@ -65,6 +65,7 @@ export type Actions =
   | 'Z_EXIT'
   | 'ESC'
   | 'TAG_COMMAND'
+  | 'OPTION_TAG'
   | 'ADD_COMMAND'
   | 'SHELL_COMMAND'
   | 'PSHELL_COMMAND'

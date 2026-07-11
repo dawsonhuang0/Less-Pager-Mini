@@ -68,11 +68,17 @@ export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
 export const KEYPAD_ON = '\x1b[?1h\x1b=';
 export const KEYPAD_OFF = '\x1b[?1l\x1b>';
 
-export const MOUSE_ON = '\x1b[?1000h';
-export const MOUSE_OFF = '\x1b[?1000l';
+// og's mousecap enables button events, button-motion (drags) and
+// SGR encoding: "\e[?1000h\e[?1002h\e[?1006h" (screen.c)
+export const MOUSE_ON = '\x1b[?1000h\x1b[?1002h';
+export const MOUSE_OFF = '\x1b[?1002l\x1b[?1000l';
 
 export const MOUSE_SGR_ON = '\x1b[?1006h';
 export const MOUSE_SGR_OFF = '\x1b[?1006l';
+
+// bracketed paste markers, enabled by --no-paste
+export const BRACKETED_PASTE_ON = '\x1b[?2004h';
+export const BRACKETED_PASTE_OFF = '\x1b[?2004l';
 
 export const SCROLL_UP_REGEX = /^\x1b\[<64;.*?M/;
 export const SCROLL_DOWN_REGEX = /^\x1b\[<65;.*?M/;

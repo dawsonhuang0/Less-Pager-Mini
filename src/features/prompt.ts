@@ -1,20 +1,24 @@
 import path from 'path';
 
+import { DEF_METACHARS, DEF_METAESCAPE, EDIT_PGM } from "../platform";
+
 import { config, mode } from "../config";
 
 import { visualWidth } from "../helpers";
 
-import { files, bottomRow, byteOffset, percentage } from "./files";
+import { files, bottomRow, byteOffset, percentage, sizeIsKnown }
+  from "./files";
 
-import { optLinenums, optQuotes, optHeader, vlinenum } from "../options";
+import { opt, optLinenums, optQuotes, optHeader, vlinenum }
+  from "../options";
 
 import { ntags, currTag } from "./tags";
 
 // screen positions selected by the where char, like less's position.h
 type Where = 't' | 'm' | 'b' | 'B' | 'j';
 
-// shell metacharacters, like less's DEF_METACHARS
-const METACHARS = "; *?\t\n'\"()<>[]|&^`#\\$%=~{},";
+// shell metacharacters, like less's DEF_METACHARS (per platform)
+const METACHARS = DEF_METACHARS;
 
 // the prompt prototypes, ported from prompt.c
 const S_PROTO =
@@ -32,6 +36,8 @@ const H_PROTO =
   'HELP -- ?eEND -- Press g to see it again:Press RETURN for more.' +
   ', or q when done';
 const W_PROTO = 'Waiting for data';
+const MORE_PROTO =
+  '--More--(?eEND ?x- Next\\: %x.:?pB%pB\\%:byte %bB?s/%s...%t)';
 
 /** Prompt prototypes for the short, medium and long styles (-m/-M). */
 const prproto = [S_PROTO, M_PROTO, LONG_PROTO];
@@ -77,11 +83,12 @@ export function setProto(text: string): void {
 }
 
 /**
- * Restores the built-in prototypes for a fresh pager run.
+ * Restores the built-in prototypes for a fresh pager run, like og's
+ * init_prompt: more mode replaces the medium prompt with --More--.
  */
 export function resetProtos(): void {
   prproto[0] = S_PROTO;
-  prproto[1] = M_PROTO;
+  prproto[1] = opt.lessIsMore ? MORE_PROTO : M_PROTO;
   prproto[2] = LONG_PROTO;
   eqproto = E_PROTO;
   hproto = H_PROTO;
@@ -223,9 +230,12 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'l': case 'd': case 'L': case 'D':
       return optLinenums() > 0;
 
-    // byte offset, size and byte percent are always known
-    case 'b': case 'p': case 's': case 'B':
-      return true;
+    // the byte offset is always known; the size and byte percent
+    // wait for a pipe's length, like ch_length() != NULL_POSITION
+    case 'b': return true;
+
+    case 'p': case 's': case 'B':
+      return sizeIsKnown(content);
   }
 
   return false;
@@ -269,7 +279,8 @@ function protochar(
           : '0');
 
     case 'E':
-      return out + (process.env.VISUAL || process.env.EDITOR || 'vi');
+      // EDIT_PGM is "vi" on unix and "edit" on Windows (defines.wn)
+      return out + (process.env.VISUAL || process.env.EDITOR || EDIT_PGM);
 
     case 'f': return out + (entry ? entry.path : '?');
     case 'F': return out + (entry ? path.basename(entry.path) : '?');
@@ -291,10 +302,12 @@ function protochar(
       return out + (ntags() ? ntags() : files.list.length);
 
     case 'p':
-      return out + percentage(
-        Math.min(byteOffset(content, whereRow(content, where)), size),
-        size
-      );
+      return out + (sizeIsKnown(content)
+        ? percentage(
+          Math.min(byteOffset(content, whereRow(content, where)), size),
+          size
+        )
+        : '?');
 
     case 'P':
       return out + (optLinenums()
@@ -307,7 +320,8 @@ function protochar(
         Math.max(longestLine(content), 1)
       );
 
-    case 's': case 'B': return out + size;
+    case 's': case 'B':
+      return out + (sizeIsKnown(content) ? size : '?');
     case 't': return out.replace(/ +$/, '');
     case 'T': return out + (ntags() ? 'tag' : 'file');
     case 'W': return out + longestLine(content);
@@ -346,7 +360,10 @@ export function shellQuote(name: string): string {
   // filename.c's metachars()/esc_metachars(); an empty escape means
   // the whole name gets the quote characters instead
   const meta = process.env.LESSMETACHARS ?? METACHARS;
-  const esc = process.env.LESSMETAESCAPE ?? '\\';
+
+  // the Windows shell has no backslash escaping, so og's
+  // DEF_METAESCAPE is empty there and names quote-wrap instead
+  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
 
   if (esc === '' && [...name].some(char => meta.includes(char))) {
     return open + name + close;

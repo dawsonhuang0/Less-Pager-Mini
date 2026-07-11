@@ -7,7 +7,7 @@ import { getLayout } from "./lineLayout";
 
 import { highlightLine } from "../features/searching";
 
-import { optRscroll, optHeader } from "../options";
+import { optRscroll, optRscrollAttr, optHeader } from "../options";
 
 import { colored } from "../features/color";
 
@@ -16,9 +16,13 @@ import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "../constants";
 const getFillingSpace = (length: number): string =>
   length > 0 ? INVERSE_ON + ' '.repeat(length) + INVERSE_OFF : '';
 
-const getMoreIndicator = (length: number): string =>
-  colored('rscroll', ' '.repeat(length - 1) + optRscroll(),
-    INVERSE_ON, INVERSE_OFF);
+// og pads with normal spaces and attributes only the rscroll char
+// (standout by default, or the --rscroll "*x" attribute)
+const getMoreIndicator = (length: number): string => {
+  const attr = optRscrollAttr();
+  return ' '.repeat(length - 1) +
+    colored('rscroll', optRscroll(), attr.on, attr.off);
+};
 
 /**
  * Chops long lines to fit screen width and fills the window.
@@ -52,7 +56,7 @@ export function chopLongLines(content: string[], lines: string[]): void {
     if (decorated) {
       // -w and --status-line highlight the row in standout
       lines[before] = gutterFor(content, row, true) +
-        highlightRow(lines[before], row);
+        highlightRow(lines[before], row, before);
     }
   }
 }
@@ -93,6 +97,9 @@ function chop(
   width: number = config.screenWidth,
   marker: boolean = true
 ): void {
+  // --rscroll=- disables the marker: the text keeps the last column
+  marker = marker && optRscroll() !== '';
+
   if (!isStyled(longLine) && isAscii(longLine)) {
     chopAsciiLine(lines, longLine, col, width, marker);
     return;

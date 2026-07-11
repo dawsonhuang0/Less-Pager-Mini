@@ -8,8 +8,10 @@ import { search } from "./searching";
 
 import { files } from "./files";
 
-import { jumpSindex, optHeader, optHiliteTarget, optWordwrap }
-  from "../options";
+import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
+  optPermaMarks, optAutosaveAction } from "../options";
+
+import { saveHistory } from "../histfile";
 
 /**
  * Jumps to line `lineNum` in the content, placing it at the top of the
@@ -506,7 +508,7 @@ function goMark(content: string[], char: string, sline: number): void {
 
     case '$': {
       const row = content.length - 1;
-      const subRow = config.chopLongLines || config.col
+      const subRow = chopLine() || config.col
         ? 0
         : maxSubRow(content[row]);
       mark = { file: files.index, row, subRow, sline: config.window - 1 };
@@ -568,7 +570,7 @@ function goMark(content: string[], char: string, sline: number): void {
   }
 
   // the stored sub-row may be stale after a resize
-  const subRow = config.chopLongLines || config.col
+  const subRow = chopLine() || config.col
     ? 0
     : Math.min(mark.subRow, maxSubRow(content[mark.row]));
 
@@ -592,7 +594,14 @@ function clearMark(char: string): void {
     return;
   }
 
-  if (!userMarks.delete(char)) ringBell();
+  if (!userMarks.delete(char)) {
+    ringBell();
+    return;
+  }
+
+  // og's clrmark autosaves the history file too (--save-marks with
+  // an 'm' autosave action)
+  if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
 }
 
 /**
@@ -629,9 +638,9 @@ export function jumpLoc(
     return;
   }
 
-  // jumps forget the -w unread highlight, like less; --hilite-target
-  // highlights the landing line instead
-  config.attnRow = optHiliteTarget() ? row : -1;
+  // jump_loc sets the -w attn position on the landing line; the
+  // --hilite-target highlight follows the target screen row instead
+  config.attnRow = optShowAttn() ? row : -1;
 
   saveLastPosition(content, row, subRow, sindex);
   placeAt(content, row, subRow, sindex);
@@ -700,7 +709,7 @@ export function saveLastPosition(
   // displayed targets are reached by scrolling, without lastmark
   if (screenRow !== null) return;
 
-  const chop = config.chopLongLines || config.col;
+  const chop = chopLine() || config.col;
   const topSubRow = chop ? 0 : config.subRow;
 
   if (row < config.row || (row === config.row && subRow < topSubRow)) {
@@ -736,7 +745,7 @@ function targetScreenRow(
   row: number,
   subRow: number
 ): number | null {
-  const topSubRow = config.chopLongLines || config.col ? 0 : config.subRow;
+  const topSubRow = chopLine() || config.col ? 0 : config.subRow;
 
   if (row < config.row || (row === config.row && subRow < topSubRow)) {
     return null;
@@ -768,7 +777,7 @@ function displayDistance(
   toSubRow: number,
   cap: number
 ): number {
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     return Math.min(toRow - fromRow, cap);
   }
 
@@ -815,7 +824,7 @@ function bottomPosition(
 ): { row: number, subRow: number } | null {
   let steps = config.window - 2 - config.blankTop;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     const row = config.row + steps;
     return row < content.length ? { row, subRow: 0 } : null;
   }
@@ -857,7 +866,7 @@ export function setMouseMark(content: string[], y: number): void {
   let row = config.row;
   let subRow = config.subRow;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     row = Math.min(row + steps, content.length - 1);
     subRow = 0;
   } else {
@@ -891,7 +900,7 @@ export function goMouseMark(content: string[]): void {
 function lastVisiblePosition(content: string[]): Mark {
   let steps = config.window - 2 - config.blankTop;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     const row = Math.min(config.row + steps, content.length - 1);
     return {
       file: files.index,
@@ -955,7 +964,7 @@ function placeAt(
 ): void {
   let steps = sindex;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     setTop(Math.max(row - steps, 0), 0);
     config.blankTop = Math.max(steps - row, 0);
     return;

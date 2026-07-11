@@ -62,7 +62,9 @@ function getDefaultConfig(): Config {
     endSubRow: 0,
     col: 0,
     setCol: 0,
-    setWindow: 0,
+    // og's swindow defaults to -1: the scroll window is the screen
+    // height minus header lines plus this when it is not positive
+    setWindow: -1,
     setHalfWindow: 0,
     window: rows,
     halfWindow: Math.floor(rows / 2),

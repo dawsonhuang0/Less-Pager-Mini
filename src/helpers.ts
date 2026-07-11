@@ -9,7 +9,7 @@ import { wrapLongLines } from './lines/wrapLongLines';
 
 import { getLayout } from './lines/lineLayout';
 
-import { search, searchPrompt, lineMatches } from './features/searching';
+import { search, searchPrompt, statusColChar } from './features/searching';
 
 import {
   option,
@@ -17,7 +17,7 @@ import {
   optNoVbell,
   optClearRepaint,
   optTildes,
-  optPrType,
+  displayPrType,
   optLinenums,
   optLinenumWidth,
   optStatusCol,
@@ -34,9 +34,11 @@ import {
   optProcReturn,
   optWordwrap,
   optHiliteTarget,
+  jumpSindex,
   gutterWidth,
   nextTabStop,
-  optBsMode
+  optBsMode,
+  chopLine
 } from './options';
 
 import { prExpand, prProto, hProto, wProto } from './features/prompt';
@@ -52,7 +54,7 @@ import { follow } from './features/follow';
 
 import { brackets, marks, markAtRow } from './features/jumping';
 
-import { files, examine } from './features/files';
+import { files, examine, binaryConfirm } from './features/files';
 
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
@@ -91,7 +93,7 @@ import {
  * @returns Number of sub-rows needed to display the line.
  */
 export function maxSubRow(line: string): number {
-  if (config.chopLongLines) return 0;
+  if (chopLine()) return 0;
 
   // --wordwrap boundaries live in the layout, even for plain lines
   if (!optWordwrap() && !isStyled(line) && isAscii(line)) {
@@ -340,15 +342,34 @@ export function gutterFor(
 
   if (optStatusCol()) {
     let char = ' ';
+    let kind: 'mark' | 'attn' | 'search' | '' = '';
 
     if (lineStart) {
+      // og's plinestart: the mark letter in the M color, else an
+      // attn-colored cell for the -w line
       const mark = markAtRow(row);
-      char = mark || (lineMatches(content[row]) ? '*' : ' ');
+
+      if (mark) {
+        char = mark;
+        kind = 'mark';
+      } else if (row === config.attnRow) {
+        kind = 'attn';
+      }
+
+      // a search match overrides, like set_status_col after
+      // plinestart: '*' visible, '<'/'>' chopped away, '=' both
+      const match = statusColChar(content[row], row);
+
+      if (match) {
+        char = match;
+        kind = 'search';
+      }
     }
 
-    // mark letters take the M color, like AT_COLOR_MARK
-    const pad = char.padEnd(optStatusColWidth());
-    gutter += char === ' ' ? pad : colored('mark', pad);
+    // og attributes only the status char; the padding stays normal
+    gutter += (kind
+      ? colored(kind, char, INVERSE_ON, INVERSE_OFF)
+      : char) + ' '.repeat(Math.max(optStatusColWidth() - 1, 0));
   }
 
   if (optLinenums() === 2) {
@@ -365,31 +386,57 @@ export function gutterFor(
 
 /** True when display rows carry a gutter or the -w attn highlight. */
 export const decoratedRows = (): boolean =>
-  gutterWidth() > 0 || config.attnRow >= 0 || optStatusLine();
+  gutterWidth() > 0 || config.attnRow >= 0 || optStatusLine() ||
+    optHiliteTarget();
 
 /**
- * Applies the row highlight for -w attn and --status-line marks: with
- * --status-line the standout spans the entire screen width, like less.
+ * Applies the row highlight for -w attn, --hilite-target and
+ * --status-line marks: with --status-line the standout spans the
+ * entire screen width, like less.
  *
  * @param text - The formatted row text.
  * @param row - The content row.
- * @returns The row, highlighted when it is the attn or a marked line.
+ * @param sindex - The 0-based screen line the row is displayed on.
+ * @returns The row, highlighted when it is the attn, target or a
+ *          marked line.
  */
-export function highlightRow(text: string, row: number): string {
+export function highlightRow(
+  text: string,
+  row: number,
+  sindex?: number
+): string {
+  // --hilite-target keeps the -j target screen line highlighted, like
+  // og's command loop calling draw_target_attn on every display
+  const target = optHiliteTarget() && sindex !== undefined &&
+    sindex === jumpSindex();
   const marked = optStatusLine() && markAtRow(row) !== '';
-  if (row !== config.attnRow && !marked) return text;
+
+  // with -J the attn line marks in the status column instead of
+  // standing out, like og's is_hilited_attr checking !status_col
+  // (--status-line still colors the whole line)
+  const attn = row === config.attnRow &&
+    (!optStatusCol() || optStatusLine());
+
+  if (!target && !attn && !marked) return text;
 
   if (optStatusLine()) {
     const pad = config.screenWidth - visualWidth(text);
     if (pad > 0) text += ' '.repeat(pad);
   }
 
-  // --hilite-target rows take the J color, marked rows M, -w attn W
-  const kind = row === config.attnRow
-    ? (optHiliteTarget() ? 'target' : 'attn')
-    : 'mark';
+  // an empty target line carries a space, like put_line_hilite
+  if (target && !text) text = ' ';
 
-  return colored(kind, text, INVERSE_ON, INVERSE_OFF);
+  // --hilite-target rows take the J color, marked rows M, -w attn W
+  const kind = target
+    ? 'target'
+    : attn ? 'attn' : 'mark';
+
+  // og underlines the target line without color; attn and marks
+  // stand out
+  return kind === 'target'
+    ? colored(kind, text, UNDERLINE_ON, UNDERLINE_OFF)
+    : colored(kind, text, INVERSE_ON, INVERSE_OFF);
 }
 
 // the second of the last eof/bof bell, like og rate limiting eof_bell
@@ -459,7 +506,7 @@ export function formatContent(content: string[]): string[] {
   // at (0,0), so pre-seeding does not disturb sub-row emission
   for (let i = 0; i < config.blankTop; i++) lines.push('');
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     chopLongLines(content, lines);
   } else {
     wrapLongLines(content, lines);
@@ -499,7 +546,7 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
 
   const rows: string[] = [];
 
-  if (config.chopLongLines) {
+  if (chopLine()) {
     chopLongLines(content, rows);
   } else {
     wrapLongLines(content, rows);
@@ -838,7 +885,7 @@ export function calculateEOF(content: string[]): void {
   const { lastRow, lastSubRow } = getLastRow(content);
   config.endRow = lastRow;
   config.endSubRow = lastSubRow;
-  mode.EOF = lastRow === 0 && (config.chopLongLines || lastSubRow === 0);
+  mode.EOF = lastRow === 0 && (chopLine() || lastSubRow === 0);
 }
 
 /**
@@ -914,16 +961,25 @@ function getPrompt(content: string[]): string {
   const inputPrompt = searchPrompt();
   if (inputPrompt !== null) return inputPrompt;
 
+  // the binary file question replaces the prompt, like og's query
+  if (binaryConfirm.pending) {
+    return `"${binaryConfirm.path}" may be a binary file.  ` +
+      'See it anyway? ';
+  }
+
   if (option.pending) {
     if (option.spec && option.spec.prompt) {
       return option.spec.prompt + option.param;
     }
 
+    // ^P shows "(P)" and -+/-! their flag, like og's mca_opt_toggle
+    const marks = (option.noPrompt ? '(P)' : '') + option.flag;
+
     if (option.name !== null) {
-      return option.pending + option.pending + option.name;
+      return option.pending + option.pending + marks + option.name;
     }
 
-    return option.pending + option.flag;
+    return option.pending + marks;
   }
 
   if (pipeMark.pending) {
@@ -997,7 +1053,7 @@ function getPrompt(content: string[]): string {
   // the bottom line expands the -P prototype of the -m/-M style; the
   // short prompt shows a new file's name once (?n) and the (END)
   // marker with the next file, like s_proto
-  const text = prExpand(content, prProto(optPrType()));
+  const text = prExpand(content, prProto(displayPrType()));
   if (files.newFile) files.newFile = false;
 
   if (!text) return ':';

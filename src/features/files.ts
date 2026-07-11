@@ -21,10 +21,15 @@ import {
 
 import { search } from "./searching";
 
-import { optNoHistDups, optQuotes, resetHeaderStart, checkModelines }
-  from "../options";
+import { opt, optNoHistDups, optQuotes, resetHeaderStart, checkModelines,
+  chopLine } from "../options";
 
-import { decodeContent } from "./charset";
+import { decodeContent, rawByteOf, binaryByte, ubinChar }
+  from "./charset";
+
+import { keyboard } from "../keyboard";
+
+import { STYLE_REGEX_G } from "../constants";
 
 import { prExpand, eqProto } from "./prompt";
 
@@ -39,6 +44,12 @@ interface FileEntry {
   lines: string[] | null;
   /** Byte size, from stat for real files. */
   size: number;
+  /** False while a pipe's length reads as unknown, like ch_length()
+   *  returning NULL_POSITION before ch has read to EOF. */
+  sizeKnown: boolean;
+  /** True once the entry opened successfully, like og's opened():
+   *  a re-open skips the binary file confirmation. */
+  everOpened?: boolean;
   /** Saved screen position, like ifile.c's store_pos/get_pos. */
   saved: { row: number, subRow: number } | null;
   /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
@@ -104,6 +115,9 @@ export function initContent(lines: string[]): void {
     path: '-',
     lines,
     size: byteOffset(lines, lines.length) - 1,
+    // a pipe's length is unknown until the display reaches EOF,
+    // unless --file-size scans for it at open (og's edit.c)
+    sizeKnown: opt.wantFileSize > 0,
     saved: null,
   }];
   files.index = 0;
@@ -128,6 +142,8 @@ export function initFiles(paths: string[]): void {
     path,
     lines: null,
     size: 0,
+    // regular files are seekable: og knows their length at once
+    sizeKnown: true,
     saved: null,
   }));
   files.index = -1;
@@ -139,7 +155,49 @@ export function initFiles(paths: string[]): void {
 }
 
 /**
+ * The `"X" may be a binary file.  See it anyway?` confirmation state,
+ * like og's edit query: loadFile raises `request`, and the caller
+ * either answers synchronously (startup) or arms the `pending` prompt
+ * answered with y/Y (runtime).
+ */
+export const binaryConfirm = {
+  request: false,
+  pending: false,
+  path: '',
+  proceed: null as (() => void) | null,
+};
+
+/**
+ * True when a file's first 256 bytes look binary, like og's bin_file:
+ * malformed UTF-8 and IS_BINARY_CHAR chars count, ANSI sequences skip
+ * under -R, and more than 5 binary characters qualify.
+ */
+function binFile(bytes: Buffer): boolean {
+  const head = bytes.subarray(0, 256);
+  if (head.length <= 4) return false;
+
+  let text = decodeContent(head);
+  if (opt.ctldisp === 2) text = text.replace(STYLE_REGEX_G, '');
+
+  let count = 0;
+
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+
+    if (rawByteOf(char) >= 0 || (code < 0x100 && binaryByte(code)) ||
+        ubinChar(char)) {
+      count++;
+    }
+  }
+
+  return count > 5;
+}
+
+/**
  * Reads a file entry's lines, reporting errors like less's edit.
+ *
+ * - A binary-looking file sets binaryConfirm.request instead of
+ *   opening, unless -f, a re-open, or a non-tty session (edit.c).
  *
  * @param index - Entry index in the file list.
  * @returns The file's lines, or null with a message set on failure.
@@ -161,20 +219,49 @@ export function loadFile(index: number): string[] | null {
   if (alt) {
     entry.size = alt.size;
     entry.alt = alt.alt;
+
+    // a pipe-form $LESSOPEN ("|cmd") feeds a pipe whose length og
+    // does not know; the file-replacement form is a seekable file
+    entry.sizeKnown = alt.alt !== '-' || opt.wantFileSize > 0;
+    entry.everOpened = true;
+
     checkModelines(alt.lines);
     return alt.lines;
   }
 
   try {
-    if (fs.statSync(entry.path).isDirectory()) {
+    const stat = fs.statSync(entry.path);
+
+    // -f skips the directory guard and lets the read report the OS
+    // error, like og's force_open bypassing bad_file's is_dir check
+    if (stat.isDirectory() && !opt.forceOpen) {
       search.message = `${entry.path} is a directory`;
+      return null;
+    }
+
+    // og refuses terminal devices without -f (edit.c's isatty check)
+    if (stat.isCharacterDevice() && !opt.forceOpen) {
+      search.message = `${entry.path} is a terminal (use -f to open it)`;
+      return null;
+    }
+
+    const bytes = fs.readFileSync(entry.path);
+
+    // og asks before opening what looks like a binary file, unless
+    // -f, a previous open, or a non-tty session (edit.c's bin_file)
+    if (!opt.forceOpen && !entry.everOpened && keyboard().isTTY &&
+        binFile(bytes)) {
+      binaryConfirm.request = true;
+      binaryConfirm.path = entry.path;
       return null;
     }
 
     // bytes decode through the charset, like og's chardef classes:
     // invalid UTF-8 bytes survive as markers for $LESSBINFMT
-    const data = decodeContent(fs.readFileSync(entry.path));
+    const data = decodeContent(bytes);
     entry.size = fs.statSync(entry.path).size;
+    entry.sizeKnown = true;
+    entry.everOpened = true;
 
     const lines = (data.endsWith('\n') ? data.slice(0, -1) : data)
       .split('\n');
@@ -660,7 +747,7 @@ export function fileInfo(content: string[]): void {
 export function bottomRow(content: string[]): number {
   let steps = config.window - 2 - config.blankTop;
 
-  if (config.chopLongLines || config.col) {
+  if (chopLine() || config.col) {
     return Math.min(config.row + steps, content.length - 1);
   }
 
@@ -694,6 +781,35 @@ export function byteOffset(content: string[], row: number): number {
   }
 
   return bytes;
+}
+
+/**
+ * True when the current file's size may be reported, like og's
+ * ch_length() != NULL_POSITION: a pipe learns its length once the
+ * display reaches the end of the content (ch reading to EOF), and
+ * keeps it from then on.
+ *
+ * @param content - Full content lines.
+ */
+export function sizeIsKnown(content: string[]): boolean {
+  const entry = files.list[files.index];
+  if (!entry) return false;
+
+  if (!entry.sizeKnown &&
+      (mode.EOF || bottomRow(content) >= content.length - 1)) {
+    entry.sizeKnown = true;
+  }
+
+  return entry.sizeKnown;
+}
+
+/**
+ * Learns the current file's size now, like og's scan_eof: --file-size
+ * turning on, or a forward search scanning to the end of a pipe.
+ */
+export function revealSize(): void {
+  const entry = files.list[files.index];
+  if (entry) entry.sizeKnown = true;
 }
 
 /**

@@ -35,7 +35,7 @@ export function wrapLongLines(content: string[], lines: string[]): void {
       for (let i = before; i < lines.length; i++) {
         // -w and --status-line highlight the row in standout
         lines[i] = gutterFor(content, row, i === before && firstIsStart) +
-          highlightRow(lines[i], row);
+          highlightRow(lines[i], row, i);
       }
     }
   }

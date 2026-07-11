@@ -52,6 +52,15 @@ export class BlockFile {
     return opt.autoBuffers ? Math.max(capped, 2048) : capped;
   }
 
+  /** Evicts blocks beyond the -b cap, like og's ch_setbufspace
+   *  releasing excess buffers as soon as the option changes. */
+  trim(): void {
+    while (this.blocks.size > this.maxBlocks()) {
+      const oldest = this.blocks.keys().next().value as number;
+      this.blocks.delete(oldest);
+    }
+  }
+
   /** Returns one block's bytes, reading and pooling it on demand. */
   private blockAt(index: number): Buffer {
     const have = this.blocks.get(index);
@@ -69,11 +78,7 @@ export class BlockFile {
     const block = read === BLOCK_SIZE ? buf : buf.subarray(0, read);
 
     this.blocks.set(index, block);
-
-    while (this.blocks.size > this.maxBlocks()) {
-      const oldest = this.blocks.keys().next().value as number;
-      this.blocks.delete(oldest);
-    }
+    this.trim();
 
     return block;
   }

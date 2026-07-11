@@ -79,6 +79,9 @@ const keys: Record<string, Actions> = {
   // delete the current file from the command line list
   ':d': 'REMOVE_FILE', // :d
 
+  // go to a tag: toggle-option t, like og's :t binding
+  ':t': 'OPTION_TAG', // :t
+
   // print current file name
   ':f': 'CURRENT_INFO', // :f
 

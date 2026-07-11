@@ -1,6 +1,8 @@
 import fs from 'fs';
 
-import { keyboard } from "./keyboard";
+import { keyboard, closeTtyKeyboard, dumbTerminal } from "./keyboard";
+
+import { shellArgv } from "./platform";
 
 import { Actions } from "./interfaces";
 
@@ -50,7 +52,8 @@ import {
   firstCol,
   forceLineBackward,
   newlineForward,
-  newlineBackward
+  newlineBackward,
+  onEofForward
 } from "./features/moving";
 
 import {
@@ -107,7 +110,8 @@ import {
   setPreviousPath,
   fileInfo,
   bottomRow,
-  closeAlt
+  closeAlt,
+  binaryConfirm
 } from "./features/files";
 
 import {
@@ -152,7 +156,20 @@ import {
   scanOptions,
   checkModelines,
   optEmouseLclick,
-  optEmouseRclick
+  optEmouseRclick,
+  optWheelEnabled,
+  EMOUSE_HSCROLL,
+  EMOUSE_HDRAG,
+  EMOUSE_VDRAG,
+  applyMouse,
+  applyBracketedPaste,
+  hook,
+  chopLine,
+  getSwindow,
+  initUnsupport,
+  takeCliOptions,
+  flushPendopt,
+  opt
 } from "./options";
 
 import {
@@ -178,7 +195,7 @@ import {
   onShellAutosave
 } from "./features/misc";
 
-import { prExpand } from "./features/prompt";
+import { prExpand, resetProtos } from "./features/prompt";
 
 import {
   stepTag,
@@ -225,6 +242,8 @@ import {
   MOUSE_OFF,
   MOUSE_SGR_ON,
   MOUSE_SGR_OFF,
+  BRACKETED_PASTE_ON,
+  BRACKETED_PASTE_OFF,
   initAnsiChars
 } from "./constants";
 
@@ -291,7 +310,26 @@ async function filePager(filePaths: string[]): Promise<void> {
   initFiles(filePaths);
 
   for (let i = 0; i < files.list.length; i++) {
-    const lines = loadFile(i);
+    let lines = loadFile(i);
+
+    // a binary-looking file asks before the screen starts, like og's
+    // edit query; refusing moves on to the next file
+    if (!lines && binaryConfirm.request) {
+      binaryConfirm.request = false;
+      process.stdout.write(
+        `"${files.list[i].path}" may be a binary file.  See it anyway? `
+      );
+
+      const answer = await warnReturn();
+      keyboard().setRawMode(false);
+      keyboard().pause();
+      process.stdout.write('\n');
+
+      if (answer === 'y' || answer === 'Y') {
+        files.list[i].everOpened = true;
+        lines = loadFile(i);
+      }
+    }
 
     if (lines) {
       files.index = i;
@@ -327,7 +365,7 @@ async function contentPager(content: string[]): Promise<void> {
       forceLineBackward(content, bufferToNum(buffer) || 1),
     FORCE_WINDOW_BACKWARD: () => forceLineBackward(
       content,
-      bufferToNum(buffer) || config.setWindow || config.window - 1
+      bufferToNum(buffer) || getSwindow()
     ),
     NEWLINE_FORWARD: () => newlineForward(content, bufferToNum(buffer) || 1),
     NEWLINE_BACKWARD: () =>
@@ -365,6 +403,9 @@ async function contentPager(content: string[]): Promise<void> {
       }
     },
     TAG_COMMAND: () => startOption(key === '_' ? '_' : '-'),
+    // og binds :t to toggle-option with an extra 't', opening the
+    // -t tag prompt (decode.c A_OPT_TOGGLE|A_EXTRA)
+    OPTION_TAG: () => { startOption('-'); optionKey(content, 't'); },
     FIRST_LINE: () => firstLine(content, bufferToNum(buffer)),
     LAST_LINE: () => lastLine(content, bufferToNum(buffer)),
     PERCENT_LINE: () => percentLine(content, bufferToNum(buffer)),
@@ -417,6 +458,10 @@ async function contentPager(content: string[]): Promise<void> {
 
   let fullContent = content;
   let lastClickY = -1;
+
+  // drag origins for --emouse hdrag/vdrag, like og's last_drag_x/y
+  let lastDragX = -1;
+  let lastDragY = -1;
   let lastFilter: ((line: string) => boolean) | null = null;
 
   // $LESS options apply before the display pipeline first derives,
@@ -440,7 +485,32 @@ async function contentPager(content: string[]): Promise<void> {
   initCharset();
   initAnsiChars();
 
-  const startup = scanOptions(process.env.LESS ?? '', fullContent);
+  // $LESS_IS_MORE selects more compatibility and the $MORE options,
+  // like og's init_option and main reading the right variable
+  const lim = process.env.LESS_IS_MORE;
+  opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
+
+  // like og's init_prompt after less_is_more is known; $MORE below may
+  // still override the prototypes with -P
+  resetProtos();
+
+  // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
+  initUnsupport(process.env.LESS_UNSUPPORT ?? '');
+
+  const startup = scanOptions(
+    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', fullContent);
+
+  // command line options follow the env, one scan per argument like
+  // og's main; -r keeps its command line meaning there
+  for (const arg of takeCliOptions()) {
+    const extra = scanOptions(arg, fullContent, false);
+    startup.firstCmds.push(...extra.firstCmds);
+    if (extra.dohelp) startup.dohelp = true;
+    if (extra.version) startup.version = true;
+  }
+
+  // a still-dangling string/number option reports now (og nopendopt)
+  flushPendopt();
 
   // -V prints the version and never starts the pager, like og
   if (startup.version) {
@@ -535,7 +605,7 @@ async function contentPager(content: string[]): Promise<void> {
   ) {
     const rows: string[] = [];
 
-    if (config.chopLongLines || config.col) {
+    if (chopLine() || config.col) {
       chopLongLines(content, rows);
     } else {
       wrapLongLines(content, rows);
@@ -550,9 +620,12 @@ async function contentPager(content: string[]): Promise<void> {
   let prevContent = content, prevConfig = config, prevMode = mode;
   let key = '', escCount = 0, buffer: string[] = [];
   let pendingFirstCmds: string[] = [];
-  let eofSeen = false;
   let shellPause: false | 'shell' | 'pager' = false;
   let exited = false;
+
+  // true when the help screen IS the input (--help/-?), like og's
+  // dohelp FAKE_HELPFILE; q then quits instead of restoring a file
+  let startupHelp = false;
   let exit = () => {};
   let pasting = false;
   let followTimer: ReturnType<typeof setInterval> | null = null;
@@ -572,16 +645,37 @@ async function contentPager(content: string[]): Promise<void> {
     if (await warnReturn() === 'q') {
       keyboard().setRawMode(false);
       keyboard().pause();
+      closeTtyKeyboard();
       return;
     }
 
     process.stdout.write('\n');
   }
 
+  // startup scan errors print before the screen erases them, gated
+  // on a keystroke like og main's errmsgs check
+  if (search.message) {
+    process.stdout.write(search.message + '\n');
+
+    while (search.messageQueue.length) {
+      process.stdout.write(search.messageQueue.shift()! + '\n');
+    }
+
+    search.message = '';
+    process.stdout.write('Press RETURN to continue ');
+    await warnReturn();
+    process.stdout.write('\n');
+  }
+
   init();
 
-  // -? pages the help file first, like og's dohelp
-  if (startup.dohelp) prepareHelp();
+  // -? pages the help file first, like og's dohelp registering
+  // FAKE_HELPFILE as an input file: quitting that help quits the
+  // pager, unlike the h command's overlay
+  if (startup.dohelp) {
+    prepareHelp();
+    startupHelp = true;
+  }
 
   // -o/-O in $LESS start logging piped-in content right away
   applyStartupLogFile(fullContent);
@@ -594,6 +688,20 @@ async function contentPager(content: string[]): Promise<void> {
 
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);
+
+  // -e/-E: a forward move at end-of-file edits the next file, or
+  // quits on the last one, like og's forward() calling edit_next
+  onEofForward(() => {
+    if (!optQuitAtEof() || mode.HELP) return false;
+
+    if (files.list[files.index + 1] !== undefined) {
+      switchToFile(files.index + 1);
+    } else {
+      exit();
+    }
+
+    return true;
+  });
 
   keyboard().on('data', keyHandler);
   await new Promise<void>((resolve) => {
@@ -638,15 +746,13 @@ async function contentPager(content: string[]): Promise<void> {
     // quitting must not repaint over the final prompt, like less
     if (!exited && !drained) render(content, buffer);
 
-    // -e quits the second time end-of-file is reached, -E the first,
-    // after the eof frame has been painted like less
-    if (!exited && optQuitAtEof() && mode.EOF && !mode.HELP) {
-      if (optQuitAtEof() === 2 || eofSeen) {
-        exit();
-        return;
-      }
-
-      eofSeen = true;
+    // -E quits as soon as end-of-file displays on the last file,
+    // like og's command loop checking get_quit_at_eof()==OPT_ONPLUS;
+    // -e acts on forward moves at EOF instead (og's forward())
+    if (!exited && optQuitAtEof() === 2 && mode.EOF && !mode.HELP &&
+        files.list[files.index + 1] === undefined) {
+      exit();
+      return;
     }
   }
 
@@ -931,6 +1037,18 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
+    // the binary file confirmation proceeds on y/Y, like og's query
+    if (binaryConfirm.pending) {
+      const proceed = binaryConfirm.proceed;
+      binaryConfirm.pending = false;
+      binaryConfirm.proceed = null;
+
+      if ((key === 'y' || key === 'Y') && proceed) proceed();
+
+      render(content, buffer);
+      return;
+    }
+
     // ^X and : start two-key commands (^X^X, :n), like less's tables
     if (config.keyPrefix === '\x18' || config.keyPrefix === ':') {
       const prefix = config.keyPrefix;
@@ -971,8 +1089,11 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     // mouse wheel ticks scroll --wheel-lines lines; --rmouse (or
-    // --MOUSE) reverses the scroll direction, like less
+    // --MOUSE) reverses the scroll direction, like less; the wheel
+    // is ignored without the vscroll --emouse feature (decode.c)
     if (!escCount && key.startsWith('\x1b[<64;')) {
+      if (!optWheelEnabled()) return;
+
       if (optMouseReverse()) {
         lineForward(content, optWheelLines());
       } else {
@@ -984,6 +1105,8 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     if (!escCount && key.startsWith('\x1b[<65;')) {
+      if (!optWheelEnabled()) return;
+
       if (optMouseReverse()) {
         lineBackward(content, optWheelLines());
       } else {
@@ -994,19 +1117,73 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
-    // --emouse clicks: left-click (press+release on one row) sets the
-    // mouse mark '#', right-click jumps to it, like og's
-    // mouse_button_left/right
+    // a horizontal wheel shifts --wheel-lines columns when the
+    // hscroll --emouse feature is on (og's A_L_MOUSE/A_R_MOUSE)
+    if (!escCount &&
+        (key.startsWith('\x1b[<66;') || key.startsWith('\x1b[<67;'))) {
+      if (!(opt.emouse & EMOUSE_HSCROLL)) return;
+
+      const left = key.startsWith('\x1b[<66;') !== (optMouseReverse());
+
+      if (mode.INIT) mode.INIT = false;
+
+      if (left) {
+        config.col = Math.max(config.col - optWheelLines(), 0);
+      } else {
+        config.col += optWheelLines();
+      }
+
+      render(content, buffer);
+      return;
+    }
+
+    // --emouse clicks and drags, like og's mouse_button_left/right:
+    // left press records the drag origin, motion events drag the text
+    // (hdrag/vdrag), a same-row release sets the mouse mark '#', and
+    // a right-click release jumps to it
     const click = !escCount &&
       // eslint-disable-next-line no-control-regex
-      /^\x1b\[<([02]);\d+;(\d+)([Mm])/.exec(key);
+      /^\x1b\[<(0|2|32);(\d+);(\d+)([Mm])/.exec(key);
 
-    if (click && click[1] === '0' && optEmouseLclick()) {
-      const y = parseInt(click[2], 10) - 1;
+    if (click && click[1] === '32' &&
+        (opt.emouse & (EMOUSE_HDRAG | EMOUSE_VDRAG))) {
+      const x = parseInt(click[2], 10) - 1;
+      const y = parseInt(click[3], 10) - 1;
 
-      if (click[3] === 'M') {
+      if ((opt.emouse & EMOUSE_HDRAG) && lastDragX >= 0 &&
+          x !== lastDragX) {
+        // dragging right moves the text right (hshift decreases)
+        config.col = Math.max(config.col - (x - lastDragX), 0);
+        if (mode.INIT) mode.INIT = false;
+        lastDragX = x;
+      }
+
+      if ((opt.emouse & EMOUSE_VDRAG) && lastDragY >= 0) {
+        if (y > lastDragY) {
+          lineBackward(content, y - lastDragY);
+        } else if (y < lastDragY) {
+          lineForward(content, lastDragY - y);
+        }
+
+        lastDragY = y;
+      }
+
+      render(content, buffer);
+      return;
+    }
+
+    if (click && click[1] === '0' &&
+        (optEmouseLclick() ||
+          (opt.emouse & (EMOUSE_HDRAG | EMOUSE_VDRAG)))) {
+      const x = parseInt(click[2], 10) - 1;
+      const y = parseInt(click[3], 10) - 1;
+
+      if (click[4] === 'M') {
         lastClickY = y;
-      } else if (y < config.window - 1 && y === lastClickY) {
+        lastDragX = x;
+        lastDragY = y;
+      } else if (optEmouseLclick() && y < config.window - 1 &&
+                 y === lastClickY) {
         setMouseMark(content, y);
       }
 
@@ -1015,9 +1192,9 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     if (click && click[1] === '2' && optEmouseRclick()) {
-      const y = parseInt(click[2], 10) - 1;
+      const y = parseInt(click[3], 10) - 1;
 
-      if (click[3] === 'm' && y < config.window - 1) {
+      if (click[4] === 'm' && y < config.window - 1) {
         goMouseMark(content);
       }
 
@@ -1146,7 +1323,21 @@ async function contentPager(content: string[]): Promise<void> {
    */
   function switchToFile(target: number): boolean {
     const lines = loadFile(target);
-    if (!lines) return false;
+
+    if (!lines) {
+      // a binary-looking file arms the y/Y confirmation prompt and
+      // retries the switch on approval, like og's edit query
+      if (binaryConfirm.request) {
+        binaryConfirm.request = false;
+        binaryConfirm.pending = true;
+        binaryConfirm.proceed = () => {
+          files.list[target].everOpened = true;
+          switchToFile(target);
+        };
+      }
+
+      return false;
+    }
 
     saveFilePosition();
     recordLastPosition();
@@ -1209,14 +1400,28 @@ async function contentPager(content: string[]): Promise<void> {
     if (at < 0) {
       at = files.index + 1;
       files.list.splice(at, 0, { path: name, lines: null, size: 0,
-        saved: null });
+        sizeKnown: true, saved: null });
 
       if (!loadFile(at)) {
+        // a binary-looking file keeps its entry and asks first,
+        // like og's edit query before registering failure
+        if (binaryConfirm.request) {
+          binaryConfirm.request = false;
+          binaryConfirm.pending = true;
+          binaryConfirm.proceed = () => {
+            files.list[at].everOpened = true;
+            switchToFile(at);
+          };
+          return false;
+        }
+
         files.list.splice(at, 1);
         return false;
       }
     } else if (!loadFile(at)) {
-      return false;
+      // switchToFile re-runs loadFile and arms the binary
+      // confirmation itself when that is what failed
+      return switchToFile(at);
     }
 
     return switchToFile(at);
@@ -1281,7 +1486,15 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     const target = stepFileTarget(delta, bufferToNum(buffer) || 1);
-    if (target !== null) switchToFile(target);
+
+    if (target === null) {
+      // :n past the last file quits with -e at end-of-file, like
+      // og's A_NEXT_FILE checking get_quit_at_eof after edit_next
+      if (delta > 0 && optQuitAtEof() && mode.EOF && !mode.HELP) exit();
+      return;
+    }
+
+    switchToFile(target);
   }
 
   function removeFile(): void {
@@ -1327,12 +1540,29 @@ async function contentPager(content: string[]): Promise<void> {
           path: name,
           lines: null,
           size: 0,
+          sizeKnown: true,
           saved: null,
         });
         inserted = true;
       }
 
       if (!loadFile(at)) {
+        // a binary-looking file keeps its entry and asks first,
+        // like og's edit query
+        if (binaryConfirm.request) {
+          binaryConfirm.request = false;
+          binaryConfirm.pending = true;
+
+          const target = at;
+          binaryConfirm.proceed = () => {
+            files.list[target].everOpened = true;
+            switchToFile(target);
+          };
+
+          if (inserted) insertAt++;
+          continue;
+        }
+
         if (inserted) files.list.splice(at, 1);
         continue;
       }
@@ -1375,14 +1605,9 @@ async function contentPager(content: string[]): Promise<void> {
 
     suspendTerminal();
 
-    const shell = process.env.SHELL || '/bin/sh';
-
-    // LESS_SHELL_COPTION replaces the shell's -c (v706); a bare "-"
-    // runs the command without the $SHELL wrapper, like og's system()
-    const copt = process.env.LESS_SHELL_COPTION || '-c';
-    const argv: [string, string[]] = copt === '-'
-      ? ['/bin/sh', cmd ? ['-c', cmd] : []]
-      : [shell, cmd ? [copt, cmd] : []];
+    // $SHELL -c on unix (LESS_SHELL_COPTION replaces -c, "-" drops
+    // the wrapper); %COMSPEC% /c on Windows, like og's lsystem
+    const argv = shellArgv(cmd);
 
     spawnSync(argv[0], argv[1], input === undefined
       ? { stdio: 'inherit' }
@@ -1705,46 +1930,67 @@ async function contentPager(content: string[]): Promise<void> {
       if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
     }
 
+    // mouse tracking and bracketed paste enable with the screen,
+    // like og's init()/init_mouse, not during the option scan
+    hook.screenActive = true;
+    applyMouse();
+    applyBracketedPaste();
+
     // SIGTERM/SIGHUP quit cleanly, restoring the terminal like og's
-    // terminate() calling quit(15)
+    // terminate() calling quit(15); an external SIGINT acts like the
+    // interrupt key (og's u_interrupt)
     process.on('SIGTERM', onTerminate);
     process.on('SIGHUP', onTerminate);
+    process.on('SIGINT', onSigint);
 
     // a SIGUSR1 runs the $LESS_SIGUSR1 keys, like og's sigusr()
     process.on('SIGUSR1', onSigusr1);
 
-    process.on('uncaughtException', (error) => {
-      cleanUp();
-      console.error(error);
-      process.exit(1);
-    });
+    process.on('uncaughtException', onUncaught);
 
-    process.on('SIGWINCH', () => {
-      if (shellPause) return;
-
-      mode.INIT = false;
-
-      resetRender();
-      calculateDimensions();
-      calculateEOF(content);
-
-      if (config.windowContent.length !== config.window) {
-        config.windowContent = new Array(config.window).fill('');
-        config.startLine = 0;
-      }
-
-      buffer = [];
-      config.bufferOffset = 0;
-      config.blankTop = 0;
-      render(content, buffer);
-    });
+    // node's tty emits 'resize' on every platform (SIGWINCH never
+    // fires on Windows, where og polls the console size instead)
+    process.stdout.on('resize', onResize);
 
     calculateEOF(content);
+  }
+
+  /** Restores the terminal before dying on an unexpected error. */
+  function onUncaught(error: unknown): void {
+    cleanUp();
+    console.error(error);
+    process.exit(1);
+  }
+
+  /** Repaints for the new size on SIGWINCH, like og's winch(). */
+  function onResize(): void {
+    if (shellPause) return;
+
+    mode.INIT = false;
+
+    resetRender();
+    calculateDimensions();
+    calculateEOF(content);
+
+    if (config.windowContent.length !== config.window) {
+      config.windowContent = new Array(config.window).fill('');
+      config.startLine = 0;
+    }
+
+    buffer = [];
+    config.bufferOffset = 0;
+    config.blankTop = 0;
+    render(content, buffer);
   }
 
   /** Quits cleanly on SIGTERM/SIGHUP, like og's terminate(). */
   function onTerminate(): void {
     if (!exited) exit();
+  }
+
+  /** Treats an external SIGINT as the ^C key, like og's u_interrupt. */
+  function onSigint(): void {
+    if (!exited) handleKey('\x03');
   }
 
   /** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like og's sigusr(). */
@@ -1786,7 +2032,11 @@ async function contentPager(content: string[]): Promise<void> {
    */
   function suspendTerminal(): void {
     if (!mode.DUMB) {
-      if (optMouse()) process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+      if (optMouse() || opt.emouse) {
+        process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+      }
+
+      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
 
       if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
@@ -1798,6 +2048,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     keyboard().setRawMode(false);
     keyboard().pause();
+    hook.screenActive = false;
   }
 
   function enterScreen(): void {
@@ -1809,9 +2060,14 @@ async function contentPager(content: string[]): Promise<void> {
 
       if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
 
-      if (optMouse()) process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
+      if (optMouse() || opt.emouse) {
+        process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
+      }
+
+      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
     }
 
+    hook.screenActive = true;
     resetRender();
   }
 
@@ -1844,6 +2100,10 @@ async function contentPager(content: string[]): Promise<void> {
 
   function exitHelp(): boolean {
     if (!mode.HELP) return false;
+
+    // a --help/-? screen is og's FAKE_HELPFILE input, not the h
+    // command's overlay: quitting it quits the pager
+    if (startupHelp) return false;
 
     content = prevContent;
     applyConfig(prevConfig);
@@ -1899,7 +2159,13 @@ async function contentPager(content: string[]): Promise<void> {
 
     // a dumb terminal never received any of the smart codes
     if (!mode.DUMB) {
-      if (optMouse()) process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+      // --emouse enables tracking without --mouse, so check both
+      if (optMouse() || opt.emouse) {
+        process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+      }
+
+      // --no-paste turned bracketed paste markers on
+      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
 
       if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
@@ -1924,25 +2190,29 @@ async function contentPager(content: string[]): Promise<void> {
     if (screen) process.stdout.write(screen.join('\n') + '\n');
 
     process.title = processTitle;
+    hook.screenActive = false;
 
+    // every session listener leaves with the session, so a library
+    // caller's process is untouched afterwards
     process.off('SIGTERM', onTerminate);
     process.off('SIGHUP', onTerminate);
+    process.off('SIGINT', onSigint);
     process.off('SIGUSR1', onSigusr1);
+    process.stdout.off('resize', onResize);
+    process.off('uncaughtException', onUncaught);
 
     keyboard().off('data', keyHandler);
     keyboard().setRawMode(false);
     keyboard().pause();
+
+    // the -e hook holds this session's closure otherwise
+    onEofForward(null);
+
+    // a /dev/tty keyboard holds the event loop open until destroyed
+    closeTtyKeyboard();
   }
 }
 
-/**
- * True when $TERM names a terminal without cursor capabilities, like
- * og's missing_cap after loading the dumb or unknown termcap entry.
- */
-function dumbTerminal(): boolean {
-  const term = process.env.TERM;
-  return !term || term === 'dumb' || term === 'unknown';
-}
 
 /**
  * Reads the keystroke answering the dumb terminal warning, like og's

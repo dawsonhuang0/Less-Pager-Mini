@@ -1,4 +1,4 @@
-import { keyboard } from '../keyboard';
+import { keyboard, closeTtyKeyboard } from '../keyboard';
 
 import { BlockFile } from './ch';
 import { BigView, displayText } from './screen';
@@ -13,9 +13,11 @@ import { forwLine, backLine } from './lineio';
 
 import { search, searchInterrupted } from '../features/searching';
 
-import { optPrType, optIntrChar } from '../options/shared';
+import { displayPrType, optIntrChar } from '../options/shared';
 
-import { scanOptions } from '../options';
+import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
+  flushPendopt, applyMouse, applyBracketedPaste, hook, opt }
+  from '../options';
 
 import {
   cmd,
@@ -32,6 +34,9 @@ import {
   ALTERNATE_CONSOLE_OFF,
   KEYPAD_ON,
   KEYPAD_OFF,
+  MOUSE_OFF,
+  MOUSE_SGR_OFF,
+  BRACKETED_PASTE_OFF,
   CLEAR_LINE,
   CLEAR_BELOW,
   CURSOR_HOME,
@@ -55,12 +60,22 @@ export async function bigPager(path: string): Promise<void> {
   const bf = new BlockFile(path);
   const view = new BigView(bf);
 
-  // $LESS (and lmn's command line riding it) applies here too
+  // a -b toggle trims the block pool at once, like ch_setbufspace
+  onTrimBufSpace(() => bf.trim());
+
+  // $LESS applies here too, then the lmn command line options
   scanOptions(process.env.LESS ?? '', []);
+  for (const arg of takeCliOptions()) scanOptions(arg, [], false);
+  flushPendopt();
 
   keyboard().setRawMode(true);
   keyboard().resume();
   process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
+
+  // mouse tracking and bracketed paste enable with the screen
+  hook.screenActive = true;
+  applyMouse();
+  applyBracketedPaste();
 
   config.window = process.stdout.rows || 24;
   config.screenWidth = process.stdout.columns || 80;
@@ -154,7 +169,7 @@ export async function bigPager(path: string): Promise<void> {
       const text = displayText(row.text);
       let out: string;
 
-      if (config.chopLongLines || config.col) {
+      if (chopLine() || config.col) {
         // chop: the layout's first row is exactly one screen width
         out = emitRow(getLayout(text), 0);
       } else {
@@ -180,9 +195,9 @@ export async function bigPager(path: string): Promise<void> {
     const name = first ? `${path} ` : '';
 
     // og prompt styles: short shows ':', -m percent, -M the works
-    const base = optPrType() === 2
+    const base = displayPrType() === 2
       ? `${path} byte ${view.top.pos}/${bf.size} ${percent}%`
-      : optPrType() === 1
+      : displayPrType() === 1
         ? `${percent}%`
         : ':';
 
@@ -198,7 +213,7 @@ export async function bigPager(path: string): Promise<void> {
               ? `${INVERSE_ON}${name}(END)${INVERSE_OFF}`
               : first
                 ? `${INVERSE_ON}${name}${INVERSE_OFF}`
-                : optPrType() === 0
+                : displayPrType() === 0
                   ? base
                   : `${INVERSE_ON}${base}${INVERSE_OFF}`;
 
@@ -221,6 +236,28 @@ export async function bigPager(path: string): Promise<void> {
   };
 
   await new Promise<void>(resolve => {
+    let done = false;
+
+    /** Repaints for the new terminal size, like og's winch(). */
+    const onResize = (): void => {
+      config.window = process.stdout.rows || 24;
+      config.screenWidth = process.stdout.columns || 80;
+      draw();
+    };
+
+    /** The one exit path: every listener leaves with the session. */
+    const quit = (): void => {
+      if (done) return;
+      done = true;
+
+      if (followTimer) clearInterval(followTimer);
+      keyboard().off('data', onKey);
+      process.off('SIGTERM', quit);
+      process.off('SIGHUP', quit);
+      process.stdout.off('resize', onResize);
+      resolve();
+    };
+
     const onKey = (data: Buffer): void => {
       for (const key of splitKeys(data.toString())) {
         first = false;
@@ -338,9 +375,7 @@ export async function bigPager(path: string): Promise<void> {
         switch (action) {
           case 'FORCE_EXIT':
           case 'EXIT':
-            if (followTimer) clearInterval(followTimer);
-            keyboard().off('data', onKey);
-            resolve();
+            quit();
             return;
           case 'LINE_FORWARD': view.lineForward(n); break;
           case 'LINE_BACKWARD': view.lineBackward(n); break;
@@ -391,11 +426,30 @@ export async function bigPager(path: string): Promise<void> {
       }
     };
 
+    // SIGTERM/SIGHUP restore the terminal like og's terminate();
+    // 'resize' fires on every platform, unlike SIGWINCH
+    process.on('SIGTERM', quit);
+    process.on('SIGHUP', quit);
+    process.stdout.on('resize', onResize);
+
     keyboard().on('data', onKey);
     draw();
   });
 
   process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
+
+  // $LESS may have enabled mouse tracking or bracketed paste
+  if (opt.mouseMode || opt.emouse) {
+    process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+  }
+
+  if (opt.noPaste) process.stdout.write(BRACKETED_PASTE_OFF);
+
+  keyboard().setRawMode(false);
   keyboard().pause();
+  hook.screenActive = false;
+
+  // a /dev/tty keyboard holds the event loop open until destroyed
+  closeTtyKeyboard();
   bf.close();
 }
