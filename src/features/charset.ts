@@ -439,3 +439,60 @@ export function decodeContent(data: Buffer): string {
 
   return out;
 }
+
+/**
+ * Incrementally decodes pipe bytes into complete lines, like og's ch
+ * layer reading a non-seekable input: a multibyte sequence split
+ * across chunks is held back rather than decoded as binary markers,
+ * and the trailing partial line waits for its newline (or the end of
+ * the input).
+ */
+export class PipeDecoder {
+  private bytes: Buffer = Buffer.alloc(0);
+  private tail = '';
+
+  /** Decodes one chunk and returns the complete lines in it. */
+  push(chunk: Buffer): string[] {
+    let data = this.bytes.length
+      ? Buffer.concat([this.bytes, chunk])
+      : chunk;
+
+    // hold back an incomplete trailing UTF-8 sequence
+    let hold = 0;
+
+    for (let i = 1; i <= 3 && i <= data.length; i++) {
+      const byte = data[data.length - i];
+      if ((byte & 0xC0) === 0x80) continue;
+
+      const need = (byte & 0xF8) === 0xF0 ? 4
+        : (byte & 0xF0) === 0xE0 ? 3
+          : (byte & 0xE0) === 0xC0 ? 2 : 1;
+
+      if (need > i) hold = i;
+      break;
+    }
+
+    this.bytes = hold
+      ? Buffer.from(data.subarray(data.length - hold))
+      : Buffer.alloc(0);
+    if (hold) data = data.subarray(0, data.length - hold);
+
+    const text = this.tail + decodeContent(data);
+    const lines = text.split('\n');
+    this.tail = lines.pop() ?? '';
+
+    return lines;
+  }
+
+  /** The final partial line once the input ends, if any. */
+  flush(): string[] {
+    const rest = this.bytes.length
+      ? this.tail + decodeContent(this.bytes)
+      : this.tail;
+
+    this.bytes = Buffer.alloc(0);
+    this.tail = '';
+
+    return rest ? [rest] : [];
+  }
+}

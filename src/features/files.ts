@@ -50,6 +50,9 @@ interface FileEntry {
   /** True once the entry opened successfully, like og's opened():
    *  a re-open skips the binary file confirmation. */
   everOpened?: boolean;
+  /** True while a pipe is still delivering data, like og's ch layer
+   *  before read() returns end-of-file. */
+  streaming?: boolean;
   /** Saved screen position, like ifile.c's store_pos/get_pos. */
   saved: { row: number, subRow: number } | null;
   /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
@@ -795,7 +798,9 @@ export function sizeIsKnown(content: string[]): boolean {
   const entry = files.list[files.index];
   if (!entry) return false;
 
-  if (!entry.sizeKnown &&
+  // a still-streaming pipe has no length yet no matter how much of
+  // it is displayed
+  if (!entry.sizeKnown && !entry.streaming &&
       (mode.EOF || bottomRow(content) >= content.length - 1)) {
     entry.sizeKnown = true;
   }
@@ -811,6 +816,18 @@ export function revealSize(): void {
   const entry = files.list[files.index];
   if (entry) entry.sizeKnown = true;
 }
+
+/**
+ * The bottom line state while a pipe drains for G/%: og's G reads
+ * with a blank command line, while % shows ierror's interruptible
+ * "Determining length of file" note.
+ */
+export const pipeDraining = {
+  active: false,
+  note: '',
+  cancelMessage: '',
+};
+
 
 /**
  * Integer percentage, rounded half to even like less's percentage().

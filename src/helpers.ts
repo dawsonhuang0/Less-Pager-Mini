@@ -54,7 +54,8 @@ import { follow } from './features/follow';
 
 import { brackets, marks, markAtRow } from './features/jumping';
 
-import { files, examine, binaryConfirm } from './features/files';
+import { files, examine, binaryConfirm, pipeDraining }
+  from './features/files';
 
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
@@ -744,13 +745,16 @@ export function screenRows(
   const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;
-  // a single pending ESC changes nothing
+  // a single pending ESC changes nothing; a pipe drain's blank
+  // command line still owns the bottom row, cursor at og's lower left
   if (prompt) {
     content.push(
       config.keyPrefix && config.keyPrefix !== '\x1B'
         ? prompt
         : prompt + getBuffer(buffer)
     );
+  } else if (pipeDraining.active) {
+    content.push('');
   }
 
   return content.join('\n').split('\n');
@@ -958,6 +962,16 @@ export const isStyled = (line: string): boolean => STYLE_REGEX.test(line);
  * @returns The prompt string.
  */
 function getPrompt(content: string[]): string {
+  // during a pipe drain og leaves the command line blank for G and
+  // shows ierror's interruptible note for % (jump.c/output.c)
+  if (pipeDraining.active) {
+    return pipeDraining.note
+      ? colored('error',
+        pipeDraining.note + '... (interrupt to abort)',
+        INVERSE_ON, INVERSE_OFF)
+      : '';
+  }
+
   const inputPrompt = searchPrompt();
   if (inputPrompt !== null) return inputPrompt;
 

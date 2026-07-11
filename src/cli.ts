@@ -4,7 +4,7 @@ import path from 'path';
 
 import { isWindows } from './platform';
 
-import pager from './index';
+import pager, { pagerPipe } from './index';
 
 import { openTtyKeyboard } from './keyboard';
 
@@ -188,16 +188,12 @@ async function main(): Promise<void> {
   }
 
   if (!stdinTty) {
-    // `cmd | lmn`: page stdin, keyboard from /dev/tty like ttyin.c
-    const chunks: Buffer[] = [];
-
-    for await (const chunk of process.stdin) {
-      chunks.push(chunk as Buffer);
-    }
-
+    // `cmd | lmn`: page the stream as it arrives, keyboard from
+    // /dev/tty like ttyin.c; og never waits for a pipe to end, so
+    // an endless writer pages immediately
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    await pager(Buffer.concat(chunks).toString(), true, false);
+    await pagerPipe(process.stdin);
     return;
   }
 

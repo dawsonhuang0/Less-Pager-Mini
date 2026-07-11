@@ -111,7 +111,9 @@ import {
   fileInfo,
   bottomRow,
   closeAlt,
-  binaryConfirm
+  binaryConfirm,
+  revealSize,
+  pipeDraining
 } from "./features/files";
 
 import {
@@ -124,13 +126,14 @@ import {
 
 import { openAltFile } from "./features/lessopen";
 
-import { initCharset } from "./features/charset";
+import { initCharset, PipeDecoder } from "./features/charset";
 
 import {
   option,
   startOption,
   optionKey,
   optQuitAtEof,
+  optSqueeze,
   optWheelLines,
   optQuitOnIntr,
   optMouse,
@@ -262,6 +265,72 @@ const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
  * @param examineFile - If true, treats input as file path(s) and reads from
  *                      disk.
  */
+// a pipe still delivering data into the session (og's non-seekable
+// ch input); set by pagerPipe before the session starts
+let pipeSource: NodeJS.ReadableStream | null = null;
+let pipeDecoder: PipeDecoder | null = null;
+
+// how many lines past the view the pipe may buffer before pausing,
+// like og reading a pipe only on demand (backpressure stops `yes`)
+const PIPE_AHEAD = 1000;
+
+/**
+ * Pages a pipe the way og does: the first data displays immediately,
+ * further reads happen on demand with the pipe paused in between, and
+ * end-of-file becomes known only when the writer closes. `yes | lmn`
+ * therefore starts instantly and holds bounded memory until a command
+ * like G drains the input.
+ *
+ * @param stream - The piped input (stdin).
+ */
+export async function pagerPipe(
+  stream: NodeJS.ReadableStream
+): Promise<void> {
+  if (!keyboard().isTTY) {
+    throw new Error('Less-pager-mini requires interactive terminal (TTY).');
+  }
+
+  const decoder = new PipeDecoder();
+
+  // the session starts with the first chunk (or an already-ended
+  // pipe), like og displaying lines as the first screenful reads
+  const first = await new Promise<{ lines: string[], ended: boolean }>(
+    resolve => {
+      const onData = (chunk: Buffer): void => {
+        stream.off('end', onEnd);
+        stream.pause();
+        resolve({ lines: decoder.push(chunk), ended: false });
+      };
+
+      const onEnd = (): void => {
+        stream.off('data', onData);
+        resolve({ lines: decoder.flush(), ended: true });
+      };
+
+      stream.once('data', onData);
+      stream.once('end', onEnd);
+    }
+  );
+
+  const lines = first.lines;
+  if (first.ended && !lines.length) lines.push('');
+
+  initContent(lines);
+
+  if (!first.ended) {
+    files.list[0].streaming = true;
+    pipeSource = stream;
+    pipeDecoder = decoder;
+  }
+
+  try {
+    await contentPager(lines);
+  } finally {
+    pipeSource = null;
+    pipeDecoder = null;
+  }
+}
+
 export default async function pager(
   input: unknown,
   preserveFormat: boolean = false,
@@ -407,8 +476,25 @@ async function contentPager(content: string[]): Promise<void> {
     // -t tag prompt (decode.c A_OPT_TOGGLE|A_EXTRA)
     OPTION_TAG: () => { startOption('-'); optionKey(content, 't'); },
     FIRST_LINE: () => firstLine(content, bufferToNum(buffer)),
-    LAST_LINE: () => lastLine(content, bufferToNum(buffer)),
-    PERCENT_LINE: () => percentLine(content, bufferToNum(buffer)),
+    LAST_LINE: () => {
+      // a streaming pipe reads to its end first, like og's G with a
+      // blank command line (jump_forw's ch_end_seek)
+      const n = bufferToNum(buffer);
+
+      if (!pipeDrain(() => lastLine(content, n), '',
+        'Cannot seek to end of file')) {
+        lastLine(content, n);
+      }
+    },
+    PERCENT_LINE: () => {
+      // og's % shows ierror's interruptible note (jump_percent)
+      const n = bufferToNum(buffer);
+
+      if (!pipeDrain(() => percentLine(content, n),
+        'Determining length of file', 'Don\'t know length of file')) {
+        percentLine(content, n);
+      }
+    },
     CURLY_BRACKET_RIGHT: () =>
       matchBracket(content, '{', '}', true, bufferToNum(buffer) || 1),
     ROUND_BRACKET_RIGHT: () =>
@@ -458,6 +544,17 @@ async function contentPager(content: string[]): Promise<void> {
 
   let fullContent = content;
   let lastClickY = -1;
+
+  // the still-delivering pipe state (og's lazy non-seekable reads)
+  let pipeStream: NodeJS.ReadableStream | null = null;
+  let pipePaused = false;
+  let pipeDrainTo: (() => void) | null = null;
+  let detachPipe: () => void = () => {};
+
+  // og paints arriving lines only while the initial forw() fills the
+  // first screenful; afterwards an idle pager never repaints on new
+  // pipe data (F is the follow command)
+  let pipeFirstFill = true;
 
   // drag origins for --emouse hdrag/vdrag, like og's last_drag_x/y
   let lastDragX = -1;
@@ -601,6 +698,7 @@ async function contentPager(content: string[]): Promise<void> {
 
   if (
     optQuitIfOneScreen() && !startup.dohelp && files.list.length <= 1 &&
+    !files.list[files.index]?.streaming &&
     totalRows + shellLines <= config.window
   ) {
     const rows: string[] = [];
@@ -689,6 +787,10 @@ async function contentPager(content: string[]): Promise<void> {
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);
 
+  // a still-delivering pipe keeps feeding the session (og's ch
+  // reads); wired after init so appends can repaint
+  if (pipeSource) attachPipe();
+
   // -e/-E: a forward move at end-of-file edits the next file, or
   // quits on the last one, like og's forward() calling edit_next
   onEofForward(() => {
@@ -742,6 +844,10 @@ async function contentPager(content: string[]): Promise<void> {
     // first paint, so the new-file prompt survives to the final frame,
     // which the replay itself has already rendered
     const drained = drainFirstCmd();
+
+    // a paused pipe resumes when the view nears the buffered end,
+    // like og reading more of a non-seekable input on demand
+    pipeDemand();
 
     // quitting must not repaint over the final prompt, like less
     if (!exited && !drained) render(content, buffer);
@@ -829,6 +935,16 @@ async function contentPager(content: string[]): Promise<void> {
 
   function handleKey(sequence: string): void {
     key = sequence;
+
+    // the interrupt key abandons a G/% pipe drain, reporting like
+    // og's interrupted ch_end_seek ("Cannot seek to end of file")
+    if (pipeDrainTo && (key === '\x03' || key === optIntrChar())) {
+      pipeDrainTo = null;
+      search.message = pipeDraining.cancelMessage;
+      pipeDraining.active = false;
+      render(content, buffer);
+      return;
+    }
 
     // waiting after !/|: the keypress re-enters the pager (! pauses on
     // the shell screen, | on the blank pager screen); non-return keys
@@ -1813,6 +1929,154 @@ async function contentPager(content: string[]): Promise<void> {
     return stopFollow();
   }
 
+  // ---- the streaming pipe, like og's lazy non-seekable reads ----
+
+  /** Wires the still-delivering pipe into the session. */
+  function attachPipe(): void {
+    const stream = pipeSource!;
+    const decoder = pipeDecoder!;
+    pipeStream = stream;
+
+    const onData = (chunk: Buffer): void => {
+      growPipe(decoder.push(chunk));
+
+      // og reads a pipe only on demand: pause once far enough ahead
+      // of the view, which blocks the writer (`yes` stops producing)
+      if (!pipeDrainTo &&
+          content.length - config.row > config.window + PIPE_AHEAD) {
+        pipePaused = true;
+        stream.pause();
+      }
+    };
+
+    const onEnd = (): void => {
+      growPipe(decoder.flush());
+
+      // the pipe length is known now, like ch reading EOF
+      const entry = files.list[files.index];
+      if (entry) entry.streaming = false;
+      revealSize();
+
+      calculateEOF(content);
+
+      const jump = pipeDrainTo;
+      pipeDrainTo = null;
+      pipeDraining.active = false;
+
+      if (jump) jump();
+
+      if (!exited && !shellPause) render(content, buffer);
+    };
+
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.resume();
+
+    detachPipe = () => {
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+
+      // quitting closes the pipe so the writer sees EPIPE, like og
+      (stream as unknown as { destroy?: () => void }).destroy?.();
+
+      pipeStream = null;
+      pipeDrainTo = null;
+      pipeDraining.active = false;
+      detachPipe = () => {};
+    };
+  }
+
+  /** Appends decoded pipe lines to the session, like ch growing. */
+  function growPipe(raw: string[]): void {
+    if (!raw.length) return;
+
+    const entry = files.list[files.index];
+
+    fullContent.push(...raw);
+
+    // the byte count grows with the data, for %b and = (one newline
+    // per line, like byteOffset)
+    if (entry) {
+      for (const line of raw) entry.size += Buffer.byteLength(line) + 1;
+    }
+
+    if (lastFilter) {
+      // an active & filter re-derives over the grown input
+      if (mode.HELP) {
+        prevContent = deriveContent();
+      } else {
+        content = deriveContent();
+      }
+    } else {
+      const add = transformContent(raw);
+      const target = mode.HELP ? prevContent : content;
+
+      // the -s squeeze run at the boundary keeps one blank line
+      if (optSqueeze() && target[target.length - 1] === '') {
+        while (add.length && add[0] === '') add.shift();
+      }
+
+      target.push(...add);
+    }
+
+    if (mode.HELP) return;
+
+    calculateEOF(content);
+
+    // sitting at the old end of the data is no longer end-of-file
+    if (mode.EOF && (config.row < config.endRow ||
+        (config.row === config.endRow &&
+          config.subRow < config.endSubRow))) {
+      mode.EOF = false;
+    }
+
+    // og displays lines only while the first screenful is filling;
+    // once it completes, new pipe data never repaints an idle screen
+    if (pipeFirstFill && !exited && !shellPause && !pipeDrainTo) {
+      if (content.length >= config.window - 1) pipeFirstFill = false;
+      render(content, buffer);
+    }
+  }
+
+  /** Resumes a paused pipe when the view nears the buffered end. */
+  function pipeDemand(): void {
+    if (!pipeStream || !pipePaused) return;
+
+    if (content.length - config.row < config.window + PIPE_AHEAD / 2) {
+      pipePaused = false;
+      pipeStream.resume();
+    }
+  }
+
+  /**
+   * G and % on a streaming pipe read to end-of-file first, like og's
+   * ch_end_seek loop; the interrupt key cancels it. og's G runs with
+   * a blank command line, % with ierror's "Determining length" note.
+   *
+   * @param jump - The jump to run once the pipe ends.
+   * @param note - The ierror text shown while reading (og's %).
+   * @param cancelMessage - The message an interrupt reports.
+   * @returns True when the jump waits for the pipe to drain.
+   */
+  function pipeDrain(
+    jump: () => void,
+    note: string,
+    cancelMessage: string
+  ): boolean {
+    const entry = files.list[files.index];
+    if (!pipeStream || !entry || !entry.streaming || mode.HELP) {
+      return false;
+    }
+
+    pipeDrainTo = jump;
+    pipeDraining.active = true;
+    pipeDraining.note = note;
+    pipeDraining.cancelMessage = cancelMessage;
+    pipePaused = false;
+    pipeStream.resume();
+    return true;
+  }
+
   /**
    * Edits the current file with $VISUAL or $EDITOR at the middle
    * displayed line, then re-examines it, like less's LESSEDIT proto.
@@ -2208,6 +2472,9 @@ async function contentPager(content: string[]): Promise<void> {
     // the -e hook holds this session's closure otherwise
     onEofForward(null);
 
+    // a streaming pipe closes so the writer sees EPIPE, like og
+    detachPipe();
+
     // a /dev/tty keyboard holds the event loop open until destroyed
     closeTtyKeyboard();
   }
@@ -2233,6 +2500,7 @@ function warnReturn(): Promise<string> {
 try {
   module.exports = pager;
   module.exports.default = pager;
+  module.exports.pagerPipe = pagerPipe;
 } catch {
   // ESM module records are frozen
 }
