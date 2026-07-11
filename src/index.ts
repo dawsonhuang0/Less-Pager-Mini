@@ -1036,6 +1036,10 @@ async function contentPager(content: string[]): Promise<void> {
       }
 
       if (key === '\x03' || key === optIntrChar()) {
+        // ^C arrives as og's SIGINT, whose u_interrupt handler rings
+        // the bell; the --intr char (READ_INTR) leaves silently
+        if (key === '\x03') ringBell();
+
         const queued = endFollow();
         render(content, buffer);
         for (const sequence of queued) handleKey(sequence);
@@ -1839,7 +1843,10 @@ async function contentPager(content: string[]): Promise<void> {
       config.attnRow = next < content.length ? next : -1;
     }
 
-    pinToEnd();
+    // og's forw_loop enters through jump_forw_buffered: re-entering
+    // F while already at the end rings the at-end bell (jump_loc's
+    // back(0) hitting eof_bell); the first F just moves there
+    lastLine(content, 0);
     followTimer = setInterval(followTick, 50);
   }
 

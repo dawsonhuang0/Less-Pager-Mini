@@ -268,6 +268,9 @@ export async function bigPager(path: string): Promise<void> {
         // commands for afterwards, like og's forw_loop
         if (following) {
           if (key === '\x03' || key === optIntrChar()) {
+            // ^C is og's SIGINT: u_interrupt rings; --intr is silent
+            if (key === '\x03') process.stdout.write('\x07');
+
             const queued = endFollow();
             draw();
             for (const q of queued) onKey(Buffer.from(q));
