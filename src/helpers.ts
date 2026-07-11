@@ -504,9 +504,13 @@ function visualBell(): void {
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
 
-  // blank rows above BOF from a bracket jump; only ever set with the top
-  // at (0,0), so pre-seeding does not disturb sub-row emission
-  for (let i = 0; i < config.blankTop; i++) lines.push('');
+  // rows above BOF from a forced back or a bracket jump are og null
+  // lines: gline draws them as "~" or "" by the twiddle flag, just
+  // like the ones past EOF; only ever set with the top at (0,0), so
+  // pre-seeding does not disturb sub-row emission
+  for (let i = 0; i < config.blankTop; i++) {
+    lines.push(optTildes() ? colored('tilde', '~', BOLD_ON, BOLD_OFF) : '');
+  }
 
   if (chopLine() || config.col) {
     chopLongLines(content, lines);
@@ -650,8 +654,42 @@ export function lastScreen(): string[] | null {
 // movement at a prompt still repositions it on unchanged screens
 let prevCursorCol = -1;
 
+// set when frames must keep the old content rows and update only the
+// bottom line, like og's error() drawing the message over the
+// untouched screen: get_return ungets the dismissing key, so the mca
+// it starts never reaches the prompt()/make_display that repaints the
+// trashed screen — repeated toggles keep the stale rows until a
+// render with no message and no option prompt open finally repaints
+let frozenFrame = false;
+
+export function freezeFrame(): void {
+  frozenFrame = true;
+}
+
+// --incsearch repaints while the pattern is typed (og's mca_search
+// jumping to the match), which clears the pending trash
+export function unfreezeFrame(): void {
+  frozenFrame = false;
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
-  const rows = screenRows(rawContent, buffer);
+  let rows = screenRows(rawContent, buffer);
+
+  if (frozenFrame) {
+    // og's prompt() returns early on ungot input and MCA_MORE loops
+    // without reaching it, so the stale rows survive any message,
+    // prompt or echo on the bottom line; only a render back at the
+    // true prompt runs make_display's repaint
+    const atPrompt = !search.message && !option.pending && !search.input &&
+      !examine.pending && !miscInput.pending && !brackets.pending &&
+      !marks.pending && !mode.BUFFERING && !config.keyPrefix;
+
+    if (atPrompt) {
+      frozenFrame = false;
+    } else if (prevRows) {
+      rows = [...prevRows.slice(0, -1), rows[rows.length - 1]];
+    }
+  }
 
   // og (v618+) starts at the lower left of the alt screen and lets
   // the first paint scroll upward: a short first screen sits just
@@ -1127,14 +1165,14 @@ function visibleBufferLength(bufferLength: number): number {
  * @param lines - The array of formatted lines to pad.
  */
 function padToEOF(lines: string[]): void {
-  // -~ pads with blank lines instead of tildes
-  if (!mode.INIT && config.window - lines.length > 1 && optTildes()) {
-    lines.push(colored(
-      'tilde',
-      '~\n'.repeat(Math.max(config.window - lines.length - 2, 0)) + '~',
-      BOLD_ON,
-      BOLD_OFF
-    ));
+  // og's gline draws a null line as "~" or "" by the twiddle flag, so
+  // -~ pads with blank rows and the prompt keeps the bottom line
+  if (!mode.INIT && config.window - lines.length > 1) {
+    const rows = config.window - lines.length - 1;
+
+    lines.push(optTildes()
+      ? colored('tilde', '~\n'.repeat(rows - 1) + '~', BOLD_ON, BOLD_OFF)
+      : '\n'.repeat(rows - 1));
   }
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;

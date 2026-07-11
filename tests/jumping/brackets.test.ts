@@ -74,20 +74,21 @@ describe('forward matching', () => {
     expect(config.row).toBe(5 - (config.window - 2));
   });
 
-  it('pads blank rows above BOF to keep the match on the bottom line', () => {
+  it('pads null rows above BOF to keep the match on the bottom line', () => {
     const small = ['(a', ')b', 'c', 'd', 'e', 'f', 'g'];
     calculateEOF(small);
 
     matchBracket(small, '(', ')', true, 1);
 
-    // ) on row 1 stays on the bottom line: 3 blank rows precede BOF,
-    // like less's jump_loc drawing blank lines at the top
+    // ) on row 1 stays on the bottom line: 3 null rows precede BOF,
+    // drawn as tildes like less's forced jump_loc back over the top
     expect(config.row).toBe(0);
     expect(config.blankTop).toBe(3);
     expect(search.message).toBe('');
 
     const lines = formatContent(small);
-    expect(lines.slice(0, 4)).toEqual(['', '', '', '(a']);
+    const plain = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ''));
+    expect(plain.slice(0, 4)).toEqual(['~', '~', '~', '(a']);
     expect(lines[config.window - 2]).toBe(')b');
 
     // scrolling forward consumes the blank padding first

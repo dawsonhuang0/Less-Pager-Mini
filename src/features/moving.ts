@@ -72,6 +72,11 @@ export function lineForward(
     const consumed = Math.min(config.blankTop, offset);
     config.blankTop -= consumed;
     offset -= consumed;
+
+    // revealing the whole tail latches (END) again, like og's forw
+    // reaching end-of-input at the bottom line
+    mode.EOF = fitsViewport(content);
+
     if (!offset) return;
   }
 
@@ -233,14 +238,44 @@ export function forceLineBackward(content: string[], offset: number): void {
   }
 
   if (leftover > 0) {
-    // blanks accumulate above BOF, one short of an empty screen
-    config.blankTop = Math.min(
-      config.blankTop + leftover,
-      Math.max(config.window - 2, 0)
-    );
+    const cap = Math.max(config.window - 2, 0);
 
-    if (mode.EOF) mode.EOF = false;
+    // og's back bells when it cannot add a single line (nlines == 0):
+    // the first file line has reached the bottom of the screen
+    if (config.blankTop >= cap) {
+      ringBell('eof');
+      return;
+    }
+
+    // null rows accumulate above BOF, one short of an empty screen
+    config.blankTop = Math.min(config.blankTop + leftover, cap);
+
+    // (END) stays displayed while the rows past the tail are still
+    // on screen, and clears once the tail slides below the bottom
+    // line, like og's eof_displayed checking the bottom position
+    mode.EOF = fitsViewport(content);
   }
+}
+
+/**
+ * True when the whole content fits above the prompt with the current
+ * blank top, i.e. the end of the file is on screen.
+ */
+function fitsViewport(content: string[]): boolean {
+  const capacity = config.window - 1 - config.blankTop;
+  return displayRows(content, capacity) <= capacity;
+}
+
+/** Display rows of the content, stopping once past `cap`. */
+function displayRows(content: string[], cap: number): number {
+  let total = 0;
+
+  for (const line of content) {
+    total += maxSubRow(line) + 1;
+    if (total > cap) break;
+  }
+
+  return total;
 }
 
 /**

@@ -28,6 +28,8 @@ import {
   addBufferChar,
   delBufferChar,
   render,
+  freezeFrame,
+  unfreezeFrame,
   resetRender,
   resetBellTimer,
   ringBell,
@@ -1103,6 +1105,9 @@ async function contentPager(content: string[]): Promise<void> {
         // --incsearch restores the position the prompt opened at
         if (optIncrSearch()) restoreSearchOrigin(origin);
       } else if (optIncrSearch()) {
+        // incsearch paints mid-mca, clearing the trash like og's
+        // repaint resetting screen_trashed
+        unfreezeFrame();
         incrementalSearch(content);
       }
 
@@ -1112,6 +1117,12 @@ async function contentPager(content: string[]): Promise<void> {
 
     if (option.pending) {
       optionKey(content, key);
+
+      // a completed toggle reports like og's error(): the message
+      // draws over the old screen and any repaint waits for the
+      // dismissing keystroke (toggle_option's screen_trashed)
+      if (search.message) freezeFrame();
+
       render(content, buffer);
       return;
     }

@@ -11,7 +11,7 @@ import { lineForward, forceLineBackward, newlineForward, newlineBackward }
 
 import { goPos } from '../../src/features/jumping';
 
-import { calculateEOF } from '../../src/helpers';
+import { calculateEOF, resetBellTimer } from '../../src/helpers';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
@@ -64,6 +64,69 @@ describe('J / K forced scrolling', () => {
   it('caps the blank padding one short of an empty screen', () => {
     forceLineBackward(content, 99);
     expect(config.blankTop).toBe(config.window - 2);
+  });
+
+  it('K at the cap rings the eof bell, like og back with no lines', () => {
+    forceLineBackward(content, 99);
+
+    resetBellTimer();
+    const write = vi.mocked(process.stdout.write);
+    write.mockClear();
+
+    forceLineBackward(content, 1);
+    expect(config.blankTop).toBe(config.window - 2);
+    expect(write).toHaveBeenCalledWith('\x07');
+  });
+});
+
+describe('K blank top with the end of file on screen', () => {
+  const short = content.slice(0, 3);
+
+  beforeEach(() => {
+    calculateEOF(short);
+    mode.EOF = true;
+  });
+
+  it('keeps (END) while the tail stays on screen, like eof_displayed', () => {
+    forceLineBackward(short, 1);
+
+    expect(config.blankTop).toBe(1);
+    expect(mode.EOF).toBe(true);
+  });
+
+  it('does not consume blanks scrolling forward at end-of-file', () => {
+    forceLineBackward(short, 1);
+    lineForward(short, 1);
+
+    expect(config.blankTop).toBe(1);
+    expect(config.row).toBe(0);
+  });
+
+  it('clears (END) once the tail slides below the bottom line', () => {
+    forceLineBackward(short, 3);
+
+    expect(config.blankTop).toBe(3);
+    expect(mode.EOF).toBe(false);
+  });
+
+  it('re-latches (END) when scrolling forward reveals the tail', () => {
+    forceLineBackward(short, 3);
+    lineForward(short, 1);
+
+    expect(config.blankTop).toBe(2);
+    expect(mode.EOF).toBe(true);
+  });
+
+  it('K from the initial screen counts only og null rows over BOF', () => {
+    // og's row table is top-anchored from the start: the lower-left
+    // first paint is a transient visual, not state, so K adds one
+    // null row and the tail stays on screen
+    mode.INIT = true;
+    forceLineBackward(short, 1);
+
+    expect(mode.INIT).toBe(false);
+    expect(config.blankTop).toBe(1);
+    expect(mode.EOF).toBe(true);
   });
 });
 
