@@ -1,4 +1,5 @@
-import { ringBell, maxSubRow, isAscii, isStyled } from "../helpers";
+import { ringBell } from "../helpers";
+import { maxSubRow, isAscii, isStyled } from "../lines/helpers";
 
 import { getLayout } from "../lines/lineLayout";
 

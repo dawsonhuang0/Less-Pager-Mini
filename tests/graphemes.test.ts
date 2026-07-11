@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { config, mode } from '../src/config';
 
-import { formatContent, maxSubRow } from '../src/helpers';
+import { formatContent } from '../src/helpers';
+import { maxSubRow } from '../src/lines/helpers';
 
 import { INVERSE_ON, INVERSE_OFF } from '../src/constants';
 

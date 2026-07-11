@@ -34,11 +34,11 @@ import {
   resetBellTimer,
   ringBell,
   bufferToNum,
-  maxSubRow,
   calculateEOF,
-  transformContent,
   lastScreen
 } from "./helpers";
+
+import { maxSubRow, transformContent } from "./lines/helpers";
 
 import {
   lineForward,

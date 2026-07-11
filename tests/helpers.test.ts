@@ -9,12 +9,11 @@ import {
   addBufferChar,
   delBufferChar,
   getLastRow,
-  calculateEOF,
-  visualWidth,
-  maxSubRow,
-  splitChars,
-  withReset
+  calculateEOF
 } from '../src/helpers';
+
+import { visualWidth, maxSubRow, splitChars, withReset }
+  from '../src/lines/helpers';
 
 import { RED, RESET } from './utils/constants';
 

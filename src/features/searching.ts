@@ -16,7 +16,7 @@ import {
   cmdPrompt
 } from "./cmdbuf";
 
-import { maxSubRow, } from "../helpers";
+import { maxSubRow } from "../lines/helpers";
 
 import { jumpLoc } from "./jumping";
 

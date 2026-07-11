@@ -1,4 +1,5 @@
-import { maxSubRow, ringBell, bufferToNum, visualWidth } from "../helpers";
+import { ringBell, bufferToNum } from "../helpers";
+import { maxSubRow, visualWidth } from "../lines/helpers";
 
 import { config, mode } from "../config";
 

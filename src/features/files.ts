@@ -3,7 +3,8 @@ import os from 'os';
 
 import { config, mode } from "../config";
 
-import { maxSubRow, ringBell } from "../helpers";
+import { ringBell } from "../helpers";
+import { maxSubRow } from "../lines/helpers";
 
 import { secureAllow } from "./secure";
 

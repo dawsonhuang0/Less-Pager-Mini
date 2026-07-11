@@ -5,7 +5,7 @@ import { forwLine, backLine, lastLineStart } from './lineio';
 import { config } from '../config';
 import { chopLine } from '../options';
 
-import { transformContent } from '../helpers';
+import { transformContent } from '../lines/helpers';
 
 import { getLayout } from '../lines/lineLayout';
 

@@ -4,7 +4,7 @@ import { DEF_METACHARS, DEF_METAESCAPE, EDIT_PGM } from "../platform";
 
 import { config, mode } from "../config";
 
-import { visualWidth } from "../helpers";
+import { visualWidth } from "../lines/helpers";
 
 import { files, bottomRow, byteOffset, percentage, sizeIsKnown,
   byteBase } from "./files";

@@ -2,7 +2,7 @@ import { strWidth } from 'char-width';
 
 import { config } from '../config';
 
-import { isAscii, splitChars } from '../helpers';
+import { isAscii, splitChars } from './helpers';
 
 import { optWordwrap } from '../options';
 

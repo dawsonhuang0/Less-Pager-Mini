@@ -1,7 +1,7 @@
 import { config } from "../config";
 
-import { isStyled, isAscii, withReset, gutterFor, decoratedRows,
-  highlightRow, visualWidth } from "../helpers";
+import { gutterFor, decoratedRows, highlightRow } from "../helpers";
+import { isStyled, isAscii, withReset, visualWidth } from "./helpers";
 
 import { getLayout } from "./lineLayout";
 
