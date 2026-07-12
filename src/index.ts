@@ -2716,9 +2716,13 @@ async function contentPager(content: string[]): Promise<void> {
     const endProto = mode.HELP ? null : optEndPrompt();
     if (endProto) process.stdout.write(prExpand(content, endProto));
 
-    // --redraw-on-quit leaves the last screen on the main display
-    const screen = optRedrawOnQuit() ? lastScreen() : null;
-    if (screen) process.stdout.write(screen.join('\n') + '\n');
+    // --redraw-on-quit leaves the last screen on the main display,
+    // like og's quit() repaint after term_deinit: only the content
+    // rows print (no prompt row -- prompt() never runs while
+    // quitting), so the shell prompt overwrites the ":" line; og
+    // also requires term_addrs, which a dumb terminal lacks
+    const screen = optRedrawOnQuit() && !mode.DUMB ? lastScreen() : null;
+    if (screen) process.stdout.write(screen.slice(0, -1).join('\n') + '\n');
 
     process.title = processTitle;
     hook.screenActive = false;
