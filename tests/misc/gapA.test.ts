@@ -7,8 +7,8 @@ import { search } from '../../src/features/searching';
 
 import { initContent } from '../../src/features/files';
 
-import { lineForward, forceLineBackward, newlineForward, newlineBackward }
-  from '../../src/features/moving';
+import { lineForward, lineBackward, forceLineBackward, newlineForward,
+  newlineBackward } from '../../src/features/moving';
 
 import { goPos } from '../../src/features/jumping';
 
@@ -171,6 +171,27 @@ describe('P byte offset jumps', () => {
   it('clamps past the end to the last line', () => {
     goPos(content, 999999);
     expect(config.row).toBe(29);
+  });
+});
+
+describe('a -z window of zero or less, like og forw/back nlines == 0', () => {
+  it('rings the eof bell and does not move', () => {
+    config.row = 10;
+
+    resetBellTimer();
+    const write = vi.mocked(process.stdout.write);
+    write.mockClear();
+
+    lineForward(content, 0);
+    expect(config.row).toBe(10);
+    expect(write).toHaveBeenCalledWith('\x07');
+
+    resetBellTimer();
+    write.mockClear();
+
+    lineBackward(content, -2);
+    expect(config.row).toBe(10);
+    expect(write).toHaveBeenCalledWith('\x07');
   });
 });
 

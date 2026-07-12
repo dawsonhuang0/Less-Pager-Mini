@@ -70,6 +70,13 @@ export function lineForward(
     return;
   }
 
+  // nothing to scroll (a -z window of zero or less): og's forw runs
+  // zero iterations and rings the eof bell on nlines == 0
+  if (offset <= 0) {
+    ringBell('eof');
+    return;
+  }
+
   setAttn(content, false);
 
   // scrolling forward consumes blank rows padded above BOF first
@@ -171,6 +178,12 @@ export function lineBackward(content: string[], offset: number): number {
     if (mode.INIT) mode.INIT = false;
     ringBell('eof');
     return offset;
+  }
+
+  // og's back with nothing to scroll bells the same way (nlines == 0)
+  if (offset <= 0) {
+    ringBell('eof');
+    return 0;
   }
 
   // backward movement forgets the -w unread highlight, like less
