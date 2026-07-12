@@ -780,15 +780,17 @@ function getPrompt(content: string[]): string {
   }
 
   if (option.pending) {
-    if (option.spec && option.spec.prompt) {
-      return option.spec.prompt + option.param;
+    if (option.spec) {
+      return (option.spec.prompt ?? '') +
+        (cmd.active ? cmdDisplay() : option.param);
     }
 
     // ^P shows "(P)" and -+/-! their flag, like og's mca_opt_toggle
     const marks = (option.noPrompt ? '(P)' : '') + option.flag;
 
     if (option.name !== null) {
-      return option.pending + option.pending + marks + option.name;
+      return option.pending + option.pending + marks +
+        (cmd.active ? cmdDisplay() : option.name);
     }
 
     return option.pending + marks;
