@@ -2636,9 +2636,19 @@ async function contentPager(content: string[]): Promise<void> {
     // command's overlay: quitting it quits the pager
     if (startupHelp) return false;
 
+    const helpConfig = config;
+
     content = prevContent;
     applyConfig(prevConfig);
     applyMode(prevMode);
+
+    // og's option variables (shift_count, swindow, wscroll,
+    // chop_line) are globals: a change made inside the help screen
+    // persists after leaving it
+    config.setCol = helpConfig.setCol;
+    config.setWindow = helpConfig.setWindow;
+    config.halfWindow = helpConfig.halfWindow;
+    config.chopLongLines = helpConfig.chopLongLines;
 
     calculateDimensions();
     calculateEOF(content);
@@ -2667,6 +2677,12 @@ async function contentPager(content: string[]): Promise<void> {
 
     prevConfig = config;
     resetConfig();
+
+    // the og globals follow into the help screen too
+    config.setCol = prevConfig.setCol;
+    config.setWindow = prevConfig.setWindow;
+    config.halfWindow = prevConfig.halfWindow;
+    config.chopLongLines = prevConfig.chopLongLines;
 
     prevMode = mode;
     resetMode();
