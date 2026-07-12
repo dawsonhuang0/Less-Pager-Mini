@@ -9,6 +9,7 @@ import {
   optStopOnFormFeed,
   optShiftCount,
   setShiftCount,
+  optClearRepaint,
   chopLine,
   getSwindow
 } from "../options";
@@ -82,6 +83,15 @@ export function lineForward(
     mode.EOF = fitsViewport(content);
 
     if (!offset) return;
+  }
+
+  // -c starts a new screen on a full-window (or bigger) forward move
+  // before knowing whether EOF lands mid-screen ("not really
+  // desirable ... but we don't yet know"), so the view runs over EOF
+  // with null lines below, stopping once the last file line reaches
+  // the top, like og's forw top_scroll branch forcing
+  if (optClearRepaint() && offset >= config.window - 1) {
+    ignoreEOF = true;
   }
 
   if (chopLine() || config.col) {

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi }
+  from 'vitest';
 
 import { config, mode } from '../../src/config';
 
@@ -10,6 +11,8 @@ import { lineForward, forceLineBackward, newlineForward, newlineBackward }
   from '../../src/features/moving';
 
 import { goPos } from '../../src/features/jumping';
+
+import { opt } from '../../src/options';
 
 import { calculateEOF, resetBellTimer } from '../../src/helpers';
 
@@ -168,5 +171,30 @@ describe('P byte offset jumps', () => {
   it('clamps past the end to the last line', () => {
     goPos(content, 999999);
     expect(config.row).toBe(29);
+  });
+});
+
+describe('-c full-window forward, like og forw with top_scroll', () => {
+  beforeEach(() => { opt.clearRepaint = 1; });
+  afterEach(() => { opt.clearRepaint = 0; });
+
+  it('starts a new screen past EOF when fewer lines remain', () => {
+    config.row = 22;
+    lineForward(content, config.window - 1);
+
+    expect(config.row).toBe(27);
+    expect(mode.EOF).toBe(true);
+  });
+
+  it('stops once the last file line reaches the top', () => {
+    config.row = 22;
+    lineForward(content, 100);
+    expect(config.row).toBe(29);
+  });
+
+  it('clamps a smaller move at the last screenful as usual', () => {
+    config.row = 22;
+    lineForward(content, config.window - 2);
+    expect(config.row).toBe(25);
   });
 });
