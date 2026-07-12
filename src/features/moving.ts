@@ -176,6 +176,14 @@ export function lineForward(
 export function lineBackward(content: string[], offset: number): number {
   if (config.row === 0 && config.subRow === 0) {
     if (mode.INIT) mode.INIT = false;
+
+    // --past-eof forces backward scrolls over BOF too, like og's
+    // back() setting force on past_eof
+    if (optPastEof() && offset > 0) {
+      padBlankTop(content, offset);
+      return 0;
+    }
+
     ringBell('eof');
     return offset;
   }
@@ -212,7 +220,14 @@ export function lineBackward(content: string[], offset: number): number {
       mode.EOF = false;
     }
 
-    return Math.max(offset - startRow, 0);
+    const leftover = Math.max(offset - startRow, 0);
+
+    if (leftover > 0 && optPastEof()) {
+      padBlankTop(content, leftover);
+      return 0;
+    }
+
+    return leftover;
   }
 
   let leftover = 0;
@@ -249,6 +264,11 @@ export function lineBackward(content: string[], offset: number): number {
     mode.EOF = false;
   }
 
+  if (leftover > 0 && optPastEof()) {
+    padBlankTop(content, leftover);
+    return 0;
+  }
+
   return leftover;
 }
 
@@ -269,24 +289,29 @@ export function forceLineBackward(content: string[], offset: number): void {
     leftover = lineBackward(content, offset);
   }
 
-  if (leftover > 0) {
-    const cap = Math.max(config.window - 2, 0);
+  if (leftover > 0) padBlankTop(content, leftover);
+}
 
-    // og's back bells when it cannot add a single line (nlines == 0):
-    // the first file line has reached the bottom of the screen
-    if (config.blankTop >= cap) {
-      ringBell('eof');
-      return;
-    }
+/**
+ * Accumulates og's over-BOF null rows for a forced back.
+ */
+function padBlankTop(content: string[], leftover: number): void {
+  const cap = Math.max(config.window - 2, 0);
 
-    // null rows accumulate above BOF, one short of an empty screen
-    config.blankTop = Math.min(config.blankTop + leftover, cap);
-
-    // (END) stays displayed while the rows past the tail are still
-    // on screen, and clears once the tail slides below the bottom
-    // line, like og's eof_displayed checking the bottom position
-    mode.EOF = fitsViewport(content);
+  // og's back bells when it cannot add a single line (nlines == 0):
+  // the first file line has reached the bottom of the screen
+  if (config.blankTop >= cap) {
+    ringBell('eof');
+    return;
   }
+
+  // null rows accumulate above BOF, one short of an empty screen
+  config.blankTop = Math.min(config.blankTop + leftover, cap);
+
+  // (END) stays displayed while the rows past the tail are still
+  // on screen, and clears once the tail slides below the bottom
+  // line, like og's eof_displayed checking the bottom position
+  mode.EOF = fitsViewport(content);
 }
 
 /**

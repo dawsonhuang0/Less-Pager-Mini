@@ -174,6 +174,27 @@ describe('P byte offset jumps', () => {
   });
 });
 
+describe('--past-eof forces backward scrolls too, like og back()', () => {
+  beforeEach(() => { opt.pastEof = 1; });
+  afterEach(() => { opt.pastEof = 0; });
+
+  it('pads null rows above BOF on a plain k at the top', () => {
+    lineBackward(content, 2);
+
+    expect(config.row).toBe(0);
+    expect(config.blankTop).toBe(2);
+  });
+
+  it('consumes file distance before padding, like the forced back', () => {
+    config.row = 1;
+    const leftover = lineBackward(content, 3);
+
+    expect(leftover).toBe(0);
+    expect(config.row).toBe(0);
+    expect(config.blankTop).toBe(2);
+  });
+});
+
 describe('a -z window of zero or less, like og forw/back nlines == 0', () => {
   it('rings the eof bell and does not move', () => {
     config.row = 10;
