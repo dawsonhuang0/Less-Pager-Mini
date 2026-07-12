@@ -793,25 +793,24 @@ export function byteOffset(content: string[], row: number): number {
 }
 
 /**
- * True when the current file's size may be reported, like og's
- * ch_length() != NULL_POSITION: a pipe learns its length once the
- * display reaches the end of the content (ch reading to EOF), and
- * keeps it from then on.
- *
- * @param content - Full content lines.
+ * True when the current file's length is known, like og's
+ * ch_length() != NULL_POSITION: displaying the last line of a pipe
+ * is not enough — the length arrives only when a read past the end
+ * returns EOI (revealPipeEnd, or revealSize for explicit scans).
  */
-export function sizeIsKnown(content: string[]): boolean {
+export function sizeIsKnown(): boolean {
+  // a session without file bookkeeping is all in memory: file-like
+  return files.list[files.index]?.sizeKnown ?? true;
+}
+
+/**
+ * A forward read past the end of a completed pipe returns EOI and
+ * teaches the length, like og's ch_forw_get at end-of-input; a pipe
+ * still delivering has no end to return yet.
+ */
+export function revealPipeEnd(): void {
   const entry = files.list[files.index];
-  if (!entry) return false;
-
-  // a still-streaming pipe has no length yet no matter how much of
-  // it is displayed
-  if (!entry.sizeKnown && !entry.streaming &&
-      (mode.EOF || bottomRow(content) >= content.length - 1)) {
-    entry.sizeKnown = true;
-  }
-
-  return entry.sizeKnown;
+  if (entry && !entry.streaming) entry.sizeKnown = true;
 }
 
 /**

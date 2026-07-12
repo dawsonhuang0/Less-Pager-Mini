@@ -24,7 +24,8 @@ import {
   setPreviousPath,
   fileTitle,
   nextFileName,
-  fileInfo
+  fileInfo,
+  revealPipeEnd
 } from '../../src/features/files';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-files-'));
@@ -353,6 +354,7 @@ describe('prompts and info', () => {
   it('shows (END) at EOF and the column when shifted', () => {
     initContent(['a', 'b', 'c']);
     mode.EOF = true;
+    revealPipeEnd();
     config.col = 4;
 
     fileInfo(['a', 'b', 'c']);

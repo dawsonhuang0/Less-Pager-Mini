@@ -13,7 +13,7 @@ import {
   getSwindow
 } from "../options";
 
-import { bottomRow } from "./files";
+import { bottomRow, revealPipeEnd } from "./files";
 
 import { INVERSE_ON } from "../constants";
 
@@ -62,6 +62,9 @@ export function lineForward(
     // before the eof bell
     if (eofForwardHook && eofForwardHook()) return;
 
+    // og's forw still reads here: a completed pipe returns EOI and
+    // only now learns its length, lighting up (END)
+    revealPipeEnd();
     ringBell('eof');
     return;
   }
@@ -95,11 +98,13 @@ export function lineForward(
     }
 
     const lastRow = Math.max(content.length - config.window + 1, 0);
+    const target = config.row + offset;
 
-    config.row = Math.min(
-      config.row + offset,
-      ignoreEOF ? content.length - 1 : lastRow
-    );
+    config.row = Math.min(target, ignoreEOF ? content.length - 1 : lastRow);
+
+    // a move asking for more rows than the input has reads past the
+    // end, like og's forw hitting EOI on a partial screenful
+    if (config.row < target) revealPipeEnd();
 
     mode.EOF = config.row >= lastRow;
     return;
@@ -127,10 +132,13 @@ export function lineForward(
   }
 
   if (config.row === maxRow) {
-    config.subRow = Math.min(
-      config.subRow + offset,
-      ignoreEOF ? maxSubRow(content[config.row]) : config.endSubRow
-    );
+    const cap = ignoreEOF ? maxSubRow(content[config.row]) : config.endSubRow;
+    const want = config.subRow + offset;
+
+    config.subRow = Math.min(want, cap);
+
+    // clamped short of the request: the forw read hit EOI
+    if (want > cap) revealPipeEnd();
   }
 
   mode.EOF = config.row > config.endRow || (

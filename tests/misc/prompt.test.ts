@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { config, mode } from '../../src/config';
 
-import { files, initContent } from '../../src/features/files';
+import { files, initContent, revealSize, revealPipeEnd }
+  from '../../src/features/files';
 
 import { prExpand, shellQuote } from '../../src/features/prompt';
 
@@ -50,7 +51,15 @@ describe('prompt expansion', () => {
 
     // lines "p1\n".."p9\n" are 3 bytes each: 27 bytes before line 10
     expect(prExpand(content, '%b')).toBe('27');
+
+    // the pipe's total size is unknown (og's ch_length) even with
+    // the end displayed, until a read past it returns EOI
+    expect(prExpand(content, '%s')).toBe('?');
+    mode.EOF = true;
+    expect(prExpand(content, '%s')).toBe('?');
+    revealPipeEnd();
     expect(prExpand(content, '%s')).toBe(String(files.list[0].size));
+    mode.EOF = false;
 
     expect(prExpand(content, '%P')).toBe('33');
     expect(prExpand(content, '%d of %D')).toBe('2 of 6');
@@ -71,7 +80,10 @@ describe('prompt expansion', () => {
     // 6 screen rows show 5 content lines above the prompt line
     expect(prExpand(content, '?e(END):%lb.')).toBe('5');
 
+    // ?e is og's eof_displayed: the pipe must have returned EOI
     mode.EOF = true;
+    expect(prExpand(content, '?e(END):%lb.')).toBe('5');
+    revealPipeEnd();
     expect(prExpand(content, '?e(END):%lb.')).toBe('(END)');
 
     // ?m with one file: false branch after the else
@@ -87,6 +99,7 @@ describe('prompt expansion', () => {
     expect(prExpand(content, '?e?xnext\\ %x:done.:more.')).toBe('more');
 
     mode.EOF = true;
+    revealSize();
     expect(prExpand(content, '?e?xnext\\ %x:done.:more.')).toBe('done');
 
     files.list.push({ path: 'n.txt', lines: null, size: 0, saved: null });

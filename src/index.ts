@@ -117,6 +117,8 @@ import {
   closeAlt,
   binaryConfirm,
   revealSize,
+  revealPipeEnd,
+  sizeIsKnown,
   pipeDraining,
   lineBase
 } from "./features/files";
@@ -496,6 +498,9 @@ async function contentPager(content: string[]): Promise<void> {
 
       if (!pipeDrain(() => lastLine(content, n), '',
         'Cannot seek to end of file')) {
+        // jump_forw's ch_end_seek reads a completed pipe's EOI even
+        // without a drain; a numbered G is jump_back and reads none
+        if (!n) revealPipeEnd();
         lastLine(content, n);
       }
     },
@@ -505,6 +510,8 @@ async function contentPager(content: string[]): Promise<void> {
 
       if (!pipeDrain(() => percentLine(content, n),
         'Determining length of file', 'Don\'t know length of file')) {
+        // jump_percent needs ch_length: the end seek reads the EOI
+        revealPipeEnd();
         percentLine(content, n);
       }
     },
@@ -825,9 +832,11 @@ async function contentPager(content: string[]): Promise<void> {
   if (pipeSource) attachPipe();
 
   // -e/-E: a forward move at end-of-file edits the next file, or
-  // quits on the last one, like og's forward() calling edit_next
+  // quits on the last one, like og's forward() calling edit_next --
+  // only when EOF is already DISPLAYED: a pipe whose length is still
+  // unknown takes the EOI-discovering read (and the bell) instead
   onEofForward(() => {
-    if (!optQuitAtEof() || mode.HELP) return false;
+    if (!optQuitAtEof() || mode.HELP || !sizeIsKnown()) return false;
 
     if (files.list[files.index + 1] !== undefined) {
       switchToFile(files.index + 1);
@@ -882,17 +891,19 @@ async function contentPager(content: string[]): Promise<void> {
     // like og reading more of a non-seekable input on demand
     pipeDemand();
 
-    // quitting must not repaint over the final prompt, like less
-    if (!exited && !drained) render(content, buffer);
-
-    // -E quits as soon as end-of-file displays on the last file,
-    // like og's command loop checking get_quit_at_eof()==OPT_ONPLUS;
-    // -e acts on forward moves at EOF instead (og's forward())
-    if (!exited && optQuitAtEof() === 2 && mode.EOF && !mode.HELP &&
-        files.list[files.index + 1] === undefined) {
+    // -E quits as soon as end-of-file DISPLAYS on the last file,
+    // like og's prompt() checking get_quit_at_eof()==OPT_ONPLUS
+    // against eof_displayed (a pipe's end must have been read)
+    // before drawing anything; -e acts on forward moves at EOF
+    // instead (og's forward())
+    if (!exited && optQuitAtEof() === 2 && mode.EOF && sizeIsKnown() &&
+        !mode.HELP && files.list[files.index + 1] === undefined) {
       exit();
       return;
     }
+
+    // quitting must not repaint over the final prompt, like less
+    if (!exited && !drained) render(content, buffer);
   }
 
   /**
@@ -1901,6 +1912,10 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
+    // og's forw_loop reads immediately: a completed pipe returns
+    // its EOI before the wait prompt shows
+    revealPipeEnd();
+
     // og warns before following a $LESSOPEN replacement, and follows
     // anyway; RETURN dismisses the warning during the wait
     if (files.list[files.index]?.alt) {
@@ -2071,10 +2086,16 @@ async function contentPager(content: string[]): Promise<void> {
     const onEnd = (): void => {
       growPipe(decoder.flush());
 
-      // the pipe length is known now, like ch reading EOF
+      // no more data will come, but og's ch_length stays unknown
+      // until a read returns EOI: a drain or follow is such a read,
+      // and so was the screen fill if the input ran out mid-screen
       const entry = files.list[files.index];
       if (entry) entry.streaming = false;
-      revealSize();
+
+      if (pipeDrainTo || follow.active ||
+          (!mode.HELP && screenPastEnd())) {
+        revealSize();
+      }
 
       calculateEOF(content);
 
@@ -2166,6 +2187,22 @@ async function contentPager(content: string[]): Promise<void> {
       stream.on('end', onEnd);
       stream.resume();
     });
+  }
+
+  /**
+   * True when the current screen extends past the end of the input:
+   * og's fill requested window-1 rows, so the input ending before
+   * they arrived means a read already returned EOI.
+   */
+  function screenPastEnd(): boolean {
+    let rows = -config.subRow;
+
+    for (let r = config.row; r < content.length; r++) {
+      rows += maxSubRow(content[r]) + 1;
+      if (rows >= config.window - 1) return false;
+    }
+
+    return true;
   }
 
   /** Appends decoded pipe lines to the session, like ch growing. */

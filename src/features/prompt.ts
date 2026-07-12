@@ -206,7 +206,10 @@ function cond(content: string[], out: string, char: string): boolean {
   switch (char) {
     case 'a': return out.length > 0;
     case 'c': return config.col !== 0;
-    case 'e': return mode.EOF;
+
+    // og's eof_displayed: with a pipe's length unknown, the bottom
+    // line at the end is not yet (END) — the help file always knows
+    case 'e': return mode.EOF && (mode.HELP || sizeIsKnown());
 
     case 'f': case 'g':
       return entry !== undefined && entry.path !== '-';
@@ -235,7 +238,7 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'b': return true;
 
     case 'p': case 's': case 'B':
-      return sizeIsKnown(content);
+      return sizeIsKnown();
   }
 
   return false;
@@ -303,7 +306,7 @@ function protochar(
       return out + (ntags() ? ntags() : files.list.length);
 
     case 'p':
-      return out + (sizeIsKnown(content)
+      return out + (sizeIsKnown()
         ? percentage(
           Math.min(
             byteOffset(content, whereRow(content, where)) + byteBase(),
@@ -325,7 +328,7 @@ function protochar(
       );
 
     case 's': case 'B':
-      return out + (sizeIsKnown(content) ? size : '?');
+      return out + (sizeIsKnown() ? size : '?');
     case 't': return out.replace(/ +$/, '');
     case 'T': return out + (ntags() ? 'tag' : 'file');
     case 'W': return out + longestLine(content);
