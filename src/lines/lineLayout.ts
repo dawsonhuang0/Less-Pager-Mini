@@ -148,24 +148,76 @@ function buildLayout(line: string): LineLayout {
   const rowStart = buildRowStarts(chars, widths);
 
   const rowStyle = new Array<string>(rowStart.length);
-  let active: string[] = [];
+  const active: string[] = [];
   let k = 0;
+  let joined = '';
 
   for (let r = 0; r < rowStart.length; r++) {
-    while (k < codeIdx.length && codeIdx[k] <= rowStart[r]) {
-      if (codes[k] === STYLE_RESET) {
-        active = [];
-      } else {
-        active.push(codes[k]);
-      }
+    let changed = false;
 
+    while (k < codeIdx.length && codeIdx[k] <= rowStart[r]) {
+      changed = applyStyleCode(active, codes[k]) || changed;
       k++;
     }
 
-    rowStyle[r] = active.join('');
+    if (changed) joined = active.join('');
+    rowStyle[r] = joined;
   }
 
   return { chars, widths, prefix, codeIdx, codes, rowStart, rowStyle };
+}
+
+// SGR parameters that end styles, mapped to the openers they cancel
+const SGR_CLOSERS = new Map<number, (open: number) => boolean>([
+  [22, p => p === 1 || p === 2],
+  [23, p => p === 3],
+  [24, p => p === 4],
+  [25, p => p === 5],
+  [27, p => p === 7],
+  [28, p => p === 8],
+  [29, p => p === 9],
+  [39, p => (p >= 30 && p <= 38) || (p >= 90 && p <= 97)],
+  [49, p => (p >= 40 && p <= 48) || (p >= 100 && p <= 107)],
+]);
+
+const firstSgrParam = (code: string): number =>
+  parseInt(code.slice(2), 10) || 0;
+
+/**
+ * Applies one ANSI code to the active-style list: a reset clears it,
+ * a closing SGR removes the openers it ends, and an opener joins the
+ * list once. Without the cancellation, paired codes (bold marker
+ * text on binary data) would pile up thousands deep and every
+ * continuation row would drag them along.
+ *
+ * @returns Whether the list changed.
+ */
+function applyStyleCode(active: string[], code: string): boolean {
+  if (code === STYLE_RESET || firstSgrParam(code) === 0) {
+    if (!active.length) return false;
+    active.length = 0;
+    return true;
+  }
+
+  const param = firstSgrParam(code);
+  const closes = SGR_CLOSERS.get(param);
+
+  if (closes) {
+    let changed = false;
+
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (closes(firstSgrParam(active[i]))) {
+        active.splice(i, 1);
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
+  if (active.includes(code)) return false;
+  active.push(code);
+  return true;
 }
 
 const isSpace = (char: string): boolean => char === ' ' || char === '\t';

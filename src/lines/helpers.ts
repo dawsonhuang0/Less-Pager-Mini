@@ -57,6 +57,12 @@ const CONTROL_REGEX =
   // eslint-disable-next-line no-control-regex
   /[\x00-\x08\x0B-\x1F\x7F\t\uE000-\uE0FF\uFFFD\p{Cn}\p{Co}\p{Cs}]/u;
 
+
+// binary data repeats the same control chars and raw bytes millions
+// of times: their renderings (and stripped widths) cache per run,
+// since color state cannot change mid-transform
+let charCache = new Map<string, [string, number]>();
+
 /**
  * Prepares raw lines for display: -s squeezes runs of blank lines, tabs
  * expand at the -x stops, and control characters follow -r/-R.
@@ -65,6 +71,8 @@ const CONTROL_REGEX =
  * @returns The display lines.
  */
 export function transformContent(lines: string[]): string[] {
+  charCache = new Map();
+
   const squeeze = optSqueeze();
   const out: string[] = [];
   let blank = false;
@@ -143,9 +151,16 @@ function transformLine(line: string): string {
     const rawByte = rawByteOf(char);
 
     if (rawByte >= 0) {
-      const text = binByteText(rawByte);
-      out += text;
-      col += text.replace(STYLE_REGEX_G, '').length;
+      let entry = charCache.get(char);
+
+      if (!entry) {
+        const text = binByteText(rawByte);
+        entry = [text, text.replace(STYLE_REGEX_G, '').length];
+        charCache.set(char, entry);
+      }
+
+      out += entry[0];
+      col += entry[1];
       i++;
       continue;
     }
@@ -153,10 +168,18 @@ function transformLine(line: string): string {
     // a unicode char with no sane display uses $LESSUTFBINFMT
     if (char >= '\x80' && ubinChar(char)) {
       const code = line.codePointAt(i) ?? 0;
-      const text = utfBinText(code);
-      out += text;
-      col += text.replace(STYLE_REGEX_G, '').length;
-      i += String.fromCodePoint(code).length;
+      const key = String.fromCodePoint(code);
+      let entry = charCache.get(key);
+
+      if (!entry) {
+        const text = utfBinText(code);
+        entry = [text, text.replace(STYLE_REGEX_G, '').length];
+        charCache.set(key, entry);
+      }
+
+      out += entry[0];
+      col += entry[1];
+      i += key.length;
       continue;
     }
 
@@ -165,11 +188,18 @@ function transformLine(line: string): string {
         out += char;
         col++;
       } else {
-        const caret = char === '\x7F'
-          ? '^?'
-          : '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
-        out += colored('ctrl', caret, INVERSE_ON, INVERSE_OFF);
-        col += 2;
+        let entry = charCache.get(char);
+
+        if (!entry) {
+          const caret = char === '\x7F'
+            ? '^?'
+            : '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
+          entry = [colored('ctrl', caret, INVERSE_ON, INVERSE_OFF), 2];
+          charCache.set(char, entry);
+        }
+
+        out += entry[0];
+        col += entry[1];
       }
 
       i++;

@@ -402,26 +402,41 @@ export function rawByteOf(char: string): number {
  * charsets map bytes through latin1 with their chardef classes.
  */
 export function decodeContent(data: Buffer): string {
-  if (!utfMode) {
-    let out = '';
+  // single code units batch through fromCharCode instead of per-char
+  // string appends, which crawl on megabytes of binary data
+  const parts: string[] = [];
+  const codes: number[] = [];
 
+  const flush = (): void => {
+    if (codes.length) {
+      parts.push(String.fromCharCode(...codes));
+      codes.length = 0;
+    }
+  };
+
+  const push = (code: number): void => {
+    codes.push(code);
+    if (codes.length >= 8192) flush();
+  };
+
+  if (!utfMode) {
     for (const byte of data) {
-      out += byte >= 0x80 && (chardef[byte] & IS_CONTROL) !== 0
-        ? String.fromCharCode(RAW_BYTE_BASE + byte)
-        : String.fromCharCode(byte);
+      push(byte >= 0x80 && (chardef[byte] & IS_CONTROL) !== 0
+        ? RAW_BYTE_BASE + byte
+        : byte);
     }
 
-    return out;
+    flush();
+    return parts.join('');
   }
 
-  let out = '';
   let i = 0;
 
   while (i < data.length) {
     const byte = data[i];
 
     if (byte < 0x80) {
-      out += String.fromCharCode(byte);
+      push(byte);
       i++;
       continue;
     }
@@ -429,15 +444,17 @@ export function decodeContent(data: Buffer): string {
     const len = utfLen(byte);
 
     if (len > 1 && i + len <= data.length && wellFormed(data, i, len)) {
-      out += data.subarray(i, i + len).toString('utf8');
+      flush();
+      parts.push(data.subarray(i, i + len).toString('utf8'));
       i += len;
     } else {
-      out += String.fromCharCode(RAW_BYTE_BASE + byte);
+      push(RAW_BYTE_BASE + byte);
       i++;
     }
   }
 
-  return out;
+  flush();
+  return parts.join('');
 }
 
 /**
