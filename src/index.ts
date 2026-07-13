@@ -215,6 +215,8 @@ import {
   onTagJump
 } from "./features/tags";
 
+import { cmd } from "./features/cmdbuf";
+
 import { initSecure, secureAllow } from "./features/secure";
 
 import { bigPager, BIG_FILE_THRESHOLD } from "./bigfile/session";
@@ -766,6 +768,11 @@ async function contentPager(content: string[]): Promise<void> {
   let startupHelp = false;
   let exit = () => {};
   let pasting = false;
+
+  // og's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
+  const MAX_PASTE_IGNORE_MS = 5000;
+  let ignoringPaste = false;
+  let ignoreStart = 0;
   let followTimer: ReturnType<typeof setInterval> | null = null;
   let pendingEditWarn = false;
   let userSeq = '';
@@ -949,26 +956,60 @@ async function contentPager(content: string[]): Promise<void> {
   function keyHandler(data: Buffer): void {
     let text = data.toString();
 
-    // --no-paste drops everything between bracketed paste markers
-    if (optNoPaste() || pasting) text = stripPaste(text);
+    if (optNoPaste() || pasting || ignoringPaste) text = filterPaste(text);
 
     for (const sequence of splitKeys(text)) handleKey(sequence);
   }
 
-  function stripPaste(text: string): string {
+  /** True while a prompt is collecting input, like og's mca != 0. */
+  function promptOpen(): boolean {
+    return cmd.active || !!option.pending || examine.pending ||
+      !!miscInput.pending || !!brackets.pending || !!marks.pending ||
+      pipeMark.pending;
+  }
+
+  /**
+   * Applies --no-paste to bracketed paste markers, like og: a paste
+   * at the main prompt is ignored whole (A_START_PASTE calling
+   * start_ignoring_input), but a command buffer accepts the text up
+   * to the first pasted newline, which starts ignoring instead of
+   * executing (mca_char's pasting && no_paste).
+   */
+  function filterPaste(text: string): string {
     let out = '';
     let i = 0;
 
     while (i < text.length) {
-      if (pasting) {
+      if (ignoringPaste) {
+        if (Date.now() >= ignoreStart + MAX_PASTE_IGNORE_MS) {
+          ignoringPaste = false;
+          pasting = false;
+          continue;
+        }
+
         const end = text.indexOf('\x1B[201~', i);
         if (end < 0) return out;
 
         i = end + 6;
+        ignoringPaste = false;
         pasting = false;
       } else if (text.startsWith('\x1B[200~', i)) {
-        pasting = true;
         i += 6;
+
+        if (promptOpen()) {
+          pasting = true;
+        } else {
+          ignoringPaste = true;
+          ignoreStart = Date.now();
+        }
+      } else if (pasting && text.startsWith('\x1B[201~', i)) {
+        i += 6;
+        pasting = false;
+      } else if (pasting && (text[i] === '\x0D' || text[i] === '\x0A')) {
+        // the pasted newline never executes the command
+        ignoringPaste = true;
+        ignoreStart = Date.now();
+        i++;
       } else {
         out += text[i++];
       }
