@@ -181,7 +181,7 @@ export const binaryConfirm = {
  * malformed UTF-8 and IS_BINARY_CHAR chars count, ANSI sequences skip
  * under -R, and more than 5 binary characters qualify.
  */
-function binFile(bytes: Buffer): boolean {
+export function binFile(bytes: Buffer): boolean {
   const head = bytes.subarray(0, 256);
   if (head.length <= 4) return false;
 
@@ -238,8 +238,11 @@ export function loadFile(index: number): string[] | null {
     return alt.lines;
   }
 
+  let stated = false;
+
   try {
     const stat = fs.statSync(entry.path);
+    stated = true;
 
     // -f skips the directory guard and lets the read report the OS
     // error, like og's force_open bypassing bad_file's is_dir check
@@ -281,6 +284,17 @@ export function loadFile(index: number): string[] | null {
 
     return lines;
   } catch (error) {
+    // -f forced the open past bad_file: og's read then fails
+    // (EISDIR) and the pager runs on the empty file, with
+    // prompt_message reporting og's "read error"
+    if (opt.forceOpen && stated) {
+      search.message = 'read error';
+      entry.size = 0;
+      entry.sizeKnown = true;
+      entry.everOpened = true;
+      return [''];
+    }
+
     search.message = `${entry.path}: ${errorText(error)}`;
     return null;
   }

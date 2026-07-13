@@ -120,7 +120,8 @@ import {
   revealPipeEnd,
   sizeIsKnown,
   pipeDraining,
-  lineBase
+  lineBase,
+  binFile
 } from "./features/files";
 
 import {
@@ -394,7 +395,26 @@ async function filePager(filePaths: string[]): Promise<void> {
     }
   }
 
+  // options apply before any file opens, like og's main scanning
+  // ahead of edit_first: -f must already guard the first loadFile
+  const startup = startupInit([]);
+
+  if (startup.version) {
+    printVersion();
+    return;
+  }
+
+  pendingStartup = startup;
+
   initFiles(filePaths);
+
+  // a single sizable file streams its tail through the pipe
+  // machinery so the first screenful paints immediately, like og's
+  // ch reading blocks on demand instead of the whole file
+  if (files.list.length === 1 && !process.env.LESSOPEN) {
+    const streamed = await streamSingleFile();
+    if (streamed) return;
+  }
 
   for (let i = 0; i < files.list.length; i++) {
     let lines = loadFile(i);
@@ -418,6 +438,13 @@ async function filePager(filePaths: string[]): Promise<void> {
       }
     }
 
+    // an unopenable file's error prints right away, like og's edit()
+    // calling error() before the screen exists
+    if (!lines && search.message) {
+      printStartupError(search.message);
+      search.message = '';
+    }
+
     if (lines) {
       files.index = i;
       files.newFile = true;
@@ -426,6 +453,169 @@ async function filePager(filePaths: string[]): Promise<void> {
       return;
     }
   }
+
+  // nothing opened: og's failing edit_first quits after the errors
+  // have printed (main.c's quit(QUIT_ERROR))
+  pendingStartup = null;
+}
+
+// a file session's startup scan runs before its first loadFile;
+// contentPager consumes it (og applies options ahead of edit_first)
+let pendingStartup: ReturnType<typeof startupInit> | null = null;
+
+// files at least this big stream instead of loading eagerly
+const STREAM_FILE_MIN = 1024 * 1024;
+
+/**
+ * Opens a single regular file as a stream: the head block reads
+ * synchronously (og's edit reading its first block for bin_file) and
+ * the rest arrives through the pipe machinery's on-demand reads,
+ * like og's ch layer pulling blocks as the display needs them. The
+ * file's length is known from stat, so unlike a true pipe the
+ * prompts and (END) never wait on EOI.
+ *
+ * @returns True when the session ran (or was refused) here; false
+ *   falls back to the eager loader.
+ */
+async function streamSingleFile(): Promise<boolean> {
+  const entry = files.list[0];
+
+  let stat;
+  try {
+    stat = fs.statSync(entry.path);
+  } catch {
+    return false;
+  }
+
+  if (!stat.isFile() || stat.size < STREAM_FILE_MIN) return false;
+
+  let head = Buffer.alloc(64 * 1024);
+  let n = 0;
+
+  try {
+    const fd = fs.openSync(entry.path, 'r');
+    n = fs.readSync(fd, head, 0, head.length, 0);
+    fs.closeSync(fd);
+  } catch {
+    return false;
+  }
+
+  head = head.subarray(0, n);
+
+  // og's edit asks about a binary-looking file before the screen
+  // starts; refusing the only file quits
+  if (!opt.forceOpen && keyboard().isTTY && binFile(head)) {
+    process.stdout.write(
+      `"${entry.path}" may be a binary file.  See it anyway? `
+    );
+
+    const answer = await warnReturn();
+    keyboard().setRawMode(false);
+    keyboard().pause();
+    process.stdout.write('\n');
+
+    if (answer !== 'y' && answer !== 'Y') return true;
+  }
+
+  entry.size = stat.size;
+  entry.sizeKnown = true;
+  entry.everOpened = true;
+  entry.streaming = true;
+
+  const decoder = new PipeDecoder();
+  const lines = decoder.push(head);
+  if (!lines.length) lines.push('');
+
+  checkModelines(lines);
+
+  files.index = 0;
+  files.newFile = true;
+  addExamineHistory(entry.path);
+
+  pipeSource = fs.createReadStream(entry.path, { start: n });
+  pipeDecoder = decoder;
+
+  try {
+    await contentPager(lines);
+  } finally {
+    pipeSource = null;
+    pipeDecoder = null;
+  }
+
+  return true;
+}
+
+/**
+ * Applies $LESS/$MORE and the command line options, like og's main()
+ * before edit_first: session state resets first so ++cmd and -o
+ * survive to startup, and the rebuild hook drops so -s/-x/-r cannot
+ * fire a previous session's pipeline.
+ *
+ * @param content - Loaded lines for immediate handlers, or [] when
+ *   scanning before any file opens.
+ */
+function startupInit(content: string[]): ReturnType<typeof scanOptions> {
+  startupErrmsgs = 0;
+  resetMisc();
+  resetBellTimer();
+  onRebuild(() => {});
+
+  // lesskey loads before $LESS scans, like og's init_cmds preceding
+  // scan_option: its #env lines can set $LESS itself
+  initSecure();
+
+  // like decode.c: lesskey files are ignored under LESSSECURE
+  if (secureAllow('lesskey')) loadLesskey();
+
+  // the charset comes from the (possibly lesskey-set) environment,
+  // like init_charset before the first file opens
+  initCharset();
+  initAnsiChars();
+
+  // $LESS_IS_MORE selects more compatibility and the $MORE options,
+  // like og's init_option and main reading the right variable
+  const lim = process.env.LESS_IS_MORE;
+  opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
+
+  // like og's init_prompt after less_is_more is known; $MORE below may
+  // still override the prototypes with -P
+  resetProtos();
+
+  // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
+  initUnsupport(process.env.LESS_UNSUPPORT ?? '');
+
+  const startup = scanOptions(
+    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', content);
+
+  // command line options follow the env, one scan per argument like
+  // og's main; -r keeps its command line meaning there
+  for (const arg of takeCliOptions()) {
+    const extra = scanOptions(arg, content, false);
+    startup.firstCmds.push(...extra.firstCmds);
+    if (extra.dohelp) startup.dohelp = true;
+    if (extra.version) startup.version = true;
+  }
+
+  // a still-dangling string/number option reports now (og nopendopt)
+  flushPendopt();
+
+  // og's pre-screen error() prints scan errors right away, ahead of
+  // any binary-file question edit_first may ask
+  while (search.message || search.messageQueue.length) {
+    if (search.message) printStartupError(search.message);
+    search.message = search.messageQueue.shift() ?? '';
+  }
+
+  return startup;
+}
+
+// error() calls before the screen initializes, for og's main errmsgs
+// gate ("Press RETURN to continue" before the screen erases them)
+let startupErrmsgs = 0;
+
+function printStartupError(message: string): void {
+  process.stdout.write(message + '\n');
+  startupErrmsgs++;
 }
 
 /**
@@ -594,53 +784,11 @@ async function contentPager(content: string[]): Promise<void> {
   let lastDragY = -1;
   let lastFilter: ((line: string) => boolean) | null = null;
 
-  // $LESS options apply before the display pipeline first derives,
-  // like og scanning the environment ahead of opening the first file;
-  // session state resets first so ++cmd and -o survive to startup,
-  // and the rebuild hook drops so -s/-x/-r cannot fire a previous
-  // session's pipeline
-  resetMisc();
-  resetBellTimer();
-  onRebuild(() => {});
-
-  // lesskey loads before $LESS scans, like og's init_cmds preceding
-  // scan_option: its #env lines can set $LESS itself
-  initSecure();
-
-  // like decode.c: lesskey files are ignored under LESSSECURE
-  if (secureAllow('lesskey')) loadLesskey();
-
-  // the charset comes from the (possibly lesskey-set) environment,
-  // like init_charset before the first file opens
-  initCharset();
-  initAnsiChars();
-
-  // $LESS_IS_MORE selects more compatibility and the $MORE options,
-  // like og's init_option and main reading the right variable
-  const lim = process.env.LESS_IS_MORE;
-  opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
-
-  // like og's init_prompt after less_is_more is known; $MORE below may
-  // still override the prototypes with -P
-  resetProtos();
-
-  // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
-  initUnsupport(process.env.LESS_UNSUPPORT ?? '');
-
-  const startup = scanOptions(
-    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', fullContent);
-
-  // command line options follow the env, one scan per argument like
-  // og's main; -r keeps its command line meaning there
-  for (const arg of takeCliOptions()) {
-    const extra = scanOptions(arg, fullContent, false);
-    startup.firstCmds.push(...extra.firstCmds);
-    if (extra.dohelp) startup.dohelp = true;
-    if (extra.version) startup.version = true;
-  }
-
-  // a still-dangling string/number option reports now (og nopendopt)
-  flushPendopt();
+  // $LESS and command line options are already applied for file
+  // sessions (og's main scans them before edit_first opens anything);
+  // in-memory and pipe sessions scan here with their content
+  const startup = pendingStartup ?? startupInit(fullContent);
+  pendingStartup = null;
 
   // -V prints the version and never starts the pager, like og
   if (startup.version) {
@@ -736,8 +884,16 @@ async function contentPager(content: string[]): Promise<void> {
     await pipeOneScreenProbe();
   }
 
+  // counting display rows lays out every line -- expensive on binary
+  // data -- so only the -F check pays for it, stopping past a screen
   let totalRows = 0;
-  for (const line of content) totalRows += maxSubRow(line) + 1;
+
+  if (optQuitIfOneScreen() && !startup.dohelp) {
+    for (const line of content) {
+      totalRows += maxSubRow(line) + 1;
+      if (totalRows + shellLines > config.window) break;
+    }
+  }
 
   if (
     optQuitIfOneScreen() && !startup.dohelp && files.list.length <= 1 &&
@@ -798,16 +954,21 @@ async function contentPager(content: string[]): Promise<void> {
     process.stdout.write('\n');
   }
 
-  // startup scan errors print before the screen erases them, gated
-  // on a keystroke like og main's errmsgs check
+  // messages set after the scan (a forced open's read error) still
+  // print here; anything shown pre-screen then waits on a keystroke
+  // like og main's errmsgs gate before the screen erases it
   if (search.message) {
-    process.stdout.write(search.message + '\n');
+    printStartupError(search.message);
 
     while (search.messageQueue.length) {
-      process.stdout.write(search.messageQueue.shift()! + '\n');
+      printStartupError(search.messageQueue.shift()!);
     }
 
     search.message = '';
+  }
+
+  if (startupErrmsgs > 0) {
+    startupErrmsgs = 0;
     process.stdout.write('Press RETURN to continue ');
     await warnReturn();
     process.stdout.write('\n');
@@ -2270,9 +2431,10 @@ async function contentPager(content: string[]): Promise<void> {
 
     fullContent.push(...raw);
 
-    // the byte count grows with the data, for %b and = (one newline
-    // per line, like byteOffset)
-    if (entry) {
+    // a pipe's byte count grows with the data, for %b and = (one
+    // newline per line, like byteOffset); a streamed file's size is
+    // already known from stat, like og's CH_CANSEEK ch_length
+    if (entry && !entry.sizeKnown) {
       for (const line of raw) entry.size += Buffer.byteLength(line) + 1;
     }
 
