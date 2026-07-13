@@ -163,6 +163,7 @@ import {
   resetHeaderStart,
   reserveGutter,
   onRebuild,
+  onTrimBufSpace,
   scanOptions,
   checkModelines,
   optEmouseLclick,
@@ -837,6 +838,13 @@ async function contentPager(content: string[]): Promise<void> {
   // a still-delivering pipe keeps feeding the session (og's ch
   // reads); wired after init so appends can repaint
   if (pipeSource) attachPipe();
+
+  // a runtime -b or -B change re-bounds the pipe like og's opt_b
+  // calling ch_setbufspace: existing data stays (og recycles only
+  // at the next allocation), new arrivals shed against the bound
+  onTrimBufSpace(() => {
+    if (pipeStream) pipeBudget = pipeBudgetBytes();
+  });
 
   // -e/-E: a forward move at end-of-file edits the next file, or
   // quits on the last one, like og's forward() calling edit_next --
@@ -2088,6 +2096,16 @@ async function contentPager(content: string[]): Promise<void> {
   }
 
   /** Wires the still-delivering pipe into the session. */
+  /**
+   * The -b bound in bytes, like og's ch_setbufspace: the kilobytes
+   * round up to 8K LBUFSIZE buffers, at least one; unlimited while
+   * -B keeps autobuf on or the space is negative.
+   */
+  function pipeBudgetBytes(): number {
+    if (opt.autoBuffers || opt.bufSpace < 0) return Infinity;
+    return Math.max(Math.ceil(opt.bufSpace / 8), 1) * 8 * 1024;
+  }
+
   function attachPipe(): void {
     const stream = pipeSource!;
     const decoder = pipeDecoder!;
@@ -2095,9 +2113,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     // -B bounds a pipe to the -b buffer space, like og's maxbufs
     // applying to non-seekable input when autobuf is off
-    pipeBudget = opt.autoBuffers
-      ? Infinity
-      : Math.max(opt.bufSpace, 64) * 1024;
+    pipeBudget = pipeBudgetBytes();
 
     let chunks = 0;
 
