@@ -10,6 +10,9 @@ import { Actions } from "./interfaces";
 import { session, resetSession, deriveContent, shellReserveLines }
   from "./session";
 
+import { startupInit, printStartupError, startupErrors, warnReturn }
+  from "./startup";
+
 import {
   config,
   mode,
@@ -545,84 +548,7 @@ async function streamSingleFile(): Promise<boolean> {
   return true;
 }
 
-/**
- * Applies $LESS/$MORE and the command line options, like og's main()
- * before edit_first: session state resets first so ++cmd and -o
- * survive to startup, and the rebuild hook drops so -s/-x/-r cannot
- * fire a previous session's pipeline.
- *
- * @param content - Loaded lines for immediate handlers, or [] when
- *   scanning before any file opens.
- */
-function startupInit(content: string[]): ReturnType<typeof scanOptions> {
-  startupErrmsgs = 0;
-  resetMisc();
-  resetBellTimer();
-  onRebuild(() => {});
 
-  // lesskey loads before $LESS scans, like og's init_cmds preceding
-  // scan_option: its #env lines can set $LESS itself
-  initSecure();
-
-  // like decode.c: lesskey files are ignored under LESSSECURE
-  if (secureAllow('lesskey')) loadLesskey();
-
-  // the charset comes from the (possibly lesskey-set) environment,
-  // like init_charset before the first file opens
-  initCharset();
-  initAnsiChars();
-
-  // $LESS_IS_MORE selects more compatibility and the $MORE options,
-  // like og's init_option and main reading the right variable
-  const lim = process.env.LESS_IS_MORE;
-  opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
-
-  // like og's init_prompt after less_is_more is known; $MORE below may
-  // still override the prototypes with -P
-  resetProtos();
-
-  // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
-  initUnsupport(process.env.LESS_UNSUPPORT ?? '');
-
-  const startup = scanOptions(
-    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', content);
-
-  // command line options follow the env, one scan per argument like
-  // og's main; -r keeps its command line meaning there
-  for (const arg of takeCliOptions()) {
-    const extra = scanOptions(arg, content, false);
-    startup.firstCmds.push(...extra.firstCmds);
-    if (extra.dohelp) startup.dohelp = true;
-    if (extra.version) startup.version = true;
-  }
-
-  // a still-dangling string/number option reports now (og nopendopt)
-  flushPendopt();
-
-  // og's pre-screen error() prints scan errors right away, ahead of
-  // any binary-file question edit_first may ask
-  while (search.message || search.messageQueue.length) {
-    if (search.message) printStartupError(search.message);
-    search.message = search.messageQueue.shift() ?? '';
-  }
-
-  // og's missing_cap warning follows the scan (main.c), still before
-  // edit_first's binary question; -d (know_dumb) suppresses it
-  if (dumbTerminal() && keyboard().isTTY && !optKnowDumb()) {
-    printStartupError('WARNING: terminal is not fully functional');
-  }
-
-  return startup;
-}
-
-// error() calls before the screen initializes, for og's main errmsgs
-// gate ("Press RETURN to continue" before the screen erases them)
-let startupErrmsgs = 0;
-
-function printStartupError(message: string): void {
-  process.stdout.write(message + '\n');
-  startupErrmsgs++;
-}
 
 /**
  * Starts an interactive pager session to navigate through string content.
@@ -894,8 +820,8 @@ async function contentPager(initialContent: string[]): Promise<void> {
 
   // og main's errmsgs gate blocks in get_return, which ungets any
   // key other than RETURN or space to become the first command
-  if (startupErrmsgs > 0) {
-    startupErrmsgs = 0;
+  if (startupErrors.count > 0) {
+    startupErrors.count = 0;
     process.stdout.write('Press RETURN to continue ');
     const answer = await warnReturn();
     process.stdout.write('\n');
@@ -2636,24 +2562,6 @@ async function contentPager(initialContent: string[]): Promise<void> {
  * Reads the keystroke answering the dumb terminal warning, like og's
  * get_return before the screen initializes.
  */
-function warnReturn(): Promise<string> {
-  keyboard().setRawMode(true);
-  keyboard().resume();
-
-  return new Promise(resolve => {
-    keyboard().once('data', (data: Buffer) => {
-      // og reads a single char; anything typed behind it stays
-      // buffered as ordinary input (paused, or the re-emit would
-      // fire with no listener attached and vanish)
-      if (data.length > 1) {
-        keyboard().pause();
-        keyboard().unshift(data.subarray(1));
-      }
-
-      resolve(data.toString()[0] ?? '');
-    });
-  });
-}
 
 // CommonJS interop; ESM importers use the default export directly
 try {
