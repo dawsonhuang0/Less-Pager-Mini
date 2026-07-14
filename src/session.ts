@@ -70,6 +70,9 @@ export const session = {
   /** The active & display filter over fullContent. */
   lastFilter: null as ((line: string) => boolean) | null,
 
+  /** The process title to restore at exit. */
+  processTitle: '',
+
   // the still-delivering pipe state (og's lazy non-seekable reads)
   pipeStream: null as NodeJS.ReadableStream | null,
   pipePaused: false,
@@ -129,6 +132,7 @@ export function resetSession(content: string[]): void {
   session.lastDragY = -1;
 
   session.lastFilter = null;
+  session.processTitle = process.title;
 
   session.pipeStream = null;
   session.pipePaused = false;
