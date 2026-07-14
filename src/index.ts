@@ -1,5 +1,4 @@
 import fs from 'fs';
-import v8 from 'v8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal } from "./keyboard";
 
@@ -40,7 +39,6 @@ import {
   resetRender,
   resetDumbPaint,
   markDumbPaint,
-  resetBellTimer,
   ringBell,
   bufferToNum,
   calculateEOF,
@@ -80,8 +78,7 @@ import {
   incrementalSearch,
   restoreSearchOrigin,
   onAutosave,
-  lineMatches,
-  filterLines
+  lineMatches
 } from "./features/searching";
 
 import {
@@ -95,7 +92,6 @@ import {
   startBrackets,
   bracketsKey,
   marks,
-  shiftMarkRows,
   marksKey,
   startSetMark,
   startGoMark,
@@ -125,7 +121,6 @@ import {
   bottomRow,
   closeAlt,
   binaryConfirm,
-  revealSize,
   revealPipeEnd,
   sizeIsKnown,
   pipeDraining,
@@ -143,14 +138,13 @@ import {
 
 import { openAltFile } from "./features/lessopen";
 
-import { initCharset, PipeDecoder } from "./features/charset";
+import { PipeDecoder } from "./features/charset";
 
 import {
   option,
   startOption,
   optionKey,
   optQuitAtEof,
-  optSqueeze,
   optWheelLines,
   optQuitOnIntr,
   optMouse,
@@ -160,7 +154,6 @@ import {
   optPermaMarks,
   optAutosaveAction,
   optNoInit,
-  optKnowDumb,
   optNoKeypad,
   optMouseReverse,
   optEndPrompt,
@@ -173,8 +166,6 @@ import {
   resetHeaderStart,
   reserveGutter,
   onRebuild,
-  onTrimBufSpace,
-  scanOptions,
   checkModelines,
   optEmouseLclick,
   optEmouseRclick,
@@ -188,9 +179,6 @@ import {
   chopLine,
   gutterWidth,
   getSwindow,
-  initUnsupport,
-  takeCliOptions,
-  flushPendopt,
   opt
 } from "./options";
 
@@ -213,11 +201,10 @@ import {
   printVersion,
   applyStartupLogFile,
   takeCmdAtPrompt,
-  resetMisc,
   onShellAutosave
 } from "./features/misc";
 
-import { prExpand, resetProtos } from "./features/prompt";
+import { prExpand } from "./features/prompt";
 
 import {
   stepTag,
@@ -231,7 +218,7 @@ import { cmd } from "./features/cmdbuf";
 import { pipeInput, attachPipe, pipeDemand, pipeDrain,
   pipeOneScreenProbe } from "./features/pipe";
 
-import { initSecure, secureAllow } from "./features/secure";
+import { secureAllow } from "./features/secure";
 
 import { bigPager, BIG_FILE_THRESHOLD } from "./bigfile/session";
 
@@ -239,8 +226,7 @@ import {
   userBinding,
   userIsPrefix,
   userStop,
-  translateEditKey,
-  loadLesskey
+  translateEditKey
 } from "./features/lesskey";
 
 import { spawnSync } from "child_process";
@@ -270,8 +256,7 @@ import {
   MOUSE_SGR_ON,
   MOUSE_SGR_OFF,
   BRACKETED_PASTE_ON,
-  BRACKETED_PASTE_OFF,
-  initAnsiChars
+  BRACKETED_PASTE_OFF
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
