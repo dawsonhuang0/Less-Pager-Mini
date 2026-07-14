@@ -2,7 +2,6 @@ import fs from 'fs';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal } from "./keyboard";
 
-import { shellArgv } from "./platform";
 
 import { Actions } from "./interfaces";
 
@@ -12,15 +11,20 @@ import { session, resetSession, deriveContent, shellReserveLines }
 import { startupInit, printStartupError, startupErrors, warnReturn }
   from "./startup";
 
+import { calculateDimensions, suspendTerminal, enterScreen }
+  from "./screen";
+
+import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
+  stepFile, removeFile, runExamine, runEditor, runMiscInput,
+  applyFilter } from "./commands";
+
 import {
   config,
   mode,
   applyConfig,
   applyMode,
   resetConfig,
-  resetMode,
-  DEFAULT_WINDOW,
-  DEFAULT_COLUMN
+  resetMode
 } from "./config";
 
 import { help } from "./lessHelp";
@@ -71,14 +75,12 @@ import {
   startSearch,
   searchInputKey,
   execSearch,
-  execFilter,
   repeatSearch,
   toggleHighlight,
   clearHighlight,
   incrementalSearch,
   restoreSearchOrigin,
-  onAutosave,
-  lineMatches
+  onAutosave
 } from "./features/searching";
 
 import {
@@ -86,7 +88,6 @@ import {
   lastLine,
   percentLine,
   goPos,
-  jumpLoc,
   matchBracket,
   brackets,
   startBrackets,
@@ -98,7 +99,6 @@ import {
   startClearMark,
   recordLastPosition,
   resetMarks,
-  adoptFileMarks,
   setMouseMark,
   goMouseMark
 } from "./features/jumping";
@@ -109,16 +109,11 @@ import {
   initContent,
   initFiles,
   loadFile,
-  saveFilePosition,
-  stepFileTarget,
   indexFileTarget,
   startExamine,
   examineKey,
-  expandExamineList,
   addExamineHistory,
-  setPreviousPath,
   fileInfo,
-  bottomRow,
   closeAlt,
   binaryConfirm,
   revealPipeEnd,
@@ -130,11 +125,8 @@ import {
 
 import {
   follow,
-  startFollow,
-  stopFollow,
-  pollFollow,
   FollowKind
-} from "./features/follow";
+, beginFollow, endFollow } from "./features/follow";
 
 import { openAltFile } from "./features/lessopen";
 
@@ -158,13 +150,7 @@ import {
   optMouseReverse,
   optEndPrompt,
   optIntrChar,
-  optShowAttn,
-  optNoEditWarn,
   optQuitIfOneScreen,
-  optOldBot,
-  jumpSindex,
-  resetHeaderStart,
-  reserveGutter,
   onRebuild,
   checkModelines,
   optEmouseLclick,
@@ -191,10 +177,7 @@ import {
   startLogFile,
   startPipe,
   pipeMarkKey,
-  shellCommand,
-  setFirstCmd,
   getFirstCmd,
-  logFileTarget,
   overwriteKey,
   writeLogFile,
   versionMessage,
@@ -207,9 +190,6 @@ import {
 import { prExpand } from "./features/prompt";
 
 import {
-  stepTag,
-  tagRow,
-  currTagFile,
   onTagJump
 } from "./features/tags";
 
@@ -229,7 +209,6 @@ import {
   translateEditKey
 } from "./features/lesskey";
 
-import { spawnSync } from "child_process";
 
 import { loadHistory, saveHistory } from "./histfile";
 
@@ -246,16 +225,8 @@ import {
   ALTERNATE_SCROLL_ON,
   KEYPAD_ON,
   KEYPAD_OFF,
-  CLEAR_LINE,
-  CONSOLE_CLEAR,
-  CURSOR_TO,
-  INVERSE_ON,
-  INVERSE_OFF,
-  MOUSE_ON,
   MOUSE_OFF,
-  MOUSE_SGR_ON,
   MOUSE_SGR_OFF,
-  BRACKETED_PASTE_ON,
   BRACKETED_PASTE_OFF
 } from "./constants";
 
@@ -1607,591 +1578,6 @@ function extraBells(): void {
   ringBell();
 }
 
-/**
- * Switches the session to another file entry, like less's edit_ifile:
- * stores the position of the file being left, records the previous
- * position, and restores the target's saved position.
- */
-function switchToFile(target: number): boolean {
-  const lines = loadFile(target);
-
-  if (!lines) {
-    // a binary-looking file arms the y/Y confirmation prompt and
-    // retries the switch on approval, like og's edit query
-    if (binaryConfirm.request) {
-      binaryConfirm.request = false;
-      binaryConfirm.pending = true;
-      binaryConfirm.proceed = () => {
-        files.list[target].everOpened = true;
-        switchToFile(target);
-      };
-    }
-
-    return false;
-  }
-
-  saveFilePosition();
-  recordLastPosition();
-
-  // the file being left becomes '#', like less's old_ifile, and its
-  // $LESSOPEN product closes ($LESSCLOSE)
-  if (files.index >= 0 && files.index !== target) {
-    setPreviousPath(files.list[files.index].path);
-    closeAlt(files.list[files.index]);
-  }
-
-  files.index = target;
-  files.newFile = true;
-
-  // every opened file joins the examine history, like edit_ifile
-  addExamineHistory(files.list[target].path);
-
-  // the header re-anchors at the new file's top, like edit_ifile
-  // calling set_header(ch_zero())
-  resetHeaderStart();
-
-  // marks restored from the history file attach to their file
-  adoptFileMarks(target, lines);
-
-  session.fullContent = lines;
-  session.lastFilter = null;
-  search.filters = [];
-  session.content = deriveContent();
-
-  const saved = files.list[target].saved;
-  config.row = saved ? saved.row : 0;
-  config.subRow = saved ? saved.subRow : 0;
-  config.blankTop = 0;
-
-  mode.INIT = false;
-  calculateEOF(session.content);
-
-  if (!mode.EOF) {
-    mode.EOF = config.row > config.endRow || (
-      config.row === config.endRow && config.subRow >= config.endSubRow
-    );
-  }
-
-  // schedule the +cmd replay for the newly examined file
-  const firstCmd = getFirstCmd();
-  session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
-
-  return true;
-}
-
-/**
- * Opens a file by name, inserting it into the file list after the
- * current entry when new, like less's edit().
- *
- * @returns True when the file displayed.
- */
-function openByName(name: string): boolean {
-  let at = files.list.findIndex(entry => entry.path === name);
-
-  if (at < 0) {
-    at = files.index + 1;
-    files.list.splice(at, 0, { path: name, lines: null, size: 0,
-      sizeKnown: true, saved: null });
-
-    if (!loadFile(at)) {
-      // a binary-looking file keeps its entry and asks first,
-      // like og's edit query before registering failure
-      if (binaryConfirm.request) {
-        binaryConfirm.request = false;
-        binaryConfirm.pending = true;
-        binaryConfirm.proceed = () => {
-          files.list[at].everOpened = true;
-          switchToFile(at);
-        };
-        return false;
-      }
-
-      files.list.splice(at, 1);
-      return false;
-    }
-  } else if (!loadFile(at)) {
-    // switchToFile re-runs loadFile and arms the binary
-    // confirmation itself when that is what failed
-    return switchToFile(at);
-  }
-
-  return switchToFile(at);
-}
-
-/**
- * Jumps to the current tag match, like command.c after nexttag:
- * edit the tag's file, then land its line on the -j target.
- */
-function gotoCurrentTag(): void {
-  const file = currTagFile();
-  if (file === null) return;
-
-  if (!openByName(file)) return;
-
-  const row = tagRow(session.content);
-
-  if (row === null) {
-    search.message = 'Tag not found';
-    return;
-  }
-
-  jumpLoc(session.content, row, 0, jumpSindex());
-}
-
-/** Steps the tag list with t / T, like A_NEXT_TAG/A_PREV_TAG. */
-function tagStep(delta: 1 | -1): void {
-  if (stepTag(delta, bufferToNum(session.buffer) || 1) === null) {
-    search.message = delta > 0 ? 'No next tag' : 'No previous tag';
-    return;
-  }
-
-  gotoCurrentTag();
-}
-
-/**
- * Repeats the search across the file list (ESC-n / ESC-N), like og's
- * A_T_AGAIN_SEARCH continuing into the next (or previous) files.
- */
-function spanningSearch(reverse: boolean): void {
-  repeatSearch(session.content, bufferToNum(session.buffer) || 1, reverse);
-
-  while (search.message === 'Pattern not found') {
-    const forward = (search.lastDir === 1) !== reverse;
-    const target = files.index + (forward ? 1 : -1);
-
-    if (target < 0 || target >= files.list.length) return;
-    if (!switchToFile(target)) return;
-
-    // a fresh file searches from its top (its end going backward)
-    if (!forward) lastLine(session.content, 0);
-
-    search.message = '';
-    repeatSearch(session.content, 1, reverse);
-  }
-}
-
-function stepFile(delta: 1 | -1): void {
-  if (mode.HELP) {
-    ringBell();
-    return;
-  }
-
-  const target = stepFileTarget(delta, bufferToNum(session.buffer) || 1);
-
-  if (target === null) {
-    // :n past the last file quits with -e at end-of-file, like
-    // og's A_NEXT_FILE checking get_quit_at_eof after edit_next
-    if (delta > 0 && optQuitAtEof() && mode.EOF && !mode.HELP) session.exit();
-    return;
-  }
-
-  switchToFile(target);
-}
-
-function removeFile(): void {
-  if (mode.HELP || files.list.length <= 1) {
-    ringBell();
-    return;
-  }
-
-  const removed = files.index;
-  const target = removed < files.list.length - 1 ? removed + 1 : removed - 1;
-
-  if (!switchToFile(target)) return;
-
-  files.list.splice(removed, 1);
-  if (files.index > removed) files.index--;
-}
-
-/**
- * Opens the files named at the `Examine: ` prompt, like less's
- * edit_list: every name enters the list after the current file,
- * unopenable ones drop out, and the first good one becomes current.
- */
-function runExamine(): void {
-  const names = expandExamineList(examine.text.trim());
-  examine.text = '';
-
-  // an empty answer re-examines the current file, like less
-  if (!names.length) {
-    if (files.index >= 0) switchToFile(files.index);
-    return;
-  }
-
-  let insertAt = files.index + 1;
-  let firstGood = -1;
-
-  for (const name of names) {
-    let at = files.list.findIndex(entry => entry.path === name);
-    let inserted = false;
-
-    if (at < 0) {
-      at = insertAt;
-      files.list.splice(at, 0, {
-        path: name,
-        lines: null,
-        size: 0,
-        sizeKnown: true,
-        saved: null,
-      });
-      inserted = true;
-    }
-
-    if (!loadFile(at)) {
-      // a binary-looking file keeps its entry and asks first,
-      // like og's edit query
-      if (binaryConfirm.request) {
-        binaryConfirm.request = false;
-        binaryConfirm.pending = true;
-
-        const target = at;
-        binaryConfirm.proceed = () => {
-          files.list[target].everOpened = true;
-          switchToFile(target);
-        };
-
-        if (inserted) insertAt++;
-        continue;
-      }
-
-      if (inserted) files.list.splice(at, 1);
-      continue;
-    }
-
-    if (inserted) insertAt++;
-    if (firstGood < 0) firstGood = at;
-  }
-
-  if (firstGood >= 0) {
-    search.message = '';
-    switchToFile(firstGood);
-  }
-}
-
-/**
- * Runs a shell command with the terminal restored, like less's
- * lsystem: echoes the command (unless it starts with `-`), runs it
- * through $SHELL, then repaints and reports the done message.
- */
-function runShell(cmd: string, doneMsg: string | null, input?: string): void {
-  // --end-prompt prints where the prompt is erased for output, like
-  // og's prompting flag firing in putchr
-  const endProto = mode.HELP ? null : optEndPrompt();
-  const endPrompt = endProto ? prExpand(session.content, endProto) : '';
-
-  // --old-bot erases the prompt from lower-left instead of the
-  // current line, like og's clear_bot
-  const clearBot =
-    (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
-
-  // only lsystem hides a "-" command; pipe_data always echoes
-  if (input === undefined && cmd.startsWith('-')) {
-    cmd = cmd.slice(1);
-    if (endPrompt) process.stdout.write(clearBot + endPrompt);
-  } else {
-    // like lsystem's clear_bot + "!cmd": the expanded command shows on
-    // the pager's bottom line, so the shell screen gets only output
-    process.stdout.write(clearBot + endPrompt + '!' + cmd);
-  }
-
-  suspendTerminal();
-
-  // $SHELL -c on unix (LESS_SHELL_COPTION replaces -c, "-" drops
-  // the wrapper); %COMSPEC% /c on Windows, like og's lsystem
-  const argv = shellArgv(cmd);
-
-  spawnSync(argv[0], argv[1], input === undefined
-    ? { stdio: 'inherit' }
-    : { stdio: ['pipe', 'inherit', 'inherit'], input });
-
-  // raw single-key input for the done pause, still on the shell screen
-  keyboard().setRawMode(true);
-  keyboard().resume();
-
-  if (doneMsg) {
-    // the pipe reinits first, like pipe_data trashing the screen, so
-    // its done message waits at the bottom of a blank pager screen
-    if (input !== undefined) {
-      enterScreen();
-      process.stdout.write(CONSOLE_CLEAR);
-      process.stdout.write(CURSOR_TO(config.window, 1));
-      process.stdout.write(
-        INVERSE_ON + doneMsg + '  (press RETURN)' + INVERSE_OFF
-      );
-      session.shellPause = 'pager';
-      return;
-    }
-
-    // like lsystem: the done message waits on the shell screen so the
-    // command's output stays visible until a keypress
-    process.stdout.write(doneMsg + '  (press RETURN)');
-    session.shellPause = 'shell';
-    return;
-  }
-
-  enterScreen();
-}
-
-/**
- * Pipes the section between the current position and the stored mark
- * to a shell command (`|X`).
- *
- * - Like less's A_PIPE, the command is taken literally: no `!!`, `%`
- *   or `#` expansion; a leading `^P` suppresses the done message.
- */
-function runPipe(cmd: string): void {
-  let doneMsg: string | null = '|done';
-
-  if (cmd.startsWith('\x10')) {
-    doneMsg = null;
-    cmd = cmd.slice(1);
-  }
-
-  if (!pipeMark.rows.length) return;
-
-  // v707 pipe_pos: || pipes exactly between its two marks (last
-  // line completed); a single mark before the screen pipes down to
-  // the bottom line, anything else pipes top through the mark
-  const [row, row2] = pipeMark.rows;
-  let lo: number;
-  let hi: number;
-
-  if (pipeMark.rows.length > 1) {
-    lo = Math.min(row, row2);
-    hi = Math.max(row, row2) + 1;
-  } else if (row < config.row) {
-    lo = row;
-    hi = bottomRow(session.content) + 1;
-  } else {
-    lo = config.row;
-    hi = row + 1;
-  }
-
-  const text = session.content.slice(lo, hi).join('\n') + '\n';
-  runShell(cmd, doneMsg, text);
-}
-
-/**
- * Starts the F command, like forw_loop: jump to the end of the file,
- * then wait for new data, polling every 50ms like og's read layer.
- *
- * @param kind - `forever` (F), `bell` (ESC-f) or `hilite` (ESC-F).
- */
-function beginFollow(kind: FollowKind): void {
-  // og's forw_loop is a no-op on the help file
-  if (mode.HELP || follow.active) return;
-
-  if (!startFollow(kind)) {
-    ringBell();
-    return;
-  }
-
-  // og's forw_loop reads immediately: a completed pipe returns
-  // its EOI before the wait prompt shows
-  revealPipeEnd();
-
-  // og warns before following a $LESSOPEN replacement, and follows
-  // anyway; RETURN dismisses the warning during the wait
-  if (files.list[files.index]?.alt) {
-    search.message = 'Warning: command may not work correctly ' +
-      'when file is viewed via LESSOPEN';
-  }
-
-  // og marks the pre-follow bottom line for -w before jumping
-  if (optShowAttn()) {
-    const next = bottomRow(session.content) + 1;
-    config.attnRow = next < session.content.length ? next : -1;
-  }
-
-  // og's forw_loop enters through jump_forw_buffered: re-entering
-  // F while already at the end rings the at-end bell (jump_loc's
-  // back(0) hitting eof_bell); the first F just moves there
-  lastLine(session.content, 0);
-  session.followTimer = setInterval(followTick, 50);
-}
-
-/**
- * Jumps to the end of the file without the at-end bell, like
- * forw_loop's jump_forw_buffered.
- */
-function pinToEnd(): void {
-  if (config.row !== config.endRow || config.subRow !== config.endSubRow) {
-    lastLine(session.content, 0);
-  }
-}
-
-/**
- * One follow poll: appends new data pinned to the end of the file,
- * reopens a rotated file under --follow-name, and leaves the wait on
- * --exit-follow-on-close.
- */
-function followTick(): void {
-  const result = pollFollow();
-  if (result.kind === 'idle' || session.exited) return;
-
-  if (result.kind === 'close') {
-    endFollow();
-    render(session.content, session.buffer);
-    return;
-  }
-
-  if (result.kind === 'rotate') {
-    rotateFollow();
-    return;
-  }
-
-  const lines = result.lines;
-  let matchLines = lines;
-
-  // the first new line completes a displayed partial last line
-  if (result.extendTail && session.fullContent.length) {
-    const tail = session.fullContent.length - 1;
-    session.fullContent[tail] += lines.shift();
-    matchLines = [session.fullContent[tail], ...lines];
-  }
-
-  session.fullContent.push(...lines);
-  session.content = deriveContent();
-  calculateEOF(session.content);
-  pinToEnd();
-
-  // ESC-f bells when the search pattern matches new data, ESC-F
-  // stops there, like forw_loop watching highest_hilite
-  if (follow.active !== 'forever' && matchLines.some(lineMatches)) {
-    ringBell();
-
-    if (follow.active === 'hilite') {
-      endFollow();
-      render(session.content, session.buffer);
-      return;
-    }
-  }
-
-  render(session.content, session.buffer);
-}
-
-/**
- * Reopens a rotated file under --follow-name and keeps following,
- * like og's screen_trashed=2 reopen after curr_ifile_changed.
- */
-function rotateFollow(): void {
-  const kind = follow.active as FollowKind;
-  endFollow();
-
-  const lines = loadFile(files.index);
-
-  if (!lines) {
-    // the message set by loadFile shows at the prompt
-    render(session.content, session.buffer);
-    return;
-  }
-
-  session.fullContent = lines;
-  session.content = deriveContent();
-  config.row = Math.min(config.row, Math.max(session.content.length - 1, 0));
-  config.subRow = 0;
-  calculateEOF(session.content);
-
-  beginFollow(kind);
-  render(session.content, session.buffer);
-}
-
-/**
- * Leaves the F wait and runs the keys typed during it, like og
- * processing the ungotten commands after forw_loop returns.
- *
- * @returns Queued keys when the caller replays them itself.
- */
-function endFollow(): string[] {
-  if (session.followTimer) {
-    clearInterval(session.followTimer);
-    session.followTimer = null;
-  }
-
-  return stopFollow();
-}
-
-// ---- the streaming pipe, like og's lazy non-seekable reads ----
-
-/** Bytes of pipe data currently held, past recycles excluded. */
-/**
- * Edits the current file with $VISUAL or $EDITOR at the middle
- * displayed line, then re-examines it, like less's LESSEDIT proto.
- */
-function runEditor(): void {
-  if (mode.HELP || !secureAllow('edit')) return;
-
-  const entry = files.list[files.index];
-
-  if (!entry || entry.path === '-') {
-    search.message = 'Cannot edit standard input';
-    return;
-  }
-
-  // og warns before editing a $LESSOPEN replacement; RETURN then
-  // continues into the editor (--no-edit-warn skips this)
-  if (!optNoEditWarn() && entry.alt && !session.pendingEditWarn) {
-    session.pendingEditWarn = true;
-    search.message = 'WARNING: This file was viewed via LESSOPEN';
-    return;
-  }
-
-  session.pendingEditWarn = false;
-
-  const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
-  const line = Math.min(
-    config.row + Math.floor((config.window - 1) / 2),
-    session.content.length - 1
-  ) + 1;
-
-  runShell(`${editor} +${line} "${entry.path}"`, null);
-
-  // the file may have changed: re-examine it, like less's reedit
-  switchToFile(files.index);
-}
-
-function runMiscInput(
-  kind: '!' | '#' | '|' | 's' | 'S' | '+',
-  text: string
-): void {
-  if (kind === '!') {
-    const { cmd, doneMsg } = shellCommand(text);
-    runShell(cmd, doneMsg);
-  } else if (kind === '#') {
-    // like A_PSHELL: prompt-expanded, no !! reuse, nothing stored
-    let doneMsg: string | null = '#done';
-
-    if (text.startsWith('\x10')) {
-      doneMsg = null;
-      text = text.slice(1);
-    }
-
-    runShell(prExpand(session.content, text), doneMsg);
-  } else if (kind === '|') {
-    runPipe(text);
-  } else if (kind === '+') {
-    setFirstCmd(text);
-  } else {
-    const target = logFileTarget(text, kind === 'S');
-
-    if (target === 'write') {
-      writeLogFile(session.content, false);
-    }
-  }
-}
-
-function applyFilter(): void {
-  const filter = execFilter();
-  if (filter === undefined) return;
-
-  session.lastFilter = filter;
-  session.content = deriveContent();
-  config.row = 0;
-  config.subRow = 0;
-  config.blankTop = 0;
-  calculateEOF(session.content);
-}
-
 function init() {
   loadHistory();
   onAutosave(saveHistory);
@@ -2326,80 +1712,6 @@ function suspendSelf(): void {
   calculateDimensions();
   calculateEOF(session.content);
   render(session.content, session.buffer);
-}
-
-/**
- * Leaves the alternate screen and raw mode so a child process can use
- * the terminal, like less de-initializing before running a command.
- */
-function suspendTerminal(): void {
-  // og's mouse and paste strings are hardcoded, not termcap: even
-  // a dumb terminal receives them when the options are on
-  if (optMouse() || opt.emouse) {
-    process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
-  }
-
-  if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
-
-  if (!mode.DUMB) {
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
-
-    if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_SCROLL_OFF);
-      process.stdout.write(ALTERNATE_CONSOLE_OFF);
-    }
-  }
-
-  keyboard().setRawMode(false);
-  keyboard().pause();
-  hook.screenActive = false;
-}
-
-function enterScreen(): void {
-  if (!mode.DUMB) {
-    if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_CONSOLE_ON);
-      process.stdout.write(ALTERNATE_SCROLL_ON);
-    }
-
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
-  }
-
-  if (optMouse() || opt.emouse) {
-    process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
-  }
-
-  if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
-
-  hook.screenActive = true;
-  resetRender();
-}
-
-function calculateDimensions(): void {
-  // a zero size (some pseudo-terminals) falls back like og's scrsize
-  config.window = process.stdout.rows || DEFAULT_WINDOW;
-  config.screenWidth = process.stdout.columns || DEFAULT_COLUMN;
-
-  // LESS_LINES / LESS_COLUMNS override the detected size, like
-  // scrsize: a negative value is relative to the real size
-  const lines = parseInt(process.env.LESS_LINES ?? '', 10);
-  const cols = parseInt(process.env.LESS_COLUMNS ?? '', 10);
-
-  if (!isNaN(lines)) {
-    config.window = lines < 0 ? config.window + lines : lines;
-    if (config.window <= 0) config.window = DEFAULT_WINDOW;
-  }
-
-  if (!isNaN(cols)) {
-    config.screenWidth = cols < 0 ? config.screenWidth + cols : cols;
-    if (config.screenWidth <= 0) config.screenWidth = DEFAULT_COLUMN;
-  }
-
-  // -N and -J reserve gutter columns inside the screen width
-  reserveGutter();
-
-  config.halfWindow = Math.floor(config.window / 2);
-  config.halfScreenWidth = Math.floor(config.screenWidth / 2);
 }
 
 function exitHelp(): boolean {

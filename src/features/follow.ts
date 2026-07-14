@@ -6,6 +6,20 @@ import { files, errorText } from "./files";
 
 import { optFollowName, optExitFollowOnClose } from "../options";
 
+import { session, deriveContent } from '../session';
+
+import { render, ringBell, calculateEOF } from '../helpers';
+
+import { lastLine } from './jumping';
+
+import { loadFile, bottomRow, revealPipeEnd } from './files';
+
+import { config, mode } from '../config';
+
+import { lineMatches } from './searching';
+
+import { optShowAttn } from '../options';
+
 /** The three F flavors, like less's A_F_FOREVER/_BELL/_UNTIL_HILITE. */
 export type FollowKind = 'forever' | 'bell' | 'hilite';
 
@@ -219,4 +233,144 @@ function nameClosed(path: string): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * Starts the F command, like forw_loop: jump to the end of the file,
+ * then wait for new data, polling every 50ms like og's read layer.
+ *
+ * @param kind - `forever` (F), `bell` (ESC-f) or `hilite` (ESC-F).
+ */
+export function beginFollow(kind: FollowKind): void {
+  // og's forw_loop is a no-op on the help file
+  if (mode.HELP || follow.active) return;
+
+  if (!startFollow(kind)) {
+    ringBell();
+    return;
+  }
+
+  // og's forw_loop reads immediately: a completed pipe returns
+  // its EOI before the wait prompt shows
+  revealPipeEnd();
+
+  // og warns before following a $LESSOPEN replacement, and follows
+  // anyway; RETURN dismisses the warning during the wait
+  if (files.list[files.index]?.alt) {
+    search.message = 'Warning: command may not work correctly ' +
+      'when file is viewed via LESSOPEN';
+  }
+
+  // og marks the pre-follow bottom line for -w before jumping
+  if (optShowAttn()) {
+    const next = bottomRow(session.content) + 1;
+    config.attnRow = next < session.content.length ? next : -1;
+  }
+
+  // og's forw_loop enters through jump_forw_buffered: re-entering
+  // F while already at the end rings the at-end bell (jump_loc's
+  // back(0) hitting eof_bell); the first F just moves there
+  lastLine(session.content, 0);
+  session.followTimer = setInterval(followTick, 50);
+}
+
+/**
+ * Jumps to the end of the file without the at-end bell, like
+ * forw_loop's jump_forw_buffered.
+ */
+export function pinToEnd(): void {
+  if (config.row !== config.endRow || config.subRow !== config.endSubRow) {
+    lastLine(session.content, 0);
+  }
+}
+
+/**
+ * One follow poll: appends new data pinned to the end of the file,
+ * reopens a rotated file under --follow-name, and leaves the wait on
+ * --exit-follow-on-close.
+ */
+export function followTick(): void {
+  const result = pollFollow();
+  if (result.kind === 'idle' || session.exited) return;
+
+  if (result.kind === 'close') {
+    endFollow();
+    render(session.content, session.buffer);
+    return;
+  }
+
+  if (result.kind === 'rotate') {
+    rotateFollow();
+    return;
+  }
+
+  const lines = result.lines;
+  let matchLines = lines;
+
+  // the first new line completes a displayed partial last line
+  if (result.extendTail && session.fullContent.length) {
+    const tail = session.fullContent.length - 1;
+    session.fullContent[tail] += lines.shift();
+    matchLines = [session.fullContent[tail], ...lines];
+  }
+
+  session.fullContent.push(...lines);
+  session.content = deriveContent();
+  calculateEOF(session.content);
+  pinToEnd();
+
+  // ESC-f bells when the search pattern matches new data, ESC-F
+  // stops there, like forw_loop watching highest_hilite
+  if (follow.active !== 'forever' && matchLines.some(lineMatches)) {
+    ringBell();
+
+    if (follow.active === 'hilite') {
+      endFollow();
+      render(session.content, session.buffer);
+      return;
+    }
+  }
+
+  render(session.content, session.buffer);
+}
+
+/**
+ * Reopens a rotated file under --follow-name and keeps following,
+ * like og's screen_trashed=2 reopen after curr_ifile_changed.
+ */
+export function rotateFollow(): void {
+  const kind = follow.active as FollowKind;
+  endFollow();
+
+  const lines = loadFile(files.index);
+
+  if (!lines) {
+    // the message set by loadFile shows at the prompt
+    render(session.content, session.buffer);
+    return;
+  }
+
+  session.fullContent = lines;
+  session.content = deriveContent();
+  config.row = Math.min(config.row, Math.max(session.content.length - 1, 0));
+  config.subRow = 0;
+  calculateEOF(session.content);
+
+  beginFollow(kind);
+  render(session.content, session.buffer);
+}
+
+/**
+ * Leaves the F wait and runs the keys typed during it, like og
+ * processing the ungotten commands after forw_loop returns.
+ *
+ * @returns Queued keys when the caller replays them itself.
+ */
+export function endFollow(): string[] {
+  if (session.followTimer) {
+    clearInterval(session.followTimer);
+    session.followTimer = null;
+  }
+
+  return stopFollow();
 }
