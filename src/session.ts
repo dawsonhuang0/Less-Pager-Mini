@@ -2,6 +2,10 @@ import { config, mode } from './config';
 
 import { Config, Mode } from './interfaces';
 
+import { transformContent } from './lines/helpers';
+
+import { filterLines } from './features/searching';
+
 /**
  * The pager session state, like og's globals spread across its C
  * files: one live session at a time, reset by resetSession() when a
@@ -133,4 +137,35 @@ export function resetSession(content: string[]): void {
   session.pipeBudget = Infinity;
   session.pipeFirstFill = true;
   session.pipeProbing = false;
+}
+
+/**
+ * Derives the display lines from the raw input: the & filter
+ * applies first, then the -s/-x/-r transform pipeline.
+ */
+export function deriveContent(): string[] {
+  if (!session.lastFilter) return transformContent(session.fullContent);
+
+  // filters run in guarded slices; a catastrophic pattern (or an
+  // interrupt) drops the filter instead of hanging the pager
+  const filtered = filterLines(session.fullContent, session.lastFilter);
+
+  if (!filtered) {
+    session.lastFilter = null;
+    return transformContent(session.fullContent);
+  }
+
+  return transformContent(filtered);
+}
+
+
+/**
+ * $LESS_SHELL_LINES reserves shell rows in one-screen tests, like
+ * og get_one_screen's `nlines + shell_lines <= sc_height`.
+ */
+export function shellReserveLines(): number {
+  return Math.min(
+    Math.max(parseInt(process.env.LESS_SHELL_LINES ?? '', 10) || 1, 1),
+    Math.max(config.window - 1, 1)
+  );
 }
