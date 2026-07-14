@@ -480,14 +480,30 @@ let prevCursorCol = -1;
 // render with no message and no option prompt open finally repaints
 let frozenFrame = false;
 
-export function freezeFrame(): void {
+// the unlatching repaint is og's make_display with top_scroll forced,
+// which a dumb terminal shows as clear+home instead of "...skipping"
+let frozenHome = false;
+let dumbHomePending = false;
+
+export function freezeFrame(homeOnUnfreeze: boolean = false): void {
   frozenFrame = true;
+  frozenHome = homeOnUnfreeze;
 }
 
 // --incsearch repaints while the pattern is typed (og's mca_search
 // jumping to the match), which clears the pending trash
 export function unfreezeFrame(): void {
   frozenFrame = false;
+}
+
+/**
+ * Seeds the previous frame as a blank screen, so frozen frames show
+ * og's unpainted display while startup ungot commands (the errmsgs
+ * gate key, +cmds) collect input before the first make_display.
+ */
+export function seedBlankFrame(): void {
+  prevRows = new Array(config.window).fill('');
+  prevCursorCol = -1;
 }
 
 export function render(rawContent: string[], buffer: string[]): void {
@@ -504,6 +520,8 @@ export function render(rawContent: string[], buffer: string[]): void {
 
     if (atPrompt) {
       frozenFrame = false;
+      if (frozenHome) dumbHomePending = true;
+      frozenHome = false;
     } else if (prevRows) {
       rows = [...prevRows.slice(0, -1), rows[rows.length - 1]];
     }
@@ -574,16 +592,70 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
     // scrolled forward: the old rows moved up by k
     for (let k = 1; k < last; k++) {
       if (plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)) {
-        return '\r' +
-          plain.slice(last - k, last).map(row => row + '\n').join('') +
-          plain[last];
+        return '\r' + joinDumb(plain.slice(last - k));
       }
     }
   }
 
-  // the first paint just prints, like og's initial forw; only later
-  // full repaints go behind the dumb `clear` of two newlines
-  return (prev ? '\n\n' : '') + plain.join('\n');
+  // the first paint just prints, like og's initial forw; a later
+  // full paint is repaint()'s non-contiguous forw, which without
+  // top_scroll prints "...skipping..." — only -c or a trashed
+  // make_display (top_scroll forced) clears with two newlines and
+  // hardcopy home's visible |-overstruck-^ marker ("|\b^"); every
+  // paint leads with lower_left's bare CR
+  const repaint = prev !== null || dumbPainted;
+  const clearHome = optClearRepaint() || dumbHomePending;
+  dumbHomePending = false;
+  dumbPainted = true;
+
+  return '\r' +
+    (repaint ? (clearHome ? '\n\n|\b^' : '...skipping...\n') : '') +
+    joinDumb(plain);
+}
+
+/**
+ * Joins dumb rows like og's pdone: a row that exactly fills the
+ * screen width gets no newline (auto-margins wrap it), and a bottom
+ * line following such a row starts with clear_bot's bare CR — which
+ * a deferred-wrap terminal puts on the hanging row, overwriting it
+ * like og.
+ */
+function joinDumb(plain: string[]): string {
+  let out = '';
+
+  for (let i = 0; i < plain.length; i++) {
+    out += plain[i];
+    if (i === plain.length - 1) break;
+
+    if (visualWidth(plain[i]) < config.screenWidth) {
+      out += '\n';
+    } else if (i === plain.length - 2 && search.message) {
+      // og's error() leads with clear_bot's CR, overwriting the
+      // hanging row; a prompt appends directly instead (forw_prompt
+      // skips clear_bot) and the deferred wrap moves it down a line
+      out += '\r';
+    }
+  }
+
+  return out;
+}
+
+// true once a dumb session painted, so a repaint after resetRender
+// (^L) still shows og's skipping marker for identical content
+let dumbPainted = false;
+
+export function resetDumbPaint(): void {
+  dumbPainted = false;
+}
+
+/**
+ * Counts the dumb screen as painted, so the next full frame carries
+ * og's "...skipping..." marker: a search executing before any paint
+ * compresses og's paint-repaint sequence, whose final repaint is
+ * always past first_time.
+ */
+export function markDumbPaint(): void {
+  dumbPainted = true;
 }
 
 /**

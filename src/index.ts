@@ -30,7 +30,10 @@ import {
   render,
   freezeFrame,
   unfreezeFrame,
+  seedBlankFrame,
   resetRender,
+  resetDumbPaint,
+  markDumbPaint,
   resetBellTimer,
   ringBell,
   bufferToNum,
@@ -606,6 +609,12 @@ function startupInit(content: string[]): ReturnType<typeof scanOptions> {
     search.message = search.messageQueue.shift() ?? '';
   }
 
+  // og's missing_cap warning follows the scan (main.c), still before
+  // edit_first's binary question; -d (know_dumb) suppresses it
+  if (dumbTerminal() && keyboard().isTTY && !optKnowDumb()) {
+    printStartupError('WARNING: terminal is not fully functional');
+  }
+
   return startup;
 }
 
@@ -917,6 +926,7 @@ async function contentPager(content: string[]): Promise<void> {
   let prevContent = content, prevConfig = config, prevMode = mode;
   let key = '', escCount = 0, buffer: string[] = [];
   let pendingFirstCmds: string[] = [];
+  let ungotStartKey = '';
   let shellPause: false | 'shell' | 'pager' = false;
   let exited = false;
 
@@ -939,24 +949,8 @@ async function contentPager(content: string[]): Promise<void> {
   // the warning (know_dumb) but not the degradation
   mode.DUMB = dumbTerminal();
 
-  if (mode.DUMB && keyboard().isTTY && !optKnowDumb()) {
-    process.stdout.write('WARNING: terminal is not fully functional\n');
-    process.stdout.write('Press RETURN to continue ');
-
-    // og's get_return accepts any key and quits on q
-    if (await warnReturn() === 'q') {
-      keyboard().setRawMode(false);
-      keyboard().pause();
-      closeTtyKeyboard();
-      return;
-    }
-
-    process.stdout.write('\n');
-  }
-
   // messages set after the scan (a forced open's read error) still
-  // print here; anything shown pre-screen then waits on a keystroke
-  // like og main's errmsgs gate before the screen erases it
+  // print here before the screen erases them
   if (search.message) {
     printStartupError(search.message);
 
@@ -967,11 +961,18 @@ async function contentPager(content: string[]): Promise<void> {
     search.message = '';
   }
 
+  // og main's errmsgs gate blocks in get_return, which ungets any
+  // key other than RETURN or space to become the first command
   if (startupErrmsgs > 0) {
     startupErrmsgs = 0;
     process.stdout.write('Press RETURN to continue ');
-    await warnReturn();
+    const answer = await warnReturn();
     process.stdout.write('\n');
+
+    if (answer && answer !== '\x0D' && answer !== '\x0A' &&
+        answer !== ' ') {
+      ungotStartKey = answer;
+    }
   }
 
   init();
@@ -1030,8 +1031,26 @@ async function contentPager(content: string[]): Promise<void> {
       resolve();
     };
 
+    // og's prompt() skips make_display while ungot startup input
+    // (the errmsgs gate key, +cmds) collects a command: the screen
+    // stays blank under the command echo until the command finishes
+    if (pendingFirstCmds.length || ungotStartKey) {
+      seedBlankFrame();
+      freezeFrame();
+    }
+
     // the startup replay may quit (+q), so it runs with exit armed
-    if (!drainFirstCmd()) render(content, buffer);
+    const drained = drainFirstCmd();
+
+    if (ungotStartKey && !exited) {
+      // the gate's key is ordinary terminal input after the +cmds
+      // (og's ungetsc stacking), with no end-command newline
+      const key = ungotStartKey;
+      ungotStartKey = '';
+      handleKey(key);
+    } else if (!drained) {
+      render(content, buffer);
+    }
 
     // --cmd runs once at the first prompt, like og's prompt() unget
     for (const sequence of splitKeys(takeCmdAtPrompt())) {
@@ -1377,6 +1396,16 @@ async function contentPager(content: string[]): Promise<void> {
       const result = searchInputKey(key);
 
       if (result === 'run') {
+        // og's search execution repaints a dumb screen (clear_attn
+        // and friends fall back to repaint() without can_goto_line):
+        // the content paints in the same frame as the result, on a
+        // fresh screen rather than over the frozen echo
+        if (mode.DUMB) {
+          unfreezeFrame();
+          resetRender();
+          markDumbPaint();
+        }
+
         if (search.input.type === '&') {
           applyFilter();
         } else {
@@ -1401,8 +1430,9 @@ async function contentPager(content: string[]): Promise<void> {
 
       // a completed toggle reports like og's error(): the message
       // draws over the old screen and any repaint waits for the
-      // dismissing keystroke (toggle_option's screen_trashed)
-      if (search.message) freezeFrame();
+      // dismissing keystroke (toggle_option's screen_trashed, whose
+      // make_display repaint homes a dumb terminal)
+      if (search.message) freezeFrame(true);
 
       render(content, buffer);
       return;
@@ -2647,6 +2677,7 @@ async function contentPager(content: string[]): Promise<void> {
     onShellAutosave(saveHistory);
     resetMarks();
     resetRender();
+    resetDumbPaint();
 
     // fresh terminal dimensions (and the -N/-J gutter), like og's
     // get_term at startup
@@ -2781,13 +2812,15 @@ async function contentPager(content: string[]): Promise<void> {
    * the terminal, like less de-initializing before running a command.
    */
   function suspendTerminal(): void {
+    // og's mouse and paste strings are hardcoded, not termcap: even
+    // a dumb terminal receives them when the options are on
+    if (optMouse() || opt.emouse) {
+      process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+    }
+
+    if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
+
     if (!mode.DUMB) {
-      if (optMouse() || opt.emouse) {
-        process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
-      }
-
-      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
-
       if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
       if (!optNoInit()) {
@@ -2809,13 +2842,13 @@ async function contentPager(content: string[]): Promise<void> {
       }
 
       if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
-
-      if (optMouse() || opt.emouse) {
-        process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
-      }
-
-      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
     }
+
+    if (optMouse() || opt.emouse) {
+      process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
+    }
+
+    if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
 
     hook.screenActive = true;
     resetRender();
@@ -2923,16 +2956,17 @@ async function contentPager(content: string[]): Promise<void> {
     closeAlt(files.list[files.index]);
     saveHistory();
 
-    // a dumb terminal never received any of the smart codes
+    // --emouse enables tracking without --mouse, so check both;
+    // these strings are hardcoded like og's, so dumb gets them too
+    if (optMouse() || opt.emouse) {
+      process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+    }
+
+    // --no-paste turned bracketed paste markers on
+    if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
+
+    // a dumb terminal never received the termcap-backed codes
     if (!mode.DUMB) {
-      // --emouse enables tracking without --mouse, so check both
-      if (optMouse() || opt.emouse) {
-        process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
-      }
-
-      // --no-paste turned bracketed paste markers on
-      if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
-
       if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
       if (!optNoInit()) {
@@ -2997,6 +3031,14 @@ function warnReturn(): Promise<string> {
 
   return new Promise(resolve => {
     keyboard().once('data', (data: Buffer) => {
+      // og reads a single char; anything typed behind it stays
+      // buffered as ordinary input (paused, or the re-emit would
+      // fire with no listener attached and vanish)
+      if (data.length > 1) {
+        keyboard().pause();
+        keyboard().unshift(data.subarray(1));
+      }
+
       resolve(data.toString()[0] ?? '');
     });
   });

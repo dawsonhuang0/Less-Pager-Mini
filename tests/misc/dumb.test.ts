@@ -6,7 +6,7 @@ import { search } from '../../src/features/searching';
 
 import { initContent } from '../../src/features/files';
 
-import { option } from '../../src/options';
+import { opt, option } from '../../src/options';
 
 import { render, resetRender, calculateEOF } from '../../src/helpers';
 
@@ -53,7 +53,7 @@ describe('dumb terminal rendering', () => {
     const frame = written.join('');
 
     // the first paint prints directly, like og's initial forw
-    expect(frame.startsWith('d1')).toBe(true);
+    expect(frame.startsWith('\rd1')).toBe(true);
 
     // no cursor addressing or attribute escapes at all
     expect(frame).not.toContain('\x1B');
@@ -89,7 +89,9 @@ describe('dumb terminal rendering', () => {
     expect(frame).not.toContain('\x1B');
   });
 
-  it('repaints in full behind two newlines on backward moves', () => {
+  it('repaints behind "...skipping..." on backward moves, like og', () => {
+    // og's repaint() forw is non-contiguous and, without top_scroll,
+    // prints the skipping marker instead of clearing
     config.row = 3;
     render(content, []);
     written.length = 0;
@@ -98,9 +100,24 @@ describe('dumb terminal rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    expect(frame.startsWith('\n\n')).toBe(true);
+    expect(frame.startsWith('\r...skipping...\n')).toBe(true);
     expect(frame).toContain('d1');
     expect(frame).not.toContain('\x1B');
+  });
+
+  it('clears with two newlines and homes with "|\\b^" under -c', () => {
+    config.row = 3;
+    render(content, []);
+    written.length = 0;
+
+    opt.clearRepaint = 1;
+    config.row = 0;
+    render(content, []);
+    opt.clearRepaint = 0;
+    const frame = written.join('');
+
+    expect(frame.startsWith('\r\n\n|\b^')).toBe(true);
+    expect(frame).toContain('d1');
   });
 
   it('keeps cursor-addressed frames on smart terminals', () => {
