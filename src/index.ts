@@ -7,6 +7,8 @@ import { shellArgv } from "./platform";
 
 import { Actions } from "./interfaces";
 
+import { session, resetSession } from "./session";
+
 import {
   config,
   mode,
@@ -469,6 +471,9 @@ let pendingStartup: ReturnType<typeof startupInit> | null = null;
 // files at least this big stream instead of loading eagerly
 const STREAM_FILE_MIN = 1024 * 1024;
 
+// og's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
+const MAX_PASTE_IGNORE_MS = 5000;
+
 /**
  * Opens a single regular file as a stream: the head block reads
  * synchronously (og's edit reading its first block for bin_file) and
@@ -636,104 +641,106 @@ function printStartupError(message: string): void {
  *
  * @param content - The content to be displayed in the pager.
  */
-async function contentPager(content: string[]): Promise<void> {
+async function contentPager(initialContent: string[]): Promise<void> {
+  resetSession(initialContent);
+
   // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
   const acts: Record<Actions, () => void> = {
-    FORCE_EXIT: () => exit(),
-    EXIT: () => { if (!exitHelp()) exit(); },
+    FORCE_EXIT: () => session.exit(),
+    EXIT: () => { if (!exitHelp()) session.exit(); },
     HELP: () => prepareHelp(),
-    ADD_BUFFER: () => addBufferChar(buffer, key),
-    DEL_BUFFER: () => delBufferChar(buffer),
-    LINE_FORWARD: () => lineForward(content, bufferToNum(buffer) || 1),
+    ADD_BUFFER: () => addBufferChar(session.buffer, session.key),
+    DEL_BUFFER: () => delBufferChar(session.buffer),
+    LINE_FORWARD: () => lineForward(session.content, bufferToNum(session.buffer) || 1),
     FORCE_LINE_FORWARD: () =>
-      lineForward(content, bufferToNum(buffer) || 1, true),
+      lineForward(session.content, bufferToNum(session.buffer) || 1, true),
     FORCE_LINE_BACKWARD: () =>
-      forceLineBackward(content, bufferToNum(buffer) || 1),
+      forceLineBackward(session.content, bufferToNum(session.buffer) || 1),
     FORCE_WINDOW_BACKWARD: () => forceLineBackward(
-      content,
-      bufferToNum(buffer) || getSwindow()
+      session.content,
+      bufferToNum(session.buffer) || getSwindow()
     ),
-    NEWLINE_FORWARD: () => newlineForward(content, bufferToNum(buffer) || 1),
+    NEWLINE_FORWARD: () => newlineForward(session.content, bufferToNum(session.buffer) || 1),
     NEWLINE_BACKWARD: () =>
-      newlineBackward(content, bufferToNum(buffer) || 1),
-    GO_POS: () => goPos(content, bufferToNum(buffer)),
+      newlineBackward(session.content, bufferToNum(session.buffer) || 1),
+    GO_POS: () => goPos(session.content, bufferToNum(session.buffer)),
     SPAN_REPEAT_SEARCH: () => spanningSearch(false),
     SPAN_REVERSE_SEARCH: () => spanningSearch(true),
     NEXT_TAG: () => tagStep(1),
     PREV_TAG: () => tagStep(-1),
-    LINE_BACKWARD: () => lineBackward(content, bufferToNum(buffer) || 1),
-    WINDOW_FORWARD: () => windowForward(content, buffer),
-    WINDOW_BACKWARD: () => windowBackward(content, buffer),
-    SET_WINDOW_FORWARD: () => setWindowForward(content, buffer),
-    SET_WINDOW_BACKWARD: () => setWindowBackward(content, buffer),
-    NO_EOF_WINDOW_FORWARD: () => windowForward(content, buffer, true),
-    SET_HALF_WINDOW_FORWARD: () => setHalfWindowForward(content, buffer),
-    SET_HALF_WINDOW_BACKWARD: () => setHalfWindowBackward(content, buffer),
-    SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(buffer),
-    SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(buffer),
-    LAST_COL: () => lastCol(content),
+    LINE_BACKWARD: () => lineBackward(session.content, bufferToNum(session.buffer) || 1),
+    WINDOW_FORWARD: () => windowForward(session.content, session.buffer),
+    WINDOW_BACKWARD: () => windowBackward(session.content, session.buffer),
+    SET_WINDOW_FORWARD: () => setWindowForward(session.content, session.buffer),
+    SET_WINDOW_BACKWARD: () => setWindowBackward(session.content, session.buffer),
+    NO_EOF_WINDOW_FORWARD: () => windowForward(session.content, session.buffer, true),
+    SET_HALF_WINDOW_FORWARD: () => setHalfWindowForward(session.content, session.buffer),
+    SET_HALF_WINDOW_BACKWARD: () => setHalfWindowBackward(session.content, session.buffer),
+    SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(session.buffer),
+    SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(session.buffer),
+    LAST_COL: () => lastCol(session.content),
     FIRST_COL: () => firstCol(),
     REPAINT: () => resetRender(),
     DROP_INPUT_REPAINT: () => resetRender(),
-    SEARCH_FORWARD: () => startSearch('/', bufferToNum(buffer) || 1),
-    SEARCH_BACKWARD: () => startSearch('?', bufferToNum(buffer) || 1),
-    REPEAT_SEARCH: () => repeatSearch(content, bufferToNum(buffer) || 1, false),
-    REVERSE_SEARCH: () => repeatSearch(content, bufferToNum(buffer) || 1, true),
+    SEARCH_FORWARD: () => startSearch('/', bufferToNum(session.buffer) || 1),
+    SEARCH_BACKWARD: () => startSearch('?', bufferToNum(session.buffer) || 1),
+    REPEAT_SEARCH: () => repeatSearch(session.content, bufferToNum(session.buffer) || 1, false),
+    REVERSE_SEARCH: () => repeatSearch(session.content, bufferToNum(session.buffer) || 1, true),
     HIGHLIGHT_TOGGLE: () => toggleHighlight(),
     CLEAR_SEARCH: () => clearHighlight(),
     PATTERN_ONLY: () => {
       if (mode.HELP) {
         ringBell();
       } else {
-        startSearch('&', bufferToNum(buffer) || 1);
+        startSearch('&', bufferToNum(session.buffer) || 1);
       }
     },
-    TAG_COMMAND: () => startOption(key === '_' ? '_' : '-'),
+    TAG_COMMAND: () => startOption(session.key === '_' ? '_' : '-'),
     // og binds :t to toggle-option with an extra 't', opening the
     // -t tag prompt (decode.c A_OPT_TOGGLE|A_EXTRA)
-    OPTION_TAG: () => { startOption('-'); optionKey(content, 't'); },
-    FIRST_LINE: () => firstLine(content, bufferToNum(buffer)),
+    OPTION_TAG: () => { startOption('-'); optionKey(session.content, 't'); },
+    FIRST_LINE: () => firstLine(session.content, bufferToNum(session.buffer)),
     LAST_LINE: () => {
       // a streaming pipe reads to its end first, like og's G with a
       // blank command line (jump_forw's ch_end_seek)
-      const n = bufferToNum(buffer);
+      const n = bufferToNum(session.buffer);
 
-      if (!pipeDrain(() => lastLine(content, n), '',
+      if (!pipeDrain(() => lastLine(session.content, n), '',
         'Cannot seek to end of file')) {
         // jump_forw's ch_end_seek reads a completed pipe's EOI even
         // without a drain; a numbered G is jump_back and reads none
         if (!n) revealPipeEnd();
-        lastLine(content, n);
+        lastLine(session.content, n);
       }
     },
     PERCENT_LINE: () => {
       // og's % shows ierror's interruptible note (jump_percent)
-      const n = bufferToNum(buffer);
+      const n = bufferToNum(session.buffer);
 
-      if (!pipeDrain(() => percentLine(content, n),
+      if (!pipeDrain(() => percentLine(session.content, n),
         'Determining length of file', 'Don\'t know length of file')) {
         // jump_percent needs ch_length: the end seek reads the EOI
         revealPipeEnd();
-        percentLine(content, n);
+        percentLine(session.content, n);
       }
     },
     CURLY_BRACKET_RIGHT: () =>
-      matchBracket(content, '{', '}', true, bufferToNum(buffer) || 1),
+      matchBracket(session.content, '{', '}', true, bufferToNum(session.buffer) || 1),
     ROUND_BRACKET_RIGHT: () =>
-      matchBracket(content, '(', ')', true, bufferToNum(buffer) || 1),
+      matchBracket(session.content, '(', ')', true, bufferToNum(session.buffer) || 1),
     SQUARE_BRACKET_RIGHT: () =>
-      matchBracket(content, '[', ']', true, bufferToNum(buffer) || 1),
+      matchBracket(session.content, '[', ']', true, bufferToNum(session.buffer) || 1),
     CURLY_BRACKET_LEFT: () =>
-      matchBracket(content, '{', '}', false, bufferToNum(buffer) || 1),
+      matchBracket(session.content, '{', '}', false, bufferToNum(session.buffer) || 1),
     ROUND_BRACKET_LEFT: () =>
-      matchBracket(content, '(', ')', false, bufferToNum(buffer) || 1),
+      matchBracket(session.content, '(', ')', false, bufferToNum(session.buffer) || 1),
     SQUARE_BRACKET_LEFT: () =>
-      matchBracket(content, '[', ']', false, bufferToNum(buffer) || 1),
-    CUSTOM_BRACKET_RIGHT: () => startBrackets(true, bufferToNum(buffer) || 1),
-    CUSTOM_BRACKET_LEFT: () => startBrackets(false, bufferToNum(buffer) || 1),
-    SET_MARK: () => startSetMark(false, bufferToNum(buffer)),
-    SET_MARK_BOTTOM: () => startSetMark(true, bufferToNum(buffer)),
-    GO_MARK: () => startGoMark(bufferToNum(buffer)),
+      matchBracket(session.content, '[', ']', false, bufferToNum(session.buffer) || 1),
+    CUSTOM_BRACKET_RIGHT: () => startBrackets(true, bufferToNum(session.buffer) || 1),
+    CUSTOM_BRACKET_LEFT: () => startBrackets(false, bufferToNum(session.buffer) || 1),
+    SET_MARK: () => startSetMark(false, bufferToNum(session.buffer)),
+    SET_MARK_BOTTOM: () => startSetMark(true, bufferToNum(session.buffer)),
+    GO_MARK: () => startGoMark(bufferToNum(session.buffer)),
     CLEAR_MARK: () => startClearMark(),
     FOLLOW: () => beginFollow('forever'),
     FOLLOW_BELL: () => beginFollow('bell'),
@@ -749,11 +756,11 @@ async function contentPager(content: string[]): Promise<void> {
         return;
       }
 
-      const target = indexFileTarget(bufferToNum(buffer) || 1);
+      const target = indexFileTarget(bufferToNum(session.buffer) || 1);
       if (target !== null) switchToFile(target);
     },
     REMOVE_FILE: () => removeFile(),
-    CURRENT_INFO: () => fileInfo(content),
+    CURRENT_INFO: () => fileInfo(session.content),
     NOACTION: () => {},
     SHELL_COMMAND: () => { if (secureAllow('shell')) startMiscInput('!'); },
     PSHELL_COMMAND: () => { if (secureAllow('shell')) startMiscInput('#'); },
@@ -764,39 +771,10 @@ async function contentPager(content: string[]): Promise<void> {
     VERSION: () => versionMessage(),
   };
 
-  let fullContent = content;
-  let lastClickY = -1;
-
-  // the still-delivering pipe state (og's lazy non-seekable reads)
-  let pipeStream: NodeJS.ReadableStream | null = null;
-  let pipePaused = false;
-  let pipeDrainTo: (() => void) | null = null;
-  let detachPipe: () => void = () => {};
-
-  // bytes of pipe data kept in memory before the oldest recycle
-  // away: -B limits it to the -b buffer space up front (ch.c's
-  // maxbufs for pipes); otherwise the budget locks in at the first
-  // sign of heap pressure, og's failed-allocation moment
-  let pipeBudget = Infinity;
-
-  // og paints arriving lines only while the initial forw() fills the
-  // first screenful; afterwards an idle pager never repaints on new
-  // pipe data (F is the follow command)
-  let pipeFirstFill = true;
-
-  // -F reads the pipe before any terminal init, like og's
-  // get_one_screen: nothing may reach the screen while it decides
-  let pipeProbing = false;
-
-  // drag origins for --emouse hdrag/vdrag, like og's last_drag_x/y
-  let lastDragX = -1;
-  let lastDragY = -1;
-  let lastFilter: ((line: string) => boolean) | null = null;
-
   // $LESS and command line options are already applied for file
   // sessions (og's main scans them before edit_first opens anything);
   // in-memory and pipe sessions scan here with their content
-  const startup = pendingStartup ?? startupInit(fullContent);
+  const startup = pendingStartup ?? startupInit(session.fullContent);
   pendingStartup = null;
 
   // -V prints the version and never starts the pager, like og
@@ -810,38 +788,38 @@ async function contentPager(content: string[]): Promise<void> {
   const pseudo = files.list[files.index];
 
   if (pseudo && pseudo.path === '-' && !pseudo.alt) {
-    const alt = openAltFile('-', fullContent.join('\n') + '\n');
+    const alt = openAltFile('-', session.fullContent.join('\n') + '\n');
 
     if (alt) {
       pseudo.alt = alt.alt;
       pseudo.size = alt.size;
       pseudo.lines = alt.lines;
-      fullContent = alt.lines;
-      content = alt.lines;
+      session.fullContent = alt.lines;
+      session.content = alt.lines;
     }
   }
 
   // a --modelines value from $LESS applies to the already-loaded file
-  checkModelines(fullContent);
+  checkModelines(session.fullContent);
 
   // the display pipeline applies & filters, -s squeezing, -x tab stops
   // and -r control char handling to the raw lines
   function deriveContent(): string[] {
-    if (!lastFilter) return transformContent(fullContent);
+    if (!session.lastFilter) return transformContent(session.fullContent);
 
     // filters run in guarded slices; a catastrophic pattern (or an
     // interrupt) drops the filter instead of hanging the pager
-    const filtered = filterLines(fullContent, lastFilter);
+    const filtered = filterLines(session.fullContent, session.lastFilter);
 
     if (!filtered) {
-      lastFilter = null;
-      return transformContent(fullContent);
+      session.lastFilter = null;
+      return transformContent(session.fullContent);
     }
 
     return transformContent(filtered);
   }
 
-  content = deriveContent();
+  session.content = deriveContent();
 
   // -s, -x and -r reshape the displayed content when toggled
   onRebuild(() => {
@@ -849,16 +827,16 @@ async function contentPager(content: string[]): Promise<void> {
     // friends carry O_REPAINT on the current file); the main content
     // rebuild lands in the parked copy for when help exits
     if (mode.HELP) {
-      prevContent = deriveContent();
-      content = transformContent(help);
-      calculateEOF(content);
+      session.prevContent = deriveContent();
+      session.content = transformContent(help);
+      calculateEOF(session.content);
       return;
     }
 
-    content = deriveContent();
-    config.row = Math.min(config.row, Math.max(content.length - 1, 0));
+    session.content = deriveContent();
+    config.row = Math.min(config.row, Math.max(session.content.length - 1, 0));
     config.subRow = 0;
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     if (!mode.EOF) {
       mode.EOF = config.row > config.endRow || (
@@ -874,7 +852,7 @@ async function contentPager(content: string[]): Promise<void> {
   config.row = 0;
   config.subRow = 0;
   config.col = 0;
-  calculateEOF(content);
+  calculateEOF(session.content);
 
   // $LESS_SHELL_LINES reserves shell rows in the fits test, like
   // get_one_screen's `nlines + shell_lines <= sc_height`
@@ -898,7 +876,7 @@ async function contentPager(content: string[]): Promise<void> {
   let totalRows = 0;
 
   if (optQuitIfOneScreen() && !startup.dohelp) {
-    for (const line of content) {
+    for (const line of session.content) {
       totalRows += maxSubRow(line) + 1;
       if (totalRows + shellLines > config.window) break;
     }
@@ -912,9 +890,9 @@ async function contentPager(content: string[]): Promise<void> {
     const rows: string[] = [];
 
     if (chopLine() || config.col) {
-      chopLongLines(content, rows);
+      chopLongLines(session.content, rows);
     } else {
-      wrapLongLines(content, rows);
+      wrapLongLines(session.content, rows);
     }
 
     process.stdout.write(rows.join('\n') + '\n');
@@ -922,27 +900,6 @@ async function contentPager(content: string[]): Promise<void> {
   }
 
   const processTitle = process.title;
-
-  let prevContent = content, prevConfig = config, prevMode = mode;
-  let key = '', escCount = 0, buffer: string[] = [];
-  let pendingFirstCmds: string[] = [];
-  let ungotStartKey = '';
-  let shellPause: false | 'shell' | 'pager' = false;
-  let exited = false;
-
-  // true when the help screen IS the input (--help/-?), like og's
-  // dohelp FAKE_HELPFILE; q then quits instead of restoring a file
-  let startupHelp = false;
-  let exit = () => {};
-  let pasting = false;
-
-  // og's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
-  const MAX_PASTE_IGNORE_MS = 5000;
-  let ignoringPaste = false;
-  let ignoreStart = 0;
-  let followTimer: ReturnType<typeof setInterval> | null = null;
-  let pendingEditWarn = false;
-  let userSeq = '';
 
   // a terminal without cursor capabilities runs degraded, like og's
   // missing_cap set from the dumb/unknown termcap entry; -d suppresses
@@ -971,7 +928,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     if (answer && answer !== '\x0D' && answer !== '\x0A' &&
         answer !== ' ') {
-      ungotStartKey = answer;
+      session.ungotStartKey = answer;
     }
   }
 
@@ -982,17 +939,17 @@ async function contentPager(content: string[]): Promise<void> {
   // pager, unlike the h command's overlay
   if (startup.dohelp) {
     prepareHelp();
-    startupHelp = true;
+    session.startupHelp = true;
   }
 
   // -o/-O in $LESS start logging piped-in content right away
-  applyStartupLogFile(fullContent);
+  applyStartupLogFile(session.fullContent);
 
   // + commands (and -p searches) run at the first file, followed by
   // the ++cmd every-file command, like og's ungotten startup input
-  pendingFirstCmds = startup.firstCmds;
+  session.pendingFirstCmds = startup.firstCmds;
   const everyCmd = getFirstCmd();
-  if (everyCmd) pendingFirstCmds.push(everyCmd);
+  if (everyCmd) session.pendingFirstCmds.push(everyCmd);
 
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);
@@ -1005,7 +962,7 @@ async function contentPager(content: string[]): Promise<void> {
   // calling ch_setbufspace: existing data stays (og recycles only
   // at the next allocation), new arrivals shed against the bound
   onTrimBufSpace(() => {
-    if (pipeStream) pipeBudget = pipeBudgetBytes();
+    if (session.pipeStream) session.pipeBudget = pipeBudgetBytes();
   });
 
   // -e/-E: a forward move at end-of-file edits the next file, or
@@ -1018,7 +975,7 @@ async function contentPager(content: string[]): Promise<void> {
     if (files.list[files.index + 1] !== undefined) {
       switchToFile(files.index + 1);
     } else {
-      exit();
+      session.exit();
     }
 
     return true;
@@ -1026,15 +983,15 @@ async function contentPager(content: string[]): Promise<void> {
 
   keyboard().on('data', keyHandler);
   await new Promise<void>((resolve) => {
-    exit = () => {
-      exited = true;
+    session.exit = () => {
+      session.exited = true;
       resolve();
     };
 
     // og's prompt() skips make_display while ungot startup input
     // (the errmsgs gate key, +cmds) collects a command: the screen
     // stays blank under the command echo until the command finishes
-    if (pendingFirstCmds.length || ungotStartKey) {
+    if (session.pendingFirstCmds.length || session.ungotStartKey) {
       seedBlankFrame();
       freezeFrame();
     }
@@ -1042,19 +999,19 @@ async function contentPager(content: string[]): Promise<void> {
     // the startup replay may quit (+q), so it runs with exit armed
     const drained = drainFirstCmd();
 
-    if (ungotStartKey && !exited) {
+    if (session.ungotStartKey && !session.exited) {
       // the gate's key is ordinary terminal input after the +cmds
       // (og's ungetsc stacking), with no end-command newline
-      const key = ungotStartKey;
-      ungotStartKey = '';
-      handleKey(key);
+      const gateKey = session.ungotStartKey;
+      session.ungotStartKey = '';
+      handleKey(gateKey);
     } else if (!drained) {
-      render(content, buffer);
+      render(session.content, session.buffer);
     }
 
     // --cmd runs once at the first prompt, like og's prompt() unget
     for (const sequence of splitKeys(takeCmdAtPrompt())) {
-      if (exited) break;
+      if (session.exited) break;
       handleKey(sequence);
     }
   });
@@ -1072,7 +1029,7 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     if (action !== 'ADD_BUFFER' && action !== 'DEL_BUFFER') {
-      buffer = [];
+      session.buffer = [];
       config.bufferOffset = 0;
       mode.BUFFERING = false;
     }
@@ -1091,14 +1048,14 @@ async function contentPager(content: string[]): Promise<void> {
     // against eof_displayed (a pipe's end must have been read)
     // before drawing anything; -e acts on forward moves at EOF
     // instead (og's forward())
-    if (!exited && optQuitAtEof() === 2 && mode.EOF && sizeIsKnown() &&
+    if (!session.exited && optQuitAtEof() === 2 && mode.EOF && sizeIsKnown() &&
         !mode.HELP && files.list[files.index + 1] === undefined) {
-      exit();
+      session.exit();
       return;
     }
 
     // quitting must not repaint over the final prompt, like less
-    if (!exited && !drained) render(content, buffer);
+    if (!session.exited && !drained) render(session.content, session.buffer);
   }
 
   /**
@@ -1109,14 +1066,14 @@ async function contentPager(content: string[]): Promise<void> {
    * @returns True when a replay ran (and rendered) here.
    */
   function drainFirstCmd(): boolean {
-    if (!pendingFirstCmds.length || exited) return false;
+    if (!session.pendingFirstCmds.length || session.exited) return false;
 
-    const cmds = pendingFirstCmds;
-    pendingFirstCmds = [];
+    const cmds = session.pendingFirstCmds;
+    session.pendingFirstCmds = [];
 
     for (const cmd of cmds) {
       for (const sequence of splitKeys(cmd)) {
-        if (exited) return true;
+        if (session.exited) return true;
         handleKey(sequence);
       }
 
@@ -1132,11 +1089,11 @@ async function contentPager(content: string[]): Promise<void> {
    * jump (`+15` acts as `15g`), other prompts wait for the user.
    */
   function endFirstCmd(): void {
-    if (exited) return;
+    if (session.exited) return;
 
     if (search.input) {
       handleKey('\x0D');
-    } else if (buffer.length) {
+    } else if (session.buffer.length) {
       handleKey('g');
     }
   }
@@ -1144,7 +1101,7 @@ async function contentPager(content: string[]): Promise<void> {
   function keyHandler(data: Buffer): void {
     let text = data.toString();
 
-    if (optNoPaste() || pasting || ignoringPaste) text = filterPaste(text);
+    if (optNoPaste() || session.pasting || session.ignoringPaste) text = filterPaste(text);
 
     for (const sequence of splitKeys(text)) handleKey(sequence);
   }
@@ -1168,10 +1125,10 @@ async function contentPager(content: string[]): Promise<void> {
     let i = 0;
 
     while (i < text.length) {
-      if (ignoringPaste) {
-        if (Date.now() >= ignoreStart + MAX_PASTE_IGNORE_MS) {
-          ignoringPaste = false;
-          pasting = false;
+      if (session.ignoringPaste) {
+        if (Date.now() >= session.ignoreStart + MAX_PASTE_IGNORE_MS) {
+          session.ignoringPaste = false;
+          session.pasting = false;
           continue;
         }
 
@@ -1179,24 +1136,24 @@ async function contentPager(content: string[]): Promise<void> {
         if (end < 0) return out;
 
         i = end + 6;
-        ignoringPaste = false;
-        pasting = false;
+        session.ignoringPaste = false;
+        session.pasting = false;
       } else if (text.startsWith('\x1B[200~', i)) {
         i += 6;
 
         if (promptOpen()) {
-          pasting = true;
+          session.pasting = true;
         } else {
-          ignoringPaste = true;
-          ignoreStart = Date.now();
+          session.ignoringPaste = true;
+          session.ignoreStart = Date.now();
         }
-      } else if (pasting && text.startsWith('\x1B[201~', i)) {
+      } else if (session.pasting && text.startsWith('\x1B[201~', i)) {
         i += 6;
-        pasting = false;
-      } else if (pasting && (text[i] === '\x0D' || text[i] === '\x0A')) {
+        session.pasting = false;
+      } else if (session.pasting && (text[i] === '\x0D' || text[i] === '\x0A')) {
         // the pasted newline never executes the command
-        ignoringPaste = true;
-        ignoreStart = Date.now();
+        session.ignoringPaste = true;
+        session.ignoreStart = Date.now();
         i++;
       } else {
         out += text[i++];
@@ -1212,7 +1169,7 @@ async function contentPager(content: string[]): Promise<void> {
     // og's prompt() checks -F after every command returns to a true
     // prompt: quit when the entire file is displayed, and either way
     // the flag gets only one chance at this
-    if (!exited && optQuitIfOneScreen()) oneScreenQuit();
+    if (!session.exited && optQuitIfOneScreen()) oneScreenQuit();
   }
 
   /**
@@ -1225,7 +1182,7 @@ async function contentPager(content: string[]): Promise<void> {
       !search.input && !examine.pending && !miscInput.pending &&
       !brackets.pending && !marks.pending && !mode.BUFFERING &&
       !config.keyPrefix && !binaryConfirm.pending && !follow.active &&
-      !pipeDraining.active && !shellPause;
+      !pipeDraining.active && !session.shellPause;
 
     if (!atPrompt) return;
 
@@ -1234,7 +1191,7 @@ async function contentPager(content: string[]): Promise<void> {
       config.subRow === 0 && lineBase() === 0 &&
       files.index >= files.list.length - 1 && !choppedColumns()
     ) {
-      exit();
+      session.exit();
       return;
     }
 
@@ -1247,37 +1204,37 @@ async function contentPager(content: string[]): Promise<void> {
     if (!chopLine() && !config.col) return false;
 
     const usable = config.screenWidth - gutterWidth();
-    return content.some(line => visualWidth(line) > usable);
+    return session.content.some(line => visualWidth(line) > usable);
   }
 
   function dispatchKey(sequence: string): void {
-    key = sequence;
+    session.key = sequence;
 
     // the interrupt key abandons a G/% pipe drain, reporting like
     // og's interrupted ch_end_seek ("Cannot seek to end of file")
-    if (pipeDrainTo && (key === '\x03' || key === optIntrChar())) {
-      pipeDrainTo = null;
+    if (session.pipeDrainTo && (session.key === '\x03' || session.key === optIntrChar())) {
+      session.pipeDrainTo = null;
       search.message = pipeDraining.cancelMessage;
       pipeDraining.active = false;
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     // waiting after !/|: the keypress re-enters the pager (! pauses on
     // the shell screen, | on the blank pager screen); non-return keys
     // become the next command (get_return)
-    if (shellPause) {
-      if (shellPause === 'shell') {
+    if (session.shellPause) {
+      if (session.shellPause === 'shell') {
         process.stdout.write('\n');
         enterScreen();
       } else {
         resetRender();
       }
 
-      shellPause = false;
+      session.shellPause = false;
 
-      if (key === '\x0D' || key === '\x0A' || key === ' ') {
-        render(content, buffer);
+      if (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ') {
+        render(session.content, session.buffer);
         return;
       }
     }
@@ -1287,37 +1244,37 @@ async function contentPager(content: string[]): Promise<void> {
     // SK bindings resolve to nothing without termcap) and just bell
     if (
       mode.DUMB &&
-      (key.startsWith('\x1B[') || key.startsWith('\x1BO'))
+      (session.key.startsWith('\x1B[') || session.key.startsWith('\x1BO'))
     ) {
       ringBell();
       return;
     }
 
     // -K exits on ctrl-C, like less's quit_on_intr
-    if (key === '\x03' && optQuitOnIntr()) {
-      exit();
+    if (session.key === '\x03' && optQuitOnIntr()) {
+      session.exit();
       return;
     }
 
     // ctrl-C at the top level clears the & filter, like og's
     // u_interrupt calling set_filter_pattern(NULL)
     if (
-      key === '\x03' && !search.input && !option.pending &&
+      session.key === '\x03' && !search.input && !option.pending &&
       !examine.pending && !marks.pending && !brackets.pending &&
       !miscInput.pending && search.filters.length
     ) {
       search.filters = [];
-      content = deriveContent();
-      calculateEOF(content);
+      session.content = deriveContent();
+      calculateEOF(session.content);
       ringBell();
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     // ^Z suspends like og's psignals S_STOP: the tty driver would
     // stop og anywhere, prompts included; restore the terminal, stop
     // the process, and repaint when the shell resumes it
-    if (key === '\x1A') {
+    if (session.key === '\x1A') {
       suspendSelf();
       return;
     }
@@ -1330,23 +1287,23 @@ async function contentPager(content: string[]): Promise<void> {
       // before the wait prompt shows again
       if (
         search.message &&
-        (key === '\x0D' || key === '\x0A' || key === ' ')
+        (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
       ) {
         search.message = search.messageQueue.shift() ?? '';
-        render(content, buffer);
+        render(session.content, session.buffer);
         return;
       }
 
-      if (key === '\x03' || key === optIntrChar()) {
+      if (session.key === '\x03' || session.key === optIntrChar()) {
         // ^C arrives as og's SIGINT, whose u_interrupt handler rings
         // the bell; the --intr char (READ_INTR) leaves silently
-        if (key === '\x03') ringBell();
+        if (session.key === '\x03') ringBell();
 
         const queued = endFollow();
-        render(content, buffer);
+        render(session.content, session.buffer);
         for (const sequence of queued) handleKey(sequence);
       } else {
-        follow.queued.push(key);
+        follow.queued.push(session.key);
       }
 
       return;
@@ -1361,21 +1318,21 @@ async function contentPager(content: string[]): Promise<void> {
     // reprocessed as commands, like less's get_return
     if (
       hadMessage &&
-      (key === '\x0D' || key === '\x0A' || key === ' ')
+      (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
     ) {
       // dismissing the LESSOPEN warning continues into the editor,
       // like og's error() returning before the edit
-      if (pendingEditWarn) {
+      if (session.pendingEditWarn) {
         runEditor();
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     // any other command abandons a pending edit warning
-    if (hadMessage && pendingEditWarn && key !== 'v') {
-      pendingEditWarn = false;
+    if (hadMessage && session.pendingEditWarn && session.key !== 'v') {
+      session.pendingEditWarn = false;
     }
 
     // #line-edit bindings translate into the built-in editing keys
@@ -1383,7 +1340,7 @@ async function contentPager(content: string[]): Promise<void> {
       search.input || option.pending || examine.pending ||
       miscInput.pending
     ) {
-      key = translateEditKey(key);
+      session.key = translateEditKey(session.key);
     }
 
     if (search.input) {
@@ -1393,7 +1350,7 @@ async function contentPager(content: string[]): Promise<void> {
         originEof: search.input.originEof,
       };
 
-      const result = searchInputKey(key);
+      const result = searchInputKey(session.key);
 
       if (result === 'run') {
         // og's search execution repaints a dumb screen (clear_attn
@@ -1409,7 +1366,7 @@ async function contentPager(content: string[]): Promise<void> {
         if (search.input.type === '&') {
           applyFilter();
         } else {
-          execSearch(content);
+          execSearch(session.content);
         }
       } else if (result === 'cancel') {
         // --incsearch restores the position the prompt opened at
@@ -1418,15 +1375,15 @@ async function contentPager(content: string[]): Promise<void> {
         // incsearch paints mid-mca, clearing the trash like og's
         // repaint resetting screen_trashed
         unfreezeFrame();
-        incrementalSearch(content);
+        incrementalSearch(session.content);
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     if (option.pending) {
-      optionKey(content, key);
+      optionKey(session.content, session.key);
 
       // a completed toggle reports like og's error(): the message
       // draws over the old screen and any repaint waits for the
@@ -1434,63 +1391,63 @@ async function contentPager(content: string[]): Promise<void> {
       // make_display repaint homes a dumb terminal)
       if (search.message) freezeFrame(true);
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     if (brackets.pending) {
-      bracketsKey(content, key);
-      render(content, buffer);
+      bracketsKey(session.content, session.key);
+      render(session.content, session.buffer);
       return;
     }
 
     if (marks.pending) {
-      marksKey(content, key);
+      marksKey(session.content, session.key);
 
       // --autosave with `m` writes changed marks right away
       if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     if (examine.pending) {
-      if (examineKey(key) === 'run') runExamine();
-      if (!drainFirstCmd()) render(content, buffer);
+      if (examineKey(session.key) === 'run') runExamine();
+      if (!drainFirstCmd()) render(session.content, session.buffer);
       return;
     }
 
     if (pipeMark.pending) {
-      pipeMarkKey(content, key);
-      render(content, buffer);
+      pipeMarkKey(session.content, session.key);
+      render(session.content, session.buffer);
       return;
     }
 
     if (miscInput.pending) {
       const kind = miscInput.pending;
 
-      if (miscInputKey(key) === 'run') {
+      if (miscInputKey(session.key) === 'run') {
         const text = miscInput.text;
         miscInput.text = '';
         runMiscInput(kind, text);
       }
 
       // no repaint while paused on the shell screen
-      if (!shellPause) render(content, buffer);
+      if (!session.shellPause) render(session.content, session.buffer);
       return;
     }
 
     if (overwrite.pending) {
-      const answer = overwriteKey(key);
+      const answer = overwriteKey(session.key);
 
       if (answer === 'overwrite' || answer === 'append') {
-        writeLogFile(content, answer === 'append');
+        writeLogFile(session.content, answer === 'append');
       } else if (answer === 'quit') {
-        exit();
+        session.exit();
         return;
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -1500,9 +1457,9 @@ async function contentPager(content: string[]): Promise<void> {
       binaryConfirm.pending = false;
       binaryConfirm.proceed = null;
 
-      if ((key === 'y' || key === 'Y') && proceed) proceed();
+      if ((session.key === 'y' || session.key === 'Y') && proceed) proceed();
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -1512,75 +1469,75 @@ async function contentPager(content: string[]): Promise<void> {
 
       // erase and newline cancel a prefix silently (CF_QUIT_ON_ERASE)
       if (
-        key === '\x03' || key === '\x08' || key === '\x7F' ||
-        key === '\x0D' || key === '\x0A'
+        session.key === '\x03' || session.key === '\x08' || session.key === '\x7F' ||
+        session.key === '\x0D' || session.key === '\x0A'
       ) {
         config.keyPrefix = '';
-        render(content, buffer);
+        render(session.content, session.buffer);
         return;
       }
 
-      const user = userBinding(prefix + key);
+      const user = userBinding(prefix + session.key);
 
       if (user) {
-        if (user.key) key = user.key;
+        if (user.key) session.key = user.key;
         act(user.action);
 
-        if (!exited && user.extra) {
+        if (!session.exited && user.extra) {
           for (const sequence of splitKeys(user.extra)) handleKey(sequence);
         }
 
         return;
       }
 
-      const action = userStop() ? undefined : getAction(prefix + key);
-      if (action === undefined && key.length > 1) extraBells();
+      const action = userStop() ? undefined : getAction(prefix + session.key);
+      if (action === undefined && session.key.length > 1) extraBells();
       act(action);
       return;
     }
 
-    if ((key === '\x18' || key === ':') && !escCount) {
-      config.keyPrefix = key;
-      render(content, buffer);
+    if ((session.key === '\x18' || session.key === ':') && !session.escCount) {
+      config.keyPrefix = session.key;
+      render(session.content, session.buffer);
       return;
     }
 
     // mouse wheel ticks scroll --wheel-lines lines; --rmouse (or
     // --MOUSE) reverses the scroll direction, like less; the wheel
     // is ignored without the vscroll --emouse feature (decode.c)
-    if (!escCount && key.startsWith('\x1b[<64;')) {
+    if (!session.escCount && session.key.startsWith('\x1b[<64;')) {
       if (!optWheelEnabled()) return;
 
       if (optMouseReverse()) {
-        lineForward(content, optWheelLines());
+        lineForward(session.content, optWheelLines());
       } else {
-        lineBackward(content, optWheelLines());
+        lineBackward(session.content, optWheelLines());
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
-    if (!escCount && key.startsWith('\x1b[<65;')) {
+    if (!session.escCount && session.key.startsWith('\x1b[<65;')) {
       if (!optWheelEnabled()) return;
 
       if (optMouseReverse()) {
-        lineBackward(content, optWheelLines());
+        lineBackward(session.content, optWheelLines());
       } else {
-        lineForward(content, optWheelLines());
+        lineForward(session.content, optWheelLines());
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
     // a horizontal wheel shifts --wheel-lines columns when the
     // hscroll --emouse feature is on (og's A_L_MOUSE/A_R_MOUSE)
-    if (!escCount &&
-        (key.startsWith('\x1b[<66;') || key.startsWith('\x1b[<67;'))) {
+    if (!session.escCount &&
+        (session.key.startsWith('\x1b[<66;') || session.key.startsWith('\x1b[<67;'))) {
       if (!(opt.emouse & EMOUSE_HSCROLL)) return;
 
-      const left = key.startsWith('\x1b[<66;') !== (optMouseReverse());
+      const left = session.key.startsWith('\x1b[<66;') !== (optMouseReverse());
 
       if (mode.INIT) mode.INIT = false;
 
@@ -1590,7 +1547,7 @@ async function contentPager(content: string[]): Promise<void> {
         config.col += optWheelLines();
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -1598,34 +1555,34 @@ async function contentPager(content: string[]): Promise<void> {
     // left press records the drag origin, motion events drag the text
     // (hdrag/vdrag), a same-row release sets the mouse mark '#', and
     // a right-click release jumps to it
-    const click = !escCount &&
+    const click = !session.escCount &&
       // eslint-disable-next-line no-control-regex
-      /^\x1b\[<(0|2|32);(\d+);(\d+)([Mm])/.exec(key);
+      /^\x1b\[<(0|2|32);(\d+);(\d+)([Mm])/.exec(session.key);
 
     if (click && click[1] === '32' &&
         (opt.emouse & (EMOUSE_HDRAG | EMOUSE_VDRAG))) {
       const x = parseInt(click[2], 10) - 1;
       const y = parseInt(click[3], 10) - 1;
 
-      if ((opt.emouse & EMOUSE_HDRAG) && lastDragX >= 0 &&
-          x !== lastDragX) {
+      if ((opt.emouse & EMOUSE_HDRAG) && session.lastDragX >= 0 &&
+          x !== session.lastDragX) {
         // dragging right moves the text right (hshift decreases)
-        config.col = Math.max(config.col - (x - lastDragX), 0);
+        config.col = Math.max(config.col - (x - session.lastDragX), 0);
         if (mode.INIT) mode.INIT = false;
-        lastDragX = x;
+        session.lastDragX = x;
       }
 
-      if ((opt.emouse & EMOUSE_VDRAG) && lastDragY >= 0) {
-        if (y > lastDragY) {
-          lineBackward(content, y - lastDragY);
-        } else if (y < lastDragY) {
-          lineForward(content, lastDragY - y);
+      if ((opt.emouse & EMOUSE_VDRAG) && session.lastDragY >= 0) {
+        if (y > session.lastDragY) {
+          lineBackward(session.content, y - session.lastDragY);
+        } else if (y < session.lastDragY) {
+          lineForward(session.content, session.lastDragY - y);
         }
 
-        lastDragY = y;
+        session.lastDragY = y;
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -1636,15 +1593,15 @@ async function contentPager(content: string[]): Promise<void> {
       const y = parseInt(click[3], 10) - 1;
 
       if (click[4] === 'M') {
-        lastClickY = y;
-        lastDragX = x;
-        lastDragY = y;
+        session.lastClickY = y;
+        session.lastDragX = x;
+        session.lastDragY = y;
       } else if (optEmouseLclick() && y < config.window - 1 &&
-                 y === lastClickY) {
-        setMouseMark(content, y);
+                 y === session.lastClickY) {
+        setMouseMark(session.content, y);
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -1652,21 +1609,21 @@ async function contentPager(content: string[]): Promise<void> {
       const y = parseInt(click[3], 10) - 1;
 
       if (click[4] === 'm' && y < config.window - 1) {
-        goMouseMark(content);
+        goMouseMark(session.content);
       }
 
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
-    if (key === '\x1B') {
+    if (session.key === '\x1B') {
       // og-dumb echoes every ESC immediately (no pending unechoed
       // first ESC) and stacks the prefix without the " ESC"/" ESCESC"
       // cycle or any bells (probed); the echo shows length-1 ESCs
       if (mode.DUMB) {
-        escCount++;
-        config.keyPrefix = '\x1B'.repeat(escCount + 1);
-        render(content, buffer);
+        session.escCount++;
+        config.keyPrefix = '\x1B'.repeat(session.escCount + 1);
+        render(session.content, session.buffer);
         return;
       }
 
@@ -1676,14 +1633,14 @@ async function contentPager(content: string[]): Promise<void> {
       // "ESC", a third literal is invalid and resets to one (the
       // " ESC" <-> " ESCESC" cycle), and any number of pending ESCs
       // still decodes as a single ESC prefix
-      const absorb = buffer.length ? 3 : 1;
+      const absorb = session.buffer.length ? 3 : 1;
 
-      if (escCount - absorb >= 2) {
+      if (session.escCount - absorb >= 2) {
         // " ESCESC" resets to " ESC" silently
-        escCount = absorb + 1;
+        session.escCount = absorb + 1;
       } else {
-        escCount++;
-        const literals = escCount - absorb;
+        session.escCount++;
+        const literals = session.escCount - absorb;
 
         // og rings when the second literal lands (" ESC" -> " ESCESC")
         // and when the first lands after swallowed digit-mode input
@@ -1692,19 +1649,19 @@ async function contentPager(content: string[]): Promise<void> {
         }
       }
 
-      config.keyPrefix = '\x1B'.repeat(Math.max(escCount - absorb, 0) + 1);
-      render(content, buffer);
+      config.keyPrefix = '\x1B'.repeat(Math.max(session.escCount - absorb, 0) + 1);
+      render(session.content, session.buffer);
     } else {
       // og-dumb echoes the terminating key into the pending ESC line
       // as caret notation before the sequence resolves; without clear
       // caps the echo stays behind as leftovers, like og
-      if (mode.DUMB && escCount && key.length === 1) {
-        process.stdout.write(key < ' ' || key === '\x7F'
-          ? '^' + String.fromCharCode((key.charCodeAt(0) + 0x40) & 0x7F)
-          : key);
+      if (mode.DUMB && session.escCount && session.key.length === 1) {
+        process.stdout.write(session.key < ' ' || session.key === '\x7F'
+          ? '^' + String.fromCharCode((session.key.charCodeAt(0) + 0x40) & 0x7F)
+          : session.key);
       }
 
-      const seq = userSeq + (escCount ? '\x1B' + key : key);
+      const seq = session.userSeq + (session.escCount ? '\x1B' + session.key : session.key);
 
       // lesskey #command bindings run before the built-in table; the
       // canonical key serves the key-sensitive actions and the extra
@@ -1712,13 +1669,13 @@ async function contentPager(content: string[]): Promise<void> {
       const user = userBinding(seq);
 
       if (user) {
-        userSeq = '';
+        session.userSeq = '';
         config.keyPrefix = '';
-        if (user.key) key = user.key;
+        if (user.key) session.key = user.key;
         act(user.action);
-        escCount = 0;
+        session.escCount = 0;
 
-        if (!exited && user.extra) {
+        if (!session.exited && user.extra) {
           for (const sequence of splitKeys(user.extra)) handleKey(sequence);
         }
 
@@ -1730,20 +1687,20 @@ async function contentPager(content: string[]): Promise<void> {
       if (
         seq[0] !== ':' && seq[0] !== '\x18' && userIsPrefix(seq)
       ) {
-        userSeq = seq;
+        session.userSeq = seq;
         config.keyPrefix = seq;
-        escCount = 0;
-        render(content, buffer);
+        session.escCount = 0;
+        render(session.content, session.buffer);
         return;
       }
 
-      if (userSeq) {
+      if (session.userSeq) {
         // the collected sequence completes no binding: bad command
-        userSeq = '';
+        session.userSeq = '';
         config.keyPrefix = '';
-        escCount = 0;
+        session.escCount = 0;
         ringBell();
-        render(content, buffer);
+        render(session.content, session.buffer);
         return;
       }
 
@@ -1751,18 +1708,18 @@ async function contentPager(content: string[]): Promise<void> {
 
       // og-dumb resolves an unbound ESC sequence by running the last
       // key as a plain command (probed: ESC ESC RETURN still scrolls)
-      if (action === undefined && mode.DUMB && escCount) {
-        action = userStop() ? undefined : getAction(key);
+      if (action === undefined && mode.DUMB && session.escCount) {
+        action = userStop() ? undefined : getAction(session.key);
       }
 
       if (
-        action === undefined && escCount && key.length > 1 && !mode.DUMB
+        action === undefined && session.escCount && session.key.length > 1 && !mode.DUMB
       ) {
         extraBells();
       }
 
       act(action);
-      escCount = 0;
+      session.escCount = 0;
     }
   }
 
@@ -1819,10 +1776,10 @@ async function contentPager(content: string[]): Promise<void> {
     // marks restored from the history file attach to their file
     adoptFileMarks(target, lines);
 
-    fullContent = lines;
-    lastFilter = null;
+    session.fullContent = lines;
+    session.lastFilter = null;
     search.filters = [];
-    content = deriveContent();
+    session.content = deriveContent();
 
     const saved = files.list[target].saved;
     config.row = saved ? saved.row : 0;
@@ -1830,7 +1787,7 @@ async function contentPager(content: string[]): Promise<void> {
     config.blankTop = 0;
 
     mode.INIT = false;
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     if (!mode.EOF) {
       mode.EOF = config.row > config.endRow || (
@@ -1840,7 +1797,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     // schedule the +cmd replay for the newly examined file
     const firstCmd = getFirstCmd();
-    pendingFirstCmds = firstCmd ? [firstCmd] : [];
+    session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
 
     return true;
   }
@@ -1894,19 +1851,19 @@ async function contentPager(content: string[]): Promise<void> {
 
     if (!openByName(file)) return;
 
-    const row = tagRow(content);
+    const row = tagRow(session.content);
 
     if (row === null) {
       search.message = 'Tag not found';
       return;
     }
 
-    jumpLoc(content, row, 0, jumpSindex());
+    jumpLoc(session.content, row, 0, jumpSindex());
   }
 
   /** Steps the tag list with t / T, like A_NEXT_TAG/A_PREV_TAG. */
   function tagStep(delta: 1 | -1): void {
-    if (stepTag(delta, bufferToNum(buffer) || 1) === null) {
+    if (stepTag(delta, bufferToNum(session.buffer) || 1) === null) {
       search.message = delta > 0 ? 'No next tag' : 'No previous tag';
       return;
     }
@@ -1919,7 +1876,7 @@ async function contentPager(content: string[]): Promise<void> {
    * A_T_AGAIN_SEARCH continuing into the next (or previous) files.
    */
   function spanningSearch(reverse: boolean): void {
-    repeatSearch(content, bufferToNum(buffer) || 1, reverse);
+    repeatSearch(session.content, bufferToNum(session.buffer) || 1, reverse);
 
     while (search.message === 'Pattern not found') {
       const forward = (search.lastDir === 1) !== reverse;
@@ -1929,10 +1886,10 @@ async function contentPager(content: string[]): Promise<void> {
       if (!switchToFile(target)) return;
 
       // a fresh file searches from its top (its end going backward)
-      if (!forward) lastLine(content, 0);
+      if (!forward) lastLine(session.content, 0);
 
       search.message = '';
-      repeatSearch(content, 1, reverse);
+      repeatSearch(session.content, 1, reverse);
     }
   }
 
@@ -1942,12 +1899,12 @@ async function contentPager(content: string[]): Promise<void> {
       return;
     }
 
-    const target = stepFileTarget(delta, bufferToNum(buffer) || 1);
+    const target = stepFileTarget(delta, bufferToNum(session.buffer) || 1);
 
     if (target === null) {
       // :n past the last file quits with -e at end-of-file, like
       // og's A_NEXT_FILE checking get_quit_at_eof after edit_next
-      if (delta > 0 && optQuitAtEof() && mode.EOF && !mode.HELP) exit();
+      if (delta > 0 && optQuitAtEof() && mode.EOF && !mode.HELP) session.exit();
       return;
     }
 
@@ -2043,7 +2000,7 @@ async function contentPager(content: string[]): Promise<void> {
     // --end-prompt prints where the prompt is erased for output, like
     // og's prompting flag firing in putchr
     const endProto = mode.HELP ? null : optEndPrompt();
-    const endPrompt = endProto ? prExpand(content, endProto) : '';
+    const endPrompt = endProto ? prExpand(session.content, endProto) : '';
 
     // --old-bot erases the prompt from lower-left instead of the
     // current line, like og's clear_bot
@@ -2084,14 +2041,14 @@ async function contentPager(content: string[]): Promise<void> {
         process.stdout.write(
           INVERSE_ON + doneMsg + '  (press RETURN)' + INVERSE_OFF
         );
-        shellPause = 'pager';
+        session.shellPause = 'pager';
         return;
       }
 
       // like lsystem: the done message waits on the shell screen so the
       // command's output stays visible until a keypress
       process.stdout.write(doneMsg + '  (press RETURN)');
-      shellPause = 'shell';
+      session.shellPause = 'shell';
       return;
     }
 
@@ -2127,13 +2084,13 @@ async function contentPager(content: string[]): Promise<void> {
       hi = Math.max(row, row2) + 1;
     } else if (row < config.row) {
       lo = row;
-      hi = bottomRow(content) + 1;
+      hi = bottomRow(session.content) + 1;
     } else {
       lo = config.row;
       hi = row + 1;
     }
 
-    const text = content.slice(lo, hi).join('\n') + '\n';
+    const text = session.content.slice(lo, hi).join('\n') + '\n';
     runShell(cmd, doneMsg, text);
   }
 
@@ -2165,15 +2122,15 @@ async function contentPager(content: string[]): Promise<void> {
 
     // og marks the pre-follow bottom line for -w before jumping
     if (optShowAttn()) {
-      const next = bottomRow(content) + 1;
-      config.attnRow = next < content.length ? next : -1;
+      const next = bottomRow(session.content) + 1;
+      config.attnRow = next < session.content.length ? next : -1;
     }
 
     // og's forw_loop enters through jump_forw_buffered: re-entering
     // F while already at the end rings the at-end bell (jump_loc's
     // back(0) hitting eof_bell); the first F just moves there
-    lastLine(content, 0);
-    followTimer = setInterval(followTick, 50);
+    lastLine(session.content, 0);
+    session.followTimer = setInterval(followTick, 50);
   }
 
   /**
@@ -2182,7 +2139,7 @@ async function contentPager(content: string[]): Promise<void> {
    */
   function pinToEnd(): void {
     if (config.row !== config.endRow || config.subRow !== config.endSubRow) {
-      lastLine(content, 0);
+      lastLine(session.content, 0);
     }
   }
 
@@ -2193,11 +2150,11 @@ async function contentPager(content: string[]): Promise<void> {
    */
   function followTick(): void {
     const result = pollFollow();
-    if (result.kind === 'idle' || exited) return;
+    if (result.kind === 'idle' || session.exited) return;
 
     if (result.kind === 'close') {
       endFollow();
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
@@ -2210,15 +2167,15 @@ async function contentPager(content: string[]): Promise<void> {
     let matchLines = lines;
 
     // the first new line completes a displayed partial last line
-    if (result.extendTail && fullContent.length) {
-      const tail = fullContent.length - 1;
-      fullContent[tail] += lines.shift();
-      matchLines = [fullContent[tail], ...lines];
+    if (result.extendTail && session.fullContent.length) {
+      const tail = session.fullContent.length - 1;
+      session.fullContent[tail] += lines.shift();
+      matchLines = [session.fullContent[tail], ...lines];
     }
 
-    fullContent.push(...lines);
-    content = deriveContent();
-    calculateEOF(content);
+    session.fullContent.push(...lines);
+    session.content = deriveContent();
+    calculateEOF(session.content);
     pinToEnd();
 
     // ESC-f bells when the search pattern matches new data, ESC-F
@@ -2228,12 +2185,12 @@ async function contentPager(content: string[]): Promise<void> {
 
       if (follow.active === 'hilite') {
         endFollow();
-        render(content, buffer);
+        render(session.content, session.buffer);
         return;
       }
     }
 
-    render(content, buffer);
+    render(session.content, session.buffer);
   }
 
   /**
@@ -2248,18 +2205,18 @@ async function contentPager(content: string[]): Promise<void> {
 
     if (!lines) {
       // the message set by loadFile shows at the prompt
-      render(content, buffer);
+      render(session.content, session.buffer);
       return;
     }
 
-    fullContent = lines;
-    content = deriveContent();
-    config.row = Math.min(config.row, Math.max(content.length - 1, 0));
+    session.fullContent = lines;
+    session.content = deriveContent();
+    config.row = Math.min(config.row, Math.max(session.content.length - 1, 0));
     config.subRow = 0;
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     beginFollow(kind);
-    render(content, buffer);
+    render(session.content, session.buffer);
   }
 
   /**
@@ -2269,9 +2226,9 @@ async function contentPager(content: string[]): Promise<void> {
    * @returns Queued keys when the caller replays them itself.
    */
   function endFollow(): string[] {
-    if (followTimer) {
-      clearInterval(followTimer);
-      followTimer = null;
+    if (session.followTimer) {
+      clearInterval(session.followTimer);
+      session.followTimer = null;
     }
 
     return stopFollow();
@@ -2300,33 +2257,33 @@ async function contentPager(content: string[]): Promise<void> {
   function attachPipe(): void {
     const stream = pipeSource!;
     const decoder = pipeDecoder!;
-    pipeStream = stream;
+    session.pipeStream = stream;
 
     // -B bounds a pipe to the -b buffer space, like og's maxbufs
     // applying to non-seekable input when autobuf is off
-    pipeBudget = pipeBudgetBytes();
+    session.pipeBudget = pipeBudgetBytes();
 
     let chunks = 0;
 
     const onData = (chunk: Buffer): void => {
       growPipe(decoder.push(chunk));
 
-      if (pipeRetained() > pipeBudget) {
+      if (pipeRetained() > session.pipeBudget) {
         shedPipe();
-      } else if (pipeBudget === Infinity && (++chunks & 31) === 0 &&
+      } else if (session.pipeBudget === Infinity && (++chunks & 31) === 0 &&
                  heapPressed()) {
         // og's allocation failure moment: from here on the oldest
         // data recycles away instead of the process dying (ch_addbuf
         // falling back to the tail buffer)
-        pipeBudget = Math.max(pipeRetained() / 2, 64 * 1024 * 1024);
+        session.pipeBudget = Math.max(pipeRetained() / 2, 64 * 1024 * 1024);
         shedPipe();
       }
 
       // og reads a pipe only on demand: pause once far enough ahead
       // of the view, which blocks the writer (`yes` stops producing)
-      if (!pipeDrainTo &&
-          content.length - config.row > config.window + PIPE_AHEAD) {
-        pipePaused = true;
+      if (!session.pipeDrainTo &&
+          session.content.length - config.row > config.window + PIPE_AHEAD) {
+        session.pipePaused = true;
         stream.pause();
       }
     };
@@ -2340,37 +2297,37 @@ async function contentPager(content: string[]): Promise<void> {
       const entry = files.list[files.index];
       if (entry) entry.streaming = false;
 
-      if (pipeDrainTo || follow.active ||
+      if (session.pipeDrainTo || follow.active ||
           (!mode.HELP && screenPastEnd())) {
         revealSize();
       }
 
-      calculateEOF(content);
+      calculateEOF(session.content);
 
-      const jump = pipeDrainTo;
-      pipeDrainTo = null;
+      const jump = session.pipeDrainTo;
+      session.pipeDrainTo = null;
       pipeDraining.active = false;
 
       if (jump) jump();
 
-      if (!exited && !shellPause) render(content, buffer);
+      if (!session.exited && !session.shellPause) render(session.content, session.buffer);
     };
 
     stream.on('data', onData);
     stream.on('end', onEnd);
     stream.resume();
 
-    detachPipe = () => {
+    session.detachPipe = () => {
       stream.off('data', onData);
       stream.off('end', onEnd);
 
       // quitting closes the pipe so the writer sees EPIPE, like og
       (stream as unknown as { destroy?: () => void }).destroy?.();
 
-      pipeStream = null;
-      pipeDrainTo = null;
+      session.pipeStream = null;
+      session.pipeDrainTo = null;
       pipeDraining.active = false;
-      detachPipe = () => {};
+      session.detachPipe = () => {};
     };
   }
 
@@ -2387,7 +2344,7 @@ async function contentPager(content: string[]): Promise<void> {
       const overOneScreen = (): boolean => {
         let total = 0;
 
-        for (const line of content) {
+        for (const line of session.content) {
           total += maxSubRow(line) + 1;
           if (total + shellLines > config.window) return true;
         }
@@ -2398,11 +2355,11 @@ async function contentPager(content: string[]): Promise<void> {
       const finish = (): void => {
         stream.off('data', onData);
         stream.off('end', onEnd);
-        pipeProbing = false;
+        session.pipeProbing = false;
 
         // a screenful is already buffered, so the initial fill's
         // arrival-by-arrival painting is over before it begins
-        pipeFirstFill = content.length < config.window - 1;
+        session.pipeFirstFill = session.content.length < config.window - 1;
         resolve();
       };
 
@@ -2424,7 +2381,7 @@ async function contentPager(content: string[]): Promise<void> {
         finish();
       };
 
-      pipeProbing = true;
+      session.pipeProbing = true;
 
       if (overOneScreen()) {
         finish();
@@ -2445,8 +2402,8 @@ async function contentPager(content: string[]): Promise<void> {
   function screenPastEnd(): boolean {
     let rows = -config.subRow;
 
-    for (let r = config.row; r < content.length; r++) {
-      rows += maxSubRow(content[r]) + 1;
+    for (let r = config.row; r < session.content.length; r++) {
+      rows += maxSubRow(session.content[r]) + 1;
       if (rows >= config.window - 1) return false;
     }
 
@@ -2459,7 +2416,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     const entry = files.list[files.index];
 
-    fullContent.push(...raw);
+    session.fullContent.push(...raw);
 
     // a pipe's byte count grows with the data, for %b and = (one
     // newline per line, like byteOffset); a streamed file's size is
@@ -2468,16 +2425,16 @@ async function contentPager(content: string[]): Promise<void> {
       for (const line of raw) entry.size += Buffer.byteLength(line) + 1;
     }
 
-    if (lastFilter) {
+    if (session.lastFilter) {
       // an active & filter re-derives over the grown input
       if (mode.HELP) {
-        prevContent = deriveContent();
+        session.prevContent = deriveContent();
       } else {
-        content = deriveContent();
+        session.content = deriveContent();
       }
     } else {
       const add = transformContent(raw);
-      const target = mode.HELP ? prevContent : content;
+      const target = mode.HELP ? session.prevContent : session.content;
 
       // the -s squeeze run at the boundary keeps one blank line
       if (optSqueeze() && target[target.length - 1] === '') {
@@ -2489,7 +2446,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     if (mode.HELP) return;
 
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     // sitting at the old end of the data is no longer end-of-file
     if (mode.EOF && (config.row < config.endRow ||
@@ -2500,10 +2457,10 @@ async function contentPager(content: string[]): Promise<void> {
 
     // og displays lines only while the first screenful is filling;
     // once it completes, new pipe data never repaints an idle screen
-    if (pipeFirstFill && !pipeProbing && !exited && !shellPause &&
-        !pipeDrainTo) {
-      if (content.length >= config.window - 1) pipeFirstFill = false;
-      render(content, buffer);
+    if (session.pipeFirstFill && !session.pipeProbing && !session.exited && !session.shellPause &&
+        !session.pipeDrainTo) {
+      if (session.content.length >= config.window - 1) session.pipeFirstFill = false;
+      render(session.content, session.buffer);
     }
   }
 
@@ -2520,27 +2477,27 @@ async function contentPager(content: string[]): Promise<void> {
     const entry = files.list[files.index];
     if (!entry || !entry.streaming) return;
 
-    const drop = Math.floor(fullContent.length / 2);
+    const drop = Math.floor(session.fullContent.length / 2);
     if (drop < 1) return;
 
     let bytes = 0;
     for (let i = 0; i < drop; i++) {
-      bytes += Buffer.byteLength(fullContent[i]) + 1;
+      bytes += Buffer.byteLength(session.fullContent[i]) + 1;
     }
 
-    fullContent.splice(0, drop);
+    session.fullContent.splice(0, drop);
     entry.discardedLines = (entry.discardedLines ?? 0) + drop;
     entry.discardedBytes = (entry.discardedBytes ?? 0) + bytes;
 
     let dropped = drop;
 
-    if (lastFilter || optSqueeze()) {
+    if (session.lastFilter || optSqueeze()) {
       // squeezing and filters break the 1:1 raw-to-display mapping
-      const before = content.length;
-      content = deriveContent();
-      dropped = Math.max(before - content.length, 0);
+      const before = session.content.length;
+      session.content = deriveContent();
+      dropped = Math.max(before - session.content.length, 0);
     } else {
-      content.splice(0, drop);
+      session.content.splice(0, drop);
     }
 
     config.row = Math.max(config.row - dropped, 0);
@@ -2551,16 +2508,16 @@ async function contentPager(content: string[]): Promise<void> {
     }
 
     shiftMarkRows(dropped);
-    calculateEOF(content);
+    calculateEOF(session.content);
   }
 
   /** Resumes a paused pipe when the view nears the buffered end. */
   function pipeDemand(): void {
-    if (!pipeStream || !pipePaused) return;
+    if (!session.pipeStream || !session.pipePaused) return;
 
-    if (content.length - config.row < config.window + PIPE_AHEAD / 2) {
-      pipePaused = false;
-      pipeStream.resume();
+    if (session.content.length - config.row < config.window + PIPE_AHEAD / 2) {
+      session.pipePaused = false;
+      session.pipeStream.resume();
     }
   }
 
@@ -2580,16 +2537,16 @@ async function contentPager(content: string[]): Promise<void> {
     cancelMessage: string
   ): boolean {
     const entry = files.list[files.index];
-    if (!pipeStream || !entry || !entry.streaming || mode.HELP) {
+    if (!session.pipeStream || !entry || !entry.streaming || mode.HELP) {
       return false;
     }
 
-    pipeDrainTo = jump;
+    session.pipeDrainTo = jump;
     pipeDraining.active = true;
     pipeDraining.note = note;
     pipeDraining.cancelMessage = cancelMessage;
-    pipePaused = false;
-    pipeStream.resume();
+    session.pipePaused = false;
+    session.pipeStream.resume();
     return true;
   }
 
@@ -2609,18 +2566,18 @@ async function contentPager(content: string[]): Promise<void> {
 
     // og warns before editing a $LESSOPEN replacement; RETURN then
     // continues into the editor (--no-edit-warn skips this)
-    if (!optNoEditWarn() && entry.alt && !pendingEditWarn) {
-      pendingEditWarn = true;
+    if (!optNoEditWarn() && entry.alt && !session.pendingEditWarn) {
+      session.pendingEditWarn = true;
       search.message = 'WARNING: This file was viewed via LESSOPEN';
       return;
     }
 
-    pendingEditWarn = false;
+    session.pendingEditWarn = false;
 
     const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
     const line = Math.min(
       config.row + Math.floor((config.window - 1) / 2),
-      content.length - 1
+      session.content.length - 1
     ) + 1;
 
     runShell(`${editor} +${line} "${entry.path}"`, null);
@@ -2645,7 +2602,7 @@ async function contentPager(content: string[]): Promise<void> {
         text = text.slice(1);
       }
 
-      runShell(prExpand(content, text), doneMsg);
+      runShell(prExpand(session.content, text), doneMsg);
     } else if (kind === '|') {
       runPipe(text);
     } else if (kind === '+') {
@@ -2654,7 +2611,7 @@ async function contentPager(content: string[]): Promise<void> {
       const target = logFileTarget(text, kind === 'S');
 
       if (target === 'write') {
-        writeLogFile(content, false);
+        writeLogFile(session.content, false);
       }
     }
   }
@@ -2663,12 +2620,12 @@ async function contentPager(content: string[]): Promise<void> {
     const filter = execFilter();
     if (filter === undefined) return;
 
-    lastFilter = filter;
-    content = deriveContent();
+    session.lastFilter = filter;
+    session.content = deriveContent();
     config.row = 0;
     config.subRow = 0;
     config.blankTop = 0;
-    calculateEOF(content);
+    calculateEOF(session.content);
   }
 
   function init() {
@@ -2733,7 +2690,7 @@ async function contentPager(content: string[]): Promise<void> {
     // fires on Windows, where og polls the console size instead)
     process.stdout.on('resize', onResize);
 
-    calculateEOF(content);
+    calculateEOF(session.content);
   }
 
   /** Restores the terminal before dying on an unexpected error. */
@@ -2745,38 +2702,38 @@ async function contentPager(content: string[]): Promise<void> {
 
   /** Repaints for the new size on SIGWINCH, like og's winch(). */
   function onResize(): void {
-    if (shellPause) return;
+    if (session.shellPause) return;
 
     mode.INIT = false;
 
     resetRender();
     calculateDimensions();
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     if (config.windowContent.length !== config.window) {
       config.windowContent = new Array(config.window).fill('');
       config.startLine = 0;
     }
 
-    buffer = [];
+    session.buffer = [];
     config.bufferOffset = 0;
     config.blankTop = 0;
-    render(content, buffer);
+    render(session.content, session.buffer);
   }
 
   /** Quits cleanly on SIGTERM/SIGHUP, like og's terminate(). */
   function onTerminate(): void {
-    if (!exited) exit();
+    if (!session.exited) session.exit();
   }
 
   /** Treats an external SIGINT as the ^C key, like og's u_interrupt. */
   function onSigint(): void {
-    if (!exited) handleKey('\x03');
+    if (!session.exited) handleKey('\x03');
   }
 
   /** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like og's sigusr(). */
   function onSigusr1(): void {
-    if (exited) return;
+    if (session.exited) return;
 
     const cmd = process.env.LESS_SIGUSR1;
     if (!cmd) return;
@@ -2803,8 +2760,8 @@ async function contentPager(content: string[]): Promise<void> {
     keyboard().resume();
     enterScreen();
     calculateDimensions();
-    calculateEOF(content);
-    render(content, buffer);
+    calculateEOF(session.content);
+    render(session.content, session.buffer);
   }
 
   /**
@@ -2886,13 +2843,13 @@ async function contentPager(content: string[]): Promise<void> {
 
     // a --help/-? screen is og's FAKE_HELPFILE input, not the h
     // command's overlay: quitting it quits the pager
-    if (startupHelp) return false;
+    if (session.startupHelp) return false;
 
     const helpConfig = config;
 
-    content = prevContent;
-    applyConfig(prevConfig);
-    applyMode(prevMode);
+    session.content = session.prevContent;
+    applyConfig(session.prevConfig);
+    applyMode(session.prevMode);
 
     // og's option variables (shift_count, swindow, wscroll,
     // chop_line) are globals: a change made inside the help screen
@@ -2903,7 +2860,7 @@ async function contentPager(content: string[]): Promise<void> {
     config.chopLongLines = helpConfig.chopLongLines;
 
     calculateDimensions();
-    calculateEOF(content);
+    calculateEOF(session.content);
 
     // calculateEOF only detects short content; restore the flag for a
     // position at the end
@@ -2927,28 +2884,28 @@ async function contentPager(content: string[]): Promise<void> {
     // less's edit_ifile calling lastmark when switching to the help file
     recordLastPosition();
 
-    prevConfig = config;
+    session.prevConfig = config;
     resetConfig();
 
     // the og globals follow into the help screen too
-    config.setCol = prevConfig.setCol;
-    config.setWindow = prevConfig.setWindow;
-    config.halfWindow = prevConfig.halfWindow;
-    config.chopLongLines = prevConfig.chopLongLines;
+    config.setCol = session.prevConfig.setCol;
+    config.setWindow = session.prevConfig.setWindow;
+    config.halfWindow = session.prevConfig.halfWindow;
+    config.chopLongLines = session.prevConfig.chopLongLines;
 
-    prevMode = mode;
+    session.prevMode = mode;
     resetMode();
 
-    prevContent = content;
+    session.prevContent = session.content;
     // the help file renders through the normal content pipeline, so
     // its nroff overstrikes become bold/underline like og
-    content = transformContent(help);
-    calculateEOF(content);
+    session.content = transformContent(help);
+    calculateEOF(session.content);
 
     mode.HELP = true;
 
     // dumb rendering is a terminal property; the help screen keeps it
-    mode.DUMB = prevMode.DUMB;
+    mode.DUMB = session.prevMode.DUMB;
   }
 
   function cleanUp(): void {
@@ -2983,7 +2940,7 @@ async function contentPager(content: string[]): Promise<void> {
 
     // --end-prompt prints where output resumes after the final prompt
     const endProto = mode.HELP ? null : optEndPrompt();
-    if (endProto) process.stdout.write(prExpand(content, endProto));
+    if (endProto) process.stdout.write(prExpand(session.content, endProto));
 
     // --redraw-on-quit leaves the last screen on the main display,
     // like og's quit() repaint after term_deinit: only the content
@@ -3013,7 +2970,7 @@ async function contentPager(content: string[]): Promise<void> {
     onEofForward(null);
 
     // a streaming pipe closes so the writer sees EPIPE, like og
-    detachPipe();
+    session.detachPipe();
 
     // a /dev/tty keyboard holds the event loop open until destroyed
     closeTtyKeyboard();
