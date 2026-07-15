@@ -597,7 +597,7 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // -X stays on the main screen, where og's real paint model shows
   if (scrollMode()) {
-    const frame = scrollFrame(prevRows, rows, filling);
+    const frame = scrollFrame(prevRows, rows, filling, rawContent);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(frame);
@@ -765,11 +765,29 @@ export function markClearHome(): void {
 function scrollFrame(
   prev: string[] | null,
   rows: string[],
-  open: boolean = false
+  open: boolean = false,
+  src: string[] = []
 ): string {
   const effRow = config.row - config.blankTop;
   const backJump = prevTopRow >= 0 && (effRow < prevTopRow ||
     (effRow === prevTopRow && config.subRow < prevTopSub));
+
+  // the display-row distance the top advanced, like og comparing
+  // pos against position(BOTTOM_PLUS_ONE): a full-screenful move
+  // shares no visible rows yet forw still scrolls it contiguously
+  let forwDist = -1;
+  if (prev && prevTopRow >= 0 && !backJump && !config.blankTop &&
+      src.length) {
+    forwDist = -prevTopSub;
+    const cap = prev.length + 1;
+
+    for (let r = prevTopRow; r < effRow && forwDist <= cap; r++) {
+      forwDist += maxSubRow(src[r] ?? '') + 1;
+    }
+
+    forwDist += config.subRow;
+  }
+
   prevTopRow = effRow;
   prevTopSub = config.subRow;
 
@@ -851,9 +869,22 @@ function scrollFrame(
       if (!ok) continue;
 
       const appended = rows.slice(overlap, last);
-      // -y caps the scroll before og repaints instead
-      if (optForwScroll() >= 0 && appended.length > optForwScroll()) break;
+      // -y caps the scroll before og repaints instead — except an
+      // exact screenful, "since repainting itself involves
+      // scrolling forward a screenful" (forw, forwback.c:244)
+      if (optForwScroll() >= 0 && appended.length > optForwScroll() &&
+          appended.length !== config.window - 1) {
+        break;
+      }
 
+      return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
+    }
+
+    // an exact-screenful advance: og-contiguous by position (the new
+    // top is the old BOTTOM_PLUS_ONE), and exempt from -y since
+    // "repainting itself involves scrolling forward a screenful"
+    if (forwDist === prev.length - 1 && rows.length === prev.length) {
+      const appended = rows.slice(0, last);
       return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
