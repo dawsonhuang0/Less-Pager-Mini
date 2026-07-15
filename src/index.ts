@@ -1,6 +1,7 @@
 import fs from 'fs';
 
-import { keyboard, closeTtyKeyboard, dumbTerminal } from "./keyboard";
+import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot }
+  from "./keyboard";
 
 
 import { Actions } from "./interfaces";
@@ -198,7 +199,8 @@ import {
 import { cmd } from "./features/cmdbuf";
 
 import { pipeInput, attachPipe, pipeDemand, pipeDrain,
-  pipeOneScreenProbe, pipeFilling, abortPipeFill } from "./features/pipe";
+  pipeOneScreenProbe, pipeFullProbe, pipeFilling, abortPipeFill }
+  from "./features/pipe";
 
 import { secureAllow } from "./features/secure";
 
@@ -592,6 +594,15 @@ async function contentPager(initialContent: string[]): Promise<void> {
   // get_one_screen's `nlines + shell_lines <= sc_height`
   const shellLines = shellReserveLines();
 
+  // --file-size reads a pipe to its end before any terminal init,
+  // like edit() calling scan_eof under want_filesize: og blocks the
+  // first paint until the length is known
+  if (opt.wantFileSize > 0 && !startup.dohelp &&
+      files.list[files.index]?.streaming &&
+      pipeInput.source && pipeInput.decoder) {
+    await pipeFullProbe();
+  }
+
   // -F on a pipe keeps reading until a screenful or EOF before any
   // terminal init, like og's get_one_screen under F_UNTIL_SCREEN: an
   // input that ends within one screen falls through to the cat below
@@ -655,9 +666,17 @@ async function contentPager(initialContent: string[]): Promise<void> {
     const answer = await warnReturn();
     process.stdout.write('\n');
 
+    // ^C is og's READ_INTR at get_return: swallowed, not ungot
     if (answer && answer !== '\x0D' && answer !== '\x0A' &&
-        answer !== ' ') {
+        answer !== ' ' && answer !== '\x03') {
       session.ungotStartKey = answer;
+    }
+
+    // og's pending S_INTERRUPT: psignals runs getcc_clear at the
+    // top of the command loop, discarding the gate's ungot key
+    if (session.intrPending) {
+      session.intrPending = false;
+      session.ungotStartKey = '';
     }
   }
 
@@ -706,6 +725,16 @@ async function contentPager(initialContent: string[]): Promise<void> {
   keyboard().on('data', keyHandler);
   // deferred fill keys replay through the same handler
   session.feedKeys = data => keyHandler(Buffer.from(data));
+
+  // a silent probe abort's pending interrupt dies here, like og's
+  // psignals at the first command iteration (the gate consumed it
+  // for messaged aborts above)
+  session.intrPending = false;
+
+  // keys polled during a --file-size startup scan run first
+  const ungotStart = takeUngot();
+  if (ungotStart) keyHandler(ungotStart);
+
   await new Promise<void>((resolve) => {
     session.exit = () => {
       session.exited = true;
@@ -976,6 +1005,11 @@ function keyHandler(data: Buffer): void {
   if (optNoPaste() || session.pasting || session.ignoringPaste) text = filterPaste(text);
 
   for (const sequence of splitKeys(text)) handleKey(sequence);
+
+  // keys the interrupt poll queued during a blocking search run
+  // now, like og's command loop draining the ungot queue
+  const pending = takeUngot();
+  if (pending && !session.exited) keyHandler(pending);
 }
 
 /** True while a prompt is collecting input, like og's mca != 0. */

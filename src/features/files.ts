@@ -124,9 +124,10 @@ export function initContent(lines: string[]): void {
     path: '-',
     lines,
     size: byteOffset(lines, lines.length) - 1,
-    // a pipe's length is unknown until the display reaches EOF,
-    // unless --file-size scans for it at open (og's edit.c)
-    sizeKnown: opt.wantFileSize > 0,
+    // a pipe's length is unknown until a read returns EOI —
+    // --file-size runs that read up front (og's edit.c scan_eof),
+    // which reveals the size through the pipe machinery itself
+    sizeKnown: false,
     saved: null,
   }];
   files.index = 0;
@@ -231,7 +232,7 @@ export function loadFile(index: number): string[] | null {
 
     // a pipe-form $LESSOPEN ("|cmd") feeds a pipe whose length og
     // does not know; the file-replacement form is a seekable file
-    entry.sizeKnown = alt.alt !== '-' || opt.wantFileSize > 0;
+    entry.sizeKnown = alt.alt !== '-';
     entry.everOpened = true;
 
     checkModelines(alt.lines);

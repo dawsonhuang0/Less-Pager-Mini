@@ -1,15 +1,24 @@
+import fs from 'fs';
+
 import v8 from 'v8';
 
 import { session, deriveContent, shellReserveLines } from '../session';
 
 import { config, mode } from '../config';
 
-import { opt, optSqueeze, onTrimBufSpace } from '../options';
+import { opt, optSqueeze, optQuitOnIntr, onTrimBufSpace, hook }
+  from '../options';
 
 import { render, calculateEOF, markBareRepaint, markClearHome }
   from '../helpers';
 
-import { CLEAR_LINE } from '../constants';
+import { searchInterrupted } from './searching';
+
+import { keyboard, consumeInterrupt } from '../keyboard';
+
+import { startupErrors } from '../startup';
+
+import { CLEAR_LINE, INVERSE_ON, INVERSE_OFF } from '../constants';
 
 import { transformContent, maxSubRow } from '../lines/helpers';
 
@@ -233,6 +242,129 @@ export function attachPipe(): void {
     session.detachPipe = () => {};
   };
 }
+
+/**
+ * --file-size reads the whole pipe before the terminal initializes,
+ * like edit() calling scan_eof under want_filesize: og blocks the
+ * first paint until the length is known, painting "Determining
+ * length of file" on the main screen once the scan runs LONGTIME
+ * (2s); ^X or ^C abandons the scan and pages with it unknown.
+ */
+export function pipeFullProbe(): Promise<void> {
+  return new Promise(resolve => {
+    const stream = pipeInput.source!;
+    const decoder = pipeInput.decoder!;
+    let messaged = false;
+    let ticks = 0;
+
+    // og's raw mode is on from startup, so ^C reaches the scan as
+    // an interrupt instead of killing the process; the keyboard
+    // stays paused, leaving its bytes to the readSync poll
+    keyboard().setRawMode(true);
+
+    // huge pipes recycle their oldest data while scanning, like
+    // og's ch buffers under -B during scan_eof
+    session.pipeBudget = pipeBudgetBytes();
+
+    const timer = setTimeout(() => {
+      messaged = true;
+      fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+        'Determining length of file... (interrupt to abort)' +
+        INVERSE_OFF);
+    }, 2000);
+    timer.unref?.();
+
+    const finish = (): void => {
+      clearTimeout(timer);
+      // og clears its ierror line before the alt screen enters
+      if (messaged) fs.writeSync(1, '\r' + CLEAR_LINE);
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+      session.pipeProbing = false;
+      session.pipeFirstFill = screenPastEnd();
+      resolve();
+    };
+
+    const onData = (chunk: Buffer): void => {
+      growPipe(decoder.push(chunk));
+
+      if (pipeRetained() > session.pipeBudget) {
+        shedPipe();
+      } else if (session.pipeBudget === Infinity && (++ticks & 31) === 0 &&
+                 heapPressed()) {
+        session.pipeBudget = Math.max(pipeRetained() / 2, 64 * 1024 * 1024);
+        shedPipe();
+      }
+
+      // ABORT_SIGS in og's scan_eof loop: stop where we are; an
+      // interrupt after the message showed turns line numbers off
+      // (abort_delayed_msg) — the pre-init error prints plainly and
+      // joins the startup RETURN gate, like og's errmsgs check
+      if ((ticks & 7) === 0 && searchInterrupted()) {
+        // the aborting ^C is og's consumed signal, never a key —
+        // except under -K, where og's psignals quits on it (the
+        // requeued byte reaches the key loop and quits there); the
+        // pending S_INTERRUPT clears the startup gate's key too
+        if (!optQuitOnIntr()) {
+          consumeInterrupt();
+          session.intrPending = true;
+        }
+
+        if (messaged) {
+          opt.linenums = 0;
+          fs.writeSync(1,
+            '\r' + CLEAR_LINE + 'Line numbers turned off\n');
+          startupErrors.count++;
+          messaged = false;
+        }
+
+        stream.pause();
+        finish();
+      }
+    };
+
+    const onEnd = (): void => {
+      growPipe(decoder.flush());
+
+      const entry = files.list[files.index];
+      if (entry) entry.streaming = false;
+      revealSize();
+      finish();
+    };
+
+    session.pipeProbing = true;
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.resume();
+  });
+}
+
+// a runtime --file-size toggle, like og's opt_filesize: scan_eof
+// runs only while a file is open and its length is unknown
+// (`curr_ifile != NULL && ch_length() == NULL_POSITION`) — a
+// completed input reveals from its buffers at once, and a
+// still-delivering pipe drains
+hook.scanFileSize = () => {
+  const entry = files.list[files.index];
+  if (!entry || entry.sizeKnown) return;
+
+  if (!entry.streaming || !session.pipeStream) {
+    revealSize();
+    return;
+  }
+
+  if (pipeDraining.active) return;
+  if (!pipeDrain(() => {}, '', '')) return;
+
+  // the note appears once the drain runs og's LONGTIME
+  const timer = setTimeout(() => {
+    if (pipeDraining.active && session.pipeDrainTo) {
+      pipeDraining.note = 'Determining length of file';
+      render(session.content, session.buffer);
+    }
+  }, 2000);
+  timer.unref?.();
+};
 
 /**
  * Reads the pipe until the content exceeds one screen or it ends,

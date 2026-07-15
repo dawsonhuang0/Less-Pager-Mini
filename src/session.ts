@@ -95,6 +95,8 @@ export const session = {
   fillKeys: [] as string[],
   /** The "Waiting for data..." state, og's waiting_for_data. */
   pipeWaiting: false,
+  /** og's pending S_INTERRUPT: the next gate's ungot key clears. */
+  intrPending: false,
   /** Feeds deferred keys back through the session's key handler. */
   feedKeys: (() => {}) as (data: string) => void,
 
@@ -151,6 +153,7 @@ export function resetSession(content: string[]): void {
   session.pipeProbing = false;
   session.fillKeys = [];
   session.pipeWaiting = false;
+  session.intrPending = false;
   session.feedKeys = () => {};
 }
 

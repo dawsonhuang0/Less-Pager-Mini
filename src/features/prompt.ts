@@ -230,8 +230,15 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'x': return files.list[files.index + 1] !== undefined;
 
     // line numbers are only known while -n keeps them on
-    case 'l': case 'd': case 'L': case 'D':
+    case 'l': case 'd':
       return optLinenums() > 0;
+
+    // the LAST line and page need the whole input: og's ?L is
+    // find_linenum(len) succeeding, which a still-delivering pipe
+    // or a streaming file cannot answer — og drops the segment
+    // rather than show a partial count
+    case 'L': case 'D':
+      return optLinenums() > 0 && !files.list[files.index]?.streaming;
 
     // the byte offset is always known; the size and byte percent
     // wait for a pipe's length, like ch_length() != NULL_POSITION

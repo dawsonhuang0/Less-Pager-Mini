@@ -3,6 +3,8 @@ import vm from 'vm';
 
 import { strWidth } from 'char-width';
 
+import { keyboard, keyboardFd, pushUngot } from '../keyboard';
+
 import { config, mode } from "../config";
 
 import {
@@ -1065,7 +1067,10 @@ let lastInterruptPoll = 0;
  * @returns True when the search should abort.
  */
 export function searchInterrupted(): boolean {
-  if (!process.stdin.isTTY) return false;
+  // piped input reads keys from /dev/tty: poll the keyboard's fd,
+  // not fd 0 (og's check_poll watches the tty, whatever stdin is)
+  const kb = keyboard();
+  if (!kb.isTTY) return false;
 
   const now = Date.now();
   if (now - lastInterruptPoll < 100) return false;
@@ -1075,7 +1080,7 @@ export function searchInterrupted(): boolean {
   let n: number;
 
   try {
-    n = fs.readSync(0, data, 0, data.length, null);
+    n = fs.readSync(keyboardFd(), data, 0, data.length, null);
   } catch {
     // EAGAIN: nothing typed
     return false;
@@ -1086,13 +1091,20 @@ export function searchInterrupted(): boolean {
   const text = data.subarray(0, n).toString();
 
   if (text.includes('\x03')) {
-    process.stdin.unshift(Buffer.from('\x03'));
+    // og's u_interrupt rings at every ^C (signal.c lbell), even
+    // with the event loop blocked mid-scan
+    fs.writeSync(1, '\x07');
+    // queued so -K can still quit; an abort's getcc_clear drops it
+    pushUngot(Buffer.from('\x03'));
     return true;
   }
 
   if (text.includes(optIntrChar())) return true;
 
-  process.stdin.unshift(data.subarray(0, n));
+  // og's check_poll ungets ordinary keys for the command loop —
+  // never back through the stream, whose flowing-mode unshift would
+  // re-enter the key handler in the middle of the scan
+  pushUngot(Buffer.from(data.subarray(0, n)));
   return false;
 }
 
