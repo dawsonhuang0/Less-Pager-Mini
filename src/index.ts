@@ -198,7 +198,7 @@ import {
 import { cmd } from "./features/cmdbuf";
 
 import { pipeInput, attachPipe, pipeDemand, pipeDrain,
-  pipeOneScreenProbe } from "./features/pipe";
+  pipeOneScreenProbe, pipeFilling, abortPipeFill } from "./features/pipe";
 
 import { secureAllow } from "./features/secure";
 
@@ -704,6 +704,8 @@ async function contentPager(initialContent: string[]): Promise<void> {
   });
 
   keyboard().on('data', keyHandler);
+  // deferred fill keys replay through the same handler
+  session.feedKeys = data => keyHandler(Buffer.from(data));
   await new Promise<void>((resolve) => {
     session.exit = () => {
       session.exited = true;
@@ -950,6 +952,26 @@ function endFirstCmd(): void {
 
 function keyHandler(data: Buffer): void {
   let text = data.toString();
+
+  // og's initial fill blocks in read: check_poll queues typed tty
+  // chars (ungetcc_back) until the screenful or the learned length;
+  // only the --intr char or an interrupt breaks out (READ_INTR),
+  // and the first queued key surfaces the wait message (READ_AGAIN)
+  if (pipeFilling() && !session.shellPause) {
+    if (text.includes('\x03') || text.includes(optIntrChar())) {
+      abortPipeFill();
+      return;
+    }
+
+    session.fillKeys.push(text);
+
+    if (!session.pipeWaiting) {
+      session.pipeWaiting = true;
+      render(session.content, session.buffer);
+    }
+
+    return;
+  }
 
   if (optNoPaste() || session.pasting || session.ignoringPaste) text = filterPaste(text);
 

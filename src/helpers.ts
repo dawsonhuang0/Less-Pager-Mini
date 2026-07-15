@@ -524,9 +524,12 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // a still-filling first screen of a pipe paints its lines bare in
   // scroll mode, like og's initial forw: the prompt appears only
-  // with the screenful or the learned length
+  // with the screenful or the learned length — or as the wait
+  // message when the read stalls (pipeFilling(), inlined: importing
+  // features/pipe here would run its module body too early)
   const filling = scrollMode() && session.pipeStream !== null &&
-    session.pipeFirstFill && !sizeIsKnown();
+    session.pipeFirstFill && !session.pipeProbing && !sizeIsKnown() &&
+    !session.pipeWaiting;
 
   let rows = screenRows(rawContent, buffer, filling);
 
@@ -694,6 +697,17 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
   return true;
 }
 
+/**
+ * Ends a painted row like og's pdone: a row that exactly fills the
+ * width gets no newline — og forces the deferred wrap with space +
+ * backspace instead (line.c), so the terminal's auto-wrap carries
+ * to the next row without doubling.
+ */
+function rowEnd(row: string): string {
+  const plain = row.replace(STYLE_REGEX_G, '');
+  return visualWidth(plain) >= config.screenWidth ? ' \b' : '\n';
+}
+
 // og's cursor rests where the prompt print ended; editing inside the
 // command buffer moves it left with backspaces, like cmdbuf's putbs —
 // -X can't address the prompt row absolutely (the screen may have
@@ -727,8 +741,14 @@ export function screenEntered(): void {
 }
 
 /** Marks the next scroll-mode paint as a bare re-edit repaint. */
-export function markBareRepaint(): void {
-  scrollPrefix = '';
+export function markBareRepaint(prefix: string = ''): void {
+  scrollPrefix = prefix;
+}
+
+/** Forces the next full paint to clear and home, like og's forw
+ *  with top_scroll (also jump_loc's !full_screen lclear). */
+export function markClearHome(): void {
+  dumbHomePending = true;
 }
 
 /**
@@ -770,28 +790,43 @@ function scrollFrame(
     dumbPainted = true;
     promptAtBottom = false;
 
-    if (wasOpen && prev && rows.length >= prev.length &&
-        prefixEqual(prev, rows)) {
-      return rows.slice(prev.length).map(r => r + '\n').join('');
+    if (prev) {
+      // a closed wait frame parked og's message on the bot row;
+      // resuming data clear_bots it and prints there (og capture:
+      // "\r ESC[K 3" over the wait message)
+      const base = wasOpen ? prev : prev.slice(0, -1);
+
+      if (rows.length >= base.length && prefixEqual(base, rows)) {
+        const appended = rows.slice(base.length).map(r => r + rowEnd(r)).join('');
+        return (wasOpen ? '' : clearBot()) + appended;
+      }
     }
 
-    return '\r' + rows.map(r => r + '\n').join('');
+    return '\r' + rows.map(r => r + rowEnd(r)).join('');
   }
 
   // the fill completed: remaining lines print, then og's forw_prompt
   // appends the prompt with no clear_bot — under --old-bot it stays
-  // right there, mid-screen, until the next command's clear_bot
+  // right there, mid-screen, until the next command's clear_bot; the
+  // stall's wait message instead arrives like og's ixerror, behind a
+  // clear_bot and without the prompt's trailing clear
   if (wasOpen && prev) {
     const grown = rows.slice(0, -1);
 
     if (grown.length >= prev.length && prefixEqual(prev, grown)) {
-      return grown.slice(prev.length).map(r => r + '\n').join('') +
-        rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows);
+      const tail = session.pipeWaiting
+        ? clearBot() + rows[rows.length - 1]
+        : rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows);
+
+      return grown.slice(prev.length).map(r => r + rowEnd(r)).join('') + tail;
     }
   }
 
   const last = rows.length - 1;
   const bot = rows[last] + CLEAR_LINE + scrollPark(rows);
+
+  // a -h-capped backward scroll repaints forward, like og's back()
+  let capped = false;
 
   if (prev && !wasOpen && !unsquished) {
     // only the bottom (prompt) line changed: og's clear_bot + reprint
@@ -819,7 +854,7 @@ function scrollFrame(
       // -y caps the scroll before og repaints instead
       if (optForwScroll() >= 0 && appended.length > optForwScroll()) break;
 
-      return clearBot() + appended.map(r => r + '\n').join('') + bot;
+      return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
     // backward: k rows scrolled in at the top; og back()'s home +
@@ -827,13 +862,18 @@ function scrollFrame(
     if (prev.length === rows.length) {
       for (let k = 1; k < last; k++) {
         if (rows[k] === prev[0] && shifted(prev, rows, k)) {
-          // -h caps the scroll before og repaints instead
-          if (optBackScroll() >= 0 && k > optBackScroll()) break;
+          // -h caps the scroll: og's back() sets do_repaint and
+          // repaint() paints forward with the skipping marker —
+          // never the far-backward clear + reverse paint
+          if (optBackScroll() >= 0 && k > optBackScroll()) {
+            capped = true;
+            break;
+          }
 
           // og's cmd_exec clear_bots before back() starts inserting
           let frame = clearBot();
           for (let i = k - 1; i >= 0; i--) {
-            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + '\n';
+            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + rowEnd(rows[i]);
           }
 
           return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
@@ -849,22 +889,24 @@ function scrollFrame(
   dumbPainted = true;
   scrollPrefix = null;
 
-  const body = rows.slice(0, last).map(r => r + '\n').join('');
+  const body = rows.slice(0, last).map(r => r + rowEnd(r)).join('');
 
   // the first paint prints in place behind term_init's line_left CR
   if (!repaint) return '\r' + body + bot;
 
   // -c and the freeze-unlatching make_display (top_scroll forced)
   // clear and paint forward, like og's forw calling clear() + home()
-  if (clearHome) return (prefix ?? clearBot()) + CLEAR_SCREEN + body + bot;
+  if (clearHome) {
+    return (prefix ?? clearBot()) + CLEAR_SCREEN + CURSOR_HOME + body + bot;
+  }
 
   // a backward far jump clear_bots (cmd_exec), clears, and paints
   // the rows in reverse through home + reverse index (jump_loc's
   // lclear + back)
-  if (backJump) {
+  if (backJump && !capped) {
     let frame = clearBot() + CLEAR_SCREEN;
     for (let i = last - 1; i >= 0; i--) {
-      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + '\n';
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + rowEnd(rows[i]);
     }
 
     return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
@@ -1181,6 +1223,15 @@ function getPrompt(content: string[]): string {
 
   if (search.message) {
     return colored('error', search.message + '  (press RETURN)',
+      INVERSE_ON, INVERSE_OFF);
+  }
+
+  // a stalled initial fill shows og's wait_message the same way
+  // (ch.c ixerror while the blocked read polls)
+  if (session.pipeWaiting) {
+    return colored('prompt',
+      prExpand(content, wProto()) +
+        `... (${prChar(optIntrChar())} or interrupt to abort)`,
       INVERSE_ON, INVERSE_OFF);
   }
 

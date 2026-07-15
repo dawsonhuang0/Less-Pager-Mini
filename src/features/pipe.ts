@@ -6,11 +6,14 @@ import { config, mode } from '../config';
 
 import { opt, optSqueeze, onTrimBufSpace } from '../options';
 
-import { render, calculateEOF } from '../helpers';
+import { render, calculateEOF, markBareRepaint, markClearHome }
+  from '../helpers';
+
+import { CLEAR_LINE } from '../constants';
 
 import { transformContent, maxSubRow } from '../lines/helpers';
 
-import { files, revealSize, pipeDraining } from './files';
+import { files, revealSize, pipeDraining, sizeIsKnown } from './files';
 
 import { shiftMarkRows } from './jumping';
 
@@ -51,6 +54,85 @@ export function pipeRetained(): number {
   return entry.size - (entry.discardedBytes ?? 0);
 }
 
+/**
+ * True while og's initial forw() would still be blocked reading the
+ * input: the first screenful is not painted and the length is not
+ * learned. Keys arriving now queue like og's check_poll ungetting
+ * tty chars, and the prompt row stays unwritten.
+ */
+export function pipeFilling(): boolean {
+  return session.pipeStream !== null && session.pipeFirstFill &&
+    !session.pipeProbing && !sizeIsKnown();
+}
+
+// og's waiting_for_data_delay: a fill stalled this long (or poked by
+// a typed key) shows wait_message() once, via ixerror (ch.c:331)
+const STALL_DELAY = 4000;
+
+let stallTimer: ReturnType<typeof setTimeout> | null = null;
+
+function armStallTimer(): void {
+  if (stallTimer) clearTimeout(stallTimer);
+
+  stallTimer = setTimeout(() => {
+    stallTimer = null;
+
+    if (pipeFilling() && !session.pipeWaiting && !session.exited) {
+      session.pipeWaiting = true;
+      render(session.content, session.buffer);
+    }
+  }, STALL_DELAY);
+
+  stallTimer.unref?.();
+}
+
+function clearStallTimer(): void {
+  if (stallTimer) clearTimeout(stallTimer);
+  stallTimer = null;
+}
+
+/**
+ * The fill is over (screenful, EOI, or an interrupt): replay the
+ * keys og would now pull from its ungot queue.
+ */
+function finishFill(): void {
+  clearStallTimer();
+  session.pipeWaiting = false;
+
+  const keys = session.fillKeys.splice(0);
+  for (const data of keys) session.feedKeys(data);
+}
+
+/**
+ * The --intr char (or ^C) breaks out of the wait, like og's
+ * check_poll returning READ_INTR: the fill stops, the queued keys
+ * are discarded (getcc_clear), and og lands at the bottom of the
+ * buffered data — clear + home, null-line tildes above BOF, the
+ * partial content bottom-anchored (jump_loc's !full_screen lclear
+ * + forw painting nblank lines first).
+ */
+export function abortPipeFill(): void {
+  session.pipeFirstFill = false;
+  session.fillKeys.length = 0;
+  clearStallTimer();
+  session.pipeWaiting = false;
+
+  mode.INIT = false;
+  config.row = 0;
+  config.subRow = 0;
+
+  let shown = 0;
+  for (const line of session.content) {
+    shown += maxSubRow(line) + 1;
+    if (shown >= config.window - 1) break;
+  }
+  config.blankTop = Math.max(config.window - 1 - shown, 0);
+
+  markBareRepaint(CLEAR_LINE);
+  markClearHome();
+  render(session.content, session.buffer);
+}
+
 /** Wires the still-delivering pipe into the session. */
 /**
  * The -b bound in bytes, like og's ch_setbufspace: the kilobytes
@@ -66,6 +148,11 @@ export function attachPipe(): void {
   const stream = pipeInput.source!;
   const decoder = pipeInput.decoder!;
   session.pipeStream = stream;
+
+  // the first chunk may already hold a screenful: og's initial
+  // forw(sc_height-1) counts forw_line screen rows and returns once
+  // they are available, so the fill is not pending
+  session.pipeFirstFill = screenPastEnd();
 
   // -B bounds a pipe to the -b buffer space, like og's maxbufs
   // applying to non-seekable input when autobuf is off
@@ -118,14 +205,22 @@ export function attachPipe(): void {
 
     if (jump) jump();
 
+    session.pipeWaiting = false;
+
     if (!session.exited && !session.shellPause) render(session.content, session.buffer);
+
+    // end-of-input completes og's blocked read: queued keys process
+    finishFill();
   };
 
   stream.on('data', onData);
   stream.on('end', onEnd);
   stream.resume();
 
+  if (pipeFilling()) armStallTimer();
+
   session.detachPipe = () => {
+    clearStallTimer();
     stream.off('data', onData);
     stream.off('end', onEnd);
 
@@ -165,9 +260,9 @@ export function pipeOneScreenProbe(): Promise<void> {
       stream.off('end', onEnd);
       session.pipeProbing = false;
 
-      // a screenful is already buffered, so the initial fill's
-      // arrival-by-arrival painting is over before it begins
-      session.pipeFirstFill = session.content.length < config.window - 1;
+      // a screenful of rows is already buffered, so the initial
+      // fill's arrival-by-arrival painting is over before it begins
+      session.pipeFirstFill = screenPastEnd();
       resolve();
     };
 
@@ -267,8 +362,19 @@ function growPipe(raw: string[]): void {
   // once it completes, new pipe data never repaints an idle screen
   if (session.pipeFirstFill && !session.pipeProbing && !session.exited && !session.shellPause &&
       !session.pipeDrainTo) {
-    if (session.content.length >= config.window - 1) session.pipeFirstFill = false;
+    // data arrived: og clears waiting_for_data and blocks again
+    session.pipeWaiting = false;
+
+    // og's forw counts screen rows (forw_line per row, so wrapped
+    // lines fill faster), not input lines
+    const done = !screenPastEnd();
+    if (done) session.pipeFirstFill = false;
+
     render(session.content, session.buffer);
+
+    // the screenful completed the read: queued keys process now
+    if (done) finishFill();
+    else if (session.pipeStream) armStallTimer();
   }
 }
 

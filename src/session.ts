@@ -90,6 +90,14 @@ export const session = {
    *  on new pipe data (F is the follow command). */
   pipeFirstFill: true,
 
+  /** Keys typed during the initial fill wait like og's check_poll
+   *  queuing tty chars (ungetcc_back) until the read completes. */
+  fillKeys: [] as string[],
+  /** The "Waiting for data..." state, og's waiting_for_data. */
+  pipeWaiting: false,
+  /** Feeds deferred keys back through the session's key handler. */
+  feedKeys: (() => {}) as (data: string) => void,
+
   /** -F reads the pipe before any terminal init, like og's
    *  get_one_screen: nothing reaches the screen while it decides. */
   pipeProbing: false,
@@ -141,6 +149,9 @@ export function resetSession(content: string[]): void {
   session.pipeBudget = Infinity;
   session.pipeFirstFill = true;
   session.pipeProbing = false;
+  session.fillKeys = [];
+  session.pipeWaiting = false;
+  session.feedKeys = () => {};
 }
 
 /**
