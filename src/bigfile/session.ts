@@ -2,7 +2,8 @@ import fs from 'fs';
 
 import { spawnSync } from 'child_process';
 
-import { keyboard, closeTtyKeyboard, consumeInterrupt, takeUngot }
+import { keyboard, closeTtyKeyboard, consumeInterrupt, takeUngot,
+  watchWinch, unwatchWinch, freshWindowSize }
   from '../keyboard';
 
 import { help } from '../lessHelp';
@@ -138,6 +139,11 @@ export async function bigPager(path: string): Promise<void> {
   // of the command loop, so keys captured at a gate after an
   // interrupt-abort are discarded; fresh keys act normally
   let intrPending = false;
+  // a WINCH during a blocking scan is queued, not live: og's intio
+  // longjmps only while blocked reading the tty, so the scan's
+  // message survives — the queued signal repaints at psignals only
+  // after a real key dismisses it
+  let winchGuard = false;
 
   /**
    * Newlines before `target`, like find_linenum walking raw lines
@@ -188,12 +194,15 @@ export async function bigPager(path: string): Promise<void> {
           // the pending S_INTERRUPT clears the next gate's key too
           consumeInterrupt();
           intrPending = true;
+          if (Date.now() - started > 100) winchGuard = true;
           return null;
         }
       }
     }
 
     lnums.push({ pos: target, num });
+    // a resize during this blocking walk arrives queued, not live
+    if (Date.now() - started > 100) winchGuard = true;
     return num;
   };
 
@@ -223,8 +232,10 @@ export async function bigPager(path: string): Promise<void> {
       fs.writeSync(1,
         'Line numbers turned off\nPress RETURN to continue ');
 
-      const answer = await new Promise<string>(resolve =>
-        keyboard().once('data', (data: Buffer) => {
+      const answer = await new Promise<string>(resolve => {
+        const onGateKey = (data: Buffer): void => {
+          unwatchWinch(onGateWinch);
+
           // one char gates; the rest stays buffered as input
           if (data.length > 1) {
             keyboard().pause();
@@ -232,7 +243,19 @@ export async function bigPager(path: string): Promise<void> {
           }
 
           resolve(data.toString()[0] ?? '');
-        }));
+        };
+
+        // og's lwinch interrupts get_return: a resize passes the
+        // gate with no key
+        const onGateWinch = (): void => {
+          unwatchWinch(onGateWinch);
+          keyboard().off('data', onGateKey);
+          resolve('');
+        };
+
+        keyboard().once('data', onGateKey);
+        watchWinch(onGateWinch);
+      });
 
       fs.writeSync(1, '\n');
       keyboard().resume();
@@ -250,6 +273,17 @@ export async function bigPager(path: string): Promise<void> {
         gateKey = '';
         consumeInterrupt();
       }
+    }
+  }
+
+  // a resize during the open scan arrived before any winch listener
+  // existed: og's psignals runs update_term before the first paint,
+  // so re-measure like scrsize
+  {
+    const fresh = freshWindowSize();
+    if (fresh) {
+      config.window = fresh[1] || config.window;
+      config.screenWidth = fresh[0] || config.screenWidth;
     }
   }
 
@@ -585,8 +619,37 @@ export async function bigPager(path: string): Promise<void> {
 
     /** Repaints for the new terminal size, like og's winch(). */
     const onResize = (): void => {
-      config.window = process.stdout.rows || 24;
-      config.screenWidth = process.stdout.columns || 80;
+      // og's update_term re-runs scrsize itself: node's cached
+      // winsize lags both blocked loops and raw SIGWINCH handlers
+      const size = freshWindowSize();
+      config.window = (size ? size[1] : process.stdout.rows) || 24;
+      config.screenWidth =
+        (size ? size[0] : process.stdout.columns) || 80;
+
+      // a WINCH queued during a blocking scan never reached og's
+      // get_return: the message it produced stays waiting on the
+      // old screen, the repaint deferred to psignals after a real
+      // key dismisses it (og paints nothing here)
+      if (winchGuard) {
+        winchGuard = false;
+        if (msgReturn) return;
+      }
+
+      // og's lwinch longjmps out of get_return like an interrupt: a
+      // resize dismisses a waiting message without a key (and
+      // without getcc_clear — WINCH is not an abort signal); the
+      // errmsgs chain's next message then takes its own turn
+      if (msgReturn) {
+        msgReturn = false;
+        message = '';
+
+        if (msgNext) {
+          message = msgNext;
+          msgNext = '';
+          msgReturn = true;
+        }
+      }
+
       draw();
     };
 
@@ -599,7 +662,7 @@ export async function bigPager(path: string): Promise<void> {
       keyboard().off('data', onKey);
       process.off('SIGTERM', quit);
       process.off('SIGHUP', quit);
-      process.stdout.off('resize', onResize);
+      unwatchWinch(onResize);
       resolve();
     };
 
@@ -612,6 +675,10 @@ export async function bigPager(path: string): Promise<void> {
         // dismissing key is subject to its getcc_clear — a silent
         // abort's flag never outlives the loop resuming
         if (intrPending && !msgReturn) intrPending = false;
+
+        // a real key means og was blocked at the tty again: any
+        // WINCH from here on is live, not scan-queued
+        winchGuard = false;
 
         // og's get_return after an error: RETURN dismisses, any
         // other key falls through as the next command (ungetcc);
@@ -1110,16 +1177,21 @@ export async function bigPager(path: string): Promise<void> {
       }
 
       // keys the interrupt poll queued during a blocking scan run
-      // now, like og's command loop draining the ungot queue
-      const pending = takeUngot();
-      if (pending && !done) onKey(pending);
+      // now, like og's command loop draining the ungot queue —
+      // except while a message waits: og's get_return reads the raw
+      // tty, so queued keys stay behind it until a fresh key
+      // dismisses (the stats survive scan-time typing)
+      if (!msgReturn) {
+        const pending = takeUngot();
+        if (pending && !done) onKey(pending);
+      }
     };
 
     // SIGTERM/SIGHUP restore the terminal like og's terminate();
     // 'resize' fires on every platform, unlike SIGWINCH
     process.on('SIGTERM', quit);
     process.on('SIGHUP', quit);
-    process.stdout.on('resize', onResize);
+    watchWinch(onResize);
 
     keyboard().on('data', onKey);
     draw();
@@ -1128,8 +1200,10 @@ export async function bigPager(path: string): Promise<void> {
     if (gateKey) onKey(Buffer.from(gateKey));
 
     // keys polled during the --file-size open scan run now
-    const pending = takeUngot();
-    if (pending && !done) onKey(pending);
+    if (!msgReturn) {
+      const pending = takeUngot();
+      if (pending && !done) onKey(pending);
+    }
   });
 
   process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);

@@ -7,6 +7,8 @@ import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
 
 import { resetRender, screenEntered } from './helpers';
 
+import { freshWindowSize } from './keyboard';
+
 import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
@@ -73,9 +75,13 @@ export function enterScreen(): void {
 }
 
 export function calculateDimensions(): void {
-  // a zero size (some pseudo-terminals) falls back like og's scrsize
-  config.window = process.stdout.rows || DEFAULT_WINDOW;
-  config.screenWidth = process.stdout.columns || DEFAULT_COLUMN;
+  // og's scrsize queries the terminal itself: node's cached
+  // winsize lags blocked loops and raw SIGWINCH handlers; a zero
+  // size (some pseudo-terminals) falls back like og
+  const size = freshWindowSize();
+  config.window = (size ? size[1] : process.stdout.rows) || DEFAULT_WINDOW;
+  config.screenWidth =
+    (size ? size[0] : process.stdout.columns) || DEFAULT_COLUMN;
 
   // LESS_LINES / LESS_COLUMNS override the detected size, like
   // scrsize: a negative value is relative to the real size

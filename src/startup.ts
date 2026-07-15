@@ -1,4 +1,5 @@
-import { keyboard, dumbTerminal } from './keyboard';
+import { keyboard, dumbTerminal, watchWinch, unwatchWinch }
+  from './keyboard';
 
 import { opt, scanOptions, initUnsupport, takeCliOptions,
   flushPendopt, onRebuild, optKnowDumb } from './options';
@@ -108,7 +109,9 @@ export function warnReturn(): Promise<string> {
   keyboard().resume();
 
   return new Promise(resolve => {
-    keyboard().once('data', (data: Buffer) => {
+    const onKey = (data: Buffer): void => {
+      unwatchWinch(onWinch);
+
       // og reads a single char; anything typed behind it stays
       // buffered as ordinary input (paused, or the re-emit would
       // fire with no listener attached and vanish)
@@ -118,6 +121,17 @@ export function warnReturn(): Promise<string> {
       }
 
       resolve(data.toString()[0] ?? '');
-    });
+    };
+
+    // og's lwinch longjmps out of get_return: a resize passes the
+    // gate with no key
+    const onWinch = (): void => {
+      unwatchWinch(onWinch);
+      keyboard().off('data', onKey);
+      resolve('');
+    };
+
+    keyboard().once('data', onKey);
+    watchWinch(onWinch);
   });
 }

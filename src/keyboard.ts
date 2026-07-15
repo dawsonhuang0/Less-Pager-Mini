@@ -2,6 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import tty from 'tty';
 
+import { execFileSync } from 'child_process';
+
 /**
  * The keyboard stream, like og's ttyin.c: keys come from the
  * controlling terminal, not stdin, so piped input (`cmd | lmn`)
@@ -89,6 +91,58 @@ export function takeUngot(): Buffer | null {
  */
 export function consumeInterrupt(): void {
   ungot = [];
+}
+
+/**
+ * The terminal size straight from the kernel, like og's scrsize
+ * ioctl: node caches the winsize and refreshes it only in its own
+ * SIGWINCH processing — a blocking scan delays that past og's
+ * update_term moment, and a raw SIGWINCH handler can run before
+ * the refresh. Returns [columns, rows], falling back to node's
+ * cache when stty is unavailable (Windows).
+ */
+export function freshWindowSize(): [number, number] | null {
+  try {
+    // a freshly opened fd: spawning with our raw keyboard fd would
+    // flip its shared file description to blocking, hanging the
+    // interrupt poll's readSync
+    const fd = fs.openSync('/dev/tty', 'r');
+
+    try {
+      const out = execFileSync('stty', ['size'], {
+        stdio: [fd, 'pipe', 'ignore'],
+      }).toString().trim().split(/\s+/);
+
+      const rows = parseInt(out[0], 10);
+      const cols = parseInt(out[1], 10);
+      if (rows > 0 && cols > 0) return [cols, rows];
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    // no stty or /dev/tty (Windows): node's cache is the best left
+  }
+
+  return (process.stdout.getWindowSize?.() as [number, number]) ?? null;
+}
+
+/**
+ * Watches window changes like og's lwinch: the handler fires on the
+ * SIGNAL itself — og's psignals runs screen_trashed() even when the
+ * size did not change, and the longjmp dismisses get_return waits —
+ * while node's 'resize' event only fires when the dimensions
+ * differ. Windows has no SIGWINCH, so 'resize' covers it, like og
+ * polling the console size.
+ */
+export function watchWinch(fn: () => void): void {
+  if (process.platform === 'win32') process.stdout.on('resize', fn);
+  else process.on('SIGWINCH', fn);
+}
+
+/** Removes a watchWinch handler. */
+export function unwatchWinch(fn: () => void): void {
+  if (process.platform === 'win32') process.stdout.off('resize', fn);
+  else process.off('SIGWINCH', fn);
 }
 
 /**

@@ -1,6 +1,7 @@
 import fs from 'fs';
 
-import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot }
+import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
+  watchWinch, unwatchWinch }
   from "./keyboard";
 
 
@@ -1007,9 +1008,13 @@ function keyHandler(data: Buffer): void {
   for (const sequence of splitKeys(text)) handleKey(sequence);
 
   // keys the interrupt poll queued during a blocking search run
-  // now, like og's command loop draining the ungot queue
-  const pending = takeUngot();
-  if (pending && !session.exited) keyHandler(pending);
+  // now, like og's command loop draining the ungot queue — except
+  // while a message waits: og's get_return reads the raw tty, so
+  // queued keys stay behind it until a fresh key dismisses
+  if (!search.message) {
+    const pending = takeUngot();
+    if (pending && !session.exited) keyHandler(pending);
+  }
 }
 
 /** True while a prompt is collecting input, like og's mca != 0. */
@@ -1696,7 +1701,7 @@ function init() {
 
   // node's tty emits 'resize' on every platform (SIGWINCH never
   // fires on Windows, where og polls the console size instead)
-  process.stdout.on('resize', onResize);
+  watchWinch(onResize);
 
   calculateEOF(session.content);
 }
@@ -1713,6 +1718,11 @@ function onResize(): void {
   if (session.shellPause) return;
 
   mode.INIT = false;
+
+  // og's lwinch longjmps out of get_return: a waiting error message
+  // dismisses on resize without a key, the repaint erasing it
+  search.message = '';
+  unfreezeFrame();
 
   resetRender();
   calculateDimensions();
@@ -1912,7 +1922,7 @@ function cleanUp(): void {
   process.off('SIGHUP', onTerminate);
   process.off('SIGINT', onSigint);
   process.off('SIGUSR1', onSigusr1);
-  process.stdout.off('resize', onResize);
+  unwatchWinch(onResize);
   process.off('uncaughtException', onUncaught);
 
   keyboard().off('data', keyHandler);
