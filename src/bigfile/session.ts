@@ -1,4 +1,15 @@
-import { keyboard, closeTtyKeyboard } from '../keyboard';
+import fs from 'fs';
+
+import { spawnSync } from 'child_process';
+
+import { keyboard, closeTtyKeyboard, consumeInterrupt, takeUngot }
+  from '../keyboard';
+
+import { help } from '../lessHelp';
+
+import { transformContent } from '../lines/helpers';
+
+import { versionMessage } from '../features/misc';
 
 import { BlockFile } from './ch';
 import { BigView, displayText } from './screen';
@@ -16,7 +27,9 @@ import { search, searchInterrupted } from '../features/searching';
 import { displayPrType, optIntrChar, prChar } from '../options/shared';
 
 import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
-  flushPendopt, applyMouse, applyBracketedPaste, hook, opt }
+  flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
+  option, startOption, optionKey, gutterWidth, optWheelLines,
+  optMouseReverse }
   from '../options';
 
 import {
@@ -41,6 +54,8 @@ import {
   CLEAR_BELOW,
   CURSOR_HOME,
   SYNC_ON,
+  SCROLL_UP_REGEX,
+  SCROLL_DOWN_REGEX,
   SYNC_OFF,
   INVERSE_ON,
   INVERSE_OFF
@@ -63,6 +78,12 @@ export async function bigPager(path: string): Promise<void> {
   // a -b toggle trims the block pool at once, like ch_setbufspace
   onTrimBufSpace(() => bf.trim());
 
+  // og's opt_filesize scans only when ch_length() == NULL_POSITION;
+  // a seekable file's length is always known, so the toggle only
+  // reports (the regular session's pipe hook is restored at exit)
+  const prevScanFileSize = hook.scanFileSize;
+  hook.scanFileSize = () => {};
+
   // $LESS applies here too, then the lmn command line options
   scanOptions(process.env.LESS ?? '', []);
   for (const arg of takeCliOptions()) scanOptions(arg, [], false);
@@ -70,12 +91,6 @@ export async function bigPager(path: string): Promise<void> {
 
   keyboard().setRawMode(true);
   keyboard().resume();
-  process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
-
-  // mouse tracking and bracketed paste enable with the screen
-  hook.screenActive = true;
-  applyMouse();
-  applyBracketedPaste();
 
   config.window = process.stdout.rows || 24;
   config.screenWidth = process.stdout.columns || 80;
@@ -94,7 +109,156 @@ export async function bigPager(path: string): Promise<void> {
   // marks and the quote mark, like og mark.c over POSITIONs
   const marks = new Map<string, { pos: number, subRow: number }>();
   let quoteMark: { pos: number, subRow: number } | null = null;
-  let marking: 'm' | "'" | '' = '';
+  let marking: 'm' | 'M' | "'" | 'c' | '' = '';
+
+  // the : command prefix collecting its second char, like og's mca
+  let coloning = false;
+
+  // the ! / # shell prompt and its post-command pause, like lsystem
+  let shelling: '!' | '#' | '' = '';
+  let shellPausing = false;
+
+  // the h help overlay: og pages FAKE_HELPFILE through the pager
+  let helpTop = -1;
+  let helpLines: string[] = [];
+
+  // og's linenum anchors (add_lnum): positions with known newline
+  // counts, cached as scans walk so later ones resume nearby
+  const lnums: { pos: number, num: number }[] = [{ pos: 0, num: 0 }];
+  // a "(press RETURN)" message is pending: RETURN dismisses it, any
+  // other key ungets as the next command, like og's get_return
+  let msgReturn = false;
+  // a second queued error shows after the first dismisses, like
+  // og's errmsgs chain
+  let msgNext = '';
+  // true when the last countTo displayed the delayed message before
+  // aborting: og's abort_delayed_msg acts only then (loopcount < 0)
+  let scanMessaged = false;
+  // og's pending S_INTERRUPT: psignals runs getcc_clear at the top
+  // of the command loop, so keys captured at a gate after an
+  // interrupt-abort are discarded; fresh keys act normally
+  let intrPending = false;
+
+  /**
+   * Newlines before `target`, like find_linenum walking raw lines
+   * from the nearest anchor: og shows "Calculating line numbers"
+   * after LONGTIME (2s) and ^X or interrupt aborts (returns null).
+   * The open-time scan_eof passes its own "Determining length of
+   * file" wording instead (linenum.c detlenmessage).
+   */
+  const countTo = (
+    target: number,
+    note: string = 'Calculating line numbers'
+  ): number | null => {
+    let anchor = lnums[0];
+    for (const a of lnums) {
+      if (a.pos <= target && a.pos > anchor.pos) anchor = a;
+    }
+
+    let { pos, num } = anchor;
+    const started = Date.now();
+    let messaged = false;
+    let steps = 0;
+    scanMessaged = false;
+
+    while (pos < target) {
+      const chunk = bf.readRange(pos, Math.min(65536, target - pos));
+      if (!chunk.length) break;
+
+      for (let i = chunk.indexOf(10); i >= 0; i = chunk.indexOf(10, i + 1)) {
+        num++;
+      }
+
+      pos += chunk.length;
+
+      if ((++steps & 15) === 0) {
+        lnums.push({ pos, num });
+
+        if (!messaged && Date.now() - started >= 2000) {
+          messaged = true;
+          scanMessaged = true;
+          // a stream write queues behind the blocking scan and would
+          // only flush with the result; og's ierror ends in flush()
+          fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+            note + '... (interrupt to abort)' + INVERSE_OFF);
+        }
+
+        if (searchInterrupted()) {
+          // the aborting ^C is og's consumed signal, never a key;
+          // the pending S_INTERRUPT clears the next gate's key too
+          consumeInterrupt();
+          intrPending = true;
+          return null;
+        }
+      }
+    }
+
+    lnums.push({ pos: target, num });
+    return num;
+  };
+
+  // --file-size scans the whole file before the screen initializes,
+  // like edit() calling scan_eof unconditionally: og pages only
+  // after the length and line count are known, with "Determining
+  // length of file" on the main screen once the scan runs long
+  let gateKey = '';
+
+  if (opt.wantFileSize > 0) {
+    const scanned = countTo(Math.max(bf.size - 1, 0),
+      'Determining length of file');
+    // og clears its ierror line before the alt screen enters
+    if (scanMessaged) fs.writeSync(1, '\r' + CLEAR_LINE);
+
+    // the aborting ^C is og's consumed signal, never a key
+    if (scanned === null) consumeInterrupt();
+
+
+    // an interrupt after the message showed turns line numbers off
+    // (abort_delayed_msg): the pre-init error prints plainly and
+    // gates on RETURN before the screen, like og's errmsgs check
+    // (main.c:457) — get_return ungets any other key as the first
+    // command
+    if (scanned === null && scanMessaged) {
+      opt.linenums = 0;
+      fs.writeSync(1,
+        'Line numbers turned off\nPress RETURN to continue ');
+
+      const answer = await new Promise<string>(resolve =>
+        keyboard().once('data', (data: Buffer) => {
+          // one char gates; the rest stays buffered as input
+          if (data.length > 1) {
+            keyboard().pause();
+            keyboard().unshift(data.subarray(1));
+          }
+
+          resolve(data.toString()[0] ?? '');
+        }));
+
+      fs.writeSync(1, '\n');
+      keyboard().resume();
+
+      // ^C is og's READ_INTR at get_return: swallowed, not ungot
+      if (answer !== '\x0D' && answer !== '\x0A' && answer !== ' ' &&
+          answer !== '\x03') {
+        gateKey = answer;
+      }
+
+      // the pending S_INTERRUPT: psignals' getcc_clear at the top
+      // of og's command loop discards the gate's ungot key
+      if (intrPending) {
+        intrPending = false;
+        gateKey = '';
+        consumeInterrupt();
+      }
+    }
+  }
+
+  process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
+
+  // mouse tracking and bracketed paste enable with the screen
+  hook.screenActive = true;
+  applyMouse();
+  applyBracketedPaste();
 
   // F follow state, like og's forw_loop
   let following = false;
@@ -104,6 +268,62 @@ export async function bigPager(path: string): Promise<void> {
   /** Records the pre-jump position into the quote mark, like lastmark. */
   const remember = (): void => {
     quoteMark = { ...view.top };
+  };
+
+  /**
+   * = and :f build og's eq_message: lines %lt-%lb/%L needs line
+   * numbers (a whole-file scan, delayed message + abort); byte %bB
+   * is BOTTOM_PLUS_ONE with its percent.
+   */
+  const showInfo = (): void => {
+    // og's cmd_exec clear_bots before the command runs: the prompt
+    // line blanks at once, even while the line scan takes seconds
+    fs.writeSync(1, '\r' + CLEAR_LINE);
+
+    const { rows, endPos } = view.visible(config.window - 1);
+    const pct = bf.size
+      ? Math.floor((endPos * 100) / bf.size)
+      : 100;
+
+    // -n (and a previously aborted scan) skips line numbers
+    // entirely, like find_linenum's !linenums early return
+    const topNum = opt.linenums === 0
+      ? null
+      : countTo(view.top.pos);
+    const botNum = topNum === null || !rows.length
+      ? null
+      : countTo(rows[rows.length - 1].pos);
+    const total = botNum === null
+      ? null
+      : countTo(Math.max(bf.size - 1, 0));
+
+    // an aborted scan leaves later fields unknown: og renders "?"
+    // for each (lines 1-23/? when only the total scan aborted) and
+    // drops the segment only when the top line itself is unknown
+    // (?lt); if the delayed message had shown, og turns line
+    // numbers off for good and says so (abort_delayed_msg), the eq
+    // info queuing behind
+    const aborted = opt.linenums !== 0 &&
+      (topNum === null || botNum === null || total === null);
+    const lines = topNum === null
+      ? ''
+      : `lines ${topNum + 1}-` +
+        `${botNum === null ? '?' : botNum + 1}/` +
+        `${total === null ? '?' : total + 1} `;
+
+    const eq =
+      `${path} ${lines}byte ${endPos}/${bf.size} ${pct}%` +
+      '  (press RETURN)';
+
+    if (aborted && scanMessaged) {
+      opt.linenums = 0;
+      message = 'Line numbers turned off  (press RETURN)';
+      msgNext = eq;
+    } else {
+      message = eq;
+    }
+
+    msgReturn = true;
   };
 
   /**
@@ -160,6 +380,28 @@ export async function bigPager(path: string): Promise<void> {
   };
 
   const draw = (): void => {
+    // -N and -J reserve gutter columns inside the width, like og's
+    // line prefix (line.c pfx); recompute per frame so toggles apply
+    config.screenWidth = (process.stdout.columns || 80) - gutterWidth();
+
+    // the h help overlay pages og's FAKE_HELPFILE with its prompts
+    if (helpTop >= 0) {
+      const count = config.window - 1;
+      const slice = helpLines.slice(helpTop, helpTop + count);
+      while (slice.length < count) slice.push('~');
+
+      const hPrompt = helpTop + count >= helpLines.length
+        ? 'HELP -- END -- Press g to see it again, or q when done '
+        : 'HELP -- Press RETURN for more, or q when done ';
+
+      const body = slice.map(r => CLEAR_LINE + r).join('\n');
+      process.stdout.write(
+        SYNC_ON + CURSOR_HOME + body + '\n' + CLEAR_LINE +
+        INVERSE_ON + hPrompt + INVERSE_OFF + CLEAR_BELOW + SYNC_OFF
+      );
+      return;
+    }
+
     const count = config.window - 1;
     const { rows } = view.visible(count);
 
@@ -175,6 +417,42 @@ export async function bigPager(path: string): Promise<void> {
       } else {
         out = emitRow(getLayout(text), row.subRow);
       }
+
+      // og's line prefix: the -J mark letter, then the -N number
+      // right-aligned in linenum_width + a space, bold like AT_BOLD;
+      // continuation rows and unknown numbers stay blank
+      let pfx = '';
+
+      if (opt.statusCol) {
+        let mark = ' ';
+        for (const [letter, m] of marks) {
+          if (m.pos === row.pos && row.subRow === 0) { mark = letter; break; }
+        }
+        pfx += mark.padEnd(opt.statusColWidth);
+      }
+
+      if (opt.linenums === 2) {
+        const num = row.subRow === 0 ? countTo(row.pos) : null;
+
+        if (num === null) {
+          pfx += ' '.repeat(opt.linenumWidth + 1);
+
+          // an interrupted count is og's abort_delayed_msg: line
+          // numbers turn off for good and the error reports it
+          if (row.subRow === 0 && scanMessaged) {
+            opt.linenums = 0;
+            message = 'Line numbers turned off  (press RETURN)';
+            msgReturn = true;
+          }
+        } else {
+          // og pads with AT_NORMAL spaces and bolds only the digits
+          const digits = String(num + 1);
+          pfx += ' '.repeat(Math.max(opt.linenumWidth - digits.length, 0)) +
+            '\x1b[1m' + digits + '\x1b[22m ';
+        }
+      }
+
+      out = pfx + out;
 
       // highlight search matches in view, like og's hilites
       if (pattern && search.highlight) {
@@ -201,10 +479,32 @@ export async function bigPager(path: string): Promise<void> {
         ? `${percent}%`
         : ':';
 
-    const prompt = searching
+    // the - prompt echoes like og's mca_opt: the doubled dash for a
+    // long name, (P)/flag marks, a spec's parameter prompt
+    const optPrompt = !option.pending
+      ? ''
+      : option.spec
+        ? (option.spec.prompt ?? '') +
+          (cmd.active ? cmdDisplay() : option.param)
+        : option.name !== null
+          ? option.pending + option.pending +
+            (option.noPrompt ? '(P)' : '') + option.flag +
+            (cmd.active ? cmdDisplay() : option.name)
+          : option.pending + (option.noPrompt ? '(P)' : '') + option.flag;
+
+    const prompt = coloning
+      ? ' :'
+      : option.pending
+      ? optPrompt
+      : searching
       ? searching + cmdDisplay()
+      : shelling
+      ? shelling + cmdDisplay()
       : marking
-        ? (marking === 'm' ? 'set mark: ' : 'goto mark: ')
+        ? (marking === 'm' ? 'set mark: '
+          : marking === 'M' ? 'set mark bottom: '
+          : marking === 'c' ? 'clear mark: '
+          : 'goto mark: ')
         : following
           ? INVERSE_ON + 'Waiting for data... (' +
             `${prChar(optIntrChar())} or interrupt to abort)` + INVERSE_OFF
@@ -223,6 +523,50 @@ export async function bigPager(path: string): Promise<void> {
       SYNC_ON + CURSOR_HOME + body + '\n' + CLEAR_LINE + prompt +
       CLEAR_BELOW + SYNC_OFF
     );
+  };
+
+  /** ! and # run through the shell, like og's lsystem. */
+  const runShellCmd = (bang: '!' | '#', text: string): void => {
+    // og's fexpand: % is the current file name
+    const expanded = text.replace(/%/g, path);
+
+    // lsystem echoes the command and deinits the screen
+    process.stdout.write('\r' + CLEAR_LINE + bang + expanded + '\n');
+    process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
+    keyboard().setRawMode(false);
+    keyboard().pause();
+
+    const shell = process.env.SHELL || 'sh';
+    spawnSync(shell, expanded ? ['-c', expanded] : [],
+      { stdio: 'inherit' });
+
+    keyboard().setRawMode(true);
+    keyboard().resume();
+
+    // the done message waits on the shell screen, like og
+    process.stdout.write(`${bang}done  (press RETURN)`);
+    shellPausing = true;
+  };
+
+  /** v spawns the editor at the current line, like og's %E +%lm %g. */
+  const runEditor = (): void => {
+    const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
+    // og's cmd_exec clear_bot, then currline(TOP) — the line
+    // number may need the scan
+    fs.writeSync(1, '\r' + CLEAR_LINE);
+    const line = countTo(view.top.pos);
+
+    process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
+    keyboard().setRawMode(false);
+    keyboard().pause();
+
+    spawnSync(editor, line === null ? [path] : [`+${line + 1}`, path],
+      { stdio: 'inherit' });
+
+    keyboard().setRawMode(true);
+    keyboard().resume();
+    process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
+    bf.refreshSize();
   };
 
   /** Ends F follow mode and replays queued keys, like og. */
@@ -262,6 +606,47 @@ export async function bigPager(path: string): Promise<void> {
     const onKey = (data: Buffer): void => {
       for (const key of splitKeys(data.toString())) {
         first = false;
+
+        // og clears the pending S_INTERRUPT at the top of the next
+        // command iteration (psignals): only a blocking message's
+        // dismissing key is subject to its getcc_clear — a silent
+        // abort's flag never outlives the loop resuming
+        if (intrPending && !msgReturn) intrPending = false;
+
+        // og's get_return after an error: RETURN dismisses, any
+        // other key falls through as the next command (ungetcc);
+        // a queued second error shows next, like og's errmsgs chain
+        if (msgReturn) {
+          msgReturn = false;
+          message = '';
+
+          // og's get_return reads the raw tty (never the ungot
+          // queue), so EVERY message in the errmsgs chain captures
+          // its own dismissing key; the pending S_INTERRUPT's
+          // getcc_clear at the loop top then discards them ALL —
+          // only a key after the chain (and the psignals clear)
+          // acts as a command
+          const discarded = intrPending;
+
+          if (msgNext) {
+            message = msgNext;
+            msgNext = '';
+            msgReturn = true;
+            draw();
+            continue;
+          }
+
+          if (intrPending) {
+            intrPending = false;
+            consumeInterrupt();
+          }
+
+          if (discarded || key === '\x0D' || key === '\x0A') {
+            draw();
+            continue;
+          }
+        }
+
         message = '';
 
         // F wait: ^C / --intr return to paging, other keys queue as
@@ -286,11 +671,30 @@ export async function bigPager(path: string): Promise<void> {
           marking = '';
 
           if (!(key === '\x03' || key.startsWith('\x1B'))) {
-            if (kind === 'm') {
+            if (kind === 'm' || kind === 'M') {
               if (/^[a-zA-Z#]$/.test(key[0])) {
-                marks.set(key[0], { ...view.top });
+                // M marks the bottom displayed line, like og's
+                // setmark with the BOTTOM position
+                const pos = kind === 'M'
+                  ? (() => {
+                      const { rows } = view.visible(config.window - 1);
+                      const last = rows[rows.length - 1];
+                      return last
+                        ? { pos: last.pos, subRow: last.subRow }
+                        : { ...view.top };
+                    })()
+                  : { ...view.top };
+                marks.set(key[0], pos);
               } else {
                 message = `Invalid mark letter ${key[0]}`;
+              }
+            } else if (kind === 'c') {
+              // ESC-m clears a mark, erroring like og's getumark
+              if (marks.has(key[0])) marks.delete(key[0]);
+              else {
+                message = /^[a-zA-Z#]$/.test(key[0])
+                  ? 'Mark not set'
+                  : `Invalid mark letter ${key[0]}`;
               }
             } else {
               const target = key[0] === "'" || key === '\x18'
@@ -311,6 +715,141 @@ export async function bigPager(path: string): Promise<void> {
                 view.top = { ...target };
               }
             }
+          }
+
+          draw();
+          continue;
+        }
+
+        // the h help overlay owns the keys until q, like og's help
+        if (helpTop >= 0) {
+          const count = config.window - 1;
+          const cap = Math.max(helpLines.length - count, 0);
+          const atEnd = helpTop + count >= helpLines.length;
+
+          if (key === 'q' || key === 'Q' ||
+              (atEnd && (key === '\x0D' || key === '\x0A'))) {
+            helpTop = -1;
+          } else {
+            switch (getAction(key)) {
+              case 'LINE_FORWARD':
+                helpTop = Math.min(helpTop + 1, cap); break;
+              case 'LINE_BACKWARD':
+                helpTop = Math.max(helpTop - 1, 0); break;
+              case 'WINDOW_FORWARD':
+              case 'SET_WINDOW_FORWARD':
+                helpTop = Math.min(helpTop + count, cap); break;
+              case 'WINDOW_BACKWARD':
+              case 'SET_WINDOW_BACKWARD':
+                helpTop = Math.max(helpTop - count, 0); break;
+              case 'SET_HALF_WINDOW_FORWARD':
+                helpTop = Math.min(
+                  helpTop + Math.floor(config.window / 2), cap);
+                break;
+              case 'SET_HALF_WINDOW_BACKWARD':
+                helpTop = Math.max(
+                  helpTop - Math.floor(config.window / 2), 0);
+                break;
+              case 'FIRST_LINE': helpTop = 0; break;
+              case 'LAST_LINE': helpTop = cap; break;
+              default: break;
+            }
+          }
+
+          draw();
+          continue;
+        }
+
+        // og's lsystem reinits after the done pause; a non-trivial
+        // key ungets as the next command (get_return)
+        if (shellPausing) {
+          shellPausing = false;
+          process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
+          draw();
+
+          if (key !== '\x0D' && key !== '\x0A' && key !== ' ' &&
+              key !== '\x03') {
+            onKey(Buffer.from(key));
+          }
+
+          continue;
+        }
+
+        // the ! / # command line runs through the shared line editor
+        if (shelling) {
+          if (!cmd.prefix && (key === '\x0D' || key === '\x0A')) {
+            const text = cmdText();
+            const bang = shelling;
+            shelling = '';
+            cmdClose();
+            runShellCmd(bang, text);
+          } else if (!cmd.prefix && key === '\x03') {
+            shelling = '';
+            cmdClose();
+            draw();
+          } else {
+            const result = cmdChar(key);
+            if (result === 'quit') { shelling = ''; cmdClose(); }
+            for (let u = cmdUngot(); u !== null; u = cmdUngot()) cmdChar(u);
+            draw();
+          }
+
+          continue;
+        }
+
+        // the : prefix dispatches its second char, like og's
+        // ":"-prefixed command table
+        if (coloning) {
+          coloning = false;
+
+          switch (key === '\x03' || key.startsWith('\x1B')
+            ? ''
+            : getAction(':' + key)) {
+            case 'CURRENT_INFO':
+              showInfo();
+              break;
+            case 'NEXT_FILE':
+              // a single-file list, like og's edit_next failing
+              message = 'No next file  (press RETURN)';
+              msgReturn = true;
+              break;
+            case 'PREV_FILE':
+              message = 'No previous file  (press RETURN)';
+              msgReturn = true;
+              break;
+            case 'REMOVE_FILE':
+              // og's getoff_ifile on the only file: just a bell
+              process.stdout.write('\x07');
+              break;
+            case 'INDEX_FILE':
+              // :x to the first (only) file: og's edit_ifile
+              // short-circuits on the current ifile
+              break;
+            case 'OPEN_FILE':
+              // examining another file is outside this session
+              message = 'Command not available  (press RETURN)';
+              msgReturn = true;
+              break;
+            case '':
+              break;
+            default:
+              process.stdout.write('\x07');
+              break;
+          }
+
+          draw();
+          continue;
+        }
+
+        // - and -- run the shared option machinery; its reports
+        // show like og's error() with the RETURN gate
+        if (option.pending) {
+          optionKey([], key);
+
+          if (search.message) {
+            message = search.message + '  (press RETURN)';
+            search.message = '';
+            msgReturn = true;
           }
 
           draw();
@@ -360,9 +899,25 @@ export async function bigPager(path: string): Promise<void> {
           continue;
         }
 
+        if (key === ':') {
+          coloning = true;
+          draw();
+          continue;
+        }
+
         if (key === 'n' || key === 'N') {
           const dir = key === 'n' ? lastDir : (-lastDir as 1 | -1);
           runSearch(dir, view.top.pos);
+          buffer = [];
+          draw();
+          continue;
+        }
+
+        // mouse wheel scrolls by --wheel-lines, --rmouse reversing
+        if (SCROLL_UP_REGEX.test(key) || SCROLL_DOWN_REGEX.test(key)) {
+          const down = SCROLL_DOWN_REGEX.test(key) !== optMouseReverse();
+          if (down) view.lineForward(optWheelLines());
+          else view.lineBackward(optWheelLines());
           buffer = [];
           draw();
           continue;
@@ -381,12 +936,24 @@ export async function bigPager(path: string): Promise<void> {
           case 'EXIT':
             quit();
             return;
-          case 'LINE_FORWARD': view.lineForward(n); break;
-          case 'LINE_BACKWARD': view.lineBackward(n); break;
+          case 'LINE_FORWARD':
+          case 'FORCE_LINE_FORWARD':
+          case 'NEWLINE_FORWARD':
+            view.lineForward(n);
+            break;
+          case 'LINE_BACKWARD':
+          case 'FORCE_LINE_BACKWARD':
+          case 'NEWLINE_BACKWARD':
+            view.lineBackward(n);
+            break;
           case 'WINDOW_FORWARD':
+          case 'NO_EOF_WINDOW_FORWARD':
+          case 'SET_WINDOW_FORWARD':
             view.lineForward(n === 1 ? config.window - 1 : n);
             break;
           case 'WINDOW_BACKWARD':
+          case 'FORCE_WINDOW_BACKWARD':
+          case 'SET_WINDOW_BACKWARD':
             view.lineBackward(n === 1 ? config.window - 1 : n);
             break;
           case 'SET_HALF_WINDOW_FORWARD':
@@ -395,19 +962,129 @@ export async function bigPager(path: string): Promise<void> {
           case 'SET_HALF_WINDOW_BACKWARD':
             view.lineBackward(Math.floor(config.window / 2));
             break;
+          case 'SET_HALF_SCREEN_RIGHT':
+            config.col +=
+              n === 1 ? Math.floor(config.screenWidth / 2) : n;
+            break;
+          case 'SET_HALF_SCREEN_LEFT':
+            config.col = Math.max(config.col -
+              (n === 1 ? Math.floor(config.screenWidth / 2) : n), 0);
+            break;
+          case 'FIRST_COL': config.col = 0; break;
+          case 'LAST_COL': {
+            // ESC-$ shifts to the widest visible line's end
+            const { rows } = view.visible(config.window - 1);
+            let widest = 0;
+            for (const row of rows) {
+              widest = Math.max(widest, displayText(row.text).length);
+            }
+            config.col = Math.max(widest - config.screenWidth, 0);
+            break;
+          }
           case 'FIRST_LINE': remember(); view.gotoStart(); break;
           case 'LAST_LINE': remember(); view.gotoEnd(config.window); break;
+          case 'GO_POS':
+            // P goes to the N-th byte, like og's A_GOPOS
+            remember();
+            view.gotoPos(Math.min(
+              parseInt(buffer.join(''), 10) || 0,
+              Math.max(bf.size - 1, 0)
+            ));
+            break;
+          case 'HIGHLIGHT_TOGGLE':
+            // ESC-u, like og's undo_search toggling hilites
+            search.highlight = !search.highlight;
+            break;
+          case 'CLEAR_SEARCH':
+            // ESC-U forgets the pattern entirely
+            pattern = null;
+            break;
+          case 'SPAN_REPEAT_SEARCH':
+            // a single-file list: ESC-n behaves like n
+            runSearch(lastDir, view.top.pos);
+            break;
+          case 'SPAN_REVERSE_SEARCH':
+            runSearch(-lastDir as 1 | -1, view.top.pos);
+            break;
           case 'PERCENT_LINE':
             remember();
             view.gotoPercent(Math.min(parseInt(buffer.join(''), 10) || 0,
               100));
             break;
           case 'SET_MARK': marking = 'm'; break;
+          case 'SET_MARK_BOTTOM': marking = 'M'; break;
+          case 'CLEAR_MARK': marking = 'c'; break;
           case 'GO_MARK': marking = "'"; break;
+          case 'HELP':
+            // og pages FAKE_HELPFILE through the same nroff pipeline
+            if (!helpLines.length) helpLines = transformContent(help);
+            helpTop = 0;
+            break;
+          case 'VERSION':
+            versionMessage();
+            message = search.message + '  (press RETURN)';
+            search.message = '';
+            msgReturn = true;
+            break;
+          case 'SAVE_FILE':
+            // og's s on seekable input: "Input is not a pipe"
+            message = 'Input is not a pipe  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'EDIT_FILE':
+            runEditor();
+            break;
+          case 'SHELL_COMMAND':
+            shelling = '!';
+            cmdOpen('!');
+            break;
+          case 'PSHELL_COMMAND':
+            shelling = '#';
+            cmdOpen('#');
+            break;
+          case 'NEXT_TAG':
+            message = 'No next tag  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'PREV_TAG':
+            message = 'No previous tag  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'OPTION_TAG':
+            startOption('-');
+            optionKey([], 't');
+            break;
+          case 'OPEN_FILE':
+            message = 'Command not available  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'NEXT_FILE':
+            message = 'No next file  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'PREV_FILE':
+            message = 'No previous file  (press RETURN)';
+            msgReturn = true;
+            break;
+          case 'REMOVE_FILE':
+            process.stdout.write('\x07');
+            break;
+          case 'INDEX_FILE':
+          case 'NOACTION':
+            break;
           case 'REPAINT':
           case 'DROP_INPUT_REPAINT':
             bf.refreshSize();
             break;
+          case 'TAG_COMMAND':
+            // - (and _) open the option prompt, like og's mca_opt
+            startOption(key === '_' ? '_' : '-');
+            break;
+          case 'CURRENT_INFO':
+            showInfo();
+            break;
+          case 'FOLLOW_BELL':
+          case 'FOLLOW_HILITE':
           case 'FOLLOW': {
             // F: jump to the end and wait for data, like forw_loop
             bf.refreshSize();
@@ -422,12 +1099,20 @@ export async function bigPager(path: string): Promise<void> {
             }, 100);
             break;
           }
-          default: break;
+          default:
+            // og bells on unmapped keys; mouse reports stay silent
+            if (!key.startsWith('\x1b[<')) process.stdout.write('\x07');
+            break;
         }
 
         buffer = [];
         draw();
       }
+
+      // keys the interrupt poll queued during a blocking scan run
+      // now, like og's command loop draining the ungot queue
+      const pending = takeUngot();
+      if (pending && !done) onKey(pending);
     };
 
     // SIGTERM/SIGHUP restore the terminal like og's terminate();
@@ -438,6 +1123,13 @@ export async function bigPager(path: string): Promise<void> {
 
     keyboard().on('data', onKey);
     draw();
+
+    // the RETURN gate's ungot key runs as the first command
+    if (gateKey) onKey(Buffer.from(gateKey));
+
+    // keys polled during the --file-size open scan run now
+    const pending = takeUngot();
+    if (pending && !done) onKey(pending);
   });
 
   process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
@@ -452,6 +1144,8 @@ export async function bigPager(path: string): Promise<void> {
   keyboard().setRawMode(false);
   keyboard().pause();
   hook.screenActive = false;
+
+  hook.scanFileSize = prevScanFileSize;
 
   // a /dev/tty keyboard holds the event loop open until destroyed
   closeTtyKeyboard();
