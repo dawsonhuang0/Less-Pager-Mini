@@ -5,7 +5,7 @@ import { config, mode } from './config';
 import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
   reserveGutter, hook } from './options';
 
-import { resetRender } from './helpers';
+import { resetRender, screenEntered } from './helpers';
 
 import {
   ALTERNATE_CONSOLE_ON,
@@ -69,6 +69,7 @@ export function enterScreen(): void {
 
   hook.screenActive = true;
   resetRender();
+  screenEntered();
 }
 
 export function calculateDimensions(): void {

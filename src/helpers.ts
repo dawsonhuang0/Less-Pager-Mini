@@ -13,6 +13,8 @@ import {
   option,
   optQuiet,
   optNoVbell,
+  optNoInit,
+  optOldBot,
   optClearRepaint,
   optTildes,
   displayPrType,
@@ -42,8 +44,10 @@ import { follow } from './features/follow';
 
 import { brackets, marks, markAtRow } from './features/jumping';
 
-import { files, examine, binaryConfirm, pipeDraining }
+import { files, examine, binaryConfirm, pipeDraining, sizeIsKnown }
   from './features/files';
+
+import { session } from './session';
 
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
@@ -61,6 +65,8 @@ import {
   CURSOR_HOME,
   CLEAR_LINE,
   CLEAR_BELOW,
+  CLEAR_SCREEN,
+  REVERSE_INDEX,
   SCROLL_UP,
   SCROLL_DOWN,
   CURSOR_TO,
@@ -448,6 +454,10 @@ let prevRows: string[] | null = null;
 export function resetRender(): void {
   prevRows = null;
   prevCursorCol = -1;
+  prevTopRow = -1;
+  prevTopSub = 0;
+  scrollOpen = false;
+  promptAtBottom = false;
 }
 
 /** The most recently rendered screen rows, for --redraw-on-quit. */
@@ -507,7 +517,18 @@ export function seedBlankFrame(): void {
 }
 
 export function render(rawContent: string[], buffer: string[]): void {
-  let rows = screenRows(rawContent, buffer);
+  // og's error() runs squish_check first (unless --old-bot): a
+  // message over a squished short first paint repaints the whole
+  // screen, tildes and all, before showing (output.c:719)
+  if (mode.INIT && search.message && !optOldBot()) mode.INIT = false;
+
+  // a still-filling first screen of a pipe paints its lines bare in
+  // scroll mode, like og's initial forw: the prompt appears only
+  // with the screenful or the learned length
+  const filling = scrollMode() && session.pipeStream !== null &&
+    session.pipeFirstFill && !sizeIsKnown();
+
+  let rows = screenRows(rawContent, buffer, filling);
 
   if (frozenFrame) {
     // og's prompt() returns early on ungot input and MCA_MORE loops
@@ -529,8 +550,10 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // og (v618+) starts at the lower left of the alt screen and lets
   // the first paint scroll upward: a short first screen sits just
-  // above the bottom prompt, its blank rows on top
-  if (mode.INIT && !mode.DUMB && rows.length < config.window) {
+  // above the bottom prompt, its blank rows on top; -X never homes,
+  // so a short first screen prints in place (og's squished screen)
+  if (mode.INIT && !mode.DUMB && !optNoInit() &&
+      rows.length < config.window) {
     rows.unshift(...Array(config.window - rows.length).fill(''));
   }
 
@@ -538,11 +561,25 @@ export function render(rawContent: string[], buffer: string[]): void {
   // and the parked cursor untouched, like less — but arrow movement
   // inside the command buffer must still move the cursor
   if (prevRows && sameRows(prevRows, rows)) {
+    // og reprints the prompt through clear_bot on every command;
+    // with --old-bot the first reprint after a forw_prompt visibly
+    // jumps it from mid-screen to the bottom row, stale copy behind
+    if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
+      process.stdout.write(
+        clearBot() + rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows)
+      );
+      return;
+    }
+
     const col = cmd.active && !mode.DUMB ? cursorCol(rows) : -1;
 
     if (col >= 0 && col !== prevCursorCol) {
       prevCursorCol = col;
-      process.stdout.write(CURSOR_TO(rows.length, col));
+      // -X owns no absolute rows: rewrite the prompt line in place
+      // and backspace to the editing position, like og's cmdbuf
+      process.stdout.write(scrollMode()
+        ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
+        : CURSOR_TO(rows.length, col));
     }
 
     return;
@@ -551,6 +588,15 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (mode.DUMB) {
     const frame = dumbFrame(prevRows, rows);
     prevRows = rows;
+    process.stdout.write(frame);
+    return;
+  }
+
+  // -X stays on the main screen, where og's real paint model shows
+  if (scrollMode()) {
+    const frame = scrollFrame(prevRows, rows, filling);
+    prevRows = rows;
+    prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(frame);
     return;
   }
@@ -613,6 +659,224 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
     joinDumb(plain);
 }
 
+/** True when -X keeps the pager on the main screen with og's
+ *  scroll-model painting (a dumb terminal keeps its own painter). */
+const scrollMode = (): boolean => !mode.DUMB && optNoInit();
+
+/**
+ * og's clear_bot: erase from the left of the current (prompt) line,
+ * or jump to the physical bottom row first with --old-bot
+ * (screen.c's lower_left vs line_left).
+ */
+export function clearBot(): string {
+  // whatever prints next sits on the bottom row under --old-bot
+  promptAtBottom = true;
+  return (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
+}
+
+// og's forw_prompt leaves the prompt directly after forward-painted
+// lines, possibly mid-screen; --old-bot's next clear_bot then visibly
+// jumps it to the bottom row. og reprints the prompt through
+// clear_bot on every command — we compress identical reprints away,
+// except that first old-bot jump, which changes the screen.
+let promptAtBottom = false;
+
+// true while the last scroll-mode frame was an open pipe fill:
+// og's initial forw prints arriving lines bare, and the prompt
+// waits for the screenful or the learned length (forw_prompt)
+let scrollOpen = false;
+
+function prefixEqual(prev: string[], rows: string[]): boolean {
+  for (let i = 0; i < prev.length; i++) {
+    if (rows[i] !== prev[i]) return false;
+  }
+
+  return true;
+}
+
+// og's cursor rests where the prompt print ended; editing inside the
+// command buffer moves it left with backspaces, like cmdbuf's putbs —
+// -X can't address the prompt row absolutely (the screen may have
+// started mid-terminal and never filled)
+function scrollPark(rows: string[]): string {
+  if (!cmd.active) return '';
+
+  const plain = rows[rows.length - 1].replace(STYLE_REGEX_G, '');
+  const back = visualWidth(plain) - cmdCol();
+  return back > 0 ? '\b'.repeat(back) : '';
+}
+
+// the top of the last scroll-mode frame, so far paints know their
+// direction like og's jump_loc comparing pos against position(TOP)
+let prevTopRow = -1;
+let prevTopSub = 0;
+
+// og's trashed-screen repaints print from wherever the cursor sits:
+// only a command's cmd_exec adds a clear_bot before them. This
+// overrides that prefix — term_init's bare CR after a screen
+// re-entry (shell return), or nothing at all when quitting the help
+// file re-edits the input (no cmd_exec clear_bot reaches the screen).
+let scrollPrefix: string | null = null;
+
+// whether the last scroll-mode frame was still squished (mode.INIT)
+let prevInit = false;
+
+/** Marks the next scroll-mode paint as a fresh screen entry. */
+export function screenEntered(): void {
+  scrollPrefix = '\r';
+}
+
+/** Marks the next scroll-mode paint as a bare re-edit repaint. */
+export function markBareRepaint(): void {
+  scrollPrefix = '';
+}
+
+/**
+ * Paints like og on the main screen for -X (no-init): og never
+ * redraws frames in place — forw() prints the new lines and lets the
+ * terminal scroll, back() inserts rows with home + reverse index
+ * (painted nearest-first), and far jumps either print
+ * "...skipping..." and scroll (forward and plain repaints, forw
+ * without top_scroll) or clear and paint backward (jump_loc's
+ * lclear + back for targets above the screen). The alt screen hides
+ * this model behind our full frames; the main screen preserves the
+ * scrollback, so these shapes match og's bytes.
+ */
+function scrollFrame(
+  prev: string[] | null,
+  rows: string[],
+  open: boolean = false
+): string {
+  const effRow = config.row - config.blankTop;
+  const backJump = prevTopRow >= 0 && (effRow < prevTopRow ||
+    (effRow === prevTopRow && config.subRow < prevTopSub));
+  prevTopRow = effRow;
+  prevTopSub = config.subRow;
+
+  // a squished screen unlatching is og's squish_check calling
+  // repaint(): the tilde pad rows appear through the full skipping
+  // paint, never as an appended forward scroll
+  const unsquished = prevInit && !mode.INIT;
+  prevInit = mode.INIT;
+
+  const wasOpen = scrollOpen;
+  scrollOpen = open;
+
+  // a clearBot() in any shape below overrides this to the bottom row
+  promptAtBottom = rows.length >= config.window;
+
+  // an open pipe fill prints only its newly arrived lines, bare
+  if (open) {
+    dumbPainted = true;
+    promptAtBottom = false;
+
+    if (wasOpen && prev && rows.length >= prev.length &&
+        prefixEqual(prev, rows)) {
+      return rows.slice(prev.length).map(r => r + '\n').join('');
+    }
+
+    return '\r' + rows.map(r => r + '\n').join('');
+  }
+
+  // the fill completed: remaining lines print, then og's forw_prompt
+  // appends the prompt with no clear_bot — under --old-bot it stays
+  // right there, mid-screen, until the next command's clear_bot
+  if (wasOpen && prev) {
+    const grown = rows.slice(0, -1);
+
+    if (grown.length >= prev.length && prefixEqual(prev, grown)) {
+      return grown.slice(prev.length).map(r => r + '\n').join('') +
+        rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows);
+    }
+  }
+
+  const last = rows.length - 1;
+  const bot = rows[last] + CLEAR_LINE + scrollPark(rows);
+
+  if (prev && !wasOpen && !unsquished) {
+    // only the bottom (prompt) line changed: og's clear_bot + reprint
+    if (prev.length === rows.length) {
+      let same = 0;
+      while (same < last && rows[same] === prev[same]) same++;
+      if (same === last) return clearBot() + bot;
+    }
+
+    // forward: the old content rows survive shifted up by k (k = 0
+    // while a short screen is still filling); og clear_bots the
+    // prompt row and prints only the new lines, letting the
+    // terminal scroll (forw)
+    for (let k = 0; k < prev.length - 1; k++) {
+      const overlap = prev.length - 1 - k;
+      if (overlap >= last) continue;
+
+      let ok = true;
+      for (let i = 0; i < overlap; i++) {
+        if (rows[i] !== prev[k + i]) { ok = false; break; }
+      }
+      if (!ok) continue;
+
+      const appended = rows.slice(overlap, last);
+      // -y caps the scroll before og repaints instead
+      if (optForwScroll() >= 0 && appended.length > optForwScroll()) break;
+
+      return clearBot() + appended.map(r => r + '\n').join('') + bot;
+    }
+
+    // backward: k rows scrolled in at the top; og back()'s home +
+    // reverse index per line, then lower_left before the prompt
+    if (prev.length === rows.length) {
+      for (let k = 1; k < last; k++) {
+        if (rows[k] === prev[0] && shifted(prev, rows, k)) {
+          // -h caps the scroll before og repaints instead
+          if (optBackScroll() >= 0 && k > optBackScroll()) break;
+
+          // og's cmd_exec clear_bots before back() starts inserting
+          let frame = clearBot();
+          for (let i = k - 1; i >= 0; i--) {
+            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + '\n';
+          }
+
+          return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
+        }
+      }
+    }
+  }
+
+  const repaint = prev !== null || dumbPainted;
+  const clearHome = optClearRepaint() || dumbHomePending;
+  const prefix = scrollPrefix;
+  dumbHomePending = false;
+  dumbPainted = true;
+  scrollPrefix = null;
+
+  const body = rows.slice(0, last).map(r => r + '\n').join('');
+
+  // the first paint prints in place behind term_init's line_left CR
+  if (!repaint) return '\r' + body + bot;
+
+  // -c and the freeze-unlatching make_display (top_scroll forced)
+  // clear and paint forward, like og's forw calling clear() + home()
+  if (clearHome) return (prefix ?? clearBot()) + CLEAR_SCREEN + body + bot;
+
+  // a backward far jump clear_bots (cmd_exec), clears, and paints
+  // the rows in reverse through home + reverse index (jump_loc's
+  // lclear + back)
+  if (backJump) {
+    let frame = clearBot() + CLEAR_SCREEN;
+    for (let i = last - 1; i >= 0; i--) {
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + '\n';
+    }
+
+    return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
+  }
+
+  // forward far jumps and repaints print og's skipping marker over
+  // the cleared prompt row and scroll (repaint() without top_scroll);
+  // trashed-screen repaints carry their own prefix instead of a
+  // command's clear_bot
+  return (prefix ?? clearBot()) + '...skipping...\n' + body + bot;
+}
+
 /**
  * Joins dumb rows like og's pdone: a row that exactly fills the
  * screen width gets no newline (auto-margins wrap it), and a bottom
@@ -668,9 +932,14 @@ export function markDumbPaint(): void {
  */
 export function screenRows(
   rawContent: string[],
-  buffer: string[]
+  buffer: string[],
+  open: boolean = false
 ): string[] {
   const content = formatContent(rawContent);
+
+  // an open pipe fill has no prompt row yet, like og's initial forw
+  if (open) return content.join('\n').split('\n');
+
   const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;

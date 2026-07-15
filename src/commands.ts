@@ -10,7 +10,7 @@ import { session, deriveContent } from './session';
 
 import { suspendTerminal, enterScreen } from './screen';
 
-import { ringBell, bufferToNum, calculateEOF } from './helpers';
+import { ringBell, bufferToNum, calculateEOF, clearBot } from './helpers';
 
 import {
   files,
@@ -41,11 +41,10 @@ import { prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
-import { optQuitAtEof, optEndPrompt, optNoEditWarn, optOldBot,
+import { optQuitAtEof, optEndPrompt, optNoEditWarn,
   jumpSindex, resetHeaderStart } from './options';
 
 import {
-  CLEAR_LINE,
   CONSOLE_CLEAR,
   CURSOR_TO,
   INVERSE_ON,
@@ -324,19 +323,15 @@ export function runShell(cmd: string, doneMsg: string | null, input?: string): v
   const endProto = mode.HELP ? null : optEndPrompt();
   const endPrompt = endProto ? prExpand(session.content, endProto) : '';
 
-  // --old-bot erases the prompt from lower-left instead of the
-  // current line, like og's clear_bot
-  const clearBot =
-    (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
-
   // only lsystem hides a "-" command; pipe_data always echoes
   if (input === undefined && cmd.startsWith('-')) {
     cmd = cmd.slice(1);
-    if (endPrompt) process.stdout.write(clearBot + endPrompt);
+    if (endPrompt) process.stdout.write(clearBot() + endPrompt);
   } else {
-    // like lsystem's clear_bot + "!cmd": the expanded command shows on
-    // the pager's bottom line, so the shell screen gets only output
-    process.stdout.write(clearBot + endPrompt + '!' + cmd);
+    // like lsystem's clear_bot + "!cmd" + newline: the expanded
+    // command shows on the pager's bottom line, so the shell screen
+    // gets only output
+    process.stdout.write(clearBot() + endPrompt + '!' + cmd + '\n');
   }
 
   suspendTerminal();
@@ -348,6 +343,12 @@ export function runShell(cmd: string, doneMsg: string | null, input?: string): v
   spawnSync(argv[0], argv[1], input === undefined
     ? { stdio: 'inherit' }
     : { stdio: ['pipe', 'inherit', 'inherit'], input });
+
+  // og's lsystem re-edits the current file on return (reedit_ifile):
+  // the filename prompt shows again (new_file), and the trashed
+  // screen's repaint abandons a squished short first paint
+  files.newFile = true;
+  mode.INIT = false;
 
   // raw single-key input for the done pause, still on the shell screen
   keyboard().setRawMode(true);

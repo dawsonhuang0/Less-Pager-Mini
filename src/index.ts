@@ -46,7 +46,9 @@ import {
   ringBell,
   bufferToNum,
   calculateEOF,
-  lastScreen
+  lastScreen,
+  clearBot,
+  markBareRepaint
 } from "./helpers";
 
 import { maxSubRow, transformContent, visualWidth } from "./lines/helpers";
@@ -1750,6 +1752,14 @@ function exitHelp(): boolean {
   // like less's edit_ifile setting new_file
   files.newFile = true;
 
+  // the re-edit repaints the whole screen: a squished short first
+  // paint is abandoned (tildes fill in), and og's trashed-screen
+  // repaint prints bare — the q never reaches the file's screen as
+  // a clear_bot
+  mode.INIT = false;
+  resetRender();
+  markBareRepaint();
+
   return true;
 }
 
@@ -1782,12 +1792,21 @@ function prepareHelp(): void {
 
   // dumb rendering is a terminal property; the help screen keeps it
   mode.DUMB = session.prevMode.DUMB;
+
+  // the content swap is a fresh screen: scroll deltas against the
+  // parked file rows would misread the jump's direction
+  resetRender();
 }
 
 function cleanUp(): void {
   endFollow();
   closeAlt(files.list[files.index]);
   saveHistory();
+
+  // og's quit() clear_bots the prompt line before deinit; on the
+  // main screen (-X) that's visible: the ":" clears and the shell
+  // prompt overwrites it (--old-bot jumps to the true bottom first)
+  if (!mode.DUMB && optNoInit()) process.stdout.write(clearBot());
 
   // --emouse enables tracking without --mouse, so check both;
   // these strings are hardcoded like og's, so dumb gets them too
@@ -1822,8 +1841,10 @@ function cleanUp(): void {
   // like og's quit() repaint after term_deinit: only the content
   // rows print (no prompt row -- prompt() never runs while
   // quitting), so the shell prompt overwrites the ":" line; og
-  // also requires term_addrs, which a dumb terminal lacks
-  const screen = optRedrawOnQuit() && !mode.DUMB ? lastScreen() : null;
+  // also requires term_addrs, which a dumb terminal lacks and -X
+  // never sets (the last screen already sits on the main display)
+  const screen =
+    optRedrawOnQuit() && !mode.DUMB && !optNoInit() ? lastScreen() : null;
   if (screen) process.stdout.write(screen.slice(0, -1).join('\n') + '\n');
 
   process.title = session.processTitle;

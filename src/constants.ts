@@ -47,6 +47,11 @@ export const CURSOR_HOME = '\x1b[H';
 export const CLEAR_LINE = '\x1b[K';
 export const CLEAR_BELOW = '\x1b[J';
 
+// og's terminfo clear (home + erase) and scroll-reverse strings,
+// used by the -X main-screen paint model
+export const CLEAR_SCREEN = '\x1b[H\x1b[2J';
+export const REVERSE_INDEX = '\x1bM';
+
 export const SCROLL_UP = (n: number): string => `\x1b[${n}S`;
 export const SCROLL_DOWN = (n: number): string => `\x1b[${n}T`;
 export const CURSOR_TO = (row: number, col: number): string =>
