@@ -2,6 +2,11 @@ import { BlockFile } from './ch';
 
 import { decodeContent } from '../features/charset';
 
+import { optSqueeze } from '../options';
+
+/** True when the byte is a newline char, like og's '\n' || '\r'. */
+const isNl = (b: number | undefined): boolean => b === 0x0A || b === 0x0D;
+
 /**
  * On-demand line reading over a BlockFile, ported from og input.c's
  * forw_line/back_line: lines materialize from byte positions, so no
@@ -47,9 +52,18 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
     };
   }
 
+  let next = nl + 1;
+
+  // og's forw_line under -s: a blank line skips down to the last
+  // contiguous blank and pretends to be it (input.c:325), so the
+  // run displays as this one line
+  if (optSqueeze() && nl === pos) {
+    while (next < bf.size && isNl(bf.readRange(next, 1)[0])) next++;
+  }
+
   return {
     text: decodeContent(bf.readRange(pos, nl - pos)),
-    next: nl + 1,
+    next,
     split: false,
   };
 }
@@ -62,6 +76,15 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
  */
 export function backLine(bf: BlockFile, pos: number): BackLine | null {
   if (pos <= 0) return null;
+
+  // og's back_line under -s: when the current line is blank, the
+  // whole preceding blank run skips away — the run's first newline
+  // folds into the non-blank line above (input.c:387)
+  if (optSqueeze() && pos < bf.size &&
+      isNl(bf.readRange(pos, 1)[0])) {
+    while (pos > 0 && isNl(bf.readRange(pos - 1, 1)[0])) pos--;
+    if (pos === 0) return null;
+  }
 
   const endsAtNl = bf.readRange(pos - 1, 1)[0] === 0x0A;
   const end = endsAtNl ? pos - 1 : pos;

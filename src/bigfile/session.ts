@@ -30,7 +30,7 @@ import { displayPrType, optIntrChar, prChar } from '../options/shared';
 import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
-  optMouseReverse }
+  optMouseReverse, optTildes }
   from '../options';
 
 import {
@@ -422,7 +422,11 @@ export async function bigPager(path: string): Promise<void> {
     if (helpTop >= 0) {
       const count = config.window - 1;
       const slice = helpLines.slice(helpTop, helpTop + count);
-      while (slice.length < count) slice.push('~');
+      // og's gline pads null lines by the -~ twiddle, bold like
+      // AT_BOLD (blank rows when --tilde is off)
+      while (slice.length < count) {
+        slice.push(optTildes() ? '\x1b[1m~\x1b[22m' : '');
+      }
 
       const hPrompt = helpTop + count >= helpLines.length
         ? 'HELP -- END -- Press g to see it again, or q when done '
@@ -499,7 +503,11 @@ export async function bigPager(path: string): Promise<void> {
       display.push(out);
     }
 
-    while (display.length < count) display.push('~');
+    // og's gline pads null lines by the -~ twiddle, bold like
+    // AT_BOLD (blank rows when --tilde is off)
+    while (display.length < count) {
+      display.push(optTildes() ? '\x1b[1m~\x1b[22m' : '');
+    }
 
     const percent = bf.size
       ? Math.floor((view.top.pos * 100) / bf.size)
