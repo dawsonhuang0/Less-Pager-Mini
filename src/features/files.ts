@@ -848,6 +848,16 @@ export const pipeDraining = {
   cancelMessage: '',
 };
 
+/**
+ * A forward move blocked reading a live pipe, like og's forw loop
+ * waiting in forw_line: the display rows still owed, and whether any
+ * line has painted yet (forw's nlines, deciding the eof_bell).
+ */
+export const pendingScroll = {
+  rows: 0,
+  moved: false,
+};
+
 /** Lines recycled off the front of a streaming pipe (0 otherwise). */
 export function lineBase(): number {
   return files.list[files.index]?.discardedLines ?? 0;

@@ -93,6 +93,37 @@ export function consumeInterrupt(): void {
   ungot = [];
 }
 
+// og keeps ISIG on in raw mode, so a typed ^C is a kernel SIGINT to
+// the WHOLE foreground process group — a pipe's writer dies with it
+// (`cmd | less` + ^C kills cmd; the pipe closes and EOF is real).
+// node's setRawMode clears ISIG, so the ^C reaches us as a bare
+// byte and the writer would live on: raiseSigint restores the
+// driver's semantics by signalling our own process group.
+let selfSigint = false;
+
+/** Emulates ISIG for a typed ^C: SIGINT to our process group. */
+export function raiseSigint(): void {
+  if (process.platform === 'win32' || !keyboard().isTTY) return;
+
+  selfSigint = true;
+
+  try {
+    // pid 0 signals every process in the caller's group, exactly
+    // the set the tty driver would have signalled with ISIG on
+    process.kill(0, 'SIGINT');
+  } catch {
+    selfSigint = false;
+  }
+}
+
+/** Consumes the self-signal mark: true when the SIGINT now being
+ *  handled came from raiseSigint (the ^C byte path already acted). */
+export function wasSelfSigint(): boolean {
+  const was = selfSigint;
+  selfSigint = false;
+  return was;
+}
+
 /**
  * The terminal size straight from the kernel, like og's scrsize
  * ioctl: node caches the winsize and refreshes it only in its own

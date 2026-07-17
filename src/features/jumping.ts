@@ -62,21 +62,25 @@ export function firstLine(content: string[], lineNum: number): void {
  *
  * @param content - Full content lines.
  * @param lineNum - 1-based target line number, or 0 to jump to the end.
+ * @returns True when jump_forw's end jump ran (past its eof_bell) —
+ *   the caller decides whether it was og's pos_clearing G or the
+ *   buffered F entry.
  */
-export function lastLine(content: string[], lineNum: number): void {
+export function lastLine(content: string[], lineNum: number): boolean {
   if (lineNum > 0) {
     firstLine(content, lineNum);
-    return;
+    return false;
   }
 
   if (config.row === config.endRow && config.subRow === config.endSubRow) {
     ringBell('eof');
-    return;
+    return false;
   }
 
   // jump_forw records the last position unconditionally
   recordLastPosition();
   setTop(config.endRow, config.endSubRow);
+  return true;
 }
 
 /**

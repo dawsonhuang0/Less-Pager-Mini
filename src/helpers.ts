@@ -44,7 +44,8 @@ import { follow } from './features/follow';
 
 import { brackets, marks, markAtRow } from './features/jumping';
 
-import { files, examine, binaryConfirm, pipeDraining, sizeIsKnown }
+import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
+  sizeIsKnown }
   from './features/files';
 
 import { session } from './session';
@@ -458,6 +459,7 @@ export function resetRender(): void {
   prevTopSub = 0;
   scrollOpen = false;
   promptAtBottom = false;
+  posClearPending = false;
 }
 
 /** The most recently rendered screen rows, for --redraw-on-quit. */
@@ -522,12 +524,12 @@ export function render(rawContent: string[], buffer: string[]): void {
   // screen, tildes and all, before showing (output.c:719)
   if (mode.INIT && search.message && !optOldBot()) mode.INIT = false;
 
-  // a still-filling first screen of a pipe paints its lines bare in
-  // scroll mode, like og's initial forw: the prompt appears only
-  // with the screenful or the learned length — or as the wait
-  // message when the read stalls (pipeFilling(), inlined: importing
+  // a still-filling first screen of a pipe paints its lines bare,
+  // like og's initial forw: the prompt appears only with the
+  // screenful or the learned length — or as the wait message when
+  // the read stalls (pipeFilling(), inlined: importing
   // features/pipe here would run its module body too early)
-  const filling = scrollMode() && session.pipeStream !== null &&
+  const filling = session.pipeStream !== null &&
     session.pipeFirstFill && !session.pipeProbing && !sizeIsKnown() &&
     !session.pipeWaiting;
 
@@ -560,10 +562,15 @@ export function render(rawContent: string[], buffer: string[]): void {
     rows.unshift(...Array(config.window - rows.length).fill(''));
   }
 
+  // og's G repaints through its pos_clear even when nothing moved
+  // visibly, so the identical-rows shortcut below must not eat it
+  const posClear = posClearPending;
+  posClearPending = false;
+
   // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
   // and the parked cursor untouched, like less — but arrow movement
   // inside the command buffer must still move the cursor
-  if (prevRows && sameRows(prevRows, rows)) {
+  if (!posClear && prevRows && sameRows(prevRows, rows)) {
     // og reprints the prompt through clear_bot on every command;
     // with --old-bot the first reprint after a forw_prompt visibly
     // jumps it from mid-screen to the bottom row, stale copy behind
@@ -597,17 +604,23 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // -X stays on the main screen, where og's real paint model shows
   if (scrollMode()) {
-    const frame = scrollFrame(prevRows, rows, filling, rawContent);
+    const frame = scrollFrame(prevRows, rows, filling, rawContent, posClear);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(frame);
     return;
   }
 
-  // -c repaints instead of scrolling
-  const frame = (optClearRepaint() ? null : scrolledFrame(rows)) ??
+  // -c repaints instead of scrolling (og's top_scroll homes; the
+  // skipping scroll paint is the !top_scroll default)
+  const frame = (optClearRepaint()
+    ? null
+    : (posClear ? null : scrolledFrame(rows)) ??
+      skippedFrame(rows, rawContent, posClear)) ??
     fullFrame(rows);
 
+  prevTopRow = config.row - config.blankTop;
+  prevTopSub = config.subRow;
   prevRows = rows;
   prevCursorCol = cmd.active ? cursorCol(rows) : -1;
   process.stdout.write(frame);
@@ -751,6 +764,17 @@ export function markClearHome(): void {
   dumbHomePending = true;
 }
 
+// og's jump_forw (G) runs pos_clear() before jump_loc: the paint
+// sees an empty position table and repaints with the skipping
+// marker even when the target rows overlap the current screen —
+// unlike a scroll or a search jump reaching the same place
+let posClearPending = false;
+
+/** Marks the next paint as og's pos_clear'd jump (G). */
+export function markPosClear(): void {
+  posClearPending = true;
+}
+
 /**
  * Paints like og on the main screen for -X (no-init): og never
  * redraws frames in place — forw() prints the new lines and lets the
@@ -766,10 +790,14 @@ function scrollFrame(
   prev: string[] | null,
   rows: string[],
   open: boolean = false,
-  src: string[] = []
+  src: string[] = [],
+  posClear: boolean = false
 ): string {
   const effRow = config.row - config.blankTop;
-  const backJump = prevTopRow >= 0 && (effRow < prevTopRow ||
+
+  // og's pos_clear'd G never looks like a backward jump: the empty
+  // position table sends jump_loc down the forward/skipping path
+  const backJump = !posClear && prevTopRow >= 0 && (effRow < prevTopRow ||
     (effRow === prevTopRow && config.subRow < prevTopSub));
 
   // the display-row distance the top advanced, like og comparing
@@ -846,7 +874,9 @@ function scrollFrame(
   // a -h-capped backward scroll repaints forward, like og's back()
   let capped = false;
 
-  if (prev && !wasOpen && !unsquished) {
+  // og's G pos_clears: the overlap shapes below assume a live
+  // position table and must not swallow its skipping repaint
+  if (prev && !wasOpen && !unsquished && !posClear) {
     // only the bottom (prompt) line changed: og's clear_bot + reprint
     if (prev.length === rows.length) {
       let same = 0;
@@ -1010,8 +1040,14 @@ export function screenRows(
 ): string[] {
   const content = formatContent(rawContent);
 
-  // an open pipe fill has no prompt row yet, like og's initial forw
-  if (open) return content.join('\n').split('\n');
+  // an open pipe fill has no prompt row yet, like og's initial forw;
+  // the alt screen still owns a blank bottom row so the cursor parks
+  // at og's lower left below the newest line (-X frames must not
+  // gain a row: scrollFrame counts them)
+  if (open) {
+    if (!scrollMode()) content.push('');
+    return content.join('\n').split('\n');
+  }
 
   const prompt = getPrompt(rawContent);
 
@@ -1024,7 +1060,7 @@ export function screenRows(
         ? prompt
         : prompt + getBuffer(buffer)
     );
-  } else if (pipeDraining.active) {
+  } else if (pipeDraining.active || pendingScroll.rows) {
     content.push('');
   }
 
@@ -1118,6 +1154,71 @@ function shifted(top: string[], bottom: string[], k: number): boolean {
 }
 
 /**
+ * Paints a far-forward jump like og's forw() without top_scroll,
+ * which the alt screen runs all the same: the prompt row clears,
+ * "...skipping..." prints over it, and the new lines scroll in
+ * (forwback.c:274) — except an exact-screenful advance, contiguous
+ * by position (the new top is the old BOTTOM_PLUS_ONE), which
+ * scrolls without the marker; a -y-capped scroll instead repaints
+ * WITH it (do_repaint, forwback.c:244). Backward jumps and
+ * same-position repaints keep the home repaint (og's make_display
+ * forces top_scroll for those).
+ *
+ * @returns The frame, or null when this is not a forward jump.
+ */
+function skippedFrame(
+  rows: string[],
+  src: string[],
+  posClear: boolean = false
+): string | null {
+  const prev = prevRows;
+  const effRow = config.row - config.blankTop;
+
+  // og guards: !first_time, full_screen, !is_filtering
+  if (!prev || session.lastFilter ||
+      prev.length !== rows.length || rows.length < config.window) {
+    return null;
+  }
+
+  // og's G paints skipping through its pos_clear no matter the
+  // direction or distance — the position table looks empty
+  let marker = '...skipping...\n';
+
+  if (!posClear) {
+    if (prevTopRow < 0 || config.blankTop) return null;
+
+    if (effRow < prevTopRow ||
+        (effRow === prevTopRow && config.subRow <= prevTopSub)) {
+      return null;
+    }
+
+    // the display-row distance the top advanced, like og comparing
+    // the paint position against position(BOTTOM_PLUS_ONE)
+    let dist = -prevTopSub;
+    const cap = prev.length + 1;
+
+    for (let r = prevTopRow; r < effRow && dist <= cap; r++) {
+      dist += maxSubRow(src[r] ?? '') + 1;
+    }
+
+    dist += config.subRow;
+
+    const screenful = prev.length - 1;
+    const capped = optForwScroll() >= 0 && dist > optForwScroll() &&
+      dist !== screenful;
+
+    if (dist < screenful && !capped) return null;
+    if (dist === screenful) marker = '';
+  }
+
+  const last = rows.length - 1;
+  const body = rows.slice(0, last).map(r => r + rowEnd(r)).join('');
+
+  return syncOn() + '\r' + CLEAR_LINE + marker + body +
+    rows[last] + CLEAR_LINE + parkCursor(rows) + syncOff();
+}
+
+/**
  * Calculates the last content row and sub-row that fits in the current window.
  * 
  * - Works backwards from the end of content.
@@ -1175,9 +1276,20 @@ export function calculateEOF(content: string[]): void {
  */
 function getPrompt(content: string[]): string {
   // during a pipe drain og leaves the command line blank for G and
-  // shows ierror's interruptible note for % (jump.c/output.c)
-  if (pipeDraining.active) {
-    return pipeDraining.note
+  // shows ierror's interruptible note for % (jump.c/output.c), and
+  // a forward move blocked in forw_line waits behind its command's
+  // clear_bot the same way; a 4s data stall prints ch.c's
+  // wait_message over any of them — og's last ixerror owns the
+  // bottom line
+  if (pipeDraining.active || pendingScroll.rows) {
+    if (session.pipeWaiting) {
+      return colored('prompt',
+        prExpand(content, wProto()) +
+          `... (${prChar(optIntrChar())} or interrupt to abort)`,
+        INVERSE_ON, INVERSE_OFF);
+    }
+
+    return pipeDraining.active && pipeDraining.note
       ? colored('error',
         pipeDraining.note + '... (interrupt to abort)',
         INVERSE_ON, INVERSE_OFF)

@@ -6,11 +6,13 @@ import { session, deriveContent, shellReserveLines } from '../session';
 
 import { config, mode } from '../config';
 
-import { opt, optSqueeze, optQuitOnIntr, onTrimBufSpace, hook }
-  from '../options';
+import { opt, optSqueeze, optQuitOnIntr, optExitFollowOnClose,
+  onTrimBufSpace, hook } from '../options';
 
-import { render, calculateEOF, markBareRepaint, markClearHome }
-  from '../helpers';
+import { render, calculateEOF, markBareRepaint, markClearHome,
+  ringBell } from '../helpers';
+
+import { lineForward } from './moving';
 
 import { searchInterrupted } from './searching';
 
@@ -22,11 +24,14 @@ import { CLEAR_LINE, INVERSE_ON, INVERSE_OFF } from '../constants';
 
 import { transformContent, maxSubRow } from '../lines/helpers';
 
-import { files, revealSize, pipeDraining, sizeIsKnown } from './files';
+import { files, revealSize, pipeDraining, pendingScroll, sizeIsKnown }
+  from './files';
 
 import { shiftMarkRows } from './jumping';
 
 import { follow } from './follow';
+
+import { POLLHUP_EXITS_F } from '../platform';
 
 import { PipeDecoder } from './charset';
 
@@ -86,7 +91,12 @@ function armStallTimer(): void {
   stallTimer = setTimeout(() => {
     stallTimer = null;
 
-    if (pipeFilling() && !session.pipeWaiting && !session.exited) {
+    // any blocked pipe read stalls into the message — the initial
+    // fill, a G/% drain and a blocked forward move alike (ch.c
+    // shows it on the first READ_AGAIN, one poll timeout without
+    // data)
+    if ((pipeFilling() || session.pipeDrainTo || pendingScroll.rows) &&
+        !session.pipeWaiting && !session.exited) {
       session.pipeWaiting = true;
       render(session.content, session.buffer);
     }
@@ -190,6 +200,11 @@ export function attachPipe(): void {
       session.pipePaused = true;
       stream.pause();
     }
+
+    // a draining read's 4s stall window restarts with each chunk
+    // (og's poll timeout is per read); a message already shown
+    // stays, like og never repainting mid-drain
+    if (session.pipeDrainTo) armStallTimer();
   };
 
   const onEnd = (): void => {
@@ -197,13 +212,28 @@ export function attachPipe(): void {
 
     // no more data will come, but og's ch_length stays unknown
     // until a read returns EOI: a drain or follow is such a read,
-    // and so was the screen fill if the input ran out mid-screen
+    // and so was the screen fill if the input ran out mid-screen —
+    // except a follow that --exit-follow-on-close will end, whose
+    // READ_INTR fires on the bare POLLHUP before any read could
+    // return 0 (os.c check_poll, Linux only), leaving the length
+    // unknown; elsewhere og's F reads the 0 and learns it
     const entry = files.list[files.index];
     if (entry) entry.streaming = false;
 
-    if (session.pipeDrainTo || follow.active ||
-        (!mode.HELP && screenPastEnd())) {
+    if (session.pipeDrainTo || pendingScroll.rows ||
+        (follow.active
+          ? !(optExitFollowOnClose() && POLLHUP_EXITS_F)
+          : !mode.HELP && screenPastEnd())) {
       revealSize();
+    }
+
+    // a blocked forward move ends at the EOI, like og's forw_line
+    // returning NULL and breaking the loop: with no line painted
+    // forw's nlines == 0 rings the eof bell
+    if (pendingScroll.rows) {
+      if (!pendingScroll.moved) ringBell('eof');
+      pendingScroll.rows = 0;
+      pendingScroll.moved = false;
     }
 
     calculateEOF(session.content);
@@ -490,17 +520,51 @@ function growPipe(raw: string[]): void {
     mode.EOF = false;
   }
 
+  // a forward move blocked in og's forw_line advances as its lines
+  // arrive, painting each one; a shown wait message stays put until
+  // the move completes (og reprints it at every keypress, which on
+  // a live keyboard reads as continuous)
+  if (pendingScroll.rows && !session.pipeFirstFill &&
+      !session.pipeDrainTo && !session.exited && !session.shellPause) {
+    const owed = pendingScroll.rows;
+    pendingScroll.rows = 0;
+
+    lineForward(session.content, owed);
+
+    const done = !pendingScroll.rows;
+
+    if (!done) {
+      pendingScroll.moved = true;
+      if (session.pipeStream) armStallTimer();
+    } else {
+      session.pipeWaiting = false;
+    }
+
+    render(session.content, session.buffer);
+
+    // the move completed: the prompt is back, and the queued keys
+    // run like og's command loop draining the ungot chars
+    if (done) {
+      pendingScroll.moved = false;
+      finishFill();
+    }
+  }
+
   // og displays lines only while the first screenful is filling;
-  // once it completes, new pipe data never repaints an idle screen
+  // once it completes, new pipe data never repaints an idle screen.
+  // A shown wait message stays through arriving lines until the
+  // fill completes (og reprints it at every keypress, which on a
+  // live keyboard reads as continuous)
   if (session.pipeFirstFill && !session.pipeProbing && !session.exited && !session.shellPause &&
       !session.pipeDrainTo) {
-    // data arrived: og clears waiting_for_data and blocks again
-    session.pipeWaiting = false;
-
     // og's forw counts screen rows (forw_line per row, so wrapped
     // lines fill faster), not input lines
     const done = !screenPastEnd();
-    if (done) session.pipeFirstFill = false;
+
+    if (done) {
+      session.pipeFirstFill = false;
+      session.pipeWaiting = false;
+    }
 
     render(session.content, session.buffer);
 
@@ -557,6 +621,44 @@ function shedPipe(): void {
   calculateEOF(session.content);
 }
 
+/**
+ * Wakes the pipe for a forward move that clamped short, like og's
+ * forw_line starting its blocking read: the stream resumes (it may
+ * have paused on back-pressure) and a 4s data stall shows the wait
+ * message on the cleared command line.
+ */
+export function startPendingScroll(): void {
+  if (!session.pipeStream) {
+    pendingScroll.rows = 0;
+    pendingScroll.moved = false;
+    return;
+  }
+
+  session.pipePaused = false;
+  session.pipeStream.resume();
+  armStallTimer();
+}
+
+/**
+ * Abandons a blocked forward move, like og's READ_INTR breaking the
+ * forw loop: queued keys are discarded (getcc_clear), and with no
+ * line painted forw's nlines == 0 rings the eof bell.
+ *
+ * @param sigint - True for ^C, whose u_interrupt handler also bells.
+ */
+export function abortPendingScroll(sigint: boolean): void {
+  if (sigint) ringBell();
+  if (!pendingScroll.moved) ringBell('eof');
+
+  pendingScroll.rows = 0;
+  pendingScroll.moved = false;
+  session.fillKeys.length = 0;
+  clearStallTimer();
+  session.pipeWaiting = false;
+
+  render(session.content, session.buffer);
+}
+
 /** Resumes a paused pipe when the view nears the buffered end. */
 export function pipeDemand(): void {
   if (!session.pipeStream || !session.pipePaused) return;
@@ -593,5 +695,9 @@ export function pipeDrain(
   pipeDraining.cancelMessage = cancelMessage;
   session.pipePaused = false;
   session.pipeStream.resume();
+
+  // the drain blocks reading like og's ch_end_seek: a 4s data
+  // stall shows wait_message on the blank command line
+  armStallTimer();
   return true;
 }

@@ -14,7 +14,7 @@ import {
   getSwindow
 } from "../options";
 
-import { bottomRow, revealPipeEnd } from "./files";
+import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
 import { INVERSE_ON } from "../constants";
 
@@ -42,6 +42,25 @@ function setAttn(content: string[], screenful: boolean): void {
 }
 
 /**
+ * Records a forward shortfall as og's blocked read: forw_line on a
+ * live pipe waits for the missing lines instead of belling — the
+ * owed rows go to pendingScroll and the pipe machinery advances the
+ * view as data arrives.
+ *
+ * @param owed - Display rows the move still wants.
+ * @param moved - True when this call already advanced the view
+ *   (og's nlines > 0, suppressing the eof_bell).
+ * @returns True when the wait was recorded (live pipe).
+ */
+function streamingWait(owed: number, moved: boolean): boolean {
+  if (mode.HELP || !files.list[files.index]?.streaming) return false;
+
+  pendingScroll.rows = owed;
+  if (moved) pendingScroll.moved = true;
+  return true;
+}
+
+/**
  * Moves forward by a given offset through content lines or subrows.
  *
  * @param content - Full content lines.
@@ -57,7 +76,18 @@ export function lineForward(
   // less forcing forw()
   if (optPastEof()) ignoreEOF = true;
 
+  // a stale EOF: blank rows pad the top while undisplayed lines sit
+  // below the viewport (a fill abort followed by more pipe data) —
+  // og's forw simply scrolls, consuming the blanks, so the EOF
+  // branch must not run its bell or blocked wait
+  if (config.blankTop && !fitsViewport(content)) mode.EOF = false;
+
   if (mode.EOF && !ignoreEOF) {
+    // a live pipe never bells here: og's position(BOTTOM_PLUS_ONE)
+    // is real on a full screen, so forw's read simply blocks for
+    // more data (and -e stays off — eof_displayed needs ch_length)
+    if (streamingWait(offset, false)) return;
+
     // -e/-E move to the next file (or quit) on a forward move at
     // end-of-file, like og's forward() checking get_quit_at_eof
     // before the eof bell
@@ -115,19 +145,26 @@ export function lineForward(
     }
 
     const lastRow = Math.max(content.length - config.window + 1, 0);
+    const startRow = config.row;
     const target = config.row + offset;
 
     config.row = Math.min(target, ignoreEOF ? content.length - 1 : lastRow);
 
     // a move asking for more rows than the input has reads past the
-    // end, like og's forw hitting EOI on a partial screenful
-    if (config.row < target) revealPipeEnd();
+    // end, like og's forw hitting EOI on a partial screenful — or
+    // blocking for the missing lines when the pipe still delivers
+    if (config.row < target &&
+        !streamingWait(target - config.row, config.row > startRow)) {
+      revealPipeEnd();
+    }
 
     mode.EOF = config.row >= lastRow;
     return;
   }
 
   const maxRow = ignoreEOF ? content.length - 1 : config.endRow;
+  const fromRow = config.row;
+  const fromSub = config.subRow;
 
   while (offset > 0 && config.row < maxRow) {
     const currMaxSubRow = maxSubRow(content[config.row]);
@@ -154,8 +191,12 @@ export function lineForward(
 
     config.subRow = Math.min(want, cap);
 
-    // clamped short of the request: the forw read hit EOI
-    if (want > cap) revealPipeEnd();
+    // clamped short of the request: the forw read hit EOI — or
+    // blocks for the missing lines when the pipe still delivers
+    if (want > cap && !streamingWait(want - cap,
+        config.row !== fromRow || config.subRow !== fromSub)) {
+      revealPipeEnd();
+    }
   }
 
   mode.EOF = config.row > config.endRow || (

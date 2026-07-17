@@ -77,16 +77,43 @@ describe('render', () => {
     expect(writes[1]).not.toContain('line 20');
   });
 
-  it('falls back to a full frame on jumps', () => {
+  it("paints forward jumps with og's skipping marker", () => {
     config.row = 10;
     render(content, []);
 
     config.row = 36;
     render(content, []);
 
-    expect(writes[1]).toContain('\x1b[H');
-    expect(writes[1]).not.toContain('S');
+    // og's forw() without top_scroll: clear the prompt row, print
+    // "...skipping..." and let the new lines scroll in — no homing
+    expect(writes[1]).toContain('...skipping...');
+    expect(writes[1]).not.toContain('\x1b[H');
     expect(writes[1]).toContain('line 36');
+  });
+
+  it('scrolls an exact-screenful advance without the marker', () => {
+    config.row = 10;
+    render(content, []);
+
+    // new top = old BOTTOM_PLUS_ONE: og-contiguous by position
+    config.row = 10 + config.window - 1;
+    render(content, []);
+
+    expect(writes[1]).not.toContain('...skipping...');
+    expect(writes[1]).not.toContain('\x1b[H');
+    expect(writes[1]).toContain(`line ${10 + config.window - 1}`);
+  });
+
+  it('falls back to a full frame on backward jumps', () => {
+    config.row = 36;
+    render(content, []);
+
+    config.row = 5;
+    render(content, []);
+
+    expect(writes[1]).toContain('\x1b[H');
+    expect(writes[1]).not.toContain('...skipping...');
+    expect(writes[1]).toContain('line 5');
   });
 
   it('redraws fully after a reset', () => {

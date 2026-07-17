@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
-  watchWinch, unwatchWinch }
+  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint }
   from "./keyboard";
 
 
@@ -50,7 +50,8 @@ import {
   calculateEOF,
   lastScreen,
   clearBot,
-  markBareRepaint
+  markBareRepaint,
+  markPosClear
 } from "./helpers";
 
 import { maxSubRow, transformContent, visualWidth } from "./lines/helpers";
@@ -123,6 +124,7 @@ import {
   revealPipeEnd,
   sizeIsKnown,
   pipeDraining,
+  pendingScroll,
   lineBase,
   binFile
 } from "./features/files";
@@ -200,7 +202,8 @@ import {
 import { cmd } from "./features/cmdbuf";
 
 import { pipeInput, attachPipe, pipeDemand, pipeDrain,
-  pipeOneScreenProbe, pipeFullProbe, pipeFilling, abortPipeFill }
+  pipeOneScreenProbe, pipeFullProbe, pipeFilling, abortPipeFill,
+  startPendingScroll, abortPendingScroll }
   from "./features/pipe";
 
 import { secureAllow } from "./features/secure";
@@ -833,12 +836,22 @@ const acts: Record<Actions, () => void> = {
     // blank command line (jump_forw's ch_end_seek)
     const n = bufferToNum(session.buffer);
 
-    if (!pipeDrain(() => lastLine(session.content, n), '',
-      'Cannot seek to end of file')) {
+    // og's bare G is jump_forw, which pos_clears past its eof_bell:
+    // the paint repaints with the skipping marker however close the
+    // end is; a numbered G is jump_back and scrolls when on screen
+    const jump = (): void => {
+      if (lastLine(session.content, n)) markPosClear();
+    };
+
+    // an interrupted end scan is not og's error case: ch_end_seek's
+    // loop exits on the READ_INTR EOI before ABORT_SIGS is checked,
+    // returns success, and jump_forw jumps to the BUFFERED end — the
+    // "Cannot seek to end of file" error needs a real seek failure
+    if (!pipeDrain(jump, '', '')) {
       // jump_forw's ch_end_seek reads a completed pipe's EOI even
       // without a drain; a numbered G is jump_back and reads none
       if (!n) revealPipeEnd();
-      lastLine(session.content, n);
+      jump();
     }
   },
   PERCENT_LINE: () => {
@@ -925,6 +938,11 @@ function act(action: Actions | undefined): void {
   // like og reading more of a non-seekable input on demand
   pipeDemand();
 
+  // a forward move that clamped short of a live pipe's data blocks
+  // reading like og's forw_line: the render below paints og's
+  // cleared command line while the wait runs
+  if (pendingScroll.rows) startPendingScroll();
+
   // -E quits as soon as end-of-file DISPLAYS on the last file,
   // like og's prompt() checking get_quit_at_eof()==OPT_ONPLUS
   // against eof_displayed (a pipe's end must have been read)
@@ -983,13 +1001,35 @@ function endFirstCmd(): void {
 function keyHandler(data: Buffer): void {
   let text = data.toString();
 
+  // og's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
+  // foreground group, killing a pipe's writer along the way — the
+  // driver semantics node's raw mode dropped
+  if (text.includes('\x03')) raiseSigint();
+
   // og's initial fill blocks in read: check_poll queues typed tty
   // chars (ungetcc_back) until the screenful or the learned length;
   // only the --intr char or an interrupt breaks out (READ_INTR),
   // and the first queued key surfaces the wait message (READ_AGAIN)
-  if (pipeFilling() && !session.shellPause) {
+  // — a forward move blocked on the pipe (forw_line) gates the same
+  if ((pipeFilling() || pendingScroll.rows > 0) && !session.shellPause) {
     if (text.includes('\x03') || text.includes(optIntrChar())) {
-      abortPipeFill();
+      if (pendingScroll.rows) {
+        abortPendingScroll(text.includes('\x03'));
+      } else {
+        // og's ^C is a SIGINT whose u_interrupt handler bells; the
+        // --intr char reaches the read silently
+        if (text.includes('\x03')) ringBell();
+        abortPipeFill();
+      }
+
+      // getcc_clear discards the QUEUED keys; chars typed after the
+      // interrupt are still unread in og's tty buffer and run as
+      // commands
+      const cut = Math.max(
+        text.lastIndexOf('\x03'), text.lastIndexOf(optIntrChar()));
+      const tail = text.slice(cut + 1);
+      if (tail && !session.exited) keyHandler(Buffer.from(tail));
+
       return;
     }
 
@@ -1121,12 +1161,22 @@ function choppedColumns(): boolean {
 function dispatchKey(sequence: string): void {
   session.key = sequence;
 
-  // the interrupt key abandons a G/% pipe drain, reporting like
-  // og's interrupted ch_end_seek ("Cannot seek to end of file")
+  // the interrupt key abandons a G/% pipe drain: og's interrupted
+  // ch_end_seek returns SUCCESS (the loop exits on the READ_INTR
+  // EOI), so G jumps to the buffered end and paints — only % still
+  // fails its ch_length check and errors ("Don't know length of
+  // file"); ^C's u_interrupt handler rings the bell either way
   if (session.pipeDrainTo && (session.key === '\x03' || session.key === optIntrChar())) {
+    const jump = session.pipeDrainTo;
     session.pipeDrainTo = null;
-    search.message = pipeDraining.cancelMessage;
     pipeDraining.active = false;
+    session.pipeWaiting = false;
+
+    if (session.key === '\x03') ringBell();
+
+    if (pipeDraining.cancelMessage) search.message = pipeDraining.cancelMessage;
+    else jump();
+
     render(session.content, session.buffer);
     return;
   }
@@ -1207,12 +1257,12 @@ function dispatchKey(sequence: string): void {
 
     if (session.key === '\x03' || session.key === optIntrChar()) {
       // ^C arrives as og's SIGINT, whose u_interrupt handler rings
-      // the bell; the --intr char (READ_INTR) leaves silently
+      // the bell; the --intr char (READ_INTR) leaves silently — and
+      // both run getcc_clear, discarding the keys typed in the wait
       if (session.key === '\x03') ringBell();
 
-      const queued = endFollow();
+      endFollow();
       render(session.content, session.buffer);
-      for (const sequence of queued) handleKey(sequence);
     } else {
       follow.queued.push(session.key);
     }
@@ -1746,6 +1796,9 @@ function onTerminate(): void {
 
 /** Treats an external SIGINT as the ^C key, like og's u_interrupt. */
 function onSigint(): void {
+  // our own raiseSigint echo: the typed ^C's byte path already ran
+  if (wasSelfSigint()) return;
+
   if (!session.exited) handleKey('\x03');
 }
 
