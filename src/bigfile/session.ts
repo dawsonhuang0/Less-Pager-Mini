@@ -611,15 +611,13 @@ export async function bigPager(path: string): Promise<void> {
     bf.refreshSize();
   };
 
-  /** Ends F follow mode and replays queued keys, like og. */
-  const endFollow = (): string[] => {
+  /** Ends F follow mode, discarding the queued keys (getcc_clear:
+   *  every bigfile exit is og's READ_INTR path). */
+  const endFollow = (): void => {
     following = false;
     if (followTimer) clearInterval(followTimer);
     followTimer = null;
-
-    const queued = followQueue;
     followQueue = [];
-    return queued;
   };
 
   await new Promise<void>(resolve => {
@@ -724,16 +722,16 @@ export async function bigPager(path: string): Promise<void> {
 
         message = '';
 
-        // F wait: ^C / --intr return to paging, other keys queue as
-        // commands for afterwards, like og's forw_loop
+        // F wait: ^C / --intr return to paging; other keys queue like
+        // og's read poll ungetting them — but an interrupt exit runs
+        // getcc_clear (os.c iread / psignals), so they are discarded
         if (following) {
           if (key === '\x03' || key === optIntrChar()) {
             // ^C is og's SIGINT: u_interrupt rings; --intr is silent
             if (key === '\x03') process.stdout.write('\x07');
 
-            const queued = endFollow();
+            endFollow();
             draw();
-            for (const q of queued) onKey(Buffer.from(q));
           } else {
             followQueue.push(key);
           }

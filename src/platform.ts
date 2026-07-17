@@ -45,6 +45,16 @@ export const LESSKEYIN_SYS = isWindows
 /** The default editor (EDIT_PGM: "vi", "edit" on Windows). */
 export const EDIT_PGM = isWindows ? 'edit' : 'vi';
 
+/**
+ * True where og's --exit-follow-on-close can actually fire: check_poll
+ * (os.c:167) exits the F wait only on a BARE POLLHUP — a drained,
+ * closed pipe reports exactly that on Linux, but Darwin adds POLLIN
+ * (EOF counts as readable) and og's Windows build has no HUP check at
+ * all, so og's F on a closed pipe just keeps waiting there — and so
+ * do we.
+ */
+export const POLLHUP_EXITS_F = process.platform === 'linux';
+
 /** Shell metacharacters (DEF_METACHARS, defines.wn's smaller set). */
 export const DEF_METACHARS = isWindows
   ? "; *?\t\n'\"()<>|&"

@@ -72,7 +72,29 @@ describe('startFollow', () => {
     scanOptions('--exit-follow-on-close', []);
 
     startFollow('forever');
-    expect(pollFollow()).toEqual({ kind: 'close' });
+
+    // og exits only where poll reports the bare POLLHUP (Linux);
+    // Darwin adds POLLIN, so og's F keeps waiting there — and so
+    // does ours
+    expect(pollFollow()).toEqual(
+      { kind: process.platform === 'linux' ? 'close' : 'idle' });
+  });
+
+  it('keeps waiting while the pipe writer is still open', () => {
+    initContent(['a', 'b']);
+    scanOptions('--exit-follow-on-close', []);
+
+    // og's check_poll needs POLLHUP: an open but idle pipe waits
+    files.list[files.index].streaming = true;
+
+    startFollow('forever');
+    expect(pollFollow()).toEqual({ kind: 'idle' });
+
+    // the writer closing is the HUP: the wait ends where the bare
+    // POLLHUP exists (Linux)
+    files.list[files.index].streaming = false;
+    expect(pollFollow()).toEqual(
+      { kind: process.platform === 'linux' ? 'close' : 'idle' });
   });
 
   it('reports a vanished file like a file open error', () => {
@@ -189,7 +211,7 @@ describe('pollFollow', () => {
     expect(pollFollow()).toEqual({ kind: 'rotate' });
   });
 
-  it('leaves the wait when the file closes with --exit-follow-on-close',
+  it('keeps waiting on a vanished file despite --exit-follow-on-close',
     () => {
       openFile('a\n');
       scanOptions('--exit-follow-on-close', []);
@@ -197,8 +219,10 @@ describe('pollFollow', () => {
 
       expect(pollFollow()).toEqual({ kind: 'idle' });
 
+      // og's option only checks POLLHUP, which a regular file never
+      // raises: removal or truncation changes nothing (os.c:167)
       fs.unlinkSync(file);
-      expect(pollFollow()).toEqual({ kind: 'close' });
+      expect(pollFollow()).toEqual({ kind: 'idle' });
     });
 
   it('keeps waiting on a vanished file without the option', () => {

@@ -6,6 +6,8 @@ import { files, errorText } from "./files";
 
 import { optFollowName, optExitFollowOnClose } from "../options";
 
+import { POLLHUP_EXITS_F } from "../platform";
+
 import { session, deriveContent } from '../session';
 
 import { render, ringBell, calculateEOF } from '../helpers';
@@ -36,8 +38,9 @@ export type FollowPoll =
 
 /**
  * F command state: the followed descriptor, the read offset, undisplayed
- * partial-line bytes, and keys typed during the wait (og ungets them
- * for after the loop).
+ * partial-line bytes, and keys typed during the wait (og ungets them;
+ * they run as commands only when the loop ends without a signal —
+ * READ_INTR exits run getcc_clear and discard them).
  */
 export const follow = {
   active: null as FollowKind | null,
@@ -143,17 +146,24 @@ export function stopFollow(): string[] {
  *   the carry until its newline arrives.
  * - --follow-name reopens when the name points to a different file or
  *   the file shrank, like curr_ifile_changed.
- * - --exit-follow-on-close leaves the wait when the file is removed or
- *   truncated, our analog of og's pipe writer closing.
+ * - --exit-follow-on-close leaves the wait when a pipe's writer has
+ *   closed and its data is drained (og's POLLHUP-without-POLLIN);
+ *   like og it never fires for a regular file, which cannot HUP.
  */
 export function pollFollow(): FollowPoll {
   const entry = files.list[files.index];
   if (!entry) return { kind: 'close' };
 
-  // the in-memory pseudo-file is a closed pipe: it never grows, and
-  // --exit-follow-on-close leaves right away like og seeing the HUP
+  // og's check_poll exits only on POLLHUP without POLLIN (os.c):
+  // the writer has closed AND every buffered byte is drained; a
+  // still-open pipe keeps waiting no matter how idle it is — and
+  // only Linux's poll ever reports that bare POLLHUP, so og's F on
+  // macOS keeps waiting on a closed pipe too
   if (entry.path === '-' || follow.fd < 0) {
-    return optExitFollowOnClose() ? { kind: 'close' } : { kind: 'idle' };
+    if (entry.streaming) return { kind: 'idle' };
+    return optExitFollowOnClose() && POLLHUP_EXITS_F
+      ? { kind: 'close' }
+      : { kind: 'idle' };
   }
 
   if (optFollowName() && nameChanged(entry.path)) return { kind: 'rotate' };
@@ -166,13 +176,10 @@ export function pollFollow(): FollowPoll {
     return { kind: 'close' };
   }
 
-  if (size <= follow.readPos) {
-    if (optExitFollowOnClose() && nameClosed(entry.path)) {
-      return { kind: 'close' };
-    }
-
-    return { kind: 'idle' };
-  }
+  // a regular file never raises POLLHUP, so og's
+  // --exit-follow-on-close has no effect here: a removed or
+  // truncated file just waits like any other unchanged one
+  if (size <= follow.readPos) return { kind: 'idle' };
 
   let chunk: Buffer;
 
@@ -220,18 +227,6 @@ function nameChanged(path: string): boolean {
       named.size < follow.readPos;
   } catch {
     return false;
-  }
-}
-
-/**
- * True when the file was removed or truncated, standing in for og's
- * POLLHUP when the pipe writer closes.
- */
-function nameClosed(path: string): boolean {
-  try {
-    return fs.statSync(path).size < follow.readPos;
-  } catch {
-    return true;
   }
 }
 
@@ -294,6 +289,8 @@ export function followTick(): void {
   if (result.kind === 'idle' || session.exited) return;
 
   if (result.kind === 'close') {
+    // og's close-exit is the READ_INTR path: iread runs getcc_clear,
+    // so keys typed during the wait are discarded, and no bell rings
     endFollow();
     render(session.content, session.buffer);
     return;
@@ -325,8 +322,11 @@ export function followTick(): void {
     ringBell();
 
     if (follow.active === 'hilite') {
-      endFollow();
+      // a signal-less break: og keeps the ungot queue, so keys
+      // typed during the wait now run as commands
+      const queued = endFollow();
       render(session.content, session.buffer);
+      for (const sequence of queued) session.feedKeys(sequence);
       return;
     }
   }
@@ -340,7 +340,10 @@ export function followTick(): void {
  */
 export function rotateFollow(): void {
   const kind = follow.active as FollowKind;
-  endFollow();
+
+  // og's reopen (screen_trashed=2) never leaves forw_loop: the
+  // ungot queue survives the rotation
+  const queued = endFollow();
 
   const lines = loadFile(files.index);
 
@@ -357,19 +360,29 @@ export function rotateFollow(): void {
   calculateEOF(session.content);
 
   beginFollow(kind);
+  follow.queued = queued;
   render(session.content, session.buffer);
 }
 
 /**
- * Leaves the F wait and runs the keys typed during it, like og
- * processing the ungotten commands after forw_loop returns.
+ * Leaves the F wait, like forw_loop returning to the command loop.
  *
- * @returns Queued keys when the caller replays them itself.
+ * @returns Queued keys when the caller replays them itself (only a
+ *   signal-less exit does; interrupts discard them, getcc_clear).
  */
 export function endFollow(): string[] {
   if (session.followTimer) {
     clearInterval(session.followTimer);
     session.followTimer = null;
+  }
+
+  // og's prompt recomputes eof_displayed after the loop: the follow
+  // pinned the view to the end, but calculateEOF on arriving data
+  // cleared the sticky flag movements normally set
+  if (!mode.EOF) {
+    mode.EOF = config.row > config.endRow || (
+      config.row === config.endRow && config.subRow >= config.endSubRow
+    );
   }
 
   return stopFollow();
