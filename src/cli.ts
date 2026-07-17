@@ -200,7 +200,14 @@ async function main(): Promise<void> {
   usageError('Missing filename ("lmn --help" for help)');
 }
 
-main().catch(error => {
+main().then(() => {
+  // og's quit() ends the process outright (exit()); node would
+  // otherwise sit on the closed stdin pipe until the writer's next
+  // write lets the loop drain — a visible pause before the shell
+  // prompt. TTY writes are synchronous, so nothing is truncated;
+  // the non-tty cat paths keep node's graceful flush.
+  if (process.stdout.isTTY) process.exit(0);
+}, error => {
   process.stderr.write(String(error) + '\n');
   process.exit(1);
 });
