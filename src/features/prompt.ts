@@ -233,12 +233,12 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'l': case 'd':
       return optLinenums() > 0;
 
-    // the LAST line and page need the whole input: og's ?L is
-    // find_linenum(len) succeeding, which a still-delivering pipe
-    // or a streaming file cannot answer — og drops the segment
-    // rather than show a partial count
+    // the LAST line and page need the input's LENGTH, not merely a
+    // finished stream: og's cond is linenums && ch_length() !=
+    // NULL_POSITION (prompt.c:233), and a pipe's length stays
+    // unknown until a read returns its EOI
     case 'L': case 'D':
-      return optLinenums() > 0 && !files.list[files.index]?.streaming;
+      return optLinenums() > 0 && sizeIsKnown();
 
     // the byte offset is always known; the size and byte percent
     // wait for a pipe's length, like ch_length() != NULL_POSITION
@@ -282,8 +282,10 @@ function protochar(
         ? String(Math.floor(whereRow(content, where) / pageSize) + 1)
         : '?');
 
+    // og's %D expands '?' while ch_length is unknown even without
+    // the ?D guard (prompt.c:317), 0 for an empty file
     case 'D':
-      return out + (!optLinenums()
+      return out + (!optLinenums() || !sizeIsKnown()
         ? '?'
         : content.length
           ? String(Math.floor((content.length - 1) / pageSize) + 1)
@@ -307,8 +309,12 @@ function protochar(
       return out +
         (optLinenums() ? String(vlinenum(whereRow(content, where) + 1)) : '?');
 
+    // og's %L is '?' while ch_length is unknown, and also for an
+    // EMPTY file (len == ch_zero, prompt.c:379) — unlike %D's 0
     case 'L':
-      return out + (optLinenums() ? String(vlinenum(content.length)) : '?');
+      return out + (optLinenums() && sizeIsKnown() && content.length
+        ? String(vlinenum(content.length))
+        : '?');
     case 'm':
       return out + (ntags() ? ntags() : files.list.length);
 

@@ -42,7 +42,11 @@ describe('prompt expansion', () => {
     // top, middle, bottom, bottom-plus-one of a 6-row window
     expect(prExpand(content, '%lt-%lm-%lb-%lB')).toBe('10-12-14-15');
 
+    // og's %L is '?' while ch_length is unknown (prompt.c:379);
     // the where char defaults to top
+    expect(prExpand(content, '%l/%L')).toBe('10/?');
+
+    revealSize();
     expect(prExpand(content, '%l/%L')).toBe('10/30');
   });
 
@@ -66,7 +70,9 @@ describe('prompt expansion', () => {
   });
 
   it('expands file list and misc escapes', () => {
-    files.list.push({ path: 'next.txt', lines: null, size: 0, saved: null });
+    files.list.push({
+      path: 'next.txt', lines: null, size: 0, sizeKnown: true, saved: null,
+    });
 
     expect(prExpand(content, '%i of %m, next %x')).toBe(
       '1 of 2, next next.txt'
