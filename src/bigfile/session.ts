@@ -673,19 +673,13 @@ export async function bigPager(path: string): Promise<void> {
     if (at === lastResolved) return;
     lastResolved = at;
 
-    // a walk far from every anchor can run long: show og's blank
-    // command line first so the prompt doesn't precede the count
-    let near = 0;
-    for (const a of lnums) {
-      if (a.pos <= view.top.pos && a.pos > near) near = a.pos;
-    }
-
-    const far = view.top.pos - near > 64 * 1024 * 1024;
-    if (far) {
-      resolvingBlank = true;
-      draw();
-      resolvingBlank = false;
-    }
+    // og paints the moved content BEFORE the walk: forw() puts its
+    // rows up, currline(BOTTOM) runs after, and the prompt comes
+    // last — so the screen always shows the move immediately, with
+    // a blank command line while the count runs
+    resolvingBlank = true;
+    draw();
+    resolvingBlank = false;
 
     if (countTo(view.top.pos) === null && scanMessaged) {
       // og's abort_delayed_msg (linenum.c:254): numbers off, the
