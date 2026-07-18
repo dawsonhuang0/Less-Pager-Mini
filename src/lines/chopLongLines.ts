@@ -55,7 +55,7 @@ export function chopLongLines(content: string[], lines: string[]): void {
 
     if (decorated) {
       // -w and --status-line highlight the row in standout
-      lines[before] = gutterFor(content, row, true) +
+      lines[before] = gutterFor(content, row) +
         highlightRow(lines[before], row, before);
     }
   }

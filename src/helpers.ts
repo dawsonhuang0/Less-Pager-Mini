@@ -155,16 +155,16 @@ export function inputToString(
 
 /**
  * Builds the left gutter for a display row: the -J status column and
- * the -N line number field. Empty when neither option is on.
+ * the -N line number field, identical on a wrapped line's every row
+ * (og's per-row plinestart from the line's base_pos). Empty when
+ * neither option is on.
  *
  * @param content - Display lines.
  * @param row - The content row of this display row.
- * @param lineStart - False for a wrapped line's continuation rows.
  */
 export function gutterFor(
   content: string[],
-  row: number,
-  lineStart: boolean
+  row: number
 ): string {
   let gutter = '';
 
@@ -172,7 +172,11 @@ export function gutterFor(
     let char = ' ';
     let kind: 'mark' | 'attn' | 'search' | '' = '';
 
-    if (lineStart) {
+    // og builds EVERY row's prefix from the line's start position
+    // (forw_line_seg walking to base_pos before plinestart,
+    // input.c:149), so a wrapped line's continuation rows repeat
+    // the mark letter and the number alike
+    {
       // og's plinestart: the mark letter in the M color, else an
       // attn-colored cell for the -w line
       const mark = markAtRow(row);
@@ -201,8 +205,9 @@ export function gutterFor(
   }
 
   if (optLinenums() === 2) {
-    // --no-number-headers blanks the header lines' numbers (0)
-    const num = lineStart ? vlinenum(row + 1) : 0;
+    // --no-number-headers blanks the header lines' numbers (0);
+    // continuation rows carry the same number as the line start
+    const num = vlinenum(row + 1);
     const digits = String(num);
 
     // og pads AT_NORMAL and prints only the digits AT_BOLD — or in

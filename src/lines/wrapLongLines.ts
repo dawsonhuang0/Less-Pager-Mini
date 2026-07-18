@@ -28,14 +28,11 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     wrap(lines, highlightLine(content[row], row));
 
     if (decorated) {
-      // the first emitted row starts the line unless it resumes an
-      // earlier sub-row; the rest are continuations with blank gutters
-      const firstIsStart = before > 0 || config.subRow === 0;
-
+      // every emitted row of the line gets the same gutter, like
+      // og's per-row plinestart from base_pos
       for (let i = before; i < lines.length; i++) {
         // -w and --status-line highlight the row in standout
-        lines[i] = gutterFor(content, row, i === before && firstIsStart) +
-          highlightRow(lines[i], row, i);
+        lines[i] = gutterFor(content, row) + highlightRow(lines[i], row, i);
       }
     }
   }

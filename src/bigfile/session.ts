@@ -465,27 +465,29 @@ export async function bigPager(path: string): Promise<void> {
       }
 
       // og's line prefix: the -J mark letter, then the -N number
-      // right-aligned in linenum_width + a space, bold like AT_BOLD;
-      // continuation rows and unknown numbers stay blank
+      // right-aligned in linenum_width + a space, bold like AT_BOLD.
+      // EVERY row of a wrapped line repeats the prefix — og builds
+      // it from the line's base_pos (forw_line_seg -> plinestart,
+      // input.c:149); only unknown numbers stay blank
       let pfx = '';
 
       if (opt.statusCol) {
         let mark = ' ';
         for (const [letter, m] of marks) {
-          if (m.pos === row.pos && row.subRow === 0) { mark = letter; break; }
+          if (m.pos === row.pos) { mark = letter; break; }
         }
         pfx += mark.padEnd(opt.statusColWidth);
       }
 
       if (opt.linenums === 2) {
-        const num = row.subRow === 0 ? countTo(row.pos) : null;
+        const num = countTo(row.pos);
 
         if (num === null) {
           pfx += ' '.repeat(opt.linenumWidth + 1);
 
           // an interrupted count is og's abort_delayed_msg: line
           // numbers turn off for good and the error reports it
-          if (row.subRow === 0 && scanMessaged) {
+          if (scanMessaged) {
             opt.linenums = 0;
             message = 'Line numbers turned off  (press RETURN)';
             msgReturn = true;
