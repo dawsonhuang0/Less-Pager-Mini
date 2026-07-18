@@ -1927,6 +1927,12 @@ function prepareHelp(): void {
   config.halfWindow = session.prevConfig.halfWindow;
   config.chopLongLines = session.prevConfig.chopLongLines;
 
+  // the helpfile is a normal file to og's line prefix: -N/-J
+  // reserve their gutter columns inside the help's width too, so
+  // its long lines wrap where og's do (plinestart runs on the
+  // helpfile like any other)
+  calculateDimensions();
+
   session.prevMode = mode;
   resetMode();
 
