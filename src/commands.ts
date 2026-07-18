@@ -10,7 +10,8 @@ import { session, deriveContent } from './session';
 
 import { suspendTerminal, enterScreen } from './screen';
 
-import { ringBell, bufferToNum, calculateEOF, clearBot } from './helpers';
+import { ringBell, bufferToNum, calculateEOF, clearBot, eprPrefix }
+  from './helpers';
 
 import {
   files,
@@ -41,7 +42,7 @@ import { prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
-import { optQuitAtEof, optEndPrompt, optNoEditWarn,
+import { optQuitAtEof, optNoEditWarn,
   jumpSindex, resetHeaderStart } from './options';
 
 import {
@@ -318,20 +319,19 @@ export function runExamine(): void {
  * through $SHELL, then repaints and reports the done message.
  */
 export function runShell(cmd: string, doneMsg: string | null, input?: string): void {
-  // --end-prompt prints where the prompt is erased for output, like
-  // og's prompting flag firing in putchr
-  const endProto = mode.HELP ? null : optEndPrompt();
-  const endPrompt = endProto ? prExpand(session.content, endProto) : '';
+  // og's putchr fires --end-prompt before the clear_bot that erases
+  // the prompt for the command's output (output.c:496)
+  const endPrompt = eprPrefix();
 
   // only lsystem hides a "-" command; pipe_data always echoes
   if (input === undefined && cmd.startsWith('-')) {
     cmd = cmd.slice(1);
-    if (endPrompt) process.stdout.write(clearBot() + endPrompt);
+    if (endPrompt) process.stdout.write(endPrompt + clearBot());
   } else {
     // like lsystem's clear_bot + "!cmd" + newline: the expanded
     // command shows on the pager's bottom line, so the shell screen
     // gets only output
-    process.stdout.write(clearBot() + endPrompt + '!' + cmd + '\n');
+    process.stdout.write(endPrompt + clearBot() + '!' + cmd + '\n');
   }
 
   suspendTerminal();
@@ -491,6 +491,17 @@ export function applyFilter(): void {
   if (filter === undefined) return;
 
   session.lastFilter = filter;
+
+  // og's is_filtering() is FALSE on the helpfile (search.c:2409):
+  // the & pattern stores, the help view stays unfiltered, and the
+  // filtered file waits behind the help exit
+  if (mode.HELP) {
+    session.prevContent = deriveContent();
+    session.prevConfig.row = 0;
+    session.prevConfig.subRow = 0;
+    return;
+  }
+
   session.content = deriveContent();
   config.row = 0;
   config.subRow = 0;

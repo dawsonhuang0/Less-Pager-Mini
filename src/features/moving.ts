@@ -94,7 +94,11 @@ export function lineForward(
     if (eofForwardHook && eofForwardHook()) return;
 
     // og's forw still reads here: a completed pipe returns EOI and
-    // only now learns its length, lighting up (END)
+    // only now learns its length, lighting up (END). A squished
+    // screen stays squished: forward() bells and returns BEFORE
+    // forw()'s squish_check when BOTTOM_PLUS_ONE is null (the short
+    // screen's position table ends early) — verified against og's
+    // bytes, which repaint nothing here
     revealPipeEnd();
     ringBell('eof');
     return;

@@ -51,7 +51,8 @@ import {
   lastScreen,
   clearBot,
   markBareRepaint,
-  markPosClear
+  markPosClear,
+  eprPrefix
 } from "./helpers";
 
 import { maxSubRow, transformContent, visualWidth } from "./lines/helpers";
@@ -125,6 +126,7 @@ import {
   sizeIsKnown,
   pipeDraining,
   pendingScroll,
+  stepFileTarget,
   lineBase,
   binFile
 } from "./features/files";
@@ -154,7 +156,6 @@ import {
   optNoInit,
   optNoKeypad,
   optMouseReverse,
-  optEndPrompt,
   optIntrChar,
   optQuitIfOneScreen,
   onRebuild,
@@ -811,21 +812,21 @@ const acts: Record<Actions, () => void> = {
   SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(session.buffer),
   LAST_COL: () => lastCol(session.content),
   FIRST_COL: () => firstCol(),
-  REPAINT: () => resetRender(),
-  DROP_INPUT_REPAINT: () => resetRender(),
+  // og's repaint() unsquishes a short first paint: the screen comes
+  // back top-anchored with tilde fill (pos_clear + jump_loc), so a
+  // squished screen ends at r/^L/^R — not at the eof bell
+  REPAINT: () => { mode.INIT = false; resetRender(); },
+  DROP_INPUT_REPAINT: () => { mode.INIT = false; resetRender(); },
   SEARCH_FORWARD: () => startSearch('/', bufferToNum(session.buffer) || 1),
   SEARCH_BACKWARD: () => startSearch('?', bufferToNum(session.buffer) || 1),
   REPEAT_SEARCH: () => repeatSearch(session.content, bufferToNum(session.buffer) || 1, false),
   REVERSE_SEARCH: () => repeatSearch(session.content, bufferToNum(session.buffer) || 1, true),
   HIGHLIGHT_TOGGLE: () => toggleHighlight(),
   CLEAR_SEARCH: () => clearHighlight(),
-  PATTERN_ONLY: () => {
-    if (mode.HELP) {
-      ringBell();
-    } else {
-      startSearch('&', bufferToNum(session.buffer) || 1);
-    }
-  },
+  // og's A_FILTER has no helpfile guard: the & prompt opens in
+  // help; is_filtering() is FALSE on the helpfile, so the pattern
+  // stores for the file and the help view stays unfiltered
+  PATTERN_ONLY: () => startSearch('&', bufferToNum(session.buffer) || 1),
   TAG_COMMAND: () => startOption(session.key === '_' ? '_' : '-'),
   // og binds :t to toggle-option with an extra 't', opening the
   // -t tag prompt (decode.c A_OPT_TOGGLE|A_EXTRA)
@@ -886,19 +887,36 @@ const acts: Record<Actions, () => void> = {
   FOLLOW: () => beginFollow('forever'),
   FOLLOW_BELL: () => beginFollow('bell'),
   FOLLOW_HILITE: () => beginFollow('hilite'),
+  // og's A_EXAMINE has no helpfile guard: :e works from help and
+  // the edit leaves the help screen
   OPEN_FILE: () => {
-    if (!mode.HELP && secureAllow('examine')) startExamine();
+    if (secureAllow('examine')) startExamine();
   },
-  NEXT_FILE: () => stepFile(1),
-  PREV_FILE: () => stepFile(-1),
-  INDEX_FILE: () => {
-    if (mode.HELP) {
-      ringBell();
-      return;
+  // og's :n/:p carry no helpfile guard: stepping the file list
+  // leaves help; with no target og stays (error on the help screen)
+  NEXT_FILE: () => {
+    if (mode.HELP &&
+        stepFileTarget(1, bufferToNum(session.buffer) || 1) !== null) {
+      exitHelp();
     }
-
+    stepFile(1);
+  },
+  PREV_FILE: () => {
+    if (mode.HELP &&
+        stepFileTarget(-1, bufferToNum(session.buffer) || 1) !== null) {
+      exitHelp();
+    }
+    stepFile(-1);
+  },
+  // og's A_INDEX_FILE has no helpfile guard either: :x edits the
+  // n-th file, leaving help
+  INDEX_FILE: () => {
     const target = indexFileTarget(bufferToNum(session.buffer) || 1);
-    if (target !== null) switchToFile(target);
+
+    if (target !== null) {
+      exitHelp();
+      switchToFile(target);
+    }
   },
   REMOVE_FILE: () => removeFile(),
   CURRENT_INFO: () => fileInfo(session.content),
@@ -1363,6 +1381,12 @@ function dispatchKey(sequence: string): void {
   }
 
   if (marks.pending) {
+    // og's gomark has no helpfile guard: jumping to a mark from
+    // help edits the mark's file, leaving the help screen
+    if (marks.pending === "'" && mode.HELP && session.key !== '\x1b') {
+      exitHelp();
+    }
+
     marksKey(session.content, session.key);
 
     // --autosave with `m` writes changed marks right away
@@ -1373,7 +1397,12 @@ function dispatchKey(sequence: string): void {
   }
 
   if (examine.pending) {
-    if (examineKey(session.key) === 'run') runExamine();
+    if (examineKey(session.key) === 'run') {
+      // og's edit from the help file leaves it (even an empty
+      // answer re-examines the current file)
+      exitHelp();
+      runExamine();
+    }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;
   }
@@ -1922,6 +1951,10 @@ function cleanUp(): void {
   closeAlt(files.list[files.index]);
   saveHistory();
 
+  // og's putchr fires --end-prompt on the first output after the
+  // prompt: the quit's clear_bot is that output (output.c:496)
+  process.stdout.write(eprPrefix());
+
   // og's quit() clear_bots the prompt line before deinit; on the
   // main screen (-X) that's visible: the ":" clears and the shell
   // prompt overwrites it (--old-bot jumps to the true bottom first)
@@ -1951,10 +1984,6 @@ function cleanUp(): void {
     // so the shell prompt overwrites the last prompt line
     process.stdout.write('\r');
   }
-
-  // --end-prompt prints where output resumes after the final prompt
-  const endProto = mode.HELP ? null : optEndPrompt();
-  if (endProto) process.stdout.write(prExpand(session.content, endProto));
 
   // --redraw-on-quit leaves the last screen on the main display,
   // like og's quit() repaint after term_deinit: only the content

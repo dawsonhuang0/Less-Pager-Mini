@@ -8,7 +8,7 @@ import { search } from './features/searching';
 
 import { resetMisc } from './features/misc';
 
-import { resetBellTimer } from './helpers';
+import { resetBellTimer, resetPrompting } from './helpers';
 
 import { initSecure, secureAllow } from './features/secure';
 
@@ -38,6 +38,7 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   startupErrors.count = 0;
   resetMisc();
   resetBellTimer();
+  resetPrompting();
   onRebuild(() => {});
 
   // lesskey loads before $LESS scans, like og's init_cmds preceding

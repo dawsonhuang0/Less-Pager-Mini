@@ -30,6 +30,7 @@ import {
   optHiliteTarget,
   jumpSindex,
   optIntrChar,
+  optEndPrompt,
   gutterWidth,
   chopLine
 } from './options';
@@ -302,7 +303,13 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
     return;
   }
 
-  process.stdout.write('\x07');
+  // og's cmd_exec runs clear_bot before EVERY command, and its
+  // first putchr carries a pending --end-prompt marker; the bell
+  // only sounds after (command.c:124, forwback.c:56). We compress
+  // the clear away normally, but a firing marker makes it real:
+  // og's bytes are epr + clear_bot + bell
+  const epr = eprPrefix();
+  process.stdout.write(epr ? epr + clearBot() + '\x07' : '\x07');
 }
 
 /**
@@ -313,7 +320,9 @@ function visualBell(): void {
   // a dumb terminal has no flash capability, like og's empty vb
   if (optNoVbell() || mode.DUMB) return;
 
-  process.stdout.write('\x1B[?5h');
+  // cmd_exec's clear_bot precedes the flash too when a marker fires
+  const epr = eprPrefix();
+  process.stdout.write((epr ? epr + clearBot() : '') + '\x1B[?5h');
   setTimeout(() => process.stdout.write('\x1B[?5l'), 100);
 }
 
@@ -462,6 +471,14 @@ export function resetRender(): void {
   posClearPending = false;
 }
 
+/** Forgets an owed --end-prompt marker: a NEW session only — og's
+ *  prompting flag survives edits (help entry included) and clears
+ *  solely by firing. */
+export function resetPrompting(): void {
+  prompting = false;
+  promptedInHelp = false;
+}
+
 /** The most recently rendered screen rows, for --redraw-on-quit. */
 export function lastScreen(): string[] | null {
   return prevRows;
@@ -533,6 +550,10 @@ export function render(rawContent: string[], buffer: string[]): void {
     session.pipeFirstFill && !session.pipeProbing && !sizeIsKnown() &&
     !session.pipeWaiting;
 
+  // getPrompt below re-arms this when the frame bottoms in the true
+  // prompt; a fill frame (no prompt row at all) must not inherit it
+  promptPainted = false;
+
   let rows = screenRows(rawContent, buffer, filling);
 
   if (frozenFrame) {
@@ -571,11 +592,26 @@ export function render(rawContent: string[], buffer: string[]): void {
   // and the parked cursor untouched, like less — but arrow movement
   // inside the command buffer must still move the cursor
   if (!posClear && prevRows && sameRows(prevRows, rows)) {
+    // og reprints clear_bot + the prompt after every command — an
+    // identical reprint we normally compress away. A configured
+    // --end-prompt makes it matter: the marker precedes the reprint
+    // (putchr), and an SGR marker visibly recolors it, so paint it
+    // for real; end_pr_string skips the help file
+    if (promptPainted && !mode.HELP && optEndPrompt() !== null) {
+      const bot = rows[rows.length - 1];
+      process.stdout.write(eprPrefix() + (scrollMode()
+        ? clearBot() + bot + CLEAR_LINE + scrollPark(rows)
+        : CURSOR_TO(rows.length, 1) + CLEAR_LINE + bot + parkCursor(rows)));
+      prompting = promptPainted;
+    promptedInHelp = mode.HELP;
+      return;
+    }
+
     // og reprints the prompt through clear_bot on every command;
     // with --old-bot the first reprint after a forw_prompt visibly
     // jumps it from mid-screen to the bottom row, stale copy behind
     if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
-      process.stdout.write(
+      process.stdout.write(eprPrefix() +
         clearBot() + rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows)
       );
       return;
@@ -587,9 +623,9 @@ export function render(rawContent: string[], buffer: string[]): void {
       prevCursorCol = col;
       // -X owns no absolute rows: rewrite the prompt line in place
       // and backspace to the editing position, like og's cmdbuf
-      process.stdout.write(scrollMode()
+      process.stdout.write(eprPrefix() + (scrollMode()
         ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
-        : CURSOR_TO(rows.length, col));
+        : CURSOR_TO(rows.length, col)));
     }
 
     return;
@@ -598,7 +634,9 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (mode.DUMB) {
     const frame = dumbFrame(prevRows, rows);
     prevRows = rows;
-    process.stdout.write(frame);
+    process.stdout.write(eprPrefix() + frame);
+    prompting = promptPainted;
+    promptedInHelp = mode.HELP;
     return;
   }
 
@@ -607,23 +645,63 @@ export function render(rawContent: string[], buffer: string[]): void {
     const frame = scrollFrame(prevRows, rows, filling, rawContent, posClear);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
-    process.stdout.write(frame);
+    process.stdout.write(eprPrefix() + frame);
+    prompting = promptPainted;
+    promptedInHelp = mode.HELP;
     return;
   }
+
+  // only the bottom (prompt) line changed — a command prompt
+  // opening, its per-key echo, a message: og's cmd_startup writes
+  // clear_bot + the command line ALONE (cmdbuf.c), never touching
+  // the content rows (whose painted colors survive, visibly so
+  // under a leaked --end-prompt SGR)
+  if (prevRows && prevRows.length === rows.length && rows.length >= 2 &&
+      prevRows[rows.length - 1] !== rows[rows.length - 1] &&
+      prefixEqual(prevRows.slice(0, -1), rows)) {
+    prevInitAlt = mode.INIT;
+    prevRows = rows;
+    prevCursorCol = cmd.active ? cursorCol(rows) : -1;
+
+    process.stdout.write(eprPrefix() +
+      CURSOR_TO(rows.length, 1) + CLEAR_LINE +
+      rows[rows.length - 1] + parkCursor(rows));
+    prompting = promptPainted;
+    promptedInHelp = mode.HELP;
+    return;
+  }
+
+  // a squished screen unlatching is og's squish_check calling
+  // repaint(): pos_clear + jump_loc paint EVERY row through the
+  // skipping shape (jump.c:124) — never a diff-scroll, which would
+  // leave the old rows' colors behind (visible under a leaked
+  // --end-prompt SGR)
+  const unsquished = prevInitAlt && !mode.INIT;
+  prevInitAlt = mode.INIT;
 
   // -c repaints instead of scrolling (og's top_scroll homes; the
   // skipping scroll paint is the !top_scroll default)
   const frame = (optClearRepaint()
     ? null
-    : (posClear ? null : scrolledFrame(rows)) ??
-      skippedFrame(rows, rawContent, posClear)) ??
+    : (posClear || unsquished ? null : scrolledFrame(rows)) ??
+      skippedFrame(rows, rawContent, posClear || unsquished)) ??
     fullFrame(rows);
 
   prevTopRow = config.row - config.blankTop;
   prevTopSub = config.subRow;
   prevRows = rows;
   prevCursorCol = cmd.active ? cursorCol(rows) : -1;
-  process.stdout.write(frame);
+
+  // og has no synchronized-update wrapper: its marker bytes sit
+  // directly in the paint stream. Keep ours INSIDE the batch — a
+  // terminal that isolates the ?2026 batch would otherwise drop
+  // SGR state written just before it
+  const epr = eprPrefix();
+  process.stdout.write(epr && frame.startsWith(syncOn())
+    ? syncOn() + epr + frame.slice(syncOn().length)
+    : epr + frame);
+  prompting = promptPainted;
+    promptedInHelp = mode.HELP;
 }
 
 /**
@@ -764,11 +842,48 @@ export function markClearHome(): void {
   dumbHomePending = true;
 }
 
+// og's prompting flag (output.c): display_prompt sets it, and the
+// FIRST putchr of whatever prints next emits the --end-prompt
+// expansion before it — a marker for "output resumed after the
+// prompt". Only the true prompt arms it; messages and input lines
+// print through error()/cmdbuf and never do.
+let prompting = false;
+
+// true while the frame being built bottoms out in the real prompt
+let promptPainted = false;
+
+// whether the armed prompt belonged to the help file: og's
+// end_pr_string checks CH_HELPFILE at FIRE time. og's fire moments
+// straddle the edits — 'h' fires at cmd_exec BEFORE the help edit
+// (marking the help's first paint), an in-help scroll fires with
+// the helpfile current (suppressed), and the help-quit repaint
+// fires AFTER editing back (marking the file repaint) — so the
+// marker is mute only when the arming prompt AND the target frame
+// are both the helpfile
+let promptedInHelp = false;
+
+/**
+ * The --end-prompt string owed to the next output, like og's putchr
+ * checking `prompting` (output.c:496): consumed once per prompt,
+ * suppressed for prompts painted on the help file.
+ */
+export function eprPrefix(): string {
+  if (!prompting) return '';
+  prompting = false;
+
+  const proto = promptedInHelp && mode.HELP ? null : optEndPrompt();
+  return proto ? prExpand(session.content, proto) : '';
+}
+
 // og's jump_forw (G) runs pos_clear() before jump_loc: the paint
 // sees an empty position table and repaints with the skipping
 // marker even when the target rows overlap the current screen —
 // unlike a scroll or a search jump reaching the same place
 let posClearPending = false;
+
+// whether the last alt-mode frame was still squished (mode.INIT),
+// mirroring scrollFrame's prevInit for the -X painter
+let prevInitAlt = false;
 
 /** Marks the next paint as og's pos_clear'd jump (G). */
 export function markPosClear(): void {
@@ -1275,6 +1390,10 @@ export function calculateEOF(content: string[]): void {
  * @returns The prompt string.
  */
 function getPrompt(content: string[]): string {
+  // only the branches below that paint og's display_prompt re-arm
+  // the --end-prompt marker
+  promptPainted = false;
+
   // during a pipe drain og leaves the command line blank for G and
   // shows ierror's interruptible note for % (jump.c/output.c), and
   // a forward move blocked in forw_line waits behind its command's
@@ -1391,6 +1510,7 @@ function getPrompt(content: string[]): string {
 
   if (mode.HELP) {
     const helpPrompt = prExpand(content, hProto());
+    promptPainted = true;
 
     return colored(
       'prompt',
@@ -1407,6 +1527,8 @@ function getPrompt(content: string[]): string {
   // marker with the next file, like s_proto
   const text = prExpand(content, prProto(displayPrType()));
   if (files.newFile) files.newFile = false;
+
+  promptPainted = true;
 
   if (!text) return ':';
 
