@@ -10,6 +10,7 @@ import { maxSubRow, visualWidth } from './lines/helpers';
 import { search, searchPrompt, statusColChar } from './features/searching';
 
 import {
+  opt,
   option,
   optQuiet,
   optNoVbell,
@@ -20,6 +21,8 @@ import {
   displayPrType,
   optLinenums,
   optLinenumWidth,
+  effectiveLinenumWidth,
+  applyGutter,
   optStatusCol,
   optStatusColWidth,
   optBackScroll,
@@ -46,7 +49,7 @@ import { follow } from './features/follow';
 import { brackets, marks, markAtRow } from './features/jumping';
 
 import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
-  sizeIsKnown }
+  sizeIsKnown, lineBase }
   from './features/files';
 
 import { session } from './session';
@@ -213,9 +216,9 @@ export function gutterFor(
     // og pads AT_NORMAL and prints only the digits AT_BOLD — or in
     // the -D N color under --use-color (line.c:449)
     gutter += num
-      ? ' '.repeat(Math.max(optLinenumWidth() - digits.length, 0)) +
+      ? ' '.repeat(Math.max(effectiveLinenumWidth() - digits.length, 0)) +
         colored('linenum', digits, BOLD_ON, BOLD_OFF) + ' '
-      : ' '.repeat(optLinenumWidth() + 1);
+      : ' '.repeat(effectiveLinenumWidth() + 1);
   }
 
   return gutter;
@@ -1386,6 +1389,14 @@ export function calculateEOF(content: string[]): void {
   config.endRow = lastRow;
   config.endSubRow = lastSubRow;
   mode.EOF = lastRow === 0 && (chopLine() || lastSubRow === 0);
+
+  // how many digits the biggest -N number needs: og's field is a
+  // minimum the digits overflow per row (line.c:446); our uniform
+  // gutter widens to fit instead, re-reserving the width when the
+  // count grew (applyGutter no-ops once settled)
+  opt.linenumDigits =
+    String(vlinenum(content.length + lineBase()) || content.length).length;
+  applyGutter(content);
 }
 
 /**

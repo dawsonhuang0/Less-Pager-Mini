@@ -76,6 +76,9 @@ export const BIG_FILE_THRESHOLD = 128 * 1024 * 1024;
 
 export async function bigPager(path: string): Promise<void> {
   const bf = new BlockFile(path);
+
+  // a fresh file starts with no known biggest line number
+  opt.linenumDigits = 0;
   const view = new BigView(bf);
 
   // a -b toggle trims the block pool at once, like ch_setbufspace
@@ -203,6 +206,9 @@ export async function bigPager(path: string): Promise<void> {
     }
 
     lnums.push({ pos: target, num });
+    // the biggest number seen widens the uniform gutter (og's field
+    // is a per-row minimum the digits overflow)
+    opt.linenumDigits = Math.max(opt.linenumDigits, String(num + 1).length);
     // a resize during this blocking walk arrives queued, not live
     if (Date.now() - started > 100) winchGuard = true;
     return num;
@@ -490,7 +496,7 @@ export async function bigPager(path: string): Promise<void> {
         const num = countTo(row.pos);
 
         if (num === null) {
-          pfx += ' '.repeat(opt.linenumWidth + 1);
+          pfx += ' '.repeat(Math.max(opt.linenumWidth, opt.linenumDigits) + 1);
 
           // an interrupted count is og's abort_delayed_msg: line
           // numbers turn off for good and the error reports it
@@ -502,7 +508,9 @@ export async function bigPager(path: string): Promise<void> {
         } else {
           // og pads with AT_NORMAL spaces and bolds only the digits
           const digits = String(num + 1);
-          pfx += ' '.repeat(Math.max(opt.linenumWidth - digits.length, 0)) +
+          pfx += ' '.repeat(
+            Math.max(Math.max(opt.linenumWidth, opt.linenumDigits) -
+              digits.length, 0)) +
             '\x1b[1m' + digits + '\x1b[m ';
         }
       }
