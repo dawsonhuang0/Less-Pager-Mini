@@ -256,6 +256,16 @@ export function attachPipe(): void {
   stream.on('end', onEnd);
   stream.resume();
 
+  // the input may have been consumed to its end before this attach
+  // (a startup error gate held the session while the writer
+  // finished): 'end' has already been emitted and will not repeat,
+  // so run its bookkeeping now — og's reads at EOF would learn this
+  // naturally on the first forward past the data
+  if ((stream as NodeJS.ReadableStream & { readableEnded?: boolean })
+    .readableEnded) {
+    onEnd();
+  }
+
   if (pipeFilling()) armStallTimer();
 
   session.detachPipe = () => {
