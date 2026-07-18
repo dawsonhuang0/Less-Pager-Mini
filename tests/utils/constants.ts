@@ -39,7 +39,7 @@ export const STRIKETHROUGH = '\x1b[9m';
  * ANSI reset codes
  */
 export const RESET = '\x1b[0m';
-export const BOLD_OFF = '\x1b[22m';
+export const BOLD_OFF = '\x1b[m';
 export const UNDERLINE_OFF = '\x1b[24m';
 export const INVERSE_OFF = '\x1b[27m';
 

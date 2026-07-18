@@ -94,7 +94,13 @@ export const INVERSE_ON = '\x1b[7m';
 export const INVERSE_OFF = '\x1b[27m';
 
 export const BOLD_ON = '\x1b[1m';
-export const BOLD_OFF = '\x1b[22m';
+
+// og exits bold through terminfo's sgr0 (no individual bold-off
+// exists), a FULL attribute reset: a leaked SGR — say an
+// --end-prompt color marker — dies at the first bold text (the
+// tilde rows, help's SUMMARY), while standout/underline end with
+// their own 27/24 and let it live on
+export const BOLD_OFF = '\x1b[m';
 
 export const UNDERLINE_ON = '\x1B[4m';
 export const UNDERLINE_OFF = '\x1B[24m';

@@ -215,16 +215,31 @@ function transformLine(line: string): string {
 }
 
 /**
+ * Merges adjacent same-attribute wraps into one run: og's at_switch
+ * writes a transition only when the attribute CHANGES, so "SUMMARY"
+ * is a single bold span with a single exit — one full reset, which
+ * is also where a leaked --end-prompt SGR dies.
+ */
+function coalesceAttr(text: string, attr: 'bold' | 'underline'): string {
+  const [on, off] = attrText(attr, '\x00').split('\x00');
+  if (!on || !off) return text;
+
+  return text.split(off + on).join('');
+}
+
+/**
  * Converts nroff-style overstrikes for --proc-backspace: `X\bX` prints
  * bold and `_\bX` underlined, leftover backspaces just erase.
  */
 function procBackspaces(line: string): string {
   /* eslint-disable no-control-regex */
-  return line
+  const out = line
     .replace(/_\x08(.)/g, (_, c: string) => attrText('underline', c))
     .replace(/(.)\x08\1/g, (_, c: string) => attrText('bold', c))
     .replace(/.\x08(.)/g, '$1');
   /* eslint-enable no-control-regex */
+
+  return coalesceAttr(coalesceAttr(out, 'bold'), 'underline');
 }
 
 /**

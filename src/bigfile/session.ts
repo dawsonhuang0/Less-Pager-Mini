@@ -425,7 +425,7 @@ export async function bigPager(path: string): Promise<void> {
       // og's gline pads null lines by the -~ twiddle, bold like
       // AT_BOLD (blank rows when --tilde is off)
       while (slice.length < count) {
-        slice.push(optTildes() ? '\x1b[1m~\x1b[22m' : '');
+        slice.push(optTildes() ? '\x1b[1m~\x1b[m' : '');
       }
 
       const hPrompt = helpTop + count >= helpLines.length
@@ -486,7 +486,7 @@ export async function bigPager(path: string): Promise<void> {
           // og pads with AT_NORMAL spaces and bolds only the digits
           const digits = String(num + 1);
           pfx += ' '.repeat(Math.max(opt.linenumWidth - digits.length, 0)) +
-            '\x1b[1m' + digits + '\x1b[22m ';
+            '\x1b[1m' + digits + '\x1b[m ';
         }
       }
 
@@ -506,7 +506,7 @@ export async function bigPager(path: string): Promise<void> {
     // og's gline pads null lines by the -~ twiddle, bold like
     // AT_BOLD (blank rows when --tilde is off)
     while (display.length < count) {
-      display.push(optTildes() ? '\x1b[1m~\x1b[22m' : '');
+      display.push(optTildes() ? '\x1b[1m~\x1b[m' : '');
     }
 
     const percent = bf.size
