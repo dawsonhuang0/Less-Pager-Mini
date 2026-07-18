@@ -10,6 +10,8 @@ import { help } from '../lessHelp';
 
 import { transformContent } from '../lines/helpers';
 
+import { ringBell } from '../helpers';
+
 import { versionMessage } from '../features/misc';
 
 import { BlockFile } from './ch';
@@ -989,8 +991,11 @@ export async function bigPager(path: string): Promise<void> {
         // mouse wheel scrolls by --wheel-lines, --rmouse reversing
         if (SCROLL_UP_REGEX.test(key) || SCROLL_DOWN_REGEX.test(key)) {
           const down = SCROLL_DOWN_REGEX.test(key) !== optMouseReverse();
-          if (down) view.lineForward(optWheelLines());
-          else view.lineBackward(optWheelLines());
+          if (down) {
+            if (!view.lineForward(optWheelLines(), config.window)) ringBell('eof');
+          } else if (!view.lineBackward(optWheelLines())) {
+            ringBell('eof');
+          }
           buffer = [];
           draw();
           continue;
@@ -1010,30 +1015,49 @@ export async function bigPager(path: string): Promise<void> {
             quit();
             return;
           case 'LINE_FORWARD':
-          case 'FORCE_LINE_FORWARD':
           case 'NEWLINE_FORWARD':
-            view.lineForward(n);
+            if (!view.lineForward(n, config.window)) ringBell('eof');
+            break;
+          case 'FORCE_LINE_FORWARD':
+            // og's J forces past the eof, stopping only when the
+            // last line reaches the top (forw with force=TRUE)
+            if (!view.lineForward(n)) ringBell('eof');
             break;
           case 'LINE_BACKWARD':
           case 'FORCE_LINE_BACKWARD':
           case 'NEWLINE_BACKWARD':
-            view.lineBackward(n);
+            if (!view.lineBackward(n)) ringBell('eof');
             break;
           case 'WINDOW_FORWARD':
-          case 'NO_EOF_WINDOW_FORWARD':
           case 'SET_WINDOW_FORWARD':
-            view.lineForward(n === 1 ? config.window - 1 : n);
+            if (!view.lineForward(
+              n === 1 ? config.window - 1 : n, config.window)) {
+              ringBell('eof');
+            }
+            break;
+          case 'NO_EOF_WINDOW_FORWARD':
+            // ESC-SPACE forces a full window past the eof, like og
+            if (!view.lineForward(n === 1 ? config.window - 1 : n)) {
+              ringBell('eof');
+            }
             break;
           case 'WINDOW_BACKWARD':
           case 'FORCE_WINDOW_BACKWARD':
           case 'SET_WINDOW_BACKWARD':
-            view.lineBackward(n === 1 ? config.window - 1 : n);
+            if (!view.lineBackward(n === 1 ? config.window - 1 : n)) {
+              ringBell('eof');
+            }
             break;
           case 'SET_HALF_WINDOW_FORWARD':
-            view.lineForward(Math.floor(config.window / 2));
+            if (!view.lineForward(
+              Math.floor(config.window / 2), config.window)) {
+              ringBell('eof');
+            }
             break;
           case 'SET_HALF_WINDOW_BACKWARD':
-            view.lineBackward(Math.floor(config.window / 2));
+            if (!view.lineBackward(Math.floor(config.window / 2))) {
+              ringBell('eof');
+            }
             break;
           case 'SET_HALF_SCREEN_RIGHT':
             config.col +=

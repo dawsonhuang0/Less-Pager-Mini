@@ -86,11 +86,33 @@ export class BigView {
     return { rows, endPos };
   }
 
-  /** Scrolls forward n display rows, like forw(). */
-  lineForward(n: number): number {
+  /**
+   * The top whose screen bottoms at the last line — og's jump_forw
+   * anchor: plain forward moves never pass it (forward() finds
+   * nothing to read past the eof and rings the bell instead).
+   */
+  endTop(window: number): { pos: number, subRow: number } {
+    const saved = this.top;
+    this.gotoEnd(window);
+    const end = this.top;
+    this.top = saved;
+    return end;
+  }
+
+  /** Scrolls forward n display rows, like forw(): a plain move
+   *  clamps at the last screenful (og's eof bell spot); a FORCED
+   *  move (J, ESC-SPACE) passes window as undefined and runs on
+   *  until the last line reaches the top, like og's force=TRUE. */
+  lineForward(n: number, window?: number): number {
+    const end = window !== undefined ? this.endTop(window) : null;
     let moved = 0;
 
     while (moved < n) {
+      if (end && (this.top.pos > end.pos ||
+          (this.top.pos === end.pos && this.top.subRow >= end.subRow))) {
+        break;
+      }
+
       const line = forwLine(this.bf, this.top.pos);
       if (!line) break;
 
