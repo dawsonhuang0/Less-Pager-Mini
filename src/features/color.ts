@@ -193,7 +193,15 @@ export function setColor(text: string): string | null {
   const kind = NAME_CHARS[text[0] ?? ''];
 
   if (!kind) {
-    return `Invalid color specifier '${text[0] ?? ''}'`;
+    // og's error() renders the char through the line buffer's caret
+    // transform: a stray control char shows as ^G, not a raw byte
+    const char = text[0] ?? '';
+    const code = char.charCodeAt(0);
+    const shown = code < 0x20 || code === 0x7F
+      ? '^' + String.fromCharCode(code ^ 0x40)
+      : char;
+
+    return `Invalid color specifier '${shown}'`;
   }
 
   if (!optUseColor() && !ATTR_KINDS.has(kind)) {
