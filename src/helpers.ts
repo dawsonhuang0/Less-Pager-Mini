@@ -203,9 +203,13 @@ export function gutterFor(
   if (optLinenums() === 2) {
     // --no-number-headers blanks the header lines' numbers (0)
     const num = lineStart ? vlinenum(row + 1) : 0;
+    const digits = String(num);
 
+    // og pads AT_NORMAL and prints only the digits AT_BOLD — or in
+    // the -D N color under --use-color (line.c:449)
     gutter += num
-      ? colored('linenum', String(num).padStart(optLinenumWidth())) + ' '
+      ? ' '.repeat(Math.max(optLinenumWidth() - digits.length, 0)) +
+        colored('linenum', digits, BOLD_ON, BOLD_OFF) + ' '
       : ' '.repeat(optLinenumWidth() + 1);
   }
 
