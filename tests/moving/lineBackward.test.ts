@@ -99,11 +99,12 @@ describe('wrapLongLines', () => {
 
     const line22 = text[21];
 
+    // spanning styles close at each row end, like og's at_switch
     const expectOutputs = [
       UNDERLINE + line22.slice(306),
-      MAGENTA + line22.slice(210, 306),
-      YELLOW + line22.slice(103, 210),
-      line22.slice(0, 103),
+      MAGENTA + line22.slice(210, 306) + RESET,
+      YELLOW + line22.slice(103, 210) + RESET,
+      line22.slice(0, 103) + RESET,
       text[20]
     ];
 

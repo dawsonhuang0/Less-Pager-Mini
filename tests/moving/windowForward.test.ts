@@ -96,7 +96,8 @@ describe('wrapLongLines', () => {
 
     implementWindowForward(content, '1', false, [text[1]]);
 
-    implementWindowForward(content, '', false, [YELLOW + text[21].slice(103, 210)]);
+    implementWindowForward(content, '', false,
+      [YELLOW + text[21].slice(103, 210) + RESET]);
     implementWindowForward(content, '', false, [lastLine, END_MARKER], [0, 23]);
   });
 

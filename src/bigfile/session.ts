@@ -461,7 +461,14 @@ export async function bigPager(path: string): Promise<void> {
         // chop: the layout's first row is exactly one screen width
         out = emitRow(getLayout(text), 0);
       } else {
-        out = emitRow(getLayout(text), row.subRow);
+        // each screen row is self-contained like og's at_switch: a
+        // spanning style reopens at the row start and closes at its
+        // end, keeping the next row's gutter clean
+        const lay = getLayout(text);
+        out = (row.subRow > 0 ? lay.rowStyle[row.subRow] ?? '' : '') +
+          emitRow(lay, row.subRow);
+
+        if (lay.rowStyle[row.subRow + 1]) out += '\x1b[0m';
       }
 
       // og's line prefix: the -J mark letter, then the -N number

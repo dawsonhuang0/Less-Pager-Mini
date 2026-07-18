@@ -93,10 +93,12 @@ describe('wrapLongLines', () => {
 
     const line22 = text[21];
 
+    // og's rows are self-contained: a style spanning the wrap
+    // closes at the row end and reopens on the continuation
     const expectOutputs = [
-      line22.slice(0, 103),
-      YELLOW + line22.slice(103, 210),
-      MAGENTA + line22.slice(210, 306),
+      line22.slice(0, 103) + RESET,
+      YELLOW + line22.slice(103, 210) + RESET,
+      MAGENTA + line22.slice(210, 306) + RESET,
       UNDERLINE + line22.slice(306),
       text[22]
     ];

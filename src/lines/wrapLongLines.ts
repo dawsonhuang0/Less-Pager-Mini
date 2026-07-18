@@ -63,13 +63,16 @@ function wrap(lines: string[], longLine: string): void {
   for (let r = Math.min(startRow, rows - 1); r < rows; r++) {
     let line = emitRow(layout, r);
 
-    // re-emit active styles when entering a line mid-way
-    if (r === startRow && r > 0) line = layout.rowStyle[r] + line;
+    // og's rows are self-contained (at_switch per row): a style
+    // spanning the wrap closes at the row's end and reopens on the
+    // continuation, so the gutter and the next row never inherit it
+    if (r > 0 && layout.rowStyle[r]) line = layout.rowStyle[r] + line;
 
     const last = r === rows - 1;
     const windowFull = lines.length === config.window - 2;
+    const openAfter = !last && !!layout.rowStyle[r + 1];
 
-    lines.push(last || windowFull ? withReset(line) : line);
+    lines.push(last || windowFull || openAfter ? withReset(line) : line);
 
     if (windowFull) return;
   }
