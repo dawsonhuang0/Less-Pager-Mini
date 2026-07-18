@@ -613,6 +613,32 @@ export async function bigPager(path: string): Promise<void> {
     bf.refreshSize();
   };
 
+  // the view position of the previous resolveBottom, so only real
+  // movements walk the line count
+  let lastResolved = '';
+
+  /**
+   * og ends EVERY forw() and back() with `(void) currline(BOTTOM)`
+   * (forwback.c:382,457): the bottom line's number resolves
+   * eagerly, walking the file from the nearest anchor with the
+   * delayed "Calculating line numbers" message — G on a huge file
+   * scans it all, whatever the -n/-N display state; only -n's
+   * linenums==0 suppresses it (find_linenum, linenum.c:278).
+   */
+  const resolveBottom = (): void => {
+    if (opt.linenums === 0) return;
+
+    const at = view.top.pos + ':' + view.top.subRow;
+    if (at === lastResolved) return;
+    lastResolved = at;
+
+    if (countTo(view.top.pos) === null || scanMessaged) {
+      // an abort leaves the count unknown (og's find_linenum 0);
+      // either way the message line repaints away
+      draw();
+    }
+  };
+
   /** Ends F follow mode, discarding the queued keys (getcc_clear:
    *  every bigfile exit is og's READ_INTR path). */
   const endFollow = (): void => {
@@ -985,6 +1011,7 @@ export async function bigPager(path: string): Promise<void> {
           runSearch(dir, view.top.pos);
           buffer = [];
           draw();
+          resolveBottom();
           continue;
         }
 
@@ -998,6 +1025,7 @@ export async function bigPager(path: string): Promise<void> {
           }
           buffer = [];
           draw();
+          resolveBottom();
           continue;
         }
 
@@ -1204,6 +1232,7 @@ export async function bigPager(path: string): Promise<void> {
 
         buffer = [];
         draw();
+        resolveBottom();
       }
 
       // keys the interrupt poll queued during a blocking scan run
