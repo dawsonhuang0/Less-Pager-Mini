@@ -1,6 +1,7 @@
 import { config } from "../config";
 
-import { gutterFor, decoratedRows, highlightRow } from "../helpers";
+import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
+  from "../helpers";
 import { isStyled, isAscii, withReset, visualWidth } from "./helpers";
 
 import { getLayout } from "./lineLayout";
@@ -47,11 +48,17 @@ export function chopLongLines(content: string[], lines: string[]): void {
     const before = lines.length;
     const line = highlightLine(content[row], row);
 
+    // a number wider than the -N field eats the line's text columns
+    const shrink = gutterOverflow(row);
+    config.screenWidth -= shrink;
+
     if (pfxCols > 0) {
       lines.push(chopWithPrefix(line, pfxCols));
     } else {
       chop(lines, line);
     }
+
+    config.screenWidth += shrink;
 
     if (decorated) {
       // -w and --status-line highlight the row in standout

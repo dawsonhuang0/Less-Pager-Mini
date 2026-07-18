@@ -76,9 +76,6 @@ export const BIG_FILE_THRESHOLD = 128 * 1024 * 1024;
 
 export async function bigPager(path: string): Promise<void> {
   const bf = new BlockFile(path);
-
-  // a fresh file starts with no known biggest line number
-  opt.linenumDigits = 0;
   const view = new BigView(bf);
 
   // a -b toggle trims the block pool at once, like ch_setbufspace
@@ -206,9 +203,6 @@ export async function bigPager(path: string): Promise<void> {
     }
 
     lnums.push({ pos: target, num });
-    // the biggest number seen widens the uniform gutter (og's field
-    // is a per-row minimum the digits overflow)
-    opt.linenumDigits = Math.max(opt.linenumDigits, String(num + 1).length);
     // a resize during this blocking walk arrives queued, not live
     if (Date.now() - started > 100) winchGuard = true;
     return num;
@@ -463,6 +457,19 @@ export async function bigPager(path: string): Promise<void> {
       const text = displayText(row.text);
       let out: string;
 
+      // a number wider than the -N field eats this line's text
+      // columns, like og's line buffer holding the actual prefix
+      let shrink = 0;
+
+      if (opt.linenums === 2) {
+        const n = countTo(row.pos);
+        if (n !== null) {
+          shrink = Math.max(String(n + 1).length - opt.linenumWidth, 0);
+        }
+      }
+
+      config.screenWidth -= shrink;
+
       if (chopLine() || config.col) {
         // chop: the layout's first row is exactly one screen width
         out = emitRow(getLayout(text), 0);
@@ -476,6 +483,8 @@ export async function bigPager(path: string): Promise<void> {
 
         if (lay.rowStyle[row.subRow + 1]) out += '\x1b[0m';
       }
+
+      config.screenWidth += shrink;
 
       // og's line prefix: the -J mark letter, then the -N number
       // right-aligned in linenum_width + a space, bold like AT_BOLD.

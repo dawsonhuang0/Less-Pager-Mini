@@ -1,6 +1,7 @@
 import { config } from '../config';
 
-import { gutterFor, decoratedRows, highlightRow } from '../helpers';
+import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
+  from '../helpers';
 import { isStyled, isAscii, withReset } from './helpers';
 
 import { getLayout, emitRow } from './lineLayout';
@@ -25,7 +26,12 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     row++
   ) {
     const before = lines.length;
+
+    // a number wider than the -N field eats the line's text columns
+    const shrink = gutterOverflow(row);
+    config.screenWidth -= shrink;
     wrap(lines, highlightLine(content[row], row));
+    config.screenWidth += shrink;
 
     if (decorated) {
       // every emitted row of the line gets the same gutter, like

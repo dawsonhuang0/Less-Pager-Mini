@@ -21,8 +21,6 @@ import {
   displayPrType,
   optLinenums,
   optLinenumWidth,
-  effectiveLinenumWidth,
-  applyGutter,
   optStatusCol,
   optStatusColWidth,
   optBackScroll,
@@ -224,6 +222,20 @@ export function gutterFor(
   }
 
   return gutter;
+}
+
+/**
+ * Columns a line's -N number overflows the nominal field by: og pads
+ * only to linenum_width and the wider digits eat into the LINE's
+ * text area — the line buffer holds the actual prefix and fills the
+ * rest to sc_width (line.c:446, the ragged field its :457 comment
+ * admits). The line's layout width shrinks by this much.
+ */
+export function gutterOverflow(row: number): number {
+  if (optLinenums() !== 2) return 0;
+
+  const digits = String(vlinenum(row + 1) || 0).length;
+  return Math.max(digits - optLinenumWidth(), 0);
 }
 
 /** True when display rows carry a gutter or the -w attn highlight. */
@@ -1392,13 +1404,6 @@ export function calculateEOF(content: string[]): void {
   config.endSubRow = lastSubRow;
   mode.EOF = lastRow === 0 && (chopLine() || lastSubRow === 0);
 
-  // how many digits the biggest -N number needs: og's field is a
-  // minimum the digits overflow per row (line.c:446); our uniform
-  // gutter widens to fit instead, re-reserving the width when the
-  // count grew (applyGutter no-ops once settled)
-  opt.linenumDigits =
-    String(vlinenum(content.length + lineBase()) || content.length).length;
-  applyGutter(content);
 }
 
 /**
