@@ -536,7 +536,9 @@ export async function bigPager(path: string): Promise<void> {
             (cmd.active ? cmdDisplay() : option.name)
           : option.pending + (option.noPrompt ? '(P)' : '') + option.flag;
 
-    const prompt = coloning
+    const prompt = resolvingBlank
+      ? ''
+      : coloning
       ? ' :'
       : option.pending
       ? optPrompt
@@ -617,13 +619,20 @@ export async function bigPager(path: string): Promise<void> {
   // movements walk the line count
   let lastResolved = '';
 
+  // og's cleared command line while currline(BOTTOM) walks
+  let resolvingBlank = false;
+
   /**
    * og ends EVERY forw() and back() with `(void) currline(BOTTOM)`
    * (forwback.c:382,457): the bottom line's number resolves
    * eagerly, walking the file from the nearest anchor with the
    * delayed "Calculating line numbers" message — G on a huge file
    * scans it all, whatever the -n/-N display state; only -n's
-   * linenums==0 suppresses it (find_linenum, linenum.c:278).
+   * linenums==0 suppresses it (find_linenum, linenum.c:278). The
+   * prompt paints only AFTER the walk: og's command line stays
+   * blank (cmd_exec's clear) for the duration, so (END) waits.
+   * An interrupt past the delayed message is abort_delayed_msg:
+   * line numbers turn off with the gated error.
    */
   const resolveBottom = (): void => {
     if (opt.linenums === 0) return;
@@ -632,10 +641,26 @@ export async function bigPager(path: string): Promise<void> {
     if (at === lastResolved) return;
     lastResolved = at;
 
-    if (countTo(view.top.pos) === null || scanMessaged) {
-      // an abort leaves the count unknown (og's find_linenum 0);
-      // either way the message line repaints away
+    // a walk far from every anchor can run long: show og's blank
+    // command line first so the prompt doesn't precede the count
+    let near = 0;
+    for (const a of lnums) {
+      if (a.pos <= view.top.pos && a.pos > near) near = a.pos;
+    }
+
+    const far = view.top.pos - near > 64 * 1024 * 1024;
+    if (far) {
+      resolvingBlank = true;
       draw();
+      resolvingBlank = false;
+    }
+
+    if (countTo(view.top.pos) === null && scanMessaged) {
+      // og's abort_delayed_msg (linenum.c:254): numbers off, the
+      // gated message; the repaint drops any -N gutter
+      opt.linenums = 0;
+      message = 'Line numbers turned off  (press RETURN)';
+      msgReturn = true;
     }
   };
 
@@ -1010,8 +1035,8 @@ export async function bigPager(path: string): Promise<void> {
           const dir = key === 'n' ? lastDir : (-lastDir as 1 | -1);
           runSearch(dir, view.top.pos);
           buffer = [];
-          draw();
           resolveBottom();
+          draw();
           continue;
         }
 
@@ -1024,8 +1049,8 @@ export async function bigPager(path: string): Promise<void> {
             ringBell('eof');
           }
           buffer = [];
-          draw();
           resolveBottom();
+          draw();
           continue;
         }
 
@@ -1231,8 +1256,8 @@ export async function bigPager(path: string): Promise<void> {
         }
 
         buffer = [];
-        draw();
         resolveBottom();
+        draw();
       }
 
       // keys the interrupt poll queued during a blocking scan run
