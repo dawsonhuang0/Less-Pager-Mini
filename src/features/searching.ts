@@ -35,6 +35,7 @@ import {
   optAutosaveAction,
   optMatchShift,
   optIntrChar,
+  optNoInit,
   chopLine
 } from "../options";
 
@@ -44,7 +45,8 @@ import {
   STYLE_REGEX,
   STYLE_REGEX_G,
   INVERSE_ON,
-  INVERSE_OFF
+  INVERSE_OFF,
+  CLEAR_LINE
 } from "../constants";
 
 interface SearchInput {
@@ -437,6 +439,13 @@ function handleModifier(input: SearchInput, key: string): boolean {
  * - `^K` compiles and highlights without moving.
  */
 export function execSearch(content: string[]): void {
+  // og's exec_mca runs cmd_exec() before the search: the /pattern
+  // command line clears and flushes ahead of a possibly long walk
+  // (command.c:267); sync, since the search blocks the loop
+  fs.writeSync(1, (optNoInit() && !mode.DUMB
+    ? '\r'
+    : `\x1b[${config.window};1H`) + CLEAR_LINE);
+
   const input = search.input;
   if (!input) return;
   search.input = null;

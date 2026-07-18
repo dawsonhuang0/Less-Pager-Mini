@@ -369,6 +369,12 @@ export async function bigPager(path: string): Promise<void> {
   const runSearch = (dir: 1 | -1, fromTop: number): boolean => {
     if (!pattern) return false;
 
+    // og's exec_mca starts with cmd_exec(): clear_bot + flush wipe
+    // the /pattern line BEFORE the search runs (command.c:267), so
+    // a long walk shows a blank command line; the write is sync —
+    // a stream write would defer behind the blocking loop
+    fs.writeSync(1, `\x1b[${config.window};1H` + CLEAR_LINE);
+
     let steps = 0;
 
     if (dir > 0) {
