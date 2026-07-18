@@ -213,12 +213,14 @@ export function gutterFor(
     const num = vlinenum(row + 1);
     const digits = String(num);
 
-    // og pads AT_NORMAL and prints only the digits AT_BOLD — or in
-    // the -D N color under --use-color (line.c:449)
+    // og pads AT_NORMAL only up to --line-num-width and prints the
+    // digits AT_BOLD (line.c:446-449): numbers wider than the
+    // option stick to the left edge unpadded, og's ragged field —
+    // the RESERVE uses the effective width so rows still fit
     gutter += num
-      ? ' '.repeat(Math.max(effectiveLinenumWidth() - digits.length, 0)) +
+      ? ' '.repeat(Math.max(optLinenumWidth() - digits.length, 0)) +
         colored('linenum', digits, BOLD_ON, BOLD_OFF) + ' '
-      : ' '.repeat(effectiveLinenumWidth() + 1);
+      : ' '.repeat(optLinenumWidth() + 1);
   }
 
   return gutter;

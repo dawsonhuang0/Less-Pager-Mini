@@ -496,7 +496,7 @@ export async function bigPager(path: string): Promise<void> {
         const num = countTo(row.pos);
 
         if (num === null) {
-          pfx += ' '.repeat(Math.max(opt.linenumWidth, opt.linenumDigits) + 1);
+          pfx += ' '.repeat(opt.linenumWidth + 1);
 
           // an interrupted count is og's abort_delayed_msg: line
           // numbers turn off for good and the error reports it
@@ -507,10 +507,10 @@ export async function bigPager(path: string): Promise<void> {
           }
         } else {
           // og pads with AT_NORMAL spaces and bolds only the digits
+          // og pads only up to --line-num-width: wider numbers
+          // stick left unpadded (line.c:446), the reserve covers
           const digits = String(num + 1);
-          pfx += ' '.repeat(
-            Math.max(Math.max(opt.linenumWidth, opt.linenumDigits) -
-              digits.length, 0)) +
+          pfx += ' '.repeat(Math.max(opt.linenumWidth - digits.length, 0)) +
             '\x1b[1m' + digits + '\x1b[m ';
         }
       }
