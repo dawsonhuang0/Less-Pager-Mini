@@ -8,7 +8,8 @@ import { setShellHistory } from '../../src/features/misc';
 
 import { search } from '../../src/features/searching';
 
-import { loadHistory, saveHistory } from '../../src/histfile';
+import { loadHistory, saveHistory, recordSearchEntry, touchSearchList,
+  touchMarks } from '../../src/histfile';
 
 let dir: string;
 let file: string;
@@ -59,6 +60,8 @@ describe('saveHistory', () => {
 
     loadHistory();
     search.history.push('new');
+    recordSearchEntry('new');
+    touchSearchList();
     saveHistory();
 
     const text = fs.readFileSync(file, 'utf8');
@@ -78,10 +81,13 @@ describe('saveHistory', () => {
 
     search.history = ['zeta'];
 
+    recordSearchEntry('zeta');
+    touchSearchList();
     saveHistory();
 
+    // og's save_marks always prints the .mark header, even empty
     expect(fs.readFileSync(file, 'utf8'))
-      .toBe('.less-history-file:\n.search\n"zeta\n');
+      .toBe('.less-history-file:\n.search\n"zeta\n.mark\n');
   });
 
   it('skips writing when the history is unchanged', () => {
@@ -92,6 +98,20 @@ describe('saveHistory', () => {
     saveHistory();
 
     expect(fs.existsSync(file)).toBe(false);
+  });
+
+  it('writes header and empty .mark after only a mark action', () => {
+    // og: setmark raises marks_modified even without --save-marks,
+    // so quit writes the file with a bare .mark section
+    loadHistory();
+    search.history = [];
+    setShellHistory([]);
+
+    touchMarks();
+    saveHistory();
+
+    expect(fs.readFileSync(file, 'utf8'))
+      .toBe('.less-history-file:\n.mark\n');
   });
 
   it('is disabled by LESSHISTFILE=-', () => {
@@ -110,9 +130,30 @@ describe('saveHistory', () => {
     process.env.LESSHISTSIZE = '2';
     search.history = ['a1', 'b2', 'c3'];
 
+    // og's write_mlist appends new entries UNCAPPED - the histsize
+    // skip only trims the DISK copy's head (og-verified)
+    for (const e of search.history) recordSearchEntry(e);
+    touchSearchList();
     saveHistory();
 
     expect(fs.readFileSync(file, 'utf8'))
-      .toBe('.less-history-file:\n.search\n"b2\n"c3\n');
+      .toBe('.less-history-file:\n.search\n"a1\n"b2\n"c3\n.mark\n');
+  });
+
+  it('merges the current disk file like copy_hist', () => {
+    // og-verified: memory overflow skips the disk head (o1, o2), the
+    // new entry lands under a SECOND .search header at EOF
+    fs.writeFileSync(file,
+      '.less-history-file:\n.search\n"o1\n"o2\n"o3\n');
+
+    loadHistory();
+    search.history.push('4');
+    process.env.LESSHISTSIZE = '2';
+    recordSearchEntry('4');
+    touchSearchList();
+    saveHistory();
+
+    expect(fs.readFileSync(file, 'utf8')).toBe(
+      '.less-history-file:\n.search\n"o3\n.search\n"4\n.mark\n');
   });
 });

@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 import { ringBell } from "../helpers";
 import { maxSubRow, isAscii, isStyled } from "../lines/helpers";
 
@@ -12,7 +14,7 @@ import { files, lineBase, byteBase } from "./files";
 import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
   optPermaMarks, optAutosaveAction } from "../options";
 
-import { saveHistory } from "../histfile";
+import { saveHistory, touchMarks } from "../histfile";
 
 /**
  * Jumps to line `lineNum` in the content, placing it at the top of the
@@ -383,9 +385,72 @@ export function getFileMarks(): FileMark[] {
   return fileMarks;
 }
 
+/**
+ * Rebinds mark file indexes around a file-list splice: og marks hold
+ * stable IFILEs, ours hold list indexes. A removal drops that file's
+ * marks like og's unmark(ifile); an insertion shifts the rest.
+ *
+ * @param at - The splice position.
+ * @param delta - +1 for an insertion, -1 for a removal.
+ */
+export function marksFileSpliced(at: number, delta: 1 | -1): void {
+  const adjust = (mark: Mark): Mark | null => {
+    if (delta < 0 && mark.file === at) return null;
+    if (mark.file >= at + (delta < 0 ? 1 : 0)) {
+      return { ...mark, file: mark.file + delta };
+    }
+    return mark;
+  };
+
+  for (const [char, mark] of [...userMarks]) {
+    const next = adjust(mark);
+    if (next) userMarks.set(char, next);
+    else userMarks.delete(char);
+  }
+
+  if (quoteMark) quoteMark = adjust(quoteMark);
+}
+
+/** Removes a restored mark, like clrmark clearing file_marks "so
+ *  save_marks doesn't save it to history file". */
+export function dropFileMark(char: string): void {
+  fileMarks = fileMarks.filter(f => f.char !== char);
+}
+
+/** Canonical file name, like og's lrealpath (falls back unchanged). */
+export function realPath(path: string): string {
+  try {
+    return fs.realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+// file-switch hooks for cross-file marks, registered by the pager to
+// avoid a module cycle with commands.ts
+let markSwitchHook: (mark: Mark, sline: number) => void = () => {};
+let markEditHook: (path: string, char: string, sline: number) => void =
+  () => {};
+
+/** Registers gomark's edit_ifile paths: switching to an open entry's
+ *  mark, and opening a restored mark's file by name. */
+export function onMarkSwitch(
+  switchFn: (mark: Mark, sline: number) => void,
+  editFn: (path: string, char: string, sline: number) => void
+): void {
+  markSwitchHook = switchFn;
+  markEditHook = editFn;
+}
+
 /** Lists the active user marks, for --save-marks persistence. */
 export function allMarks(): { char: string, mark: Mark }[] {
-  return [...userMarks].map(([char, mark]) => ({ char, mark }));
+  const all = [...userMarks].map(([char, mark]) => ({ char, mark }));
+
+  // og's save_marks loop covers LASTMARK: the ' position persists
+  // and '' works across sessions
+  if (quoteMark) all.push({ char: "'", mark: quoteMark });
+
+  return all;
 }
 
 /**
@@ -399,8 +464,19 @@ export function adoptFileMarks(index: number, lines: string[]): void {
   const path = files.list[index]?.path;
   if (!path || path === '-') return;
 
+  // og's mark_check_ifile compares canonical names (lrealpath vs
+  // get_real_filename): a mark saved absolute binds to a relative open
+  const real = realPath(path);
+
   for (const restored of fileMarks) {
-    if (restored.path !== path || userMarks.has(restored.char)) continue;
+    if (realPath(restored.path) !== real) continue;
+
+    // restored marks never displace one set this session (og: an
+    // active cmark cleared m_filename, so mark_check_ifile skips it)
+    if (restored.char === "'" ? quoteMark !== null
+      : userMarks.has(restored.char)) {
+      continue;
+    }
 
     let bytes = 0, row = 0;
 
@@ -410,12 +486,20 @@ export function adoptFileMarks(index: number, lines: string[]): void {
       row++;
     }
 
-    userMarks.set(restored.char, {
+    const mark = {
       file: index,
       row,
       subRow: 0,
       sline: restored.sline,
-    });
+    };
+
+    // the restored LASTMARK lands in the ' slot, like restore_mark
+    // filling marks[LASTMARK]: '' works across sessions
+    if (restored.char === "'") {
+      quoteMark = mark;
+    } else {
+      userMarks.set(restored.char, mark);
+    }
   }
 }
 
@@ -549,15 +633,20 @@ function setMark(
       subRow: 0,
       sline: bottom ? config.window - 1 : 1,
     });
-    return;
+  } else {
+    userMarks.set(char, bottom ? lastVisiblePosition(content) : {
+      file: files.index,
+      row: config.row,
+      subRow: config.subRow,
+      sline: config.blankTop + 1,
+    });
   }
 
-  userMarks.set(char, bottom ? lastVisiblePosition(content) : {
-    file: files.index,
-    row: config.row,
-    subRow: config.subRow,
-    sline: config.blankTop + 1,
-  });
+  // og's setmark raises marks_modified BEFORE its autosave check, so
+  // the very first m of a session writes immediately (unlike search
+  // history's cmd_accept ordering)
+  touchMarks();
+  if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
 }
 
 /**
@@ -626,16 +715,39 @@ function goMark(content: string[], char: string, sline: number): void {
       mark = userMarks.get(char);
 
       if (!mark) {
+        // og's restored marks live by filename until requested:
+        // gomark's mark_get_ifile + edit_ifile open the file
+        const restored = fileMarks.find(f => f.char === char);
+
+        if (restored) {
+          markEditHook(restored.path, char, sline);
+          return;
+        }
+
         search.message = 'Mark not set';
         return;
       }
   }
 
   if (mark.file !== files.index) {
-    search.message = 'Mark not in current file';
+    // og's gomark edits the mark's file (edit_ifile) and jumps there;
+    // "Mark not in current file" belongs to markpos (the | command)
+    markSwitchHook(mark, sline);
     return;
   }
 
+  jumpToMark(content, mark, sline);
+}
+
+/**
+ * Lands a resolved mark on its screen line, gomark's jump_loc tail.
+ */
+export function jumpToMark(
+  content: string[],
+  mark: Mark,
+  sline: number,
+  fresh: boolean = false
+): void {
   if (mark.row >= content.length) {
     search.message = 'Cannot seek to that file position';
     return;
@@ -650,7 +762,26 @@ function goMark(content: string[], char: string, sline: number): void {
   const line = sline || mark.sline;
   const sindex = Math.min(Math.max(line, 1), config.window - 1) - 1;
 
-  jumpLoc(content, mark.row, subRow, sindex);
+  jumpLoc(content, mark.row, subRow, sindex, fresh);
+}
+
+/**
+ * Finishes a cross-file gomark once its file is open: the mark should
+ * have been adopted by the open (mark_check_ifile).
+ */
+export function jumpToUserMark(
+  content: string[],
+  char: string,
+  sline: number
+): void {
+  const mark = userMarks.get(char);
+
+  if (!mark || mark.file !== files.index) {
+    search.message = 'Mark not set';
+    return;
+  }
+
+  jumpToMark(content, mark, sline, true);
 }
 
 /**
@@ -666,13 +797,19 @@ function clearMark(char: string): void {
     return;
   }
 
-  if (!userMarks.delete(char)) {
+  // og's clrmark clears file_marks too - without this the restored
+  // copy resurrects the cleared mark at the next write
+  const restored = fileMarks.length;
+  dropFileMark(char);
+
+  if (!userMarks.delete(char) && fileMarks.length === restored) {
     ringBell();
     return;
   }
 
   // og's clrmark autosaves the history file too (--save-marks with
   // an 'm' autosave action)
+  touchMarks();
   if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
 }
 
@@ -694,7 +831,8 @@ export function jumpLoc(
   content: string[],
   row: number,
   subRow: number,
-  sindex: number
+  sindex: number,
+  fresh: boolean = false
 ): void {
   // a jump above the pinned header lands at their start, like less's
   // jump_loc clamping the target through after_header_pos
@@ -705,7 +843,9 @@ export function jumpLoc(
     subRow = 0;
   }
 
-  if (targetScreenRow(content, row, subRow) === sindex) {
+  // og's edit_ifile trashes the screen: a jump right after a file
+  // switch never takes the already-there bell shortcut
+  if (!fresh && targetScreenRow(content, row, subRow) === sindex) {
     ringBell('eof');
     return;
   }
@@ -875,6 +1015,10 @@ function displayDistance(
  */
 export function recordLastPosition(): void {
   if (mode.HELP) return;
+
+  // og's lastmark raises marks_modified: nearly any jump dirties
+  // the history file, so og rewrites it at quit
+  touchMarks();
 
   quoteMark = {
     file: files.index,

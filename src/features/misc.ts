@@ -46,7 +46,7 @@ export function setShellHistory(entries: string[]): void {
 /**
  * Records an accepted shell command, like cmd_addhist for ml_shell.
  */
-function addShellHistory(text: string): void {
+export function addShellHistory(text: string): void {
   if (!text) return;
 
   if (optNoHistDups()) {
@@ -55,12 +55,19 @@ function addShellHistory(text: string): void {
     shellHistory.push(...kept);
   }
 
-  if (shellHistory[shellHistory.length - 1] !== text) {
+  const pushed = shellHistory[shellHistory.length - 1] !== text;
+
+  if (pushed) {
     shellHistory.push(text);
     if (shellHistory.length > 100) shellHistory.shift();
+    recordHook(text);
   }
 
   if (optAutosaveAction('!')) autosaveHook();
+
+  // like searching's addHistory: cmd_accept raises the modified
+  // flag after cmd_addhist's autosave attempt
+  touchHook();
 }
 
 // history autosave hook, registered by the pager like searching's
@@ -69,6 +76,20 @@ let autosaveHook: () => void = () => {};
 /** Registers the --autosave history file writer. */
 export function onShellAutosave(fn: () => void): void {
   autosaveHook = fn;
+}
+
+// histfile hooks, same cycle-avoiding registration as searching's
+let recordHook: (entry: string) => void = () => {};
+let touchHook: () => void = () => {};
+
+/** Registers the new-entry recorder. */
+export function onShellHistRecord(fn: (entry: string) => void): void {
+  recordHook = fn;
+}
+
+/** Registers the history modified-flag raiser (og's cmd_accept). */
+export function onShellHistTouch(fn: () => void): void {
+  touchHook = fn;
 }
 
 export const miscInput = {
@@ -227,12 +248,6 @@ export function miscInputKey(key: string): 'run' | 'pending' | 'cancel' {
       miscInput.pending = '';
       miscInput.text = cmdText();
       cmdClose();
-
-      if (kind === '!' || kind === '#' || kind === '|') {
-        // ^P prefixed commands still join the history bare, like og
-        // eslint-disable-next-line no-control-regex
-        addShellHistory(miscInput.text.replace(/^\x10/, ''));
-      }
 
       return 'run';
     }

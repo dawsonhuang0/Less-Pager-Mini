@@ -348,12 +348,29 @@ export function onAutosave(fn: () => void): void {
   autosaveHook = fn;
 }
 
+// histfile hooks, same cycle-avoiding registration: the entry
+// recorder is og's cmdbuf.c:798 entry-modified bit (raised BEFORE
+// the autosave attempt), the touch hook is cmd_accept's list flag
+// (raised AFTER it - the attempt sees only earlier state)
+let recordHook: (entry: string) => void = () => {};
+let touchHook: () => void = () => {};
+
+/** Registers the new-entry recorder. */
+export function onHistRecord(fn: (entry: string) => void): void {
+  recordHook = fn;
+}
+
+/** Registers the history modified-flag raiser (og's cmd_accept). */
+export function onHistTouch(fn: () => void): void {
+  touchHook = fn;
+}
+
 /**
  * Records an accepted pattern, like cmd_accept: empty and repeated
  * patterns stay out, the list caps at less's history size, and
  * --autosave writes the file right away.
  */
-function addHistory(pattern: string): void {
+export function addHistory(pattern: string): void {
   if (!pattern) return;
 
   // --no-histdups drops older copies from anywhere in the list
@@ -362,13 +379,21 @@ function addHistory(pattern: string): void {
   }
 
   const last = search.history[search.history.length - 1];
+  const pushed = pattern !== last;
 
-  if (pattern !== last) {
+  if (pushed) {
     search.history.push(pattern);
     if (search.history.length > HISTORY_LIMIT) search.history.shift();
+    recordHook(pattern);
   }
 
   if (optAutosaveAction('/')) autosaveHook();
+
+  // og's cmd_accept raises the list modified flag only AFTER
+  // cmd_addhist's autosave attempt: the first accept of a clean
+  // session skips its own autosave unless the action already
+  // dirtied the file (a far search jump's lastmark)
+  touchHook();
 }
 
 function handleModifier(input: SearchInput, key: string): boolean {
@@ -454,24 +479,32 @@ export function execSearch(content: string[]): void {
   const pattern = input.chars.join('');
   const dir: 1 | -1 = input.type === '?' ? -1 : 1;
 
-  addHistory(pattern);
+  // og's cmd_accept runs at the TOP OF THE NEXT command iteration
+  // (command.c:1517), i.e. after the search executed: its autosave
+  // attempt sees the jump's lastmark dirtying the file
+  try {
+    if (pattern) {
+      if (!compile(pattern, input.noRegex, input.invert)) return;
+      search.subs = new Set(input.subs);
+    } else if (!search.regex) {
+      search.message = 'No previous regular expression';
+      return;
+    }
 
-  if (pattern) {
-    if (!compile(pattern, input.noRegex, input.invert)) return;
-    search.subs = new Set(input.subs);
-  } else if (!search.regex) {
-    search.message = 'No previous regular expression';
-    return;
+    // every search unhides highlighting, like less resetting
+    // hide_hilite
+    search.highlight = true;
+    search.lastDir = dir;
+
+    if (input.keep) return;
+
+    // an empty pattern repeats the previous search past the current
+    // position
+    findMatch(content, dir, input.count, input.fromStart, input.wrap,
+      !pattern);
+  } finally {
+    addHistory(pattern);
   }
-
-  // every search unhides highlighting, like less resetting hide_hilite
-  search.highlight = true;
-  search.lastDir = dir;
-
-  if (input.keep) return;
-
-  // an empty pattern repeats the previous search past the current position
-  findMatch(content, dir, input.count, input.fromStart, input.wrap, !pattern);
 }
 
 type LineFilter = (line: string) => boolean;

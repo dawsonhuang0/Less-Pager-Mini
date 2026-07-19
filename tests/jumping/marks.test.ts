@@ -16,8 +16,13 @@ import {
   startGoMark,
   startClearMark,
   resetMarks,
-  recordLastPosition
+  recordLastPosition,
+  setFileMarks,
+  getFileMarks,
+  adoptFileMarks
 } from '../../src/features/jumping';
+
+import { files } from '../../src/features/files';
 
 const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(
   () => true
@@ -320,5 +325,44 @@ describe('help mode', () => {
     goMark('a');
     expect(config.row).toBe(0);
     expect(writeSpy).toHaveBeenCalledWith('\x07');
+  });
+});
+
+describe('history-file marks', () => {
+  it('adopts restored marks into the active table, like mark_check_ifile',
+    () => {
+    files.list = [{ path: '/nope/f.txt', lines: null, size: 0,
+      sizeKnown: true, saved: null }];
+    files.index = 0;
+
+    setFileMarks([
+      { char: 'a', sline: 1, pos: 6, path: '/nope/f.txt' },
+      { char: "'", sline: 1, pos: 3, path: '/nope/f.txt' },
+    ]);
+    adoptFileMarks(0, content);
+
+    // pos 6 = start of l3; the restored lastmark works via ''
+    goMark('a');
+    expect(config.row).toBe(2);
+
+    goMark("'");
+    expect(config.row).toBe(1);
+  });
+
+  it('clearing a mark purges its restored copy (clrmark file_marks)',
+    () => {
+    files.list = [{ path: '/nope/f.txt', lines: null, size: 0,
+      sizeKnown: true, saved: null }];
+    files.index = 0;
+
+    setFileMarks([{ char: 'b', sline: 1, pos: 0, path: '/nope/f.txt' }]);
+    adoptFileMarks(0, content);
+
+    startClearMark();
+    marksKey(content, 'b');
+
+    expect(getFileMarks().some(f => f.char === 'b')).toBe(false);
+    goMark('b');
+    expect(search.message).toBe('Mark not set');
   });
 });

@@ -30,12 +30,14 @@ import {
 import { search, repeatSearch, execFilter }
   from './features/searching';
 
-import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition }
+import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition,
+  marksFileSpliced }
   from './features/jumping';
 
 import { stepTag, tagRow, currTagFile } from './features/tags';
 
 import { pipeMark, shellCommand, setFirstCmd, getFirstCmd,
+  addShellHistory,
   logFileTarget, writeLogFile } from './features/misc';
 
 import { prExpand } from './features/prompt';
@@ -137,6 +139,7 @@ export function openByName(name: string): boolean {
     at = files.index + 1;
     files.list.splice(at, 0, { path: name, lines: null, size: 0,
       sizeKnown: true, saved: null });
+    marksFileSpliced(at, 1);
 
     if (!loadFile(at)) {
       // a binary-looking file keeps its entry and asks first,
@@ -152,6 +155,7 @@ export function openByName(name: string): boolean {
       }
 
       files.list.splice(at, 1);
+      marksFileSpliced(at, -1);
       return false;
     }
   } else if (!loadFile(at)) {
@@ -244,7 +248,9 @@ export function removeFile(): void {
 
   if (!switchToFile(target)) return;
 
+  // og's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
+  marksFileSpliced(removed, -1);
   if (files.index > removed) files.index--;
 }
 
@@ -279,6 +285,7 @@ export function runExamine(): void {
         sizeKnown: true,
         saved: null,
       });
+      marksFileSpliced(at, 1);
       inserted = true;
     }
 
@@ -299,7 +306,10 @@ export function runExamine(): void {
         continue;
       }
 
-      if (inserted) files.list.splice(at, 1);
+      if (inserted) {
+        files.list.splice(at, 1);
+        marksFileSpliced(at, -1);
+      }
       continue;
     }
 
@@ -345,10 +355,13 @@ export function runShell(cmd: string, doneMsg: string | null, input?: string): v
     : { stdio: ['pipe', 'inherit', 'inherit'], input });
 
   // og's lsystem re-edits the current file on return (reedit_ifile):
-  // the filename prompt shows again (new_file), and the trashed
-  // screen's repaint abandons a squished short first paint
+  // the filename prompt shows again (new_file), the trashed screen's
+  // repaint abandons a squished short first paint, and edit_ifile
+  // records the last position (lastmark, edit.c:385) - raising
+  // marks_modified before the command's history accept
   files.newFile = true;
   mode.INIT = false;
+  recordLastPosition();
 
   // raw single-key input for the done pause, still on the shell screen
   keyboard().setRawMode(true);
@@ -460,6 +473,10 @@ export function runMiscInput(
   kind: '!' | '#' | '|' | 's' | 'S' | '+',
   text: string
 ): void {
+  // ^P prefixed commands still join the history bare, like og
+  // eslint-disable-next-line no-control-regex
+  const bare = text.replace(/^\x10/, '');
+
   if (kind === '!') {
     const { cmd, doneMsg } = shellCommand(text);
     runShell(cmd, doneMsg);
@@ -484,6 +501,13 @@ export function runMiscInput(
       writeLogFile(session.content, false);
     }
   }
+  // og's cmd_accept runs at the top of the NEXT command iteration:
+  // the shell mlist accepts after the command ran, so its autosave
+  // attempt sees lsystem's reedit lastmark having dirtied the file
+  if (kind === '!' || kind === '#' || kind === '|') {
+    addShellHistory(bare);
+  }
+
 }
 
 export function applyFilter(): void {

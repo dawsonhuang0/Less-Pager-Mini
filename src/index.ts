@@ -18,7 +18,7 @@ import { calculateDimensions, suspendTerminal, enterScreen }
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
   stepFile, removeFile, runExamine, runEditor, runMiscInput,
-  applyFilter } from "./commands";
+  applyFilter, openByName } from "./commands";
 
 import {
   config,
@@ -86,7 +86,9 @@ import {
   clearHighlight,
   incrementalSearch,
   restoreSearchOrigin,
-  onAutosave
+  onAutosave,
+  onHistTouch,
+  onHistRecord
 } from "./features/searching";
 
 import {
@@ -106,7 +108,11 @@ import {
   recordLastPosition,
   resetMarks,
   setMouseMark,
-  goMouseMark
+  goMouseMark,
+  onMarkSwitch,
+  jumpToMark,
+  jumpToUserMark,
+  adoptFileMarks
 } from "./features/jumping";
 
 import {
@@ -191,7 +197,9 @@ import {
   printVersion,
   applyStartupLogFile,
   takeCmdAtPrompt,
-  onShellAutosave
+  onShellAutosave,
+  onShellHistTouch,
+  onShellHistRecord
 } from "./features/misc";
 
 import { prExpand } from "./features/prompt";
@@ -219,7 +227,8 @@ import {
 } from "./features/lesskey";
 
 
-import { loadHistory, saveHistory } from "./histfile";
+import { loadHistory, saveHistory, touchSearchList, touchShellList,
+  recordSearchEntry, recordShellEntry } from "./histfile";
 
 import { chopLongLines } from "./lines/chopLongLines";
 import { wrapLongLines } from "./lines/wrapLongLines";
@@ -1387,10 +1396,9 @@ function dispatchKey(sequence: string): void {
       exitHelp();
     }
 
+    // --autosave with `m` writes changed marks right away, inside
+    // setMark/clearMark like og (gomark never saves immediately)
     marksKey(session.content, session.key);
-
-    // --autosave with `m` writes changed marks right away
-    if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
 
     render(session.content, session.buffer);
     return;
@@ -1721,10 +1729,35 @@ function extraBells(): void {
 }
 
 function init() {
+  resetMarks();
   loadHistory();
   onAutosave(saveHistory);
   onShellAutosave(saveHistory);
-  resetMarks();
+  onHistTouch(touchSearchList);
+  onHistRecord(recordSearchEntry);
+  onShellHistTouch(touchShellList);
+  onShellHistRecord(recordShellEntry);
+
+  // og's gomark edits the mark's file: switch to an open entry, or
+  // open a restored mark's file by name (mark_get_ifile + edit_ifile)
+  onMarkSwitch(
+    (mark, sline) => {
+      if (!switchToFile(mark.file)) return;
+      jumpToMark(session.content, mark, sline, true);
+    },
+    (path, char, sline) => {
+      if (!openByName(path)) return;
+      jumpToUserMark(session.content, char, sline);
+    }
+  );
+
+  // og's init_cmdhist runs before edit_first, so the restored marks
+  // bind to the first file as it opens; ours opened it already -
+  // bind them now (mark_check_ifile)
+  if (files.index >= 0 && session.fullContent.length) {
+    adoptFileMarks(files.index, session.fullContent);
+  }
+
   resetRender();
   resetDumbPaint();
 
@@ -1955,6 +1988,11 @@ function prepareHelp(): void {
 function cleanUp(): void {
   endFollow();
   closeAlt(files.list[files.index]);
+
+  // og's quit() edit-closes the file, whose lastmark raises
+  // marks_modified (edit.c:385) - every clean tty quit with a screen
+  // position rewrites the history file, even a plain j session
+  if (process.stdout.isTTY && session.content.length) recordLastPosition();
   saveHistory();
 
   // og's putchr fires --end-prompt on the first output after the
