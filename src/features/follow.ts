@@ -12,7 +12,7 @@ import { session, deriveContent } from '../session';
 
 import { render, ringBell, calculateEOF } from '../helpers';
 
-import { lastLine } from './jumping';
+import { lastLine, endPad } from './jumping';
 
 import { loadFile, bottomRow, revealPipeEnd } from './files';
 
@@ -274,7 +274,10 @@ export function beginFollow(kind: FollowKind): void {
  * forw_loop's jump_forw_buffered.
  */
 export function pinToEnd(): void {
-  if (config.row !== config.endRow || config.subRow !== config.endSubRow) {
+  // short content that grew needs its over-BOF pad re-derived even
+  // when the top position is unchanged (row 0 while under a screen)
+  if (config.row !== config.endRow || config.subRow !== config.endSubRow ||
+      config.blankTop !== endPad(session.content)) {
     lastLine(session.content, 0);
   }
 }

@@ -169,3 +169,40 @@ describe('wrapLongLines', () => {
     expect(mode.EOF).toBe(true);
   });
 });
+
+describe('short-content end jump (jump_loc null-row pad)', () => {
+  const short = ['1', '2', '3', '4'];
+
+  beforeEach(() => {
+    config.chopLongLines = true;
+    config.blankTop = 0;
+    calculateEOF(short);
+  });
+
+  it('G bottom-anchors under tildes, second G bells', () => {
+    expect(lastLine(short, 0)).toBe(true);
+    expect(config.row).toBe(0);
+    expect(config.blankTop).toBe(config.window - 1 - short.length);
+    expect(mode.EOF).toBe(true);
+
+    // og's bot_pos == end_pos on the anchored screen: eof_bell
+    expect(lastLine(short, 0)).toBe(false);
+    expect(config.blankTop).toBe(config.window - 1 - short.length);
+  });
+
+  it('re-derives the pad when grown content still fits', () => {
+    lastLine(short, 0);
+
+    const grown = [...short, '5', '6'];
+    calculateEOF(grown);
+
+    expect(lastLine(grown, 0)).toBe(true);
+    expect(config.blankTop).toBe(config.window - 1 - grown.length);
+  });
+
+  it('keeps no pad for content taller than the screen', () => {
+    calculateEOF(content);
+    lastLine(content, 0);
+    expect(config.blankTop).toBe(0);
+  });
+});

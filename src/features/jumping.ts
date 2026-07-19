@@ -72,7 +72,10 @@ export function lastLine(content: string[], lineNum: number): boolean {
     return false;
   }
 
-  if (config.row === config.endRow && config.subRow === config.endSubRow) {
+  const pad = endPad(content);
+
+  if (config.row === config.endRow && config.subRow === config.endSubRow &&
+      config.blankTop === pad) {
     ringBell('eof');
     return false;
   }
@@ -80,7 +83,26 @@ export function lastLine(content: string[], lineNum: number): boolean {
   // jump_forw records the last position unconditionally
   recordLastPosition();
   setTop(config.endRow, config.endSubRow);
+  config.blankTop = pad;
   return true;
+}
+
+/**
+ * Null rows above BOF for an end jump on short content, like jump_loc's
+ * back-walk from the last line hitting BOF and handing the remainder to
+ * forw as blank lines at the top of the screen (jump.c:316): G and F
+ * bottom-anchor a file shorter than the window under a run of tildes.
+ */
+export function endPad(content: string[]): number {
+  const cap = config.window - 1;
+  let rows = 0;
+
+  for (const line of content) {
+    rows += maxSubRow(line) + 1;
+    if (rows >= cap) return 0;
+  }
+
+  return cap - rows;
 }
 
 /**
