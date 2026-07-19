@@ -26,6 +26,40 @@ const isFormFeed = (line: string): boolean =>
   line.startsWith('\f') || line.startsWith(INVERSE_ON + '^L');
 
 /**
+ * Caps a forward scroll at og's --form-feed stop: forw() checks each
+ * newly printed bottom line (forwback.c:366) and breaks with the \f
+ * line as the LAST visible row on screen.
+ */
+function ffCapForward(content: string[], offset: number): number {
+  let r = config.row;
+  let s = config.subRow;
+  let steps = Math.max(config.window - 2 - config.blankTop, 0);
+
+  const advance = (): boolean => {
+    if (s < maxSubRow(content[r])) {
+      s++;
+      return true;
+    }
+
+    if (r + 1 >= content.length) return false;
+    r++;
+    s = 0;
+    return true;
+  };
+
+  // find the current bottom display row
+  while (steps > 0 && advance()) steps--;
+
+  // the first incoming row that STARTS a  line caps the move there
+  for (let k = 1; k <= offset; k++) {
+    if (!advance()) break;
+    if (s === 0 && isFormFeed(content[r])) return k;
+  }
+
+  return offset;
+}
+
+/**
  * Remembers the first unread line before a forward movement, like less
  * setting attnpos for -w/-W: `-W` marks any forward movement, `-w`
  * only full screens.
@@ -135,19 +169,12 @@ export function lineForward(
     ignoreEOF = true;
   }
 
+  // og's forw checks each newly printed BOTTOM line (forwback.c:366):
+  // the scroll stops with the \f line as the LAST visible row; jumps
+  // pass do_stop_on_form_feed=FALSE and never stop
+  if (optStopOnFormFeed()) offset = ffCapForward(content, offset);
+
   if (chopLine() || config.col) {
-    // --form-feed stops the scroll with a \f line at the top
-    if (optStopOnFormFeed()) {
-      const limit = Math.min(config.row + offset, content.length - 1);
-
-      for (let row = config.row + 1; row <= limit; row++) {
-        if (isFormFeed(content[row])) {
-          offset = row - config.row;
-          break;
-        }
-      }
-    }
-
     const lastRow = Math.max(content.length - config.window + 1, 0);
     const startRow = config.row;
     const target = config.row + offset;
@@ -182,11 +209,6 @@ export function lineForward(
 
     config.row++;
     config.subRow = 0;
-
-    if (optStopOnFormFeed() && isFormFeed(content[config.row])) {
-      offset = 0;
-      break;
-    }
   }
 
   if (config.row === maxRow) {
