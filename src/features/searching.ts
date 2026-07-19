@@ -20,7 +20,7 @@ import {
 
 import { maxSubRow } from "../lines/helpers";
 
-import { jumpLoc } from "./jumping";
+import { jumpLoc, subRowStart, subRowOfIndex } from "./jumping";
 
 import { revealSize } from "./files";
 
@@ -809,6 +809,78 @@ function stripStyles(line: string): string {
   return line.replace(STYLE_REGEX_G, '');
 }
 
+/**
+ * Converts a candidate line like matchesLine and maps each converted
+ * index back to its raw string index, like og's cvt chpos array.
+ */
+function convertWithMap(raw: string): { text: string; map: number[] } {
+  const spans: Array<[number, number]> = [];
+
+  for (const m of raw.matchAll(STYLE_REGEX_G)) {
+    spans.push([m.index, m.index + m[0].length]);
+  }
+
+  const out: Array<{ ch: string; at: number }> = [];
+  let s = 0;
+
+  for (let i = 0; i < raw.length; i++) {
+    if (s < spans.length && i === spans[s][0]) {
+      i = spans[s][1] - 1;
+      s++;
+      continue;
+    }
+
+    const ch = raw[i];
+
+    // overstrikes collapse like cvt_text's CVT_BS
+    if (ch === '\x08' && out.length &&
+      out[out.length - 1].ch !== '\x08') {
+      out.pop();
+      continue;
+    }
+
+    out.push({ ch, at: i });
+  }
+
+  // CVT_CRLF: a trailing carriage return drops
+  if (out.length && out[out.length - 1].ch === '\r') out.pop();
+
+  return { text: out.map(o => o.ch).join(''), map: out.map(o => o.at) };
+}
+
+/**
+ * Locates the first match's end in a candidate line, like og's ep[0]
+ * after match_pattern.
+ *
+ * @returns The end as a converted-text offset (og's end_off) and the
+ *          raw index it maps to (og's chpos[end_off]), or null when
+ *          there is no real match (inverted searches have no ep).
+ */
+function matchEnd(
+  candidate: string
+): { conv: number; raw: number } | null {
+  const regex = search.regex;
+  if (!regex || search.invert) return null;
+
+  let { text, map } = convertWithMap(candidate);
+
+  if (optNoSearchHeaders().cols && optHeader().cols > 0) {
+    const kept = skipColumns(text, optHeader().cols);
+    map = map.slice(text.length - kept.length);
+    text = kept;
+  }
+
+  const m = regex.exec(text);
+  if (!m) return null;
+
+  // og 707 never fills chpos past the last char (cvt_text's trailing
+  // assignment sits behind a FIXME comment) and the calloc'd array
+  // reads 0 there: a match ending exactly at the line end computes
+  // tpos = linepos and never bottom-jumps
+  const conv = m.index + m[0].length;
+  return { conv, raw: map[conv] ?? 0 };
+}
+
 function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
   if (!subs.size) return regex.test(text);
 
@@ -882,11 +954,14 @@ function searchSkipsRow(row: number): boolean {
 /**
  * Finds the N-th match and jumps to it.
  *
- * - Start positions follow -a/-A, like less's search_pos: the default
- *   (state 2) includes the whole displayed screen for fresh searches,
- *   `-a` skips the screen entirely, and state 0 starts fresh searches
- *   at the -j target line like repeats.
+ * - The start is a screen position like less's search_pos: the
+ *   default (state 2) includes the whole displayed screen for fresh
+ *   searches, `-a` skips the screen entirely, and state 0 starts
+ *   fresh searches at the -j target line like repeats.
  * - Repeats (`afterTarget`) start just past the target line.
+ * - A start falling mid-line (a wrapped line straddling the screen
+ *   edge) bounds the first candidate: forward searches read the
+ *   remainder and land on its sub-row, backward searches the head.
  */
 function findMatch(
   content: string[],
@@ -897,31 +972,60 @@ function findMatch(
   afterTarget: boolean
 ): void {
   let first: number;
+  let firstOffset = 0;
+  let firstSub = 0;
 
   if (fromStart) {
     first = dir > 0 ? 0 : content.length - 1;
-  } else if (afterTarget || optHowSearch() === 0) {
-    const target = Math.min(config.row + jumpSindex(), content.length - 1);
-    first = dir > 0 ? target + 1 : target - 1;
-  } else if (optHowSearch() === 1) {
-    first = dir > 0 ? lastVisibleRow(content) + 1 : config.row - 1;
   } else {
-    first = dir > 0 ? config.row : lastVisibleRow(content);
+    const start = searchStartPos(content, dir, afterTarget);
+
+    if (start === null) {
+      // og's search_pos found no place to start from
+      search.message = 'Nothing to search';
+      return;
+    }
+
+    if (dir > 0) {
+      first = start.row;
+      if (start.sub > 0) {
+        firstSub = start.sub;
+        firstOffset = subRowStart(content[first], start.sub);
+      }
+    } else if (start.sub > 0) {
+      // backward candidates lie strictly before the position: the
+      // head of a mid-line row first, then whole lines above it
+      first = start.row;
+      firstOffset = subRowStart(content[first], start.sub);
+    } else {
+      first = start.row - 1;
+    }
   }
 
   const state = { remaining: count };
-  const main = scanRange(content, first, dir, null, state);
+  const main = scanRange(content, first, dir, null, state, firstOffset);
 
   if (main === 'stop') return;
 
   if (main !== 'miss') {
-    jumpTo(content, main);
+    const bottomSub =
+      lastLineSub(content, main, dir, first, firstOffset, firstSub);
+
+    if (bottomSub !== null) {
+      jumpBottom(content, main, bottomSub);
+    } else {
+      jumpTo(content, main, main === first ? firstSub : 0);
+    }
+
     return;
   }
 
   if (wrap) {
     const start = dir > 0 ? 0 : content.length - 1;
-    const wrapped = scanRange(content, start, dir, first, state);
+    // a partial first row leaves its other part to the wrapped scan,
+    // which reads the boundary line whole like og's endpos check
+    const until = firstOffset > 0 ? first + dir : first;
+    const wrapped = scanRange(content, start, dir, until, state);
 
     if (wrapped === 'stop') return;
 
@@ -930,7 +1034,13 @@ function findMatch(
       // pipe's length becomes known, like og's ch
       if (dir > 0) revealSize();
 
-      jumpTo(content, wrapped);
+      const wrapSub = lastLineSub(content, wrapped, dir, start, 0, 0);
+
+      if (wrapSub !== null) {
+        jumpBottom(content, wrapped, wrapSub);
+      } else {
+        jumpTo(content, wrapped);
+      }
 
       // ^W wrap reports where the search resumed, like og's
       // search_wrapped message
@@ -1006,6 +1116,9 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
  * Scans a row range for the remaining matches in guarded slices.
  *
  * @param until - Exclusive stop row for a wrapped scan, or null.
+ * @param fromOffset - Raw string index bounding the partial first
+ *          row: forward scans read from it, backward scans up to it,
+ *          like og reading a raw line at a mid-line start position.
  * @returns The matching row, `miss`, or `stop` after an interrupt or
  *          a dropped catastrophic pattern.
  */
@@ -1014,7 +1127,8 @@ function scanRange(
   from: number,
   dir: 1 | -1,
   until: number | null,
-  state: { remaining: number }
+  state: { remaining: number },
+  fromOffset: number = 0
 ): number | 'miss' | 'stop' {
   let row = from;
   let hit = -1;
@@ -1024,7 +1138,13 @@ function scanRange(
     let steps = 0;
 
     while (row >= 0 && row < content.length && row !== until) {
-      if (!searchSkipsRow(row) && matchesLine(content[row]) &&
+      const line = row === from && fromOffset > 0
+        ? (dir > 0
+          ? content[row].slice(fromOffset)
+          : content[row].slice(0, fromOffset))
+        : content[row];
+
+      if (!searchSkipsRow(row) && matchesLine(line) &&
         --state.remaining === 0) {
         hit = row;
         return true;
@@ -1150,37 +1270,157 @@ export function searchInterrupted(): boolean {
   return false;
 }
 
+interface ScreenPos { row: number; sub: number }
+
 /**
- * Returns the last content row visible in the current window.
+ * The content position displayed at a screen row, like position():
+ * row `k` counted from the top of the window, the end-of-file
+ * position just past the last line (og's table entry pushed after
+ * the paint loop), or null beyond that on a short screen.
  */
-function lastVisibleRow(content: string[]): number {
-  const last = content.length - 1;
-  if (last < 0) return -1;
+function screenPos(content: string[], k: number): ScreenPos | null {
+  // blank rows above the top of the file hold no position
+  if (k < config.blankTop) return null;
+  k -= config.blankTop;
 
   if (chopLine() || config.col) {
-    return Math.min(config.row + config.window - 2, last);
+    const row = config.row + k;
+    return row > content.length ? null : { row, sub: 0 };
   }
 
   let row = config.row;
-  let rows = config.window - 1;
-  rows -= maxSubRow(content[row]) + 1 - config.subRow;
+  let sub = config.subRow;
 
-  while (rows > 0 && row < last) {
-    row++;
-    rows -= maxSubRow(content[row]) + 1;
+  for (let i = 0; i < k; i++) {
+    if (row >= content.length) return null;
+
+    if (sub < maxSubRow(content[row])) {
+      sub++;
+    } else {
+      row++;
+      sub = 0;
+    }
   }
 
-  return row;
+  return { row, sub };
 }
 
-function jumpTo(content: string[], row: number): void {
+/**
+ * Where a search range begins, like search_pos: a screen position
+ * resolved to its content row and sub-row.
+ *
+ * @returns The start, or null when there is nothing to search from.
+ */
+function searchStartPos(
+  content: string[],
+  dir: 1 | -1,
+  afterTarget: boolean
+): ScreenPos | null {
+  let k: number;
+  let addOne = false;
+
+  if (optHowSearch() === 1) {
+    // -a: the search does not include the current screen
+    k = dir > 0 ? config.window - 1 : 0;
+  } else if (optHowSearch() === 2 && !afterTarget) {
+    // the default includes all of the displayed screen
+    k = dir > 0 ? 0 : config.window - 1;
+  } else {
+    // state 0 and repeats start at the -j target line
+    k = jumpSindex();
+    if (dir > 0) addOne = true;
+  }
+
+  let p = screenPos(content, k);
+
+  if (p && addOne) {
+    // og's add_one reads past the whole target line (forw_raw_line)
+    p = p.row < content.length ? { row: p.row + 1, sub: 0 } : null;
+  }
+
+  // "look around for a plausible starting place": og walks the
+  // screen rows toward the search direction while the row is empty
+  while (p === null) {
+    k += dir;
+    if (k < 0 || k >= config.window) return null;
+    p = screenPos(content, k);
+  }
+
+  return p;
+}
+
+function jumpTo(content: string[], row: number, sub: number = 0): void {
   if (mode.INIT) mode.INIT = false;
 
   lastMatchRow = row;
 
-  // matches land on the -j target line, like search calling jump_loc
-  jumpLoc(content, row, 0, jumpSindex());
+  // og skips the jump when the match already sits at the -j target
+  // screen row (search.c: pos != opos), with no bell
+  const opos = screenPos(content, jumpSindex());
 
+  if (!opos || opos.row !== row || opos.sub !== sub) {
+    // matches land on the -j target line, like search calling
+    // jump_loc
+    jumpLoc(content, row, sub, jumpSindex());
+  }
+
+  shiftVisible(content, row);
+}
+
+/**
+ * og's long-line rule (search_range's plastlinepos): when a match in
+ * a wrapped line ends at least a quarter screenful into the candidate
+ * (`end_off >= swidth*sheight/4`) and its sub-row falls a screenful
+ * or more below the candidate's start (get_lastlinepos), the jump
+ * shows that sub-row on the bottom line instead.
+ *
+ * @returns The sub-row to land on the bottom line, or null.
+ */
+function lastLineSub(
+  content: string[],
+  row: number,
+  dir: 1 | -1,
+  fromRow: number,
+  fromOffset: number,
+  fromSub: number
+): number | null {
+  // og computes lastlinepos only when not chopping (the chop branch
+  // shifts horizontally instead)
+  if (chopLine() || config.col) return null;
+
+  const partial = row === fromRow && fromOffset > 0;
+  const candidate = partial
+    ? (dir > 0
+      ? content[row].slice(fromOffset)
+      : content[row].slice(0, fromOffset))
+    : content[row];
+
+  const end = matchEnd(candidate);
+  if (end === null) return null;
+
+  const sheight = config.window - jumpSindex();
+
+  if (end.conv < Math.floor(config.screenWidth * sheight / 4)) {
+    return null;
+  }
+
+  const base = partial && dir > 0 ? fromOffset : 0;
+  const startSub = partial && dir > 0 ? fromSub : 0;
+  const endSub = subRowOfIndex(content[row], base + end.raw);
+
+  return endSub - startSub >= sheight ? endSub : null;
+}
+
+/**
+ * Lands a long-line match with its final sub-row on the bottom line,
+ * like jump_loc(lastlinepos, BOTTOM).
+ */
+function jumpBottom(content: string[], row: number, sub: number): void {
+  if (mode.INIT) mode.INIT = false;
+
+  lastMatchRow = row;
+
+  jumpLoc(content, row, sub, config.window - 2);
   shiftVisible(content, row);
 }
 

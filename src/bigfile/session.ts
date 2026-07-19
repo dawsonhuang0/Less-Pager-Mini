@@ -35,7 +35,8 @@ import { loadHistory, saveHistory, touchSearchList, touchShellList,
   recordSearchEntry, recordShellEntry, touchMarks, onSessionMarks }
   from '../histfile';
 
-import { realPath, getFileMarks, dropFileMark }
+import { realPath, getFileMarks, dropFileMark, subRowStart,
+  subRowOfIndex }
   from '../features/jumping';
 
 import { displayPrType, optIntrChar, prChar } from '../options/shared';
@@ -43,7 +44,8 @@ import { displayPrType, optIntrChar, prChar } from '../options/shared';
 import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
-  optMouseReverse, optTildes, optPermaMarks, optAutosaveAction }
+  optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
+  optHowSearch, jumpSindex }
   from '../options';
 
 import {
@@ -423,10 +425,59 @@ export async function bigPager(path: string): Promise<void> {
   };
 
   /**
+   * og's plastlinepos (see searching.ts lastLineSub): the sub-row a
+   * long-line match lands on the bottom line, or null for a normal
+   * jump. The candidate is the display slice searched, `candStart`
+   * its index in the full display text, `startSub` its sub-row.
+   */
+  const bottomSub = (
+    display: string,
+    candidate: string,
+    candStart: number,
+    startSub: number
+  ): number | null => {
+    if (chopLine() || config.col || !pattern) return null;
+
+    const m = pattern.exec(candidate);
+    if (!m) return null;
+
+    const end = m.index + m[0].length;
+    const sheight = config.window - jumpSindex();
+
+    if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
+
+    // og 707's zeroed chpos sentinel: a match ending exactly at the
+    // line end computes tpos = linepos and never bottom-jumps
+    if (end >= candidate.length) return null;
+
+    const endSub = subRowOfIndex(display, candStart + end);
+    return endSub - startSub >= sheight ? endSub : null;
+  };
+
+  /** Sets the view for a match: the matched (sub-)line tops the
+   *  screen, or a long-line match bottoms its final sub-row, like
+   *  jump_loc(lastlinepos, BOTTOM). */
+  const landMatch = (pos: number, sub: number, bSub: number | null): void => {
+    if (bSub !== null) {
+      view.top = { pos, subRow: bSub };
+      view.lineBackward(config.window - 2);
+    } else {
+      view.top = { pos, subRow: sub };
+    }
+  };
+
+  /**
    * Streams the file line by line for the pattern, like og's search
    * walking ch buffers; ^X interrupts via the tty poll.
+   *
+   * The start is a screen position like og's search_pos (the same
+   * model as the regular session's findMatch): the default includes
+   * the whole displayed screen for fresh searches, -a skips it, and
+   * repeats start past the -j target line. A start falling mid-line
+   * bounds the first candidate to the remainder (forward) or head
+   * (backward) of the straddling line.
    */
-  const runSearch = (dir: 1 | -1, fromTop: number): boolean => {
+  const runSearch = (dir: 1 | -1, afterTarget: boolean): boolean => {
     if (!pattern) return false;
 
     // og's exec_mca starts with cmd_exec(): clear_bot + flush wipe
@@ -435,21 +486,68 @@ export async function bigPager(path: string): Promise<void> {
     // a stream write would defer behind the blocking loop
     fs.writeSync(1, `\x1b[${config.window};1H` + CLEAR_LINE);
 
+    // og search_pos: the screen row the range starts at
+    let k: number;
+    let addOne = false;
+
+    if (optHowSearch() === 1) {
+      k = dir > 0 ? config.window - 1 : 0;
+    } else if (optHowSearch() === 2 && !afterTarget) {
+      k = dir > 0 ? 0 : config.window - 1;
+    } else {
+      k = jumpSindex();
+      if (dir > 0) addOne = true;
+    }
+
+    let start = view.screenPos(k);
+
+    if (start && addOne) {
+      // og's add_one reads past the whole target line
+      const line = start.pos < bf.size ? forwLine(bf, start.pos) : null;
+      start = line ? { pos: line.next, subRow: 0 } : null;
+    }
+
+    // "look around for a plausible starting place" on short screens
+    while (start === null) {
+      k += dir;
+
+      if (k < 0 || k >= config.window) {
+        message = 'Nothing to search';
+        return false;
+      }
+
+      start = view.screenPos(k);
+    }
+
     let steps = 0;
 
     if (dir > 0) {
-      let pos = forwLine(bf, fromTop)?.next ?? bf.size;
+      let pos = start.pos;
+      let firstSub = start.subRow;
 
       while (pos < bf.size) {
         const line = forwLine(bf, pos);
         if (!line) break;
 
-        if (pattern.test(line.text)) {
-          view.top = { pos, subRow: 0 };
+        if (firstSub > 0) {
+          // the remainder of the line straddling the range start
+          const display = displayText(line.text);
+          const from = subRowStart(display, firstSub);
+          const tail = display.slice(from);
+
+          if (pattern.test(tail)) {
+            landMatch(pos, firstSub,
+              bottomSub(display, tail, from, firstSub));
+            return true;
+          }
+        } else if (pattern.test(line.text)) {
+          const display = displayText(line.text);
+          landMatch(pos, 0, bottomSub(display, display, 0, 0));
           return true;
         }
 
         pos = line.next;
+        firstSub = 0;
 
         if (++steps % 5000 === 0 && searchInterrupted()) {
           message = 'Search interrupted';
@@ -457,14 +555,31 @@ export async function bigPager(path: string): Promise<void> {
         }
       }
     } else {
-      let pos = fromTop;
+      let pos = start.pos;
+
+      // the head of a straddling line comes first, like og reading
+      // a partial raw line back from the start position
+      if (start.subRow > 0 && pos < bf.size) {
+        const line = forwLine(bf, pos);
+
+        if (line) {
+          const display = displayText(line.text);
+          const head = display.slice(0, subRowStart(display, start.subRow));
+
+          if (pattern.test(head)) {
+            landMatch(pos, 0, bottomSub(display, head, 0, 0));
+            return true;
+          }
+        }
+      }
 
       for (;;) {
         const prev = backLine(bf, pos);
         if (!prev) break;
 
         if (pattern.test(prev.text)) {
-          view.top = { pos: prev.start, subRow: 0 };
+          const display = displayText(prev.text);
+          landMatch(prev.start, 0, bottomSub(display, display, 0, 0));
           return true;
         }
 
@@ -1158,7 +1273,7 @@ export async function bigPager(path: string): Promise<void> {
                 pattern = new RegExp(text, caseless ? 'i' : '');
                 lastDir = searching === '/' ? 1 : -1;
                 remember();
-                runSearch(lastDir, view.top.pos);
+                runSearch(lastDir, false);
               } catch {
                 message = `Invalid pattern: ${text}`;
               }
@@ -1199,7 +1314,7 @@ export async function bigPager(path: string): Promise<void> {
 
         if (key === 'n' || key === 'N') {
           const dir = key === 'n' ? lastDir : (-lastDir as 1 | -1);
-          runSearch(dir, view.top.pos);
+          runSearch(dir, true);
           buffer = [];
           resolveBottom();
           draw();
@@ -1317,10 +1432,10 @@ export async function bigPager(path: string): Promise<void> {
             break;
           case 'SPAN_REPEAT_SEARCH':
             // a single-file list: ESC-n behaves like n
-            runSearch(lastDir, view.top.pos);
+            runSearch(lastDir, true);
             break;
           case 'SPAN_REVERSE_SEARCH':
-            runSearch(-lastDir as 1 | -1, view.top.pos);
+            runSearch(-lastDir as 1 | -1, true);
             break;
           case 'PERCENT_LINE':
             remember();

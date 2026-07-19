@@ -303,7 +303,7 @@ export function matchBracket(
  * @param line - The raw content line.
  * @param subRow - Wrapped sub-row index.
  */
-function subRowStart(line: string, subRow: number): number {
+export function subRowStart(line: string, subRow: number): number {
   if (subRow === 0) return 0;
 
   // --wordwrap boundaries live in the layout, even for plain lines
@@ -323,6 +323,16 @@ function subRowStart(line: string, subRow: number): number {
   }
 
   return index;
+}
+
+/**
+ * Returns the sub-row whose range contains a raw string index; an
+ * index exactly on a wrap boundary belongs to the sub-row it starts.
+ */
+export function subRowOfIndex(line: string, index: number): number {
+  let sub = maxSubRow(line);
+  while (sub > 0 && subRowStart(line, sub) > index) sub--;
+  return sub;
 }
 
 /**

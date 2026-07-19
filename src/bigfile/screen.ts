@@ -87,6 +87,32 @@ export class BigView {
   }
 
   /**
+   * The position shown at a screen row, like og's position(): row k
+   * counted from the top of the window, the end-of-file position
+   * just past the last line, or null beyond that on a short screen.
+   */
+  screenPos(k: number): ViewTop | null {
+    let pos = this.top.pos;
+    let sub = this.top.subRow;
+
+    for (let i = 0; i < k; i++) {
+      if (pos >= this.bf.size) return null;
+
+      const line = forwLine(this.bf, pos);
+      if (!line) return null;
+
+      if (sub + 1 < this.rowsOf(line.text)) {
+        sub++;
+      } else {
+        pos = line.next;
+        sub = 0;
+      }
+    }
+
+    return { pos, subRow: sub };
+  }
+
+  /**
    * The top whose screen bottoms at the last line — og's jump_forw
    * anchor: plain forward moves never pass it (forward() finds
    * nothing to read past the eof and rings the bell instead).
