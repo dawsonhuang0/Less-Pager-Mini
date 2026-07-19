@@ -178,6 +178,7 @@ import {
   chopLine,
   gutterWidth,
   getSwindow,
+  applyPendingHeader,
   opt
 } from "./options";
 
@@ -706,6 +707,11 @@ async function contentPager(initialContent: string[]): Promise<void> {
 
   // -o/-O in $LESS start logging piped-in content right away
   applyStartupLogFile(session.fullContent);
+
+  // a command-line --header applies now that the file is open, like
+  // og's deferred init_header (find_pos works, the view opens at the
+  // header start via the first jump's after_header_pos)
+  applyPendingHeader(session.fullContent);
 
   // + commands (and -p searches) run at the first file, followed by
   // the ++cmd every-file command, like og's ungotten startup input
@@ -1277,6 +1283,14 @@ function dispatchKey(sequence: string): void {
       search.message &&
       (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
     ) {
+      // og: a message wider than the screen wrapped and trashed the
+      // rows above the prompt (command.c:998 calls make_display
+      // again) - the dismissal repaint must be full, not a scroll
+      if (visualWidth(search.message + '  (press RETURN)') >
+          config.screenWidth) {
+        resetRender();
+      }
+
       search.message = search.messageQueue.shift() ?? '';
       render(session.content, session.buffer);
       return;
@@ -1300,6 +1314,15 @@ function dispatchKey(sequence: string): void {
   // dismissing a message reveals any queued follow-up, like less's
   // consecutive blocking error() calls
   const hadMessage = search.message !== '';
+
+  // og: a message wider than the screen wrapped and trashed the rows
+  // above the prompt (command.c:998 calls make_display again) - the
+  // dismissal repaint must be full, never a scroll shortcut
+  if (hadMessage && visualWidth(search.message + '  (press RETURN)') >
+      config.screenWidth) {
+    resetRender();
+  }
+
   search.message = search.messageQueue.shift() ?? '';
 
   // RETURN and space only dismiss a pending message; other keys are

@@ -384,9 +384,11 @@ export function formatContent(content: string[]): string[] {
 
 /**
  * Replaces the top screen rows with the --header lines, like less's
- * overlay_header: rendered from the header start row without horizontal
- * shift, the last one underlined unless the screen top sits exactly at
- * the header start (no gap below it).
+ * overlay_header: rendered from the header start row WITH the live
+ * horizontal shift (og's forw_line honors hshift; --header's column
+ * count freezes the left cols via the chop prefix), the last one
+ * underlined unless the screen top sits exactly at the header start
+ * (no gap below it).
  *
  * @param content - Full content lines.
  * @param lines - The formatted screen lines.
@@ -406,7 +408,6 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
 
   config.row = header.start;
   config.subRow = 0;
-  config.col = 0;
   config.blankTop = 0;
   config.window = header.lines + 1;
 
@@ -825,6 +826,17 @@ function rowEnd(row: string): string {
   return visualWidth(plain) >= config.screenWidth ? ' \b' : '\n';
 }
 
+/**
+ * Row terminator for reverse-indexed (ESC M) rows: og's back() leaves
+ * a full-width row bare - pdone skips the deferred-wrap ' \b' going
+ * backward, and emitting it here would wrap onto the row BELOW and
+ * overwrite its first column.
+ */
+function revRowEnd(row: string): string {
+  const end = rowEnd(row);
+  return end === '\n' ? end : '';
+}
+
 // og's cursor rests where the prompt print ended; editing inside the
 // command buffer moves it left with backspaces, like cmdbuf's putbs —
 // -X can't address the prompt row absolutely (the screen may have
@@ -1075,7 +1087,7 @@ function scrollFrame(
           // og's cmd_exec clear_bots before back() starts inserting
           let frame = clearBot();
           for (let i = k - 1; i >= 0; i--) {
-            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + rowEnd(rows[i]);
+            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
           }
 
           return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
@@ -1108,7 +1120,7 @@ function scrollFrame(
   if (backJump && !capped) {
     let frame = clearBot() + CLEAR_SCREEN;
     for (let i = last - 1; i >= 0; i--) {
-      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + rowEnd(rows[i]);
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
     }
 
     return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;

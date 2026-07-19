@@ -6,6 +6,7 @@ import { config, mode } from "../config";
 import {
   optShowAttn,
   optPastEof,
+  optHeader,
   optStopOnFormFeed,
   optShiftCount,
   setShiftCount,
@@ -264,6 +265,11 @@ export function lineBackward(content: string[], offset: number): number {
   // backward movement forgets the -w unread highlight, like less
   config.attnRow = -1;
 
+  // og's back() clamps at the header start: each line is checked
+  // through after_header_pos (forwback.c:426), so rows above the
+  // header are unreachable by backward scrolls
+  const floor = optHeader().lines > 0 ? optHeader().start : 0;
+
   if (chopLine() || config.col) {
     // --form-feed also stops backward scrolls at a \f line
     if (optStopOnFormFeed()) {
@@ -278,7 +284,7 @@ export function lineBackward(content: string[], offset: number): number {
     }
 
     const startRow = config.row;
-    config.row = Math.max(config.row - offset, 0);
+    config.row = Math.max(config.row - offset, floor);
 
     if (
       mode.EOF &&
@@ -287,7 +293,7 @@ export function lineBackward(content: string[], offset: number): number {
       mode.EOF = false;
     }
 
-    const leftover = Math.max(offset - startRow, 0);
+    const leftover = Math.max(offset - (startRow - floor), 0);
 
     if (leftover > 0 && optPastEof()) {
       padBlankTop(content, leftover);
@@ -299,13 +305,13 @@ export function lineBackward(content: string[], offset: number): number {
 
   let leftover = 0;
 
-  while (offset > 0 && config.row >= 0) {
+  while (offset > 0 && config.row >= floor) {
     if (config.subRow >= offset) {
       config.subRow -= offset;
       break;
     }
 
-    if (config.row === 0) {
+    if (config.row === floor) {
       leftover = offset - config.subRow;
       config.subRow = 0;
       break;
