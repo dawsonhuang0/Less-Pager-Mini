@@ -217,7 +217,11 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'm':
       return ntags() ? ntags() > 1 : files.list.length > 1;
 
-    case 'n': return files.newFile;
+    case 'n':
+      // og: with an active tag list ?n is ALWAYS true (prompt.c:242)
+      // - a -t session shows the file name on every prompt, since
+      // tag jumps switch files
+      return ntags() > 0 || files.newFile;
 
     // OSC 8 links are not supported
     case 'O': return false;

@@ -6,6 +6,8 @@ import { keyboard } from './keyboard';
 
 import { config, mode } from './config';
 
+import { maxSubRow } from './lines/helpers';
+
 import { session, deriveContent } from './session';
 
 import { suspendTerminal, enterScreen } from './screen';
@@ -24,7 +26,8 @@ import {
   addExamineHistory,
   setPreviousPath,
   bottomRow,
-  closeAlt
+  closeAlt,
+  revealAltEnd
 } from './features/files';
 
 import { search, repeatSearch, execFilter }
@@ -104,6 +107,10 @@ export function switchToFile(target: number): boolean {
   session.lastFilter = null;
   search.filters = [];
   session.content = deriveContent();
+
+  // a pipe-form $LESSOPEN alt whose content ends within the screen
+  // learns its length at the paint, like og reading to EOI
+  revealAltEnd(session.content);
 
   const saved = files.list[target].saved;
   config.row = saved ? saved.row : 0;

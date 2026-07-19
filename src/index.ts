@@ -35,7 +35,7 @@ import { help } from "./lessHelp";
 import { getAction, splitKeys, kentToNewline } from "./keys";
 
 import {
-  inputToFilePaths,
+  inputToRawPaths,
   inputToString,
   addBufferChar,
   delBufferChar,
@@ -132,6 +132,7 @@ import {
   binaryConfirm,
   revealPipeEnd,
   sizeIsKnown,
+  revealAltEnd,
   pipeDraining,
   pendingScroll,
   stepFileTarget,
@@ -346,7 +347,7 @@ export default async function pager(
   }
 
   if (examineFile) {
-    await filePager(inputToFilePaths(input));
+    await filePager(inputToRawPaths(input));
     return;
   }
 
@@ -442,6 +443,7 @@ async function filePager(filePaths: string[]): Promise<void> {
 
   // nothing opened: og's failing edit_first quits after the errors
   // have printed (main.c's quit(QUIT_ERROR))
+  process.exitCode = 1;
   pendingStartup = null;
 }
 
@@ -723,6 +725,11 @@ async function contentPager(initialContent: string[]): Promise<void> {
   // og's deferred init_header (find_pos works, the view opens at the
   // header start via the first jump's after_header_pos)
   applyPendingHeader(session.fullContent);
+
+  // the initial open ran before the dimensions were known: a short
+  // pipe-form $LESSOPEN alt reveals its length now (og's first
+  // paint reading to EOI shows (END))
+  revealAltEnd(session.content);
 
   // + commands (and -p searches) run at the first file, followed by
   // the ++cmd every-file command, like og's ungotten startup input

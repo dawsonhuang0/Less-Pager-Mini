@@ -10,6 +10,8 @@ import { openTtyKeyboard } from './keyboard';
 
 import { printVersion } from './features/misc';
 
+import { errorText } from './features/files';
+
 import {
   OptionSpec,
   opt,
@@ -137,7 +139,8 @@ async function main(): Promise<void> {
             rs.pipe(process.stdout, { end: false });
           });
         } catch (error) {
-          process.stderr.write(`${f}: ${String(error)}\n`);
+          process.stderr.write(`${f}: ${errorText(error)}\n`);
+          process.exitCode = 1;
         }
       }
     } else if (wantsHelp) {
@@ -206,7 +209,8 @@ main().then(() => {
   // write lets the loop drain — a visible pause before the shell
   // prompt. TTY writes are synchronous, so nothing is truncated;
   // the non-tty cat paths keep node's graceful flush.
-  if (process.stdout.isTTY) process.exit(0);
+  if (process.stdout.isTTY) process.exit(typeof process.exitCode === 'number'
+      ? process.exitCode : 0);
 }, error => {
   process.stderr.write(String(error) + '\n');
   process.exit(1);

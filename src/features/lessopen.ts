@@ -54,7 +54,15 @@ function pctS(text: string): number {
  *  the preprocessor inherit the input pipe. */
 function shellCmd(cmd: string, input?: string): SpawnSyncReturns<string> {
   const argv = shellArgv(cmd);
-  return spawnSync(argv[0], argv[1], { encoding: 'utf8', input });
+
+  // og's popen child inherits stderr: a failing preprocessor's own
+  // complaint ("cat: b: No such file or directory") reaches the
+  // terminal before og's open error
+  return spawnSync(argv[0], argv[1], {
+    encoding: 'utf8',
+    input,
+    stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'inherit'],
+  });
 }
 
 /**

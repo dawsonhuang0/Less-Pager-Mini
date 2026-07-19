@@ -103,6 +103,19 @@ export function bufferToNum(buffer: string[]): number {
  * @param input - A potential file path, array of paths, or nested arrays.
  * @returns An array of existing file paths.
  */
+/**
+ * Flattens input into file paths WITHOUT dropping missing ones: og's
+ * main passes every name to edit, which errors per file ("b: No such
+ * file or directory") and quits with an error when none opened.
+ */
+export function inputToRawPaths(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.flat(Infinity).filter(p => typeof p === 'string');
+  }
+
+  return typeof input === 'string' ? [input] : [];
+}
+
 export function inputToFilePaths(input: unknown): string[] {
   if (Array.isArray(input)) {
     return input

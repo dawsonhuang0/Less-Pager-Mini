@@ -834,6 +834,25 @@ export function revealPipeEnd(): void {
 }
 
 /**
+ * og reads a pipe-form $LESSOPEN alt to EOI when its content ends
+ * within the first screen: the length is learned at the first paint
+ * and the prompt shows (END), like eof_displayed.
+ */
+export function revealAltEnd(content: string[]): void {
+  const entry = files.list[files.index];
+  if (!entry || entry.alt !== '-' || entry.sizeKnown) return;
+
+  let rows = 0;
+
+  for (const line of content) {
+    rows += maxSubRow(line) + 1;
+    if (rows > config.window - 1) return;
+  }
+
+  entry.sizeKnown = true;
+}
+
+/**
  * Learns the current file's size now, like og's scan_eof: --file-size
  * turning on, or a forward search scanning to the end of a pipe.
  */
