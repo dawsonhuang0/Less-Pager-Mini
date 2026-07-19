@@ -190,6 +190,12 @@ export function lineForward(
       revealPipeEnd();
     }
 
+    // og's forw unsquishes as soon as it actually paints: a forced
+    // (ESC-SPACE, --past-eof) advance on the squished short first
+    // paint fills the screen with null-line tildes; only clamped
+    // bells keep the squish (forwback.c first_time branch)
+    if (mode.INIT && config.row !== startRow) mode.INIT = false;
+
     mode.EOF = config.row >= lastRow;
     return;
   }
@@ -224,6 +230,13 @@ export function lineForward(
         config.row !== fromRow || config.subRow !== fromSub)) {
       revealPipeEnd();
     }
+  }
+
+  // og's forw unsquishes when it actually paints (a forced advance
+  // fills the screen with null-line tildes); clamped bells keep it
+  if (mode.INIT &&
+      (config.row !== fromRow || config.subRow !== fromSub)) {
+    mode.INIT = false;
   }
 
   mode.EOF = config.row > config.endRow || (
