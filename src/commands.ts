@@ -12,7 +12,8 @@ import { session, deriveContent } from './session';
 
 import { suspendTerminal, enterScreen } from './screen';
 
-import { ringBell, bufferToNum, calculateEOF, clearBot, eprPrefix }
+import { ringBell, bufferToNum, calculateEOF, clearBot, eprPrefix,
+  freezeFrame, render }
   from './helpers';
 
 import {
@@ -47,7 +48,7 @@ import { prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
-import { optQuitAtEof, optNoEditWarn,
+import { optQuitAtEof, optNoEditWarn, optOldBot,
   jumpSindex, resetHeaderStart } from './options';
 
 import {
@@ -278,6 +279,7 @@ export function runExamine(): void {
 
   let insertAt = files.index + 1;
   let firstGood = -1;
+  const errors: string[] = [];
 
   for (const name of names) {
     let at = files.list.findIndex(entry => entry.path === name);
@@ -313,6 +315,13 @@ export function runExamine(): void {
         continue;
       }
 
+      // og's edit_list error()s per failing name IN ORDER; each
+      // message blocks in turn, not last-one-wins
+      if (search.message) {
+        errors.push(search.message);
+        search.message = '';
+      }
+
       if (inserted) {
         files.list.splice(at, 1);
         marksFileSpliced(at, -1);
@@ -324,9 +333,34 @@ export function runExamine(): void {
     if (firstGood < 0) firstGood = at;
   }
 
+  if (errors.length && firstGood >= 0) {
+    // og's error() runs squish_check (output.c:720): a squished
+    // short first paint repaints the OLD file top-anchored, tildes
+    // and all, before the message shows
+    if (mode.INIT && !optOldBot()) {
+      mode.INIT = false;
+      render(session.content, session.buffer);
+    }
+
+    // og's make_display then defers while the messages block: the
+    // old screen survives the switch until RETURN dismisses them
+    freezeFrame();
+  }
+
   if (firstGood >= 0) {
     search.message = '';
     switchToFile(firstGood);
+  } else if (errors.length && files.index >= 0) {
+    // og's failed edit_ifile re-edits the current file
+    // (reedit_ifile), so the next prompt is the new-file one with
+    // the filename
+    switchToFile(files.index);
+  }
+
+  if (errors.length) {
+    // each failing name error()ed in order; they block in turn
+    search.message = errors.shift()!;
+    search.messageQueue.push(...errors);
   }
 }
 

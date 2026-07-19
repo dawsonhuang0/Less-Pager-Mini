@@ -28,6 +28,8 @@ import {
   revealPipeEnd
 } from '../../src/features/files';
 
+import { opt } from '../../src/options';
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-files-'));
 const fileA = path.join(dir, 'a.txt');
 const fileB = path.join(dir, 'b.txt');
@@ -269,6 +271,33 @@ describe('examine expansion', () => {
     expect(expandExamineList('one two')).toEqual(['one', 'two']);
     expect(expandExamineList('"with space" three'))
       .toEqual(['with space', 'three']);
+  });
+
+  it('groups with the -" quote pair, like init_textlist', () => {
+    opt.quoteOpen = '<';
+    opt.quoteClose = '>';
+
+    try {
+      expect(expandExamineList('<with space> three'))
+        .toEqual(['with space', 'three']);
+
+      // the old default pair no longer groups
+      expect(expandExamineList('"a b"')).toEqual(['"a', 'b"']);
+
+      // a doubled close quote is a literal one (shell_unquote)
+      expect(expandExamineList('<a>>b>')).toEqual(['a>b']);
+    } finally {
+      opt.quoteOpen = opt.quoteClose = '"';
+    }
+  });
+
+  it('protects a space with the meta escape, like shell_unquote', () => {
+    expect(expandExamineList('with\\ space three'))
+      .toEqual(['with space', 'three']);
+
+    // quotes opened mid-word group but stay literal, like og
+    // splitting first and unquoting only a leading quote
+    expect(expandExamineList('pre"a b"')).toEqual(['pre"a b"']);
   });
 
   it('globs patterns and sorts, falling back to the raw name', () => {

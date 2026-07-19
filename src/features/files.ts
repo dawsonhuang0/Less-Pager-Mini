@@ -32,6 +32,8 @@ import { keyboard } from "../keyboard";
 
 import { STYLE_REGEX_G } from "../constants";
 
+import { DEF_METAESCAPE } from "../platform";
+
 import { prExpand, eqProto } from "./prompt";
 
 import { openAltFile, closeAltFile } from "./lessopen";
@@ -500,33 +502,89 @@ export function fexpand(text: string): string {
 }
 
 /**
- * Splits a filename list on whitespace, honoring double quotes.
+ * Splits a filename list on unquoted spaces, like init_textlist: the
+ * -" quote pair groups words and the meta escape (LESSMETAESCAPE,
+ * default backslash) protects the next character; both stay in the
+ * word for unquoteWord, like og deferring to shell_unquote.
  */
 function splitWords(text: string): string[] {
+  const { open, close } = optQuotes();
+  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+
   const words: string[] = [];
   let word = '';
   let quoted = false;
-  let seen = false;
 
-  for (const char of text) {
-    if (char === '"') {
-      quoted = !quoted;
-      seen = true;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (!quoted && esc && text.startsWith(esc, i) &&
+        i + esc.length < text.length) {
+      word += text.slice(i, i + esc.length + 1);
+      i += esc.length;
       continue;
     }
 
-    if (char === ' ' && !quoted) {
-      if (seen || word) words.push(word);
+    if (quoted) {
+      if (char === close) quoted = false;
+      word += char;
+      continue;
+    }
+
+    if (char === open && open !== '') {
+      quoted = true;
+      word += char;
+      continue;
+    }
+
+    if (char === ' ') {
+      if (word) words.push(word);
       word = '';
-      seen = false;
       continue;
     }
 
     word += char;
   }
 
-  if (seen || word) words.push(word);
-  return words;
+  if (word) words.push(word);
+  return words.map(unquoteWord);
+}
+
+/**
+ * Strips the quotes or escapes from one word, like shell_unquote: a
+ * word starting with the open quote reads to the closing quote (a
+ * doubled close quote is a literal one) and drops anything after
+ * it; otherwise each meta escape collapses into the next character.
+ */
+function unquoteWord(word: string): string {
+  const { open, close } = optQuotes();
+  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+  let out = '';
+
+  if (open && word[0] === open) {
+    for (let i = 1; i < word.length; i++) {
+      if (word[i] === close) {
+        if (word[i + 1] !== close) break;
+        i++;
+      }
+
+      out += word[i];
+    }
+
+    return out;
+  }
+
+  for (let i = 0; i < word.length; i++) {
+    if (esc && word.startsWith(esc, i)) {
+      i += esc.length;
+      out += word[i] ?? '';
+      continue;
+    }
+
+    out += word[i];
+  }
+
+  return out;
 }
 
 /**
