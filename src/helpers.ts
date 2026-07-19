@@ -737,7 +737,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   // skipping scroll paint is the !top_scroll default)
   const frame = (optClearRepaint()
     ? null
-    : (posClear || unsquished ? null : scrolledFrame(rows)) ??
+    : (posClear || unsquished ? null : scrolledFrame(rows, rawContent)) ??
       skippedFrame(rows, rawContent, posClear || unsquished)) ??
     fullFrame(rows);
 
@@ -1287,23 +1287,59 @@ function fullFrame(rows: string[]): string {
 }
 
 /**
+ * The display-row distance the screen top moved since the last frame,
+ * positive forward, like og comparing paint positions in jump_loc.
+ *
+ * @returns The signed distance, or null when it is unknown or larger
+ *          than a screenful.
+ */
+function topDelta(src: string[], cap: number): number | null {
+  if (prevTopRow < 0 || config.blankTop) return null;
+
+  const effRow = config.row - config.blankTop;
+  const sign = effRow > prevTopRow ||
+    (effRow === prevTopRow && config.subRow >= prevTopSub) ? 1 : -1;
+
+  const [loRow, loSub, hiRow, hiSub] = sign > 0
+    ? [prevTopRow, prevTopSub, effRow, config.subRow]
+    : [effRow, config.subRow, prevTopRow, prevTopSub];
+
+  let dist = -loSub;
+
+  for (let r = loRow; r < hiRow; r++) {
+    dist += chopLine() || config.col ? 1 : maxSubRow(src[r] ?? '') + 1;
+    if (dist > cap) return null;
+  }
+
+  return sign * (dist + hiSub);
+}
+
+/**
  * Builds a minimal frame when the screen content only scrolled.
  *
+ * - og's jump_loc picks scrolling by POSITION, never by matching
+ *   screen text: only the shift matching the top's actual movement
+ *   is considered, so repeated text (blank runs) cannot fake one.
  * - The bottom (prompt) row is excluded from shift matching and always
  *   redrawn, like less reprinting its prompt after scrolling.
  *
  * @returns The frame, or null when the change is not a pure scroll.
  */
-function scrolledFrame(rows: string[]): string | null {
+function scrolledFrame(rows: string[], src: string[]): string | null {
   const prev = prevRows;
   const n = rows.length;
 
   if (!prev || prev.length !== n || n < 3) return null;
 
-  for (let k = 1; k < n - 1; k++) {
-    // scrolled forward: new rows show what was k rows lower; -y limits
-    // how far the screen scrolls before repainting instead
-    if (rows[0] === prev[k] && shifted(rows, prev, k)) {
+  const delta = topDelta(src, n);
+  if (delta === null || delta === 0) return null;
+
+  // scrolled forward: new rows show what was k rows lower; -y limits
+  // how far the screen scrolls before repainting instead
+  if (delta > 0) {
+    const k = delta;
+
+    if (k < n - 1 && rows[0] === prev[k] && shifted(rows, prev, k)) {
       if (optForwScroll() >= 0 && k > optForwScroll()) return null;
 
       let frame = syncOn() + SCROLL_UP(k);
@@ -1311,15 +1347,19 @@ function scrolledFrame(rows: string[]): string | null {
       return frame + parkCursor(rows) + syncOff();
     }
 
-    // scrolled backward: new rows show what was k rows higher; -h is
-    // the backward scroll limit
-    if (rows[k] === prev[0] && shifted(prev, rows, k)) {
-      if (optBackScroll() >= 0 && k > optBackScroll()) return null;
+    return null;
+  }
 
-      let frame = syncOn() + SCROLL_DOWN(k);
-      for (let r = 0; r < k; r++) frame += drawRow(rows, r);
-      return frame + drawRow(rows, n - 1) + parkCursor(rows) + syncOff();
-    }
+  // scrolled backward: new rows show what was k rows higher; -h is
+  // the backward scroll limit
+  const k = -delta;
+
+  if (k < n - 1 && rows[k] === prev[0] && shifted(prev, rows, k)) {
+    if (optBackScroll() >= 0 && k > optBackScroll()) return null;
+
+    let frame = syncOn() + SCROLL_DOWN(k);
+    for (let r = 0; r < k; r++) frame += drawRow(rows, r);
+    return frame + drawRow(rows, n - 1) + parkCursor(rows) + syncOff();
   }
 
   return null;
