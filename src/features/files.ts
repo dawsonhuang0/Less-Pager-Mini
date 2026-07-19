@@ -34,7 +34,7 @@ import { STYLE_REGEX_G } from "../constants";
 
 import { DEF_METAESCAPE } from "../platform";
 
-import { prExpand, eqProto } from "./prompt";
+import { prExpand, eqProto, shellQuote } from "./prompt";
 
 import { openAltFile, closeAltFile } from "./lessopen";
 
@@ -371,7 +371,9 @@ export function indexFileTarget(n: number): number | null {
  * @param filePath - Path of the file just opened.
  */
 export function addExamineHistory(filePath: string): void {
-  const name = quoteIfNeeded(filePath);
+  // og shell_quotes the entry (edit.c:683), never the -" pair on a
+  // shell with an escape char
+  const name = shellQuote(filePath);
   if (!name) return;
 
   if (examineHistory[examineHistory.length - 1] !== name) {
@@ -494,8 +496,9 @@ export function fexpand(text: string): string {
       ? files.list[files.index]?.path ?? null
       : previousPath;
 
-    // with no file to substitute, the character stays literal
-    expanded += name === null ? char : quoteIfNeeded(name);
+    // with no file to substitute, the character stays literal;
+    // og shell_quotes the substituted name (xcpy_filename)
+    expanded += name === null ? char : shellQuote(name);
   }
 
   return expanded;
@@ -744,7 +747,7 @@ function buildCompletions(): boolean {
 
   const start = wordStart(cmd.steps.slice(0, cmd.cur).join(''));
   const word = cmd.steps.slice(start, cmd.cur).join('');
-  const matches = glob(expandHomeEnv(unquote(word)) + '*');
+  const matches = glob(expandHomeEnv(unquoteWord(word)) + '*');
 
   if (matches.length === 1 && !fs.existsSync(matches[0])) {
     ringBell();
@@ -753,42 +756,40 @@ function buildCompletions(): boolean {
 
   cmd.inCompletion = true;
   completion.wordStart = start;
-  completion.trials = [...matches.map(quoteIfNeeded), word];
+  // og shell_quotes each expanded name (lglob, filename.c:665)
+  completion.trials = [...matches.map(shellQuote), word];
   completion.index = -1;
 
   return true;
 }
 
 /**
- * Returns the start of the last space-delimited word, honoring quotes.
+ * Returns the start of the last space-delimited word, honoring the
+ * -" quote pair and the meta escape like og's delimit_word.
  */
 function wordStart(text: string): number {
+  const { open, close } = optQuotes();
+  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
   let start = 0;
   let quoted = false;
 
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === '"') quoted = !quoted;
-    if (text[i] === ' ' && !quoted) start = i + 1;
+    if (!quoted && esc && text.startsWith(esc, i) &&
+        i + esc.length < text.length) {
+      i += esc.length;
+      continue;
+    }
+
+    if (quoted) {
+      if (text[i] === close) quoted = false;
+    } else if (text[i] === open && open !== '') {
+      quoted = true;
+    } else if (text[i] === ' ') {
+      start = i + 1;
+    }
   }
 
   return start;
-}
-
-function unquote(word: string): string {
-  const { open, close } = optQuotes();
-  let out = word;
-
-  if (open) out = out.split(open).join('');
-  if (close && close !== open) out = out.split(close).join('');
-
-  return out;
-}
-
-// filenames with spaces take the -" quote characters, like less
-function quoteIfNeeded(name: string): string {
-  const { open, close } = optQuotes();
-  if (!open || !/[ "]/.test(name)) return name;
-  return open + unquote(name) + close;
 }
 
 /**

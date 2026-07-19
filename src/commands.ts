@@ -279,6 +279,7 @@ export function runExamine(): void {
 
   let insertAt = files.index + 1;
   let firstGood = -1;
+  let lastGood = -1;
   const errors: string[] = [];
 
   for (const name of names) {
@@ -331,6 +332,7 @@ export function runExamine(): void {
 
     if (inserted) insertAt++;
     if (firstGood < 0) firstGood = at;
+    lastGood = at;
   }
 
   if (errors.length && firstGood >= 0) {
@@ -349,7 +351,13 @@ export function runExamine(): void {
 
   if (firstGood >= 0) {
     search.message = '';
-    switchToFile(firstGood);
+
+    // og's edit_list skips the final re-edit when the first good
+    // name is already current (edit_ifile returns early on
+    // curr_ifile): a lone :e of the current file is a no-op
+    if (firstGood !== files.index || lastGood !== firstGood) {
+      switchToFile(firstGood);
+    }
   } else if (errors.length && files.index >= 0) {
     // og's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with

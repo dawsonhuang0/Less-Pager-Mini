@@ -244,12 +244,14 @@ describe('examine prompt', () => {
     expect(examine.text).toBe('-');
   });
 
-  it('quotes recalled names containing spaces', () => {
+  it('escapes recalled names containing spaces', () => {
+    // og shell_quotes the history entry (edit.c:683): the meta
+    // escape, never the -" pair, on a shell that has one
     addExamineHistory('with space.txt');
 
     startExamine();
     examineKey('\x1B[A');
-    expect(examine.text).toBe('"with space.txt"');
+    expect(examine.text).toBe('with\\ space.txt');
   });
 });
 
