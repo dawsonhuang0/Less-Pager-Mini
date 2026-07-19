@@ -25,14 +25,25 @@ import { getAction, splitKeys } from '../keys';
 
 import { forwLine, backLine } from './lineio';
 
-import { search, searchInterrupted } from '../features/searching';
+import { search, searchInterrupted, addHistory, onAutosave, onHistTouch,
+  onHistRecord } from '../features/searching';
+
+import { addShellHistory, onShellAutosave, onShellHistTouch,
+  onShellHistRecord } from '../features/misc';
+
+import { loadHistory, saveHistory, touchSearchList, touchShellList,
+  recordSearchEntry, recordShellEntry, touchMarks, onSessionMarks }
+  from '../histfile';
+
+import { realPath, getFileMarks, dropFileMark }
+  from '../features/jumping';
 
 import { displayPrType, optIntrChar, prChar } from '../options/shared';
 
 import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
-  optMouseReverse, optTildes }
+  optMouseReverse, optTildes, optPermaMarks, optAutosaveAction }
   from '../options';
 
 import {
@@ -107,12 +118,49 @@ export async function bigPager(path: string): Promise<void> {
   let lastDir: 1 | -1 = 1;
   let message = '';
 
-  const searchHistory: string[] = [];
 
   // marks and the quote mark, like og mark.c over POSITIONs
-  const marks = new Map<string, { pos: number, subRow: number }>();
+  const marks =
+    new Map<string, { pos: number, subRow: number, sline?: number }>();
   let quoteMark: { pos: number, subRow: number } | null = null;
   let marking: 'm' | 'M' | "'" | 'c' | '' = '';
+
+  // og's init_cmdhist + mark_check_ifile: the history file loads and
+  // this file's saved marks bind before the first paint; og's mark
+  // positions are bytes, exactly our {pos} shape
+  loadHistory();
+  onAutosave(saveHistory);
+  onShellAutosave(saveHistory);
+  onHistTouch(touchSearchList);
+  onHistRecord(recordSearchEntry);
+  onShellHistTouch(touchShellList);
+  onShellHistRecord(recordShellEntry);
+
+  const realpath = realPath(path);
+
+  for (const restored of getFileMarks()) {
+    if (realPath(restored.path) !== realpath) continue;
+
+    if (restored.char === "'") {
+      quoteMark = { pos: restored.pos, subRow: 0 };
+    } else if (!marks.has(restored.char)) {
+      marks.set(restored.char,
+        { pos: restored.pos, subRow: 0, sline: restored.sline });
+    }
+  }
+
+  // --save-marks reads this session's live marks at each write
+  onSessionMarks(() => {
+    const out = [...marks].map(([char, m]) => ({
+      char, sline: m.sline ?? 1, pos: m.pos, path: realpath,
+    }));
+
+    if (quoteMark) {
+      out.push({ char: "'", sline: 1, pos: quoteMark.pos, path: realpath });
+    }
+
+    return out;
+  });
 
   // the : command prefix collecting its second char, like og's mca
   let coloning = false;
@@ -301,9 +349,11 @@ export async function bigPager(path: string): Promise<void> {
   let followQueue: string[] = [];
   let followTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** Records the pre-jump position into the quote mark, like lastmark. */
+  /** Records the pre-jump position into the quote mark, like
+   *  lastmark - which raises og's marks_modified. */
   const remember = (): void => {
     quoteMark = { ...view.top };
+    touchMarks();
   };
 
   /**
@@ -449,7 +499,7 @@ export async function bigPager(path: string): Promise<void> {
     }
 
     const count = config.window - 1;
-    const { rows } = view.visible(count);
+    const { rows, endPos } = view.visible(count);
 
     const display: string[] = [];
 
@@ -543,17 +593,47 @@ export async function bigPager(path: string): Promise<void> {
       display.push(optTildes() ? '\x1b[1m~\x1b[m' : '');
     }
 
+    // og's %pB: the percent of the BOTTOM displayed byte
     const percent = bf.size
-      ? Math.floor((view.top.pos * 100) / bf.size)
+      ? Math.floor((endPos * 100) / bf.size)
       : 100;
     const name = first ? `${path} ` : '';
 
-    // og prompt styles: short shows ':', -m percent, -M the works
-    const base = displayPrType() === 2
-      ? `${path} byte ${view.top.pos}/${bf.size} ${percent}%`
-      : displayPrType() === 1
-        ? `${percent}%`
-        : ':';
+    // -M is og's M_proto: "%f lines %lt-%lb/%L" resolved through the
+    // same countTo walk (first paint runs the full-count scan with
+    // the delayed Calculating message), with "byte %bB/%s" as ?lt's
+    // fallback once line numbers are off; aborting past the message
+    // is abort_delayed_msg
+    const needsBase = !resolvingBlank && !coloning && !option.pending &&
+      !searching && !shelling && !marking && !following && !message;
+
+    let mSeg = '';
+
+    if (needsBase && displayPrType() === 2) {
+      if (opt.linenums !== 0) {
+        const lt = countTo(view.top.pos);
+        const lb = lt === null || !rows.length
+          ? null
+          : countTo(rows[rows.length - 1].pos);
+        const total = lb === null
+          ? null
+          : countTo(Math.max(bf.size - 1, 0));
+
+        if (lt !== null) {
+          mSeg = `lines ${lt + 1}-${lb === null ? '?' : lb + 1}` +
+            `/${total === null ? '?' : total + 1} `;
+        }
+
+        if ((lt === null || lb === null || total === null) &&
+            scanMessaged) {
+          opt.linenums = 0;
+          message = 'Line numbers turned off  (press RETURN)';
+          msgReturn = true;
+        }
+      }
+
+      if (!mSeg) mSeg = `byte ${endPos}/${bf.size} `;
+    }
 
     // the - prompt echoes like og's mca_opt: the doubled dash for a
     // long name, (P)/flag marks, a spec's parameter prompt
@@ -589,12 +669,19 @@ export async function bigPager(path: string): Promise<void> {
           : message
             ? `${INVERSE_ON}${message}${INVERSE_OFF}`
             : view.atEof
-              ? `${INVERSE_ON}${name}(END)${INVERSE_OFF}`
-              : first
-                ? `${INVERSE_ON}${name}${INVERSE_OFF}`
-                : displayPrType() === 0
-                  ? base
-                  : `${INVERSE_ON}${base}${INVERSE_OFF}`;
+              ? `${INVERSE_ON}${displayPrType() === 2
+                  ? `${path} ${mSeg}`
+                  : name}(END)${INVERSE_OFF}`
+              : displayPrType() === 2
+                ? `${INVERSE_ON}${path} ${mSeg}${percent}%${INVERSE_OFF}`
+                : displayPrType() === 1
+                  ? `${INVERSE_ON}${name}${percent}%${INVERSE_OFF}`
+                  : first
+                    // og protos end in %t: the %f separator space
+                    // trims away when nothing follows the file name
+                    ? `${INVERSE_ON}${name.replace(/ +$/, '')}` +
+                      INVERSE_OFF
+                    : ':';
 
     const body = display.map(r => CLEAR_LINE + r).join('\n');
     process.stdout.write(
@@ -605,6 +692,7 @@ export async function bigPager(path: string): Promise<void> {
 
   /** ! and # run through the shell, like og's lsystem. */
   const runShellCmd = (bang: '!' | '#', text: string): void => {
+
     // og's fexpand: % is the current file name
     const expanded = text.replace(/%/g, path);
 
@@ -624,6 +712,14 @@ export async function bigPager(path: string): Promise<void> {
     // the done message waits on the shell screen, like og
     process.stdout.write(`${bang}done  (press RETURN)`);
     shellPausing = true;
+    // og's lsystem reedit: lastmark dirties the history file, then
+    // the next-loop cmd_accept adds the command - the autosave
+    // attempt of a first ! already sees a dirty file (og-verified:
+    // a header-only write)
+    quoteMark = { ...view.top };
+    touchMarks();
+    addShellHistory(text);
+
   };
 
   /** v spawns the editor at the current line, like og's %E +%lm %g. */
@@ -743,6 +839,13 @@ export async function bigPager(path: string): Promise<void> {
       if (done) return;
       done = true;
 
+      // og's quit edit-closes the file: lastmark records TOP
+      // (marks_modified) and save_cmdhist rewrites the history file
+      quoteMark = { ...view.top };
+      touchMarks();
+      saveHistory();
+      onSessionMarks(null);
+
       if (followTimer) clearInterval(followTimer);
       keyboard().off('data', onKey);
       process.off('SIGTERM', quit);
@@ -832,18 +935,34 @@ export async function bigPager(path: string): Promise<void> {
                       const { rows } = view.visible(config.window - 1);
                       const last = rows[rows.length - 1];
                       return last
-                        ? { pos: last.pos, subRow: last.subRow }
-                        : { ...view.top };
+                        ? { pos: last.pos, subRow: last.subRow,
+                            sline: config.window - 1 }
+                        : { ...view.top, sline: 1 };
                     })()
-                  : { ...view.top };
+                  : { ...view.top, sline: 1 };
                 marks.set(key[0], pos);
+
+                // og's setmark: marks_modified, then the perma+
+                // autosave immediate write
+                touchMarks();
+                if (optPermaMarks() && optAutosaveAction('m')) {
+                  saveHistory();
+                }
               } else {
                 message = `Invalid mark letter ${key[0]}`;
               }
             } else if (kind === 'c') {
               // ESC-m clears a mark, erroring like og's getumark
-              if (marks.has(key[0])) marks.delete(key[0]);
-              else {
+              if (marks.has(key[0])) {
+                marks.delete(key[0]);
+
+                // og's clrmark clears file_marks too, then autosaves
+                dropFileMark(key[0]);
+                touchMarks();
+                if (optPermaMarks() && optAutosaveAction('m')) {
+                  saveHistory();
+                }
+              } else {
                 message = /^[a-zA-Z#]$/.test(key[0])
                   ? 'Mark not set'
                   : `Invalid mark letter ${key[0]}`;
@@ -1020,13 +1139,17 @@ export async function bigPager(path: string): Promise<void> {
                 const caseless = search.caseless === 2 ||
                   (search.caseless === 1 && !/[A-Z]/.test(text));
                 pattern = new RegExp(text, caseless ? 'i' : '');
-                searchHistory.push(text);
                 lastDir = searching === '/' ? 1 : -1;
                 remember();
                 runSearch(lastDir, view.top.pos);
               } catch {
                 message = `Invalid pattern: ${text}`;
               }
+
+              // og's cmd_accept at the next loop top: the pattern
+              // joins history after the search ran (invalid regexes
+              // included), its autosave seeing the jump's lastmark
+              addHistory(text);
             }
 
             searching = '';
@@ -1046,7 +1169,7 @@ export async function bigPager(path: string): Promise<void> {
 
         if (key === '/' || key === '?') {
           searching = key;
-          cmdOpen(key, { history: searchHistory });
+          cmdOpen(key, { history: search.history });
           draw();
           continue;
         }
