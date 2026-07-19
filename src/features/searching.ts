@@ -34,6 +34,7 @@ import {
   optDefSearchType,
   optAutosaveAction,
   optMatchShift,
+  optRscroll,
   optIntrChar,
   optNoInit,
   chopLine
@@ -1438,7 +1439,9 @@ function shiftVisible(content: string[], row: number): void {
 
   const startCol = strWidth(text.slice(0, match.index));
   const endCol = startCol + strWidth(match[0]);
-  const swidth = config.screenWidth - 1;
+  // the marker column only exists while --rscroll is enabled
+  // (search.c:641: sc_width - (rscroll_char ? 1 : 0))
+  const swidth = config.screenWidth - (optRscroll() ? 1 : 0);
   let newCol: number;
 
   if (endCol < swidth) {

@@ -118,6 +118,34 @@ describe('search_pos over wrapped lines', () => {
   });
 });
 
+describe('shift_visible rscroll width', () => {
+  it('counts the marker column only while --rscroll is enabled', () => {
+    // search.c:641: swidth = sc_width - (rscroll_char ? 1 : 0)
+    const wide = ['aaaaaHITTzzz'];
+    calculateEOF(wide);
+    config.chopLongLines = true;
+
+    // marker on: the match end (col 9) misses the 9-col text area
+    doSearch('/', 'HITT');
+    execSearch(wide);
+    expect(config.col).toBe(3);
+
+    config.col = 0;
+    const saved = opt.rscrollChar;
+    opt.rscrollChar = '';
+
+    try {
+      // --rscroll=-: the full width is usable and no shift happens
+      doSearch('/', 'HITT');
+      execSearch(wide);
+      expect(config.col).toBe(0);
+    } finally {
+      opt.rscrollChar = saved;
+      config.chopLongLines = false;
+    }
+  });
+});
+
 /** Runs a block under a -a/--search-skip-screen state. */
 function withHowSearch(state: number, fn: () => void): void {
   const saved = opt.howSearch;
