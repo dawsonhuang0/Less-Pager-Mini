@@ -10,7 +10,8 @@ import { search } from '../../src/features/searching';
 
 import { initContent } from '../../src/features/files';
 
-import { option, startOption, optionKey } from '../../src/options';
+import { option, startOption, optionKey, optTagsFile }
+  from '../../src/options';
 
 import { findTag, stepTag, tagRow, currTagFile, ntags, currTag, resetTags }
   from '../../src/features/tags';
@@ -135,6 +136,54 @@ describe('global(1) lookup', () => {
   it('reports No tags file without $LESSGLOBALTAGS', () => {
     toggle('-TGTAGS\x0D');
     expect(findTag('sym')).toBe('No tags file');
+  });
+});
+
+describe('-T- ctags -x from stdin', () => {
+  /** Answers stdin (fd 0) reads with the given ctags -x listing. */
+  function mockStdin(data: string): () => void {
+    const real = fs.readFileSync.bind(fs);
+    const spy = vi.spyOn(fs, 'readFileSync').mockImplementation(
+      ((file: unknown, options: unknown) => file === 0
+        ? data
+        : real(file as fs.PathOrFileDescriptor, options as BufferEncoding)
+      ) as typeof fs.readFileSync
+    );
+
+    return () => spy.mockRestore();
+  }
+
+  it('loads the stdin listing and resets -T to "tags"', () => {
+    const restore = mockStdin(
+      `helper function 1 ${srcFile}\nmain function 4 ${srcFile}\n`
+    );
+
+    try {
+      toggle('-T-\x0D');
+      expect(findTag('unused')).toBeNull();
+      expect(ntags()).toBe(2);
+      expect(tagRow(content)).toBe(0);
+
+      // og sets the ztags default: stdin cannot be read again
+      expect(optTagsFile()).toBe('tags');
+    } finally {
+      restore();
+    }
+  });
+
+  it('stops at an unparsable line, keeping earlier entries', () => {
+    const restore = mockStdin(
+      `main function 4 ${srcFile}\n\nhelper function 1 ${srcFile}\n`
+    );
+
+    try {
+      toggle('-T-\x0D');
+      expect(findTag('unused')).toBeNull();
+      expect(ntags()).toBe(1);
+      expect(tagRow(content)).toBe(3);
+    } finally {
+      restore();
+    }
   });
 });
 

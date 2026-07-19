@@ -2,7 +2,7 @@ import fs from 'fs';
 
 import { spawnSync } from 'child_process';
 
-import { optTagsFile } from "../options";
+import { optTagsFile, resetTagsFile } from "../options";
 
 import { shellQuote } from "./prompt";
 
@@ -72,6 +72,7 @@ export function findTag(tag: string): string | null {
     case 'GRTAGS': return findGtag(tag, 'r');
     case 'GSYMS': return findGtag(tag, 's');
     case 'GPATH': return findGtag(tag, 'P');
+    case '-': return findCtagsX();
   }
 
   // a readable file is ctags format; otherwise og falls back to
@@ -237,12 +238,42 @@ function findGtag(tag: string, flag: string): string | null {
 
   if (result.status !== 0) return 'No tags file';
 
+  return loadCtagsX(result.stdout ?? '');
+}
+
+/**
+ * Reads ctags -x entries from stdin for -T-, like findgtag's
+ * T_CTAGS_X branch: -T resets to "tags" first, because stdin
+ * cannot be read again.
+ */
+function findCtagsX(): string | null {
+  resetTagsFile();
+
+  let data: string;
+
+  try {
+    data = fs.readFileSync(0, 'utf8');
+  } catch {
+    data = '';
+  }
+
+  return loadCtagsX(data);
+}
+
+/**
+ * Loads a ctags -x listing into the tag list; an unparsable line
+ * (blank included) ends the scan, keeping the entries before it,
+ * like findgtag's break on a failed getentry.
+ */
+function loadCtagsX(data: string): string | null {
   resetTags();
   const found: Tag[] = [];
+  const lines = data.split('\n');
 
-  for (const raw of (result.stdout ?? '').split('\n')) {
-    if (!raw) continue;
+  // the piece after the final newline is not a read line
+  if (lines[lines.length - 1] === '') lines.pop();
 
+  for (const raw of lines) {
     const entry = getEntry(raw);
     if (!entry) break;
 

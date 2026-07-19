@@ -555,7 +555,7 @@ export function expandHomeEnv(word: string): string {
  *
  * @param pattern - The pattern to expand.
  */
-function glob(pattern: string): string[] {
+export function glob(pattern: string): string[] {
   // like lglob: expansion is disabled under LESSSECURE
   if (!secureAllow('glob')) return [pattern];
 
