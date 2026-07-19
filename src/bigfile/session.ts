@@ -349,6 +349,16 @@ export async function bigPager(path: string): Promise<void> {
   let followQueue: string[] = [];
   let followTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** og's load_line: an overlong prompt keeps its tail, one column
+   *  reserved (line.c:1924). */
+  const clipPrompt = (text: string): string => {
+    const max = config.screenWidth - 1;
+    if (text.length <= max) return text;
+
+    const chars = [...text];
+    return chars.slice(chars.length - max).join('');
+  };
+
   /** Records the pre-jump position into the quote mark, like
    *  lastmark - which raises og's marks_modified. */
   const remember = (): void => {
@@ -669,18 +679,20 @@ export async function bigPager(path: string): Promise<void> {
           : message
             ? `${INVERSE_ON}${message}${INVERSE_OFF}`
             : view.atEof
-              ? `${INVERSE_ON}${displayPrType() === 2
+              ? INVERSE_ON + clipPrompt((displayPrType() === 2
                   ? `${path} ${mSeg}`
-                  : name}(END)${INVERSE_OFF}`
+                  : name) + '(END)') + INVERSE_OFF
               : displayPrType() === 2
-                ? `${INVERSE_ON}${path} ${mSeg}${percent}%${INVERSE_OFF}`
+                ? INVERSE_ON +
+                  clipPrompt(`${path} ${mSeg}${percent}%`) + INVERSE_OFF
                 : displayPrType() === 1
-                  ? `${INVERSE_ON}${name}${percent}%${INVERSE_OFF}`
+                  ? INVERSE_ON + clipPrompt(`${name}${percent}%`) +
+                    INVERSE_OFF
                   : first
                     // og protos end in %t: the %f separator space
                     // trims away when nothing follows the file name
-                    ? `${INVERSE_ON}${name.replace(/ +$/, '')}` +
-                      INVERSE_OFF
+                    ? INVERSE_ON +
+                      clipPrompt(name.replace(/ +$/, '')) + INVERSE_OFF
                     : ':';
 
     const body = display.map(r => CLEAR_LINE + r).join('\n');
@@ -1316,7 +1328,16 @@ export async function bigPager(path: string): Promise<void> {
           case 'GO_MARK': marking = "'"; break;
           case 'HELP':
             // og pages FAKE_HELPFILE through the same nroff pipeline
-            if (!helpLines.length) helpLines = transformContent(help);
+            if (!helpLines.length) {
+              // og forces BS_SPECIAL + proc_backspace off for the
+              // help file (command.c:2115)
+              const saved = { bs: opt.bsMode, pb: opt.procBackspace };
+              opt.bsMode = 0;
+              opt.procBackspace = 0;
+              helpLines = transformContent(help);
+              opt.bsMode = saved.bs;
+              opt.procBackspace = saved.pb;
+            }
             helpTop = 0;
             break;
           case 'VERSION':

@@ -115,7 +115,8 @@ function buildLayout(line: string): LineLayout {
   const pushChars = (segment: string): void => {
     if (!segment) return;
 
-    if (isAscii(segment)) {
+    // eslint-disable-next-line no-control-regex
+    if (isAscii(segment) && !segment.includes('\x08')) {
       for (const char of segment) {
         chars.push(char);
         widths.push(1);
@@ -123,7 +124,15 @@ function buildLayout(line: string): LineLayout {
     } else {
       for (const cluster of splitChars(segment)) {
         chars.push(cluster);
-        widths.push(strWidth(cluster));
+
+        // a raw -u backspace counts og's pwidth: -1, or -2 when it
+        // overprints a wide char (line.c:535)
+        if (cluster === '\b') {
+          const prev = widths.length ? widths[widths.length - 1] : 0;
+          widths.push(prev === 2 ? -2 : -1);
+        } else {
+          widths.push(isAscii(cluster) ? 1 : strWidth(cluster));
+        }
       }
     }
   };

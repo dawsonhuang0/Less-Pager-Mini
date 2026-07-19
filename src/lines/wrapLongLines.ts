@@ -58,7 +58,9 @@ function wrap(lines: string[], longLine: string): void {
   const startRow = lines.length ? 0 : config.subRow;
 
   // --wordwrap boundaries live in the layout, even for plain lines
-  if (!optWordwrap() && !isStyled(longLine) && isAscii(longLine)) {
+  // eslint-disable-next-line no-control-regex
+  if (!optWordwrap() && !isStyled(longLine) && isAscii(longLine) &&
+      !longLine.includes('\x08')) {
     wrapAsciiLine(lines, longLine, startRow);
     return;
   }

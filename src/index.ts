@@ -1906,6 +1906,13 @@ function exitHelp(): boolean {
 
   const helpConfig = config;
 
+  // og restores save_bs_mode/save_proc_backspace on quit-help
+  if (helpSavedBs) {
+    opt.bsMode = helpSavedBs.bs;
+    opt.procBackspace = helpSavedBs.pb;
+    helpSavedBs = null;
+  }
+
   session.content = session.prevContent;
   applyConfig(session.prevConfig);
   applyMode(session.prevMode);
@@ -1944,12 +1951,23 @@ function exitHelp(): boolean {
   return true;
 }
 
+// -u/-U and --proc-backspace saved across the help view, like og's
+// save_bs_mode: help renders with BS_SPECIAL, quit-help restores the
+// entry values (discarding in-help toggles)
+let helpSavedBs: { bs: number, pb: number } | null = null;
+
 function prepareHelp(): void {
   if (mode.HELP) return;
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file
   recordLastPosition();
+
+  // og forces BS_SPECIAL + proc_backspace off for the help file
+  // (command.c:2115) so its overstrike bold/underline always renders
+  helpSavedBs = { bs: opt.bsMode, pb: opt.procBackspace };
+  opt.bsMode = 0;
+  opt.procBackspace = 0;
 
   session.prevConfig = config;
   resetConfig();

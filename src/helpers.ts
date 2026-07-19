@@ -5,7 +5,7 @@ import { config, mode } from './config';
 import { chopLongLines } from './lines/chopLongLines';
 import { wrapLongLines } from './lines/wrapLongLines';
 
-import { maxSubRow, visualWidth } from './lines/helpers';
+import { maxSubRow, visualWidth, isStyled } from './lines/helpers';
 
 import { search, searchPrompt, statusColChar } from './features/searching';
 
@@ -1561,7 +1561,30 @@ function getPrompt(content: string[]): string {
 
   if (!text) return colored('prompt', ':');
 
-  return colored('prompt', text, INVERSE_ON, INVERSE_OFF);
+  return colored('prompt', clipPrompt(text), INVERSE_ON, INVERSE_OFF);
+}
+
+/**
+ * Truncates the BEGINNING of an overlong prompt so its tail fits the
+ * screen minus one reserved column, like og's load_line shifting the
+ * head off (line.c:1924). Error messages are never clipped - og
+ * prints those full and lets them trash the screen.
+ */
+function clipPrompt(text: string): string {
+  const max = config.screenWidth - 1;
+  if (text.length <= max && !isStyled(text)) return text;
+  if (visualWidth(text) <= max) return text;
+
+  const chars = [...text];
+  let width = visualWidth(text);
+  let i = 0;
+
+  while (i < chars.length && width > max) {
+    width -= visualWidth(chars[i]);
+    i++;
+  }
+
+  return chars.slice(i).join('');
 }
 
 /**

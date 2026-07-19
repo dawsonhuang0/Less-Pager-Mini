@@ -45,7 +45,9 @@ export function maxSubRow(line: string): number {
   if (chopLine()) return 0;
 
   // --wordwrap boundaries live in the layout, even for plain lines
-  if (!optWordwrap() && !isStyled(line) && isAscii(line)) {
+  // eslint-disable-next-line no-control-regex
+  if (!optWordwrap() && !isStyled(line) && isAscii(line) &&
+      !line.includes('\x08')) {
     return Math.floor(Math.max(line.length - 1, 0) / config.screenWidth);
   }
 
@@ -109,24 +111,43 @@ function transformLine(line: string): string {
 
     if (pb === 1 || (pb === 0 && optBsMode() === 0)) {
       line = procBackspaces(line);
-    } else if (pb === 0 && optBsMode() === 1) {
-      // -u: the backspace really overprints, leaving plain text
-      // eslint-disable-next-line no-control-regex
-      while (/.\x08/.test(line)) line = line.replace(/.\x08/g, '');
     }
-    // otherwise \b renders as the ^H control char below
+    // -u (BS_NORMAL) keeps the raw \b: og stores the byte and the
+    // terminal overprints it; the layout counts it as pwidth -1/-2
+    // otherwise (--proc-backspace off, or -U with it unset) \b
+    // falls through to the ^H control display, like store_bs
   }
 
-  // --proc-return deletes a carriage return before the newline
-  if (optProcReturn() === 1 && line.endsWith('\r')) {
+  // og pends a CR seen before the newline and discards it
+  // (line.c:1106) under --proc-return or the default -u/-U mode;
+  // -u and -U render it as ^M instead. Mid-line CRs are ^M in
+  // EVERY mode - the pend only eats the one before the newline.
+  const pr = optProcReturn();
+
+  if ((pr === 1 || (pr === 0 && optBsMode() === 0)) &&
+      line.endsWith('\r')) {
     line = line.slice(0, -1);
   }
+
+  // -u passes the raw backspace byte through (BS_NORMAL's STORE_CHAR):
+  // the terminal overprints it, pwidth counting -1
+  const rawBs = optProcBackspace() === 0 && optBsMode() === 1;
 
   while (i < line.length) {
     const char = line[i];
 
-    // --proc-tab as ^I falls through to the control char display
-    if (char === '\t' && optProcTab() !== 2) {
+    if (char === '\x08' && rawBs) {
+      out += char;
+      col = Math.max(col - 1, 0);
+      i++;
+      continue;
+    }
+
+    // og expands tabs unless --proc-tab (or -U with it unset) says
+    // control display (line.c:1389) - then ^I falls through below
+    const pt = optProcTab();
+
+    if (char === '\t' && (pt === 1 || (pt === 0 && optBsMode() !== 2))) {
       const stop = nextTabStop(col);
       out += ' '.repeat(stop - col);
       col = stop;
@@ -232,10 +253,16 @@ function coalesceAttr(text: string, attr: 'bold' | 'underline'): string {
  * bold and `_\bX` underlined, leftover backspaces just erase.
  */
 function procBackspaces(line: string): string {
+  // og's do_append order: an identical pair is bold FIRST (so _\b_
+  // is bold, not underline), then an underscore on either side
+  // underlines - X\b_ keeps the PREVIOUS char (line.c "we replace
+  // prev_ch, but we keep its attributes" branch is only for
+  // non-underscore overstrikes)
   /* eslint-disable no-control-regex */
   const out = line
-    .replace(/_\x08(.)/g, (_, c: string) => attrText('underline', c))
     .replace(/(.)\x08\1/g, (_, c: string) => attrText('bold', c))
+    .replace(/_\x08(.)/g, (_, c: string) => attrText('underline', c))
+    .replace(/(.)\x08_/g, (_, c: string) => attrText('underline', c))
     .replace(/.\x08(.)/g, '$1');
   /* eslint-enable no-control-regex */
 
@@ -251,6 +278,18 @@ function procBackspaces(line: string): string {
  */
 export function visualWidth(line: string): number {
   if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
+
+  if (line.includes('\x08')) {
+    // og's pwidth counts a raw -u backspace as -1 (-2 after a wide
+    // char): measuring the overprinted result gives the same sum
+    /* eslint-disable no-control-regex */
+    while (/[^\x08]\x08/.test(line)) {
+      line = line.replace(/[^\x08]\x08/g, '');
+    }
+    line = line.replace(/\x08/g, '');
+    /* eslint-enable no-control-regex */
+  }
+
   return isAscii(line) ? line.length : strWidth(line);
 }
 

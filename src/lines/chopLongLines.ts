@@ -107,7 +107,9 @@ function chop(
   // --rscroll=- disables the marker: the text keeps the last column
   marker = marker && optRscroll() !== '';
 
-  if (!isStyled(longLine) && isAscii(longLine)) {
+  // eslint-disable-next-line no-control-regex
+  if (!isStyled(longLine) && isAscii(longLine) &&
+      !longLine.includes('\x08')) {
     chopAsciiLine(lines, longLine, col, width, marker);
     return;
   }
