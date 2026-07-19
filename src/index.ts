@@ -1262,8 +1262,10 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // -K exits on ctrl-C, like less's quit_on_intr
+  // -K exits on ctrl-C, like less's quit_on_intr; og's psignals
+  // quits with QUIT_INTERRUPT = 2 (signal.c:296)
   if (session.key === '\x03' && optQuitOnIntr()) {
+    process.exitCode = 2;
     session.exit();
     return;
   }

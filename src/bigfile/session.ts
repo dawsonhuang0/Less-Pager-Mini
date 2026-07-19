@@ -45,7 +45,7 @@ import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
-  optHowSearch, jumpSindex }
+  optHowSearch, jumpSindex, optQuitOnIntr }
   from '../options';
 
 import {
@@ -994,6 +994,15 @@ export async function bigPager(path: string): Promise<void> {
         // a real key means og was blocked at the tty again: any
         // WINCH from here on is live, not scan-queued
         winchGuard = false;
+
+        // -K: og's psignals quits on the interrupt before any
+        // command state - prompts and message chains included -
+        // with QUIT_INTERRUPT = 2 (signal.c:296)
+        if (key === '\x03' && optQuitOnIntr()) {
+          process.exitCode = 2;
+          quit();
+          return;
+        }
 
         // og's get_return after an error: RETURN dismisses, any
         // other key falls through as the next command (ungetcc);
