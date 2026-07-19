@@ -12,7 +12,7 @@ import { option, startOption, optionKey } from '../../src/options';
 import { colorSgr, colored, attrText, resetColors, setColor }
   from '../../src/features/color';
 
-import { formatContent, calculateEOF } from '../../src/helpers';
+import { formatContent, calculateEOF, screenRows } from '../../src/helpers';
 
 import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from '../../src/constants';
 
@@ -106,6 +106,24 @@ describe('-D option', () => {
     expect(search.message).toBe('Invalid color string "qq"');
   });
 
+  it('rejects -Dn like set_color_map with no AT_NORMAL slot', () => {
+    toggle('-Dnr\x0D');
+    expect(search.message).toBe('Invalid color string "r"');
+
+    toggle('-Dn\x0D');
+    expect(search.message).toBe('Invalid color string ""');
+  });
+
+  it('rejects strings past the 12-byte color_map entry', () => {
+    toggle('--use-color\x0D');
+    toggle('-DS123.123_____\x0D');
+    expect(search.message).toBe('Invalid color string "123.123_____"');
+
+    search.message = '';
+    toggle('-DS123.123____\x0D');
+    expect(search.message).toBe('');
+  });
+
   it('allows attribute remaps without --use-color', () => {
     toggle('-Ddr\x0D');
     expect(search.message).toBe('');
@@ -149,6 +167,19 @@ describe('color application', () => {
 
     const line = highlightLine(content[0], 0);
     expect(line).toContain(INVERSE_ON + 'alpha' + INVERSE_OFF);
+  });
+
+  it("colors the bare ':' prompt, never standout (command.c:1007)", () => {
+    // burn the short prompt's one-time ?n file name display
+    screenRows(content, []);
+
+    expect(screenRows(content, []).pop()).toBe(':');
+
+    toggle('--use-color\x0D');
+    toggle('-DPrb\x0D');
+    search.message = '';
+    expect(screenRows(content, []).pop())
+      .toBe('\x1B[31m\x1B[44m:' + STYLE_RESET);
   });
 });
 

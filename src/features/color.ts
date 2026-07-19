@@ -210,7 +210,11 @@ export function setColor(text: string): string | null {
 
   const rest = text.slice(1);
 
-  if (rest && colorSgr(rest) === null) {
+  // set_color_map fails for -Dn (AT_NORMAL has no color_map slot, so
+  // color_index returns -1; 'n' only works on the MSDOS build) and
+  // for strings that overflow its 12-byte entry
+  if (kind === 'normal' || rest.length > 11 ||
+    (rest && colorSgr(rest) === null)) {
     return `Invalid color string "${rest}"`;
   }
 

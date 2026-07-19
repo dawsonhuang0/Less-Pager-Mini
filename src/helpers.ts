@@ -1533,7 +1533,9 @@ function getPrompt(content: string[]): string {
       INVERSE_ON, INVERSE_OFF);
   }
 
-  if (mode.BUFFERING) return ':';
+  // og's ':' carries AT_NORMAL|AT_COLOR_PROMPT: colored under
+  // --use-color, never standout (command.c:1007)
+  if (mode.BUFFERING) return colored('prompt', ':');
 
   if (mode.HELP) {
     const helpPrompt = prExpand(content, hProto());
@@ -1557,7 +1559,7 @@ function getPrompt(content: string[]): string {
 
   promptPainted = true;
 
-  if (!text) return ':';
+  if (!text) return colored('prompt', ':');
 
   return colored('prompt', text, INVERSE_ON, INVERSE_OFF);
 }
