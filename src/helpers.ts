@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import { hasUngot } from './keyboard';
+
 import { config, mode } from './config';
 
 import { chopLongLines } from './lines/chopLongLines';
@@ -562,6 +564,16 @@ export function seedBlankFrame(): void {
   prevCursorCol = -1;
 }
 
+/**
+ * Seeds the previous frame with rows painted OUTSIDE the renderer
+ * (a raw squish repaint at a blocking gate), so a following frozen
+ * render preserves exactly what is on screen.
+ */
+export function seedFrameRows(rows: string[]): void {
+  prevRows = rows;
+  prevCursorCol = -1;
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole
@@ -587,10 +599,12 @@ export function render(rawContent: string[], buffer: string[]): void {
     // og's prompt() returns early on ungot input and MCA_MORE loops
     // without reaching it, so the stale rows survive any message,
     // prompt or echo on the bottom line; only a render back at the
-    // true prompt runs make_display's repaint
+    // true prompt - with NO ungot command pending - runs
+    // make_display's repaint
     const atPrompt = !search.message && !option.pending && !search.input &&
       !examine.pending && !miscInput.pending && !brackets.pending &&
-      !marks.pending && !mode.BUFFERING && !config.keyPrefix;
+      !marks.pending && !mode.BUFFERING && !config.keyPrefix &&
+      !hasUngot();
 
     if (atPrompt) {
       frozenFrame = false;

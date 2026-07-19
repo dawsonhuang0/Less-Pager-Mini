@@ -21,7 +21,7 @@ import { getLayout, emitRow } from '../lines/lineLayout';
 
 import { config } from '../config';
 
-import { getAction, splitKeys } from '../keys';
+import { getAction, splitKeys, kentToNewline } from '../keys';
 
 import { forwLine, backLine } from './lineio';
 
@@ -867,7 +867,7 @@ export async function bigPager(path: string): Promise<void> {
     };
 
     const onKey = (data: Buffer): void => {
-      for (const key of splitKeys(data.toString())) {
+      for (let key of splitKeys(data.toString())) {
         first = false;
 
         // og clears the pending S_INTERRUPT at the top of the next
@@ -913,6 +913,11 @@ export async function bigPager(path: string): Promise<void> {
             continue;
           }
         }
+
+        // og's kent translation (getcc) sits below get_return's raw
+        // read: keypad Enter is '\n' for commands and prompts, while
+        // a message's raw ESC above already dismissed it
+        key = kentToNewline(key);
 
         message = '';
 

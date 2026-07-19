@@ -1,7 +1,8 @@
 import fs from 'fs';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
-  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint }
+  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyboardFd,
+  gateReturn, gateReleasedByWinch, gateReleaseKind }
   from "./keyboard";
 
 
@@ -31,7 +32,7 @@ import {
 
 import { help } from "./lessHelp";
 
-import { getAction, splitKeys } from "./keys";
+import { getAction, splitKeys, kentToNewline } from "./keys";
 
 import {
   inputToFilePaths,
@@ -41,6 +42,7 @@ import {
   render,
   freezeFrame,
   unfreezeFrame,
+  seedFrameRows,
   seedBlankFrame,
   resetRender,
   resetDumbPaint,
@@ -179,6 +181,9 @@ import {
   gutterWidth,
   getSwindow,
   applyPendingHeader,
+  optShowPreprocError,
+  optTildes,
+  optOldBot,
   opt
 } from "./options";
 
@@ -246,7 +251,13 @@ import {
   KEYPAD_OFF,
   MOUSE_OFF,
   MOUSE_SGR_OFF,
-  BRACKETED_PASTE_OFF
+  BRACKETED_PASTE_OFF,
+  CLEAR_LINE,
+  INVERSE_ON,
+  INVERSE_OFF,
+  BOLD_ON,
+  BOLD_OFF,
+  CURSOR_TO
 } from "./constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
@@ -1331,6 +1342,7 @@ function dispatchKey(sequence: string): void {
     hadMessage &&
     (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
   ) {
+    /* raw get_return: the kent conversion below never applies */
     // dismissing the LESSOPEN warning continues into the editor,
     // like og's error() returning before the edit
     if (session.pendingEditWarn) {
@@ -1340,6 +1352,11 @@ function dispatchKey(sequence: string): void {
     render(session.content, session.buffer);
     return;
   }
+
+  // og's kent translation happens at getcc, below error()'s raw
+  // get_return: keypad Enter is '\n' for every prompt and command,
+  // while at a message the raw ESC ungot above already dismissed
+  session.key = kentToNewline(session.key);
 
   // any other command abandons a pending edit warning
   if (hadMessage && session.pendingEditWarn && session.key !== 'v') {
@@ -1948,6 +1965,31 @@ function exitHelp(): boolean {
   config.halfWindow = helpConfig.halfWindow;
   config.chopLongLines = helpConfig.chopLongLines;
 
+  // og's help exit re-edits the file: a $LESSOPEN preprocessor runs
+  // again, arming a fresh altpipe whose status can report at the
+  // next close (a second q prompts the error again, like og)
+  if (helpClosedAlt) {
+    helpClosedAlt = false;
+    const entry = files.list[files.index];
+
+    if (entry && entry.path !== '-') {
+      entry.lines = null;
+      const lines = loadFile(files.index);
+
+      if (lines) {
+        session.fullContent = lines;
+        session.content = deriveContent();
+
+        // og's repaint reads the fresh altpipe to EOI when the
+        // content ends on screen: the length is learned and the
+        // prompt shows (END) again, like eof_displayed
+        if (session.content.length <= config.window - 1) {
+          revealPipeEnd();
+        }
+      }
+    }
+  }
+
   calculateDimensions();
   calculateEOF(session.content);
 
@@ -1979,12 +2021,63 @@ function exitHelp(): boolean {
 // entry values (discarding in-help toggles)
 let helpSavedBs: { bs: number, pb: number } | null = null;
 
+// the preproc gate at help entry released with an ungot command:
+// og's prompt() skips make_display while ungot input pends, so the
+// command (a - option, a search...) runs over the STALE file screen
+// and help paints only when the interaction returns to the prompt
+let helpGateUngot = false;
+
+// the help entry closed a $LESSOPEN altpipe: og's help exit re-edits
+// the file, running the preprocessor AGAIN (edit_prev -> edit_ifile)
+let helpClosedAlt = false;
+
 function prepareHelp(): void {
   if (mode.HELP) return;
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file
   recordLastPosition();
+
+  // og's h is a full edit(FAKE_HELPFILE): leaving the file closes
+  // its $LESSOPEN altpipe, whose exit status reports here (the
+  // error gates before the help shows). og has already painted the
+  // NEW file's still-empty screen - ...skipping... over null-line
+  // tildes - when the close's error() blocks
+  const helpEntry = files.list[files.index];
+  helpClosedAlt = !!helpEntry?.alt;
+
+  // og's error() runs squish_check (output.c:720): with a squished
+  // short first paint, the un-squish repaints the JUST-CLOSED file -
+  // an empty skipping frame of tildes; a full screen stays intact
+  if (helpEntry?.alt && helpEntry.preprocError &&
+      optShowPreprocError() && process.stdout.isTTY &&
+      mode.INIT && !optOldBot()) {
+    let frame = '\r' + CLEAR_LINE + '...skipping...\n';
+
+    for (let i = 0; i < config.window - 1; i++) {
+      frame += optTildes() ? BOLD_ON + '~' + BOLD_OFF + '\n' : '\n';
+    }
+
+    fs.writeSync(1, frame);
+    mode.INIT = false;
+
+    // the raw frame bypassed the renderer: seed it as the previous
+    // rows so an unget-release's freeze preserves the tilde screen
+    const tilde = optTildes() ? BOLD_ON + '~' + BOLD_OFF : '';
+    seedFrameRows([...new Array(config.window - 1).fill(tilde), '']);
+  }
+
+  closeAlt(helpEntry);
+  helpGateUngot = gateReleaseKind() === 'unget';
+
+  // og's winch-released gate resumes a half-open edit that the
+  // resize broke: jump_loc's seek fails and a SECOND gated error
+  // chains before the help paints (og-verified byte shape:
+  // lower-left + clear, then the standout message)
+  if (gateReleasedByWinch()) {
+    fs.writeSync(1, CURSOR_TO(config.window, 1) + CLEAR_LINE);
+    gateReturn('Cannot seek to that file position');
+  }
 
   // og forces BS_SPECIAL + proc_backspace off for the help file
   // (command.c:2115) so its overstrike bold/underline always renders
@@ -2022,12 +2115,25 @@ function prepareHelp(): void {
   mode.DUMB = session.prevMode.DUMB;
 
   // the content swap is a fresh screen: scroll deltas against the
-  // parked file rows would misread the jump's direction
-  resetRender();
+  // parked file rows would misread the jump's direction - except
+  // when the preproc gate released with an ungot command: og's
+  // prompt() skips make_display while ungot input pends, so the
+  // stale FILE rows stay while the command's prompt runs on the
+  // bottom line, and help paints when it returns to the prompt
+  if (helpGateUngot) {
+    helpGateUngot = false;
+    freezeFrame();
+  } else {
+    resetRender();
+  }
 }
 
 function cleanUp(): void {
   endFollow();
+
+  // og's quit() runs check_altpipe_error before restoring the
+  // terminal: closeAlt's inline gate blocks at (press RETURN) on
+  // the way out, like error()'s get_return before term_deinit
   closeAlt(files.list[files.index]);
 
   // og's quit() edit-closes the file, whose lastmark raises

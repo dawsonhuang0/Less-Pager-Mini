@@ -93,6 +93,92 @@ export function consumeInterrupt(): void {
   ungot = [];
 }
 
+/** True while ungot input pends, og's prompt() early-return test. */
+export function hasUngot(): boolean {
+  return ungot.length > 0;
+}
+
+/**
+ * og's error()/get_return inline gate: prints the message on the
+ * prompt line, BLOCKS for one raw key (output.c:696 - RETURN, space
+ * or an interrupt dismiss; any other key ungets to run as the next
+ * command), then clears the line so the interrupted action continues.
+ */
+// how the last gateReturn ended: a dismissing key, an ungot command
+// key, or og's lwinch resize longjmp
+export type GateRelease = 'dismiss' | 'unget' | 'winch';
+let gateKind: GateRelease = 'dismiss';
+
+/** The last gate's release kind. */
+export function gateReleaseKind(): GateRelease {
+  return gateKind;
+}
+
+/** Reads whether the last gate was released by a resize. */
+export function gateReleasedByWinch(): boolean {
+  return gateKind === 'winch';
+}
+
+export function gateReturn(message: string): void {
+  gateKind = 'dismiss';
+
+  if (!process.stdout.isTTY || !keyboard().isTTY) {
+    // og's non-interactive error() prints plainly with no gate
+    fs.writeSync(1, message + '\n');
+    return;
+  }
+
+  fs.writeSync(1, '\r\x1b[K\x1b[7m' + message +
+    '  (press RETURN)\x1b[27m');
+
+  keyboard().pause();
+
+  // node's tty fd is non-blocking: og's getchr blocks, so spin on
+  // EAGAIN with a short sleep until a key arrives. A resize during
+  // the wait dismisses like og's lwinch longjmp out of the blocked
+  // read (READ_INTR at a tty read) - node can't deliver SIGWINCH
+  // while we spin, so poll the real ioctl size instead
+  const buf = Buffer.alloc(64);
+  const lock = new Int32Array(new SharedArrayBuffer(4));
+  const size0 = freshWindowSize();
+  let spins = 0;
+  let n = 0;
+
+  for (;;) {
+    try {
+      n = fs.readSync(keyboardFd(), buf, 0, 64, null);
+      if (n > 0) break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EAGAIN') {
+        n = 0;
+        break;
+      }
+    }
+
+    if ((++spins & 15) === 0) {
+      const size = freshWindowSize();
+      if (size && size0 &&
+          (size[0] !== size0[0] || size[1] !== size0[1])) {
+        gateKind = 'winch';
+        break;
+      }
+    }
+
+    Atomics.wait(lock, 0, 0, 20);
+  }
+
+  const key = n > 0 ? buf.toString('utf8', 0, n)[0] : '';
+
+  if (key && key !== '\r' && key !== '\n' && key !== ' ' &&
+      key !== '\x03') {
+    pushUngot(buf.subarray(0, n));
+    gateKind = 'unget';
+  }
+
+  keyboard().resume();
+  fs.writeSync(1, '\r\x1b[K');
+}
+
 // og keeps ISIG on in raw mode, so a typed ^C is a kernel SIGINT to
 // the WHOLE foreground process group — a pipe's writer dies with it
 // (`cmd | less` + ^C kills cmd; the pipe closes and EOF is real).

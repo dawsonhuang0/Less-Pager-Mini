@@ -12,12 +12,17 @@ import { shellQuote } from "./prompt";
 
 import { optUseLessopen, optShowPreprocError } from "../options";
 
+import { gateReturn } from "../keyboard";
+
 /** A $LESSOPEN replacement: its lines, byte size and alt file name. */
 export interface AltFile {
   lines: string[];
   size: number;
   /** `-` for pipe preprocessors, the temp file name otherwise. */
   alt: string;
+  /** The pipe preprocessor's failure message, reported when the
+   *  file is LEFT (og's close_altfile, edit.c:288), not at open. */
+  preprocError?: string;
 }
 
 /**
@@ -53,26 +58,25 @@ function shellCmd(cmd: string, input?: string): SpawnSyncReturns<string> {
 }
 
 /**
- * Reports a failed pipe preprocessor under --show-preproc-errors, like
- * edit.c's close_pipe checking the exit status.
+ * The failure message for a pipe preprocessor's exit, like edit.c's
+ * close_pipe decoding the pclose status - null on clean exit.
  */
-function reportPreprocStatus(result: SpawnSyncReturns<string>): void {
-  if (!optShowPreprocError()) return;
-
+function preprocStatusMessage(
+  result: SpawnSyncReturns<string>
+): string | null {
   if (result.signal) {
-    report(`Input preprocessor terminated: ${result.signal}`);
-    return;
+    return `Input preprocessor terminated: ${result.signal}`;
   }
 
   const status = result.status ?? 0;
-  if (status === 0) return;
+  if (status === 0) return null;
 
   if (status <= 128) {
-    report(`Input preprocessor failed (status ${status})`);
-  } else {
-    // shells add 128 to a fatal signal, like og assuming the tradition
-    report(`Input preprocessor terminated: signal ${status - 128}`);
+    return `Input preprocessor failed (status ${status})`;
   }
+
+  // shells add 128 to a fatal signal, like og assuming the tradition
+  return `Input preprocessor terminated: signal ${status - 128}`;
 }
 
 /** Splits preprocessor output into display lines. */
@@ -131,9 +135,14 @@ export function openAltFile(
   const output = result.stdout ?? '';
 
   if (pipes > 0) {
-    reportPreprocStatus(result);
-
     if (!output) {
+      // an abandoned pipe (no replacement) closes right here, so og
+      // reports its status at open (close_pipe from the open path)
+      if (optShowPreprocError()) {
+        const message = preprocStatusMessage(result);
+        if (message) report(message);
+      }
+
       // with "||" a clean exit means the file really is empty, like
       // og's FAKE_EMPTYFILE; with "|" it means no replacement
       if (pipes > 1 && result.status === 0) {
@@ -143,10 +152,13 @@ export function openAltFile(
       return null;
     }
 
+    // a USED replacement keeps its altpipe: og reports the exit
+    // status only when the file is left (close_altfile, edit.c:288)
     return {
       lines: toLines(output),
       size: Buffer.byteLength(output),
       alt: '-',
+      preprocError: preprocStatusMessage(result) ?? undefined,
     };
   }
 
@@ -172,7 +184,17 @@ export function openAltFile(
  * @param altName - The replacement name (`-` for pipes).
  * @param filename - The original file name.
  */
-export function closeAltFile(altName: string, filename: string): void {
+export function closeAltFile(
+  altName: string,
+  filename: string,
+  preprocError?: string
+): void {
+  // og's close_altfile checks the altpipe status as the file is
+  // left, the flag read at close time (a mid-session toggle counts);
+  // error() gates INLINE - the message blocks on the current screen
+  // and the interrupted action (help, quit, :n) continues after
+  if (preprocError && optShowPreprocError()) gateReturn(preprocError);
+
   const lessclose = process.env.LESSCLOSE;
   if (!lessclose) return;
 

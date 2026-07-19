@@ -63,6 +63,9 @@ interface FileEntry {
   saved: { row: number, subRow: number } | null;
   /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
   alt?: string;
+  /** A failed pipe preprocessor's message, reported at close like
+   *  og's close_altfile (edit.c:288). */
+  preprocError?: string;
 }
 
 /**
@@ -229,6 +232,7 @@ export function loadFile(index: number): string[] | null {
   if (alt) {
     entry.size = alt.size;
     entry.alt = alt.alt;
+    entry.preprocError = alt.preprocError;
 
     // a pipe-form $LESSOPEN ("|cmd") feeds a pipe whose length og
     // does not know; the file-replacement form is a seekable file
@@ -308,8 +312,9 @@ export function loadFile(index: number): string[] | null {
 export function closeAlt(entry: FileEntry | undefined): void {
   if (!entry || !entry.alt) return;
 
-  closeAltFile(entry.alt, entry.path);
+  closeAltFile(entry.alt, entry.path, entry.preprocError);
   entry.alt = undefined;
+  entry.preprocError = undefined;
 }
 
 /**

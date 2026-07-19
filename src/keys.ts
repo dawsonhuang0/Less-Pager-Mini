@@ -22,6 +22,18 @@ export function splitKeys(data: string): string[] {
 }
 
 /**
+ * og's kent translation (getcc_repl, command.c:1172): the terminal's
+ * keypad-Enter sequence (terminfo kent, \eOM on xterm) reads as a
+ * newline at getcc - commands and prompts alike - unless a lesskey
+ * file mapped it. error()'s get_return reads RAW getchr instead, so
+ * at a message the ESC ungets (dismissing) and the re-formed \eOM
+ * becomes the NEXT command's newline: dismiss AND move.
+ */
+export function kentToNewline(key: string): string {
+  return key === '\x1bOM' ? '\n' : key;
+}
+
+/**
  * Maps a key press to a corresponding pager action.
  *
  * @param key - A single-character string from user input.
