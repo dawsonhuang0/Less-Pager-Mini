@@ -47,7 +47,7 @@ import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
   optHowSearch, jumpSindex, optQuitOnIntr, optNoSearchHeaders,
-  optHeader }
+  optHeader, checkModelines }
   from '../options';
 
 import {
@@ -106,6 +106,22 @@ export async function bigPager(path: string): Promise<void> {
   scanOptions(process.env.LESS ?? '', []);
   for (const arg of takeCliOptions()) scanOptions(arg, [], false);
   flushPendopt();
+
+  // og's check_modelines runs at every edit_ifile (edit.c:632),
+  // any file size: read the first --modelines lines from the head
+  if (opt.modelines > 0) {
+    const head: string[] = [];
+    let pos = 0;
+
+    for (let i = 0; i < opt.modelines && pos < bf.size; i++) {
+      const line = forwLine(bf, pos);
+      if (!line) break;
+      head.push(line.text);
+      pos = line.next;
+    }
+
+    checkModelines(head);
+  }
 
   keyboard().setRawMode(true);
   keyboard().resume();
