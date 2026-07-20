@@ -721,11 +721,23 @@ export function highlightLine(line: string, row: number = -1): string {
 
   const stripped = tokens.map(token => token.text).join('');
 
+  // og matches the column-skipped text and hilites at linepos +
+  // skip_bytes (search_range's skip_columns): with
+  // --no-search-header-columns active, only matches past the
+  // header columns exist to highlight
+  let matchable = stripped;
+  let base = 0;
+
+  if (optNoSearchHeaders().cols && optHeader().cols > 0) {
+    matchable = skipColumns(stripped, optHeader().cols);
+    base = stripped.length - matchable.length;
+  }
+
   const ranges: [number, number, ColorKind][] = [];
   globalRegex.lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = globalRegex.exec(stripped)) !== null) {
+  while ((match = globalRegex.exec(matchable)) !== null) {
     if (search.subs.size && match.indices) {
       for (const n of search.subs) {
         const span = match.indices[n];
@@ -742,6 +754,14 @@ export function highlightLine(line: string, row: number = -1): string {
   }
 
   if (!ranges.length) return line;
+
+  // shift the skipped-text offsets back into the full line
+  if (base) {
+    for (const range of ranges) {
+      range[0] += base;
+      range[1] += base;
+    }
+  }
 
   ranges.sort((a, b) => a[0] - b[0]);
 
