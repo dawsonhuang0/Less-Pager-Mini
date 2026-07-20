@@ -883,7 +883,8 @@ const acts: Record<Actions, () => void> = {
     forceLineBackward(session.content, bufferToNum(session.buffer) || 1),
   FORCE_WINDOW_BACKWARD: () => forceLineBackward(
     session.content,
-    bufferToNum(session.buffer) || getSwindow()
+    bufferToNum(session.buffer) || getSwindow(),
+    true
   ),
   NEWLINE_FORWARD: () => newlineForward(session.content, bufferToNum(session.buffer) || 1),
   NEWLINE_BACKWARD: () =>

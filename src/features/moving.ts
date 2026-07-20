@@ -61,19 +61,38 @@ function ffCapForward(content: string[], offset: number): number {
 }
 
 /**
- * Remembers the first unread line before a forward movement, like less
- * setting attnpos for -w/-W: `-W` marks any forward movement, `-w`
- * only full screens.
+ * og's attnpos for -w/-W: every move command first clears the old
+ * highlight (cmd_exec's clear_attn, command.c:126), then remembers
+ * the first unread line under its own condition (command.c:1660+).
+ * Forward marks the old bottompos - the first row below the screen.
  *
  * @param content - Full content lines.
- * @param screenful - True when moving by a whole window.
+ * @param cond - The og per-command show_attn condition.
  */
-function setAttn(content: string[], screenful: boolean): void {
-  const attn = optShowAttn();
-  if (!attn || (attn === 1 && !screenful)) return;
+export function setAttnForward(content: string[], cond: boolean): void {
+  config.attnRow = -1;
+  if (!cond) return;
 
   const next = bottomRow(content) + 1;
   config.attnRow = next < content.length ? next : -1;
+}
+
+/**
+ * The backward counterpart (v693, command.c:1689): attn marks
+ * toppos-1 - the line just above the old top, or the same line's
+ * earlier part when the top sat mid-line - guarded off at BOF.
+ *
+ * @param cond - The og per-command show_attn condition.
+ */
+export function setAttnBackward(cond: boolean): void {
+  config.attnRow = -1;
+  if (!cond) return;
+
+  if (config.subRow > 0) {
+    config.attnRow = config.row;
+  } else if (config.row > 0 && config.blankTop === 0) {
+    config.attnRow = config.row - 1;
+  }
 }
 
 /**
@@ -105,7 +124,8 @@ function streamingWait(owed: number, moved: boolean): boolean {
 export function lineForward(
   content: string[],
   offset: number,
-  ignoreEOF: boolean = false
+  ignoreEOF: boolean = false,
+  attn: boolean = true
 ): void {
   // --past-eof lets every forward scroll continue past (END), like
   // less forcing forw()
@@ -146,7 +166,9 @@ export function lineForward(
     return;
   }
 
-  setAttn(content, false);
+  // j/J and the wheel mark attn only under -W with a count
+  // (command.c:1702: OPT_ONPLUS && number > 1)
+  if (attn) setAttnForward(content, optShowAttn() === 2 && offset > 1);
 
   // scrolling forward consumes blank rows padded above BOF first
   if (config.blankTop) {
@@ -254,7 +276,11 @@ export function lineForward(
  * @param content - Full content lines.
  * @param offset - Lines or sub-rows to scroll backward.
  */
-export function lineBackward(content: string[], offset: number): number {
+export function lineBackward(
+  content: string[],
+  offset: number,
+  attn: boolean = true
+): number {
   if (config.row === 0 && config.subRow === 0) {
     if (mode.INIT) mode.INIT = false;
 
@@ -275,8 +301,9 @@ export function lineBackward(content: string[], offset: number): number {
     return 0;
   }
 
-  // backward movement forgets the -w unread highlight, like less
-  config.attnRow = -1;
+  // k marks the line above the old top only under -W with a count
+  // (v693, command.c:1715)
+  if (attn) setAttnBackward(optShowAttn() === 2 && offset > 1);
 
   // og's back() clamps at the header start: each line is checked
   // through after_header_pos (forwback.c:426), so rows above the
@@ -365,14 +392,21 @@ export function lineBackward(content: string[], offset: number): number {
  * @param content - Full content lines.
  * @param offset - Lines or sub-rows to scroll backward.
  */
-export function forceLineBackward(content: string[], offset: number): void {
+export function forceLineBackward(
+  content: string[],
+  offset: number,
+  screenful: boolean = false
+): void {
   if (mode.INIT) mode.INIT = false;
-  config.attnRow = -1;
+
+  // K needs -W and a count (A_BF_LINE); ESC-b marks under -W alone
+  // (A_BF_SCREEN, command.c:1790)
+  setAttnBackward(optShowAttn() === 2 && (screenful || offset > 1));
 
   let leftover = offset;
 
   if (config.row !== 0 || config.subRow !== 0) {
-    leftover = lineBackward(content, offset);
+    leftover = lineBackward(content, offset, false);
   }
 
   if (leftover > 0) padBlankTop(content, leftover);
@@ -439,7 +473,8 @@ export function newlineForward(content: string[], offset: number): void {
     return;
   }
 
-  setAttn(content, false);
+  // ESC-j shares A_F_NEWLINE's -W-with-count condition
+  setAttnForward(content, optShowAttn() === 2 && offset > 1);
 
   // land on the next line boundary, but never past the EOF anchor
   const target = config.row + offset;
@@ -476,7 +511,8 @@ export function newlineBackward(content: string[], offset: number): void {
     return;
   }
 
-  config.attnRow = -1;
+  // ESC-k shares A_B_NEWLINE's -W-with-count condition
+  setAttnBackward(optShowAttn() === 2 && offset > 1);
 
   // a mid-line top first snaps back to its line start
   if (config.subRow > 0) {
@@ -522,12 +558,16 @@ export function windowForward(
   buffer: string[],
   ignoreEOF: boolean = false
 ): void {
-  if (!mode.EOF || ignoreEOF) setAttn(content, true);
+  // f marks under any -w state (command.c:1670); ESC-SPACE
+  // (A_FF_SCREEN) needs -W (command.c:1803)
+  setAttnForward(content,
+    ignoreEOF ? optShowAttn() === 2 : optShowAttn() > 0);
 
   lineForward(
     content,
     bufferToNum(buffer) || getSwindow(),
-    ignoreEOF
+    ignoreEOF,
+    false
   );
 }
 
@@ -541,9 +581,14 @@ export function windowForward(
  * @param buffer - A string array that represents the number of lines to scroll.
  */
 export function windowBackward(content: string[], buffer: string[]): void {
+  // b marks the line above the old top under any -w state (v693,
+  // command.c:1689)
+  setAttnBackward(optShowAttn() > 0);
+
   lineBackward(
     content,
-    bufferToNum(buffer) || getSwindow()
+    bufferToNum(buffer) || getSwindow(),
+    false
   );
 }
 
@@ -558,7 +603,10 @@ export function windowBackward(content: string[], buffer: string[]): void {
  */
 export function setWindowForward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
-  lineForward(content, getSwindow());
+
+  // z is A_F_WINDOW: the f condition (command.c:1670)
+  setAttnForward(content, optShowAttn() > 0);
+  lineForward(content, getSwindow(), false, false);
 }
 
 /**
@@ -572,7 +620,10 @@ export function setWindowForward(content: string[], buffer: string[]): void {
  */
 export function setWindowBackward(content: string[], buffer: string[]): void {
   config.setWindow = bufferToNum(buffer) || config.setWindow;
-  lineBackward(content, getSwindow());
+
+  // w is A_B_WINDOW: the b condition (command.c:1689)
+  setAttnBackward(optShowAttn() > 0);
+  lineBackward(content, getSwindow(), false);
 }
 
 /**
@@ -590,7 +641,11 @@ export function setHalfWindowForward(
   buffer: string[]
 ): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
-  lineForward(content, config.setHalfWindow || config.halfWindow);
+
+  // d is A_F_SCROLL: -W only (command.c:1829)
+  setAttnForward(content, optShowAttn() === 2);
+  lineForward(content, config.setHalfWindow || config.halfWindow,
+    false, false);
 }
 
 /**
@@ -609,7 +664,11 @@ export function setHalfWindowBackward(
   buffer: string[]
 ): void {
   config.setHalfWindow = bufferToNum(buffer) || config.setHalfWindow;
-  lineBackward(content, config.setHalfWindow || config.halfWindow);
+
+  // u is A_B_SCROLL: -W only, marking above the old top
+  setAttnBackward(optShowAttn() === 2);
+  lineBackward(content, config.setHalfWindow || config.halfWindow,
+    false);
 }
 
 /**
