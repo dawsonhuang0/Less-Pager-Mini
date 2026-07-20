@@ -183,6 +183,7 @@ import {
   gutterWidth,
   getSwindow,
   applyPendingHeader,
+  optHeader,
   optShowPreprocError,
   optTildes,
   optOldBot,
@@ -726,6 +727,12 @@ async function contentPager(initialContent: string[]): Promise<void> {
   // og's deferred init_header (find_pos works, the view opens at the
   // header start via the first jump's after_header_pos)
   applyPendingHeader(session.fullContent);
+
+  // og never squishes the first paint with a header configured
+  // (forwback.c's squish condition requires header_lines == 0 &&
+  // header_cols == 0): a short first screen paints top-anchored
+  // with tildes instead of the lower-left scroll-up
+  if (optHeader().lines > 0 || optHeader().cols > 0) mode.INIT = false;
 
   // the initial open ran before the dimensions were known: a short
   // pipe-form $LESSOPEN alt reveals its length now (og's first
