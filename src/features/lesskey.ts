@@ -374,7 +374,7 @@ export function loadLesskey(): void {
   // the content table is searched first in og, so it parses first
   // here (bindings keep the first definition, like cmd_search)
   const content = process.env.LESSKEY_CONTENT;
-  if (content) parseLesskey(content, 'lesskey-content');
+  if (content) parseLesskeyContent(content);
 
   const file = lesskeyFile();
 
@@ -574,6 +574,49 @@ function lesskeyFile(): string | null {
  * @param filename - Name reported in parse errors.
  */
 export function parseLesskey(text: string, filename: string): void {
+  parseLesskeyText(text, filename);
+}
+
+/**
+ * Parses inline lesskey source, like og's parse_lesskey_content
+ * (lesskey_parse.c:738): lines end at a newline OR a semicolon, a
+ * backslash escapes a literal semicolon, and a line hitting the
+ * 1023-char cap SPLITS - the remainder becomes the next line.
+ *
+ * @param text - The --lesskey-content / $LESSKEY_CONTENT value.
+ */
+export function parseLesskeyContent(text: string): void {
+  const lines: string[] = [];
+  let line = '';
+
+  for (let i = 0; i < text.length; i++) {
+    if (line.length >= 1023) {
+      lines.push(line);
+      line = '';
+    }
+
+    const ch = text[i];
+
+    if (ch === '\n' || ch === ';') {
+      lines.push(line);
+      line = '';
+      continue;
+    }
+
+    if (ch === '\\' && text[i + 1] === ';') {
+      line += ';';
+      i++;
+      continue;
+    }
+
+    line += ch;
+  }
+
+  if (line) lines.push(line);
+  parseLesskeyText(lines.join('\n'), 'lesskey-content');
+}
+
+function parseLesskeyText(text: string, filename: string): void {
   let section: 'command' | 'edit' | 'var' = 'command';
 
   parseFile = filename;

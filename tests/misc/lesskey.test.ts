@@ -13,6 +13,7 @@ import {
   translateEditKey,
   resetLesskey,
   parseLesskey,
+  parseLesskeyContent,
   parseLesskeyBinary,
   loadLesskey
 } from '../../src/features/lesskey';
@@ -367,5 +368,16 @@ describe('loadLesskey', () => {
 
     loadLesskey();
     expect(userBinding('x')).toBeUndefined();
+  });
+});
+
+describe('lesskey content splitting', () => {
+  it('splits lines on semicolons with backslash escapes, like og', () => {
+    // og parse_lesskey_content (lesskey_parse.c:738): \n or ';'
+    // ends a line, a backslash escapes a literal semicolon
+    parseLesskeyContent('#command;z quit;\\; forw-line');
+
+    expect(userBinding('z')?.action).toBe('EXIT');
+    expect(userBinding(';')?.action).toBe('LINE_FORWARD');
   });
 });
