@@ -1190,9 +1190,20 @@ function placeAt(
 ): void {
   let steps = sindex;
 
+  // og's back() never scrolls above the current header start
+  // (forwback.c: pos != after_header_pos breaks the paint loop -
+  // even at BOF, since after_header_pos(NULL) is the header start),
+  // so with a header active the -j back-walk clamps with NO blank
+  // rows and a jump to the header start stays aligned under the
+  // overlay
+  const header = optHeader();
+  const headerOn = header.lines > 0;
+  const floor = headerOn ? header.start : 0;
+
   if (chopLine() || config.col) {
-    setTop(Math.max(row - steps, 0), 0);
-    config.blankTop = Math.max(steps - row, 0);
+    const top = Math.max(row - steps, floor);
+    setTop(top, 0);
+    config.blankTop = headerOn ? 0 : Math.max(steps - row, 0);
     return;
   }
 
@@ -1206,8 +1217,9 @@ function placeAt(
       break;
     }
 
-    if (topRow === 0) {
-      blankTop = steps - topSubRow;
+    if (topRow === floor) {
+      // only a headerless BOF pads with blank rows
+      blankTop = headerOn ? 0 : steps - topSubRow;
       topSubRow = 0;
       break;
     }

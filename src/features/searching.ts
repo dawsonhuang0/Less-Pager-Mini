@@ -971,14 +971,20 @@ const isAsciiText = (text: string): boolean =>
   /^[\x00-\x7F]*$/.test(text);
 
 /**
- * Whether a row is excluded from searches by --no-search-header-lines.
+ * og's search_range start adjust (search.c:1541): with
+ * --no-search-header-lines a start within the first header_lines
+ * lines of the FILE (ABSOLUTE line numbers - og's own quirk, blind
+ * to where the header actually starts) moves past them. That is the
+ * ONLY exclusion: og never skips header lines mid-scan, so backward
+ * and wrapped searches still run INTO the header and can match it.
  */
-function searchSkipsRow(row: number): boolean {
-  if (!optNoSearchHeaders().lines) return false;
+function noSearchStart(start: ScreenPos): ScreenPos {
+  if (!optNoSearchHeaders().lines) return start;
 
-  const header = optHeader();
-  return header.lines > 0 && row >= header.start &&
-    row < header.start + header.lines;
+  const lines = optHeader().lines;
+  if (lines === 0 || start.row >= lines) return start;
+
+  return { row: lines, sub: 0 };
 }
 
 /**
@@ -1006,15 +1012,19 @@ function findMatch(
   let firstSub = 0;
 
   if (fromStart) {
-    first = dir > 0 ? 0 : content.length - 1;
+    // the start adjust covers ch_zero starts too (search.c:1541)
+    first = dir > 0 ? noSearchStart({ row: 0, sub: 0 }).row
+      : content.length - 1;
   } else {
-    const start = searchStartPos(content, dir, afterTarget);
+    let start = searchStartPos(content, dir, afterTarget);
 
     if (start === null) {
       // og's search_pos found no place to start from
       search.message = 'Nothing to search';
       return;
     }
+
+    start = noSearchStart(start);
 
     if (dir > 0) {
       first = start.row;
@@ -1174,8 +1184,7 @@ function scanRange(
           : content[row].slice(0, fromOffset))
         : content[row];
 
-      if (!searchSkipsRow(row) && matchesLine(line) &&
-        --state.remaining === 0) {
+      if (matchesLine(line) && --state.remaining === 0) {
         hit = row;
         return true;
       }

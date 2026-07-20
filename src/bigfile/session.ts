@@ -46,7 +46,8 @@ import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
-  optHowSearch, jumpSindex, optQuitOnIntr }
+  optHowSearch, jumpSindex, optQuitOnIntr, optNoSearchHeaders,
+  optHeader }
   from '../options';
 
 import {
@@ -521,6 +522,22 @@ export async function bigPager(path: string): Promise<void> {
       }
 
       start = view.screenPos(k);
+    }
+
+    // og's start adjust (search.c:1541): --no-search-header-lines
+    // moves a start within the first header_lines lines of the file
+    // past them - the only exclusion; backward scans still run into
+    // the header
+    if (optNoSearchHeaders().lines && optHeader().lines > 0) {
+      let pos = 0;
+
+      for (let i = 0; i < optHeader().lines; i++) {
+        const line = forwLine(bf, pos);
+        if (!line) break;
+        pos = line.next;
+      }
+
+      if (start.pos < pos) start = { pos, subRow: 0 };
     }
 
     let steps = 0;
