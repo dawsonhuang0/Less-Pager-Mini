@@ -175,26 +175,35 @@ export function setStartupLogFile(name: string, force: boolean): void {
  * use_logfile when the input pipe opens: regular files are not logged,
  * an existing file raises the overwrite query, and success is silent.
  *
- * @param content - Full content lines to log.
+ * @returns The pending log, or null when nothing should be logged.
  */
-export function applyStartupLogFile(content: string[]): void {
+export function takeStartupLog(): { name: string, force: boolean } | null {
   const log = startupLog;
   startupLog = null;
 
-  if (!log) return;
+  if (!log) return null;
 
+  // og's CH_CANSEEK guard: seekable input never logs (edit.c:961)
   const entry = files.list[files.index];
-  if (!entry || entry.path !== '-') return;
+  if (!entry || entry.path !== '-') return null;
 
-  overwrite.file = log.name;
+  return log;
+}
 
-  if (!log.force && fs.existsSync(log.name)) {
-    overwrite.pending = true;
-    overwrite.reminder = false;
-    return;
+/**
+ * Appends newly streamed lines to the active log, like og's ch.c
+ * writing the log file as each buffer is read from the pipe.
+ *
+ * @param lines - The decoded lines just added to the content.
+ */
+export function appendLogLines(lines: string[]): void {
+  if (!logFile || !lines.length) return;
+
+  try {
+    fs.appendFileSync(logFile, lines.map(line => line + '\n').join(''));
+  } catch {
+    // og writes blind after the open; a failed write is dropped
   }
-
-  writeLogFile(content, false, true);
 }
 
 /**
@@ -570,9 +579,9 @@ export function writeLogFile(
     // like less reporting the log file once it is in use
     logFile = overwrite.file;
     if (!quiet) search.message = `Log file "${overwrite.file}"`;
-  } catch (error) {
-    const code = (error as { code?: string }).code ?? 'cannot write';
-    search.message = `${overwrite.file}: ${code}`;
+  } catch {
+    // og's open-failure error, edit.c:1032
+    search.message = `Cannot write to "${overwrite.file}"`;
   }
 }
 

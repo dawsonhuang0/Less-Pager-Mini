@@ -16,6 +16,8 @@ import { lineForward } from './moving';
 
 import { searchInterrupted } from './searching';
 
+import { appendLogLines } from './misc';
+
 import { keyboard, consumeInterrupt } from '../keyboard';
 
 import { startupErrors } from '../startup';
@@ -492,6 +494,11 @@ function growPipe(raw: string[]): void {
   const entry = files.list[files.index];
 
   session.fullContent.push(...raw);
+
+  // og's ch.c writes the log file as each pipe buffer is read: an
+  // active -o/s log receives streamed lines live, not just the
+  // content buffered when it opened
+  appendLogLines(raw);
 
   // a pipe's byte count grows with the data, for %b and = (one
   // newline per line, like byteOffset); a streamed file's size is

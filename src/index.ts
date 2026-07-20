@@ -204,7 +204,7 @@ import {
   writeLogFile,
   versionMessage,
   printVersion,
-  applyStartupLogFile,
+  takeStartupLog,
   takeCmdAtPrompt,
   onShellAutosave,
   onShellHistTouch,
@@ -677,6 +677,61 @@ async function contentPager(initialContent: string[]): Promise<void> {
   mode.DUMB = dumbTerminal();
 
   // messages set after the scan (a forced open's read error) still
+  /* eslint-disable-next-line no-inner-declarations */
+  async function logQuery(prompt: string): Promise<string> {
+    process.stdout.write(prompt);
+    const answer = await warnReturn();
+    process.stdout.write('\n');
+
+    // og's query() quits on a capital Q only (output.c:808)
+    if (answer === 'Q') {
+      keyboard().setRawMode(false);
+      closeTtyKeyboard();
+      process.exit(0);
+    }
+
+    return answer;
+  }
+
+  // og's use_logfile (edit.c:954) runs at edit time, BEFORE the
+  // errmsgs gate and term_init: the -o overwrite query asks on the
+  // plain screen, one raw key per ask, and only a capital Q quits
+  // (query() itself, output.c:808) - lowercase q retypes like any
+  // other invalid answer. A failed open error()s into the same
+  // pre-screen message flow below, like og's errmsgs.
+  const startupLog = takeStartupLog();
+
+  if (startupLog) {
+    overwrite.file = startupLog.name;
+
+    let answer = startupLog.force || !fs.existsSync(startupLog.name)
+      ? 'O'
+      : await logQuery(`Warning: "${startupLog.name}" exists; ` +
+          "Overwrite, Append, Don't log, or Quit? ");
+
+    for (let decided = false; !decided;) {
+      switch (answer) {
+        case 'O': case 'o':
+          writeLogFile(session.fullContent, false, true);
+          decided = true;
+          break;
+        case 'A': case 'a':
+          writeLogFile(session.fullContent, true, true);
+          decided = true;
+          break;
+        case 'D': case 'd':
+          decided = true;
+          break;
+        default:
+          answer = await logQuery("Overwrite, Append, Don't log, " +
+            'or Quit? (Type "O", "A", "D" or "Q") ');
+      }
+    }
+
+    keyboard().setRawMode(false);
+    keyboard().pause();
+  }
+
   // print here before the screen erases them
   if (search.message) {
     printStartupError(search.message);
@@ -719,9 +774,6 @@ async function contentPager(initialContent: string[]): Promise<void> {
     prepareHelp();
     session.startupHelp = true;
   }
-
-  // -o/-O in $LESS start logging piped-in content right away
-  applyStartupLogFile(session.fullContent);
 
   // a command-line --header applies now that the file is open, like
   // og's deferred init_header (find_pos works, the view opens at the
