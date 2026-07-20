@@ -32,7 +32,8 @@ import {
 
 import { help } from "./lessHelp";
 
-import { getAction, splitKeys, kentToNewline } from "./keys";
+import { getAction, splitKeys, kentToNewline, tailCascade }
+  from "./keys";
 
 import {
   inputToRawPaths,
@@ -1538,7 +1539,26 @@ function dispatchKey(sequence: string): void {
     }
 
     const action = userStop() ? undefined : getAction(prefix + session.key);
-    if (action === undefined && session.key.length > 1) extraBells();
+
+    // og's tail cascade covers the ^X/: prefixed bytes all the same
+    // (the ":" entries live in the same cmd_decode tables)
+    if (
+      action === undefined && !userStop() && session.key.length > 1 &&
+      !mode.DUMB
+    ) {
+      for (const piece of tailCascade(prefix + session.key)) {
+        if (session.exited) return;
+
+        if (piece === null) {
+          act(undefined);
+        } else {
+          dispatchKey(piece);
+        }
+      }
+
+      return;
+    }
+
     act(action);
     return;
   }
@@ -1759,22 +1779,33 @@ function dispatchKey(sequence: string): void {
       action = userStop() ? undefined : getAction(session.key);
     }
 
+    // og's cmd_decode matches bindings against the TAIL of the
+    // accumulated bytes (decode.c:943, cmd_match:845): stray prefix
+    // bytes age out silently, a completed tail binding runs as its
+    // own command (ESC j scrolls, ESC + arrow arrows), and an
+    // unmatched buffer is ONE invalid command - bell, count dropped
     if (
-      action === undefined && session.escCount && session.key.length > 1 && !mode.DUMB
+      action === undefined && !mode.DUMB && !userStop() &&
+      seq.length > 1 && !seq.startsWith('\x1b[<')
     ) {
-      extraBells();
+      session.escCount = 0;
+
+      for (const piece of tailCascade(seq)) {
+        if (session.exited) return;
+
+        if (piece === null) {
+          act(undefined);
+        } else {
+          dispatchKey(piece);
+        }
+      }
+
+      return;
     }
 
     act(action);
     session.escCount = 0;
   }
-}
-
-// og reprocesses the leftover bytes of a special key after a failed
-// prefix combo, ringing for each — ESC + an arrow key rings three times
-function extraBells(): void {
-  ringBell();
-  ringBell();
 }
 
 function init() {

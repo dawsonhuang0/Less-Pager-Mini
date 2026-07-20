@@ -21,7 +21,8 @@ import { getLayout, emitRow } from '../lines/lineLayout';
 
 import { config } from '../config';
 
-import { getAction, splitKeys, kentToNewline } from '../keys';
+import { getAction, splitKeys, kentToNewline, tailCascade }
+  from '../keys';
 
 import { forwLine, backLine } from './lineio';
 
@@ -119,6 +120,9 @@ export async function bigPager(path: string): Promise<void> {
   let pattern: RegExp | null = null;
   let lastDir: 1 | -1 = 1;
   let message = '';
+
+  // a pending lone ESC, like og's A_PREFIX waiting for the rest
+  let escPrefix = '';
 
 
   // marks and the quote mark, like og mark.c over POSITIONs
@@ -982,7 +986,20 @@ export async function bigPager(path: string): Promise<void> {
     };
 
     const onKey = (data: Buffer): void => {
-      for (let key of splitKeys(data.toString())) {
+      const pending = splitKeys(data.toString());
+
+      while (pending.length > 0) {
+        let key = pending.shift()!;
+
+        // an empty entry is a cascade-resolved invalid buffer:
+        // og's lbell with the pending count dropped
+        if (key === '') {
+          ringBell();
+          buffer = [];
+          draw();
+          continue;
+        }
+
         first = false;
 
         // og clears the pending S_INTERRUPT at the top of the next
@@ -1308,6 +1325,19 @@ export async function bigPager(path: string): Promise<void> {
           continue;
         }
 
+        // og's A_PREFIX over a lone ESC: it waits silently for the
+        // rest of the combination (repeated ESCs stay one prefix);
+        // the next key joins it and decodes as a whole
+        if (key === '\x1b') {
+          escPrefix = '\x1b';
+          continue;
+        }
+
+        if (escPrefix) {
+          key = escPrefix + key;
+          escPrefix = '';
+        }
+
         if (key === '/' || key === '?') {
           searching = key;
           cmdOpen(key, { history: search.history });
@@ -1346,6 +1376,16 @@ export async function bigPager(path: string): Promise<void> {
 
         const n = parseInt(buffer.join(''), 10) || 1;
         const action = getAction(key);
+
+        // og's cmd_decode matches bindings against the byte TAIL
+        // (decode.c:943): an unbound sequence resolves to bound
+        // tails that replay as commands, unmatched buffers belling
+        // once each ('' sentinel above) with the count dropped
+        if (action === undefined && key.length > 1 &&
+            !key.startsWith('\x1b[<')) {
+          pending.unshift(...tailCascade(key).map(p => p ?? ''));
+          continue;
+        }
 
         if (key >= '0' && key <= '9' && key.length === 1) {
           buffer.push(key);
@@ -1549,8 +1589,9 @@ export async function bigPager(path: string): Promise<void> {
             break;
           }
           default:
-            // og bells on unmapped keys; mouse reports stay silent
-            if (!key.startsWith('\x1b[<')) process.stdout.write('\x07');
+            // og bells on unmapped keys (lbell); mouse reports stay
+            // silent
+            if (!key.startsWith('\x1b[<')) ringBell();
             break;
         }
 

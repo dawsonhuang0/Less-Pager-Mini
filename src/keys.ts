@@ -46,6 +46,68 @@ export function getAction(key: string): Actions | undefined {
 }
 
 /**
+ * og's cmd_match (decode.c:845): the largest N where the first N
+ * chars of a binding equal the LAST N chars of the buffer.
+ */
+function tailMatch(buf: string, entry: string): number {
+  for (let n = Math.min(buf.length, entry.length); n > 0; n--) {
+    if (buf.slice(-n) === entry.slice(0, n)) return n;
+  }
+
+  return 0;
+}
+
+/**
+ * Decodes an accumulated buffer like og's cmd_decode (decode.c:943):
+ * bindings match against the buffer's TAIL, so stray prefix bytes
+ * age out silently.
+ *
+ * @returns The binding the tail completes, `prefix` while more
+ *          input could complete one, or `invalid`.
+ */
+function tailDecode(buf: string): string | 'prefix' | 'invalid' {
+  let matchLen = 0;
+  let result: string | 'prefix' | 'invalid' = 'invalid';
+
+  for (const entry of Object.keys(keys)) {
+    const t = tailMatch(buf, entry);
+    if (t === 0 || t < matchLen) continue;
+
+    // og's sequential scan: later entries take ties, an equal-length
+    // partial outranking an earlier completion
+    result = t === entry.length ? entry : 'prefix';
+    matchLen = t;
+  }
+
+  return result;
+}
+
+/**
+ * Resolves the bytes of an unbound sequence like og reprocessing
+ * them through cmd_decode: a completed tail binding comes out as a
+ * replayable key (ESC j still scrolls, a digit still counts), an
+ * unmatched buffer as null - ONE invalid command, bell and count
+ * dropped. og keeps waiting on a trailing partial match; sequences
+ * arrive whole here, so a dangling prefix simply drops.
+ */
+export function tailCascade(stream: string): Array<string | null> {
+  const out: Array<string | null> = [];
+  let buf = '';
+
+  for (const ch of stream) {
+    buf += ch;
+    const m = tailDecode(buf);
+
+    if (m === 'prefix') continue;
+
+    buf = '';
+    out.push(m === 'invalid' ? null : m);
+  }
+
+  return out;
+}
+
+/**
  * Maps single-character key inputs to their corresponding pager actions.
  *
  * This keybinding object enables interpreting user keystrokes (like `:` or `q`)

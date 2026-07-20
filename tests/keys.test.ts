@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { getAction, splitKeys } from '../src/keys';
+import { getAction, splitKeys, tailCascade } from '../src/keys';
 
 it('valid keys should have their corresponding event as result', () => {
   // ':' alone is a command prefix, not a key: its combos map instead
@@ -87,4 +87,25 @@ it('maps window movement keys', () => {
   expect(getAction('u')).toBe('SET_HALF_WINDOW_BACKWARD');
   expect(getAction('r')).toBe('REPAINT');
   expect(getAction('R')).toBe('DROP_INPUT_REPAINT');
+});
+
+it('resolves unbound sequences by their tail, like cmd_decode', () => {
+  // og's cmd_match anchors bindings to the buffer's LAST chars
+  // (decode.c:845): a stray ESC ages out and the tail runs
+  expect(tailCascade('\x1Bq')).toEqual(['q']);
+  expect(tailCascade('\x1B\x1BOA')).toEqual(['\x1BOA']);
+
+  // a fully bound combination stays whole
+  expect(tailCascade('\x1Bj')).toEqual(['\x1Bj']);
+
+  // no entry shares the tail: ONE invalid command for the buffer
+  expect(tailCascade('\x1Bx')).toEqual([null]);
+
+  // digits complete mid-stream, the trailing junk is one invalid;
+  // the '1' rides the \x1B[1;… modifier-arrow prefixes and ages out
+  // (og, binding none, would yield ['1', '5', null] - same bell)
+  expect(tailCascade('\x1B[15~')).toEqual(['5', null]);
+
+  // a dangling partial match drops (og would wait for more input)
+  expect(tailCascade('\x1B\x1B')).toEqual([]);
 });
