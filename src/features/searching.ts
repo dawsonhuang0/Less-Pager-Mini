@@ -682,6 +682,15 @@ export function highlightLine(line: string, row: number = -1): string {
     return line;
   }
 
+  // og's hilite list holds only lines a search actually matched:
+  // under --no-search-header-lines the start adjust keeps the first
+  // header_lines FILE lines out of it (search.c:1541, absolute like
+  // the adjust), so they never highlight - pinned overlay included
+  if (optNoSearchHeaders().lines && row >= 0 &&
+      row < optHeader().lines) {
+    return line;
+  }
+
   const hilite = optHiliteSearch();
   if (hilite === 0) return line;
   if (hilite === 1 && row !== lastMatchRow) return line;
