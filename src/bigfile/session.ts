@@ -27,7 +27,7 @@ import { getAction, splitKeys, kentToNewline, tailCascade }
 import { forwLine, backLine } from './lineio';
 
 import { search, searchInterrupted, addHistory, onAutosave, onHistTouch,
-  onHistRecord } from '../features/searching';
+  onHistRecord, stripStyles } from '../features/searching';
 
 import { addShellHistory, onShellAutosave, onShellHistTouch,
   onShellHistRecord } from '../features/misc';
@@ -47,8 +47,10 @@ import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
   optHowSearch, jumpSindex, optQuitOnIntr, optNoSearchHeaders,
-  optHeader, checkModelines }
+  optHeader, checkModelines, optMatchShift, optRscroll }
   from '../options';
+
+import { strWidth } from 'char-width';
 
 import {
   cmd,
@@ -485,6 +487,48 @@ export async function bigPager(path: string): Promise<void> {
     } else {
       view.top = { pos, subRow: sub };
     }
+
+    shiftMatch(pos);
+  };
+
+  /**
+   * Shifts the screen horizontally so the match is visible, like
+   * search.c's shift_visible: an off-screen match lands --match-shift
+   * columns from the left edge. og only shifts in the chop branch;
+   * wrapped long lines bottom-jump instead (bottomSub).
+   */
+  const shiftMatch = (linePos: number): void => {
+    if (!chopLine() || !pattern) return;
+
+    const line = linePos < bf.size ? forwLine(bf, linePos) : null;
+    if (!line) return;
+
+    const text = stripStyles(displayText(line.text));
+    const match = pattern.exec(text);
+    if (!match) return;
+
+    const startCol = strWidth(text.slice(0, match.index));
+    const endCol = startCol + strWidth(match[0]);
+    // the marker column only exists while --rscroll is enabled
+    // (search.c:641: sc_width - (rscroll_char ? 1 : 0))
+    const swidth = config.screenWidth - (optRscroll() ? 1 : 0);
+    let newCol: number;
+
+    if (endCol < swidth) {
+      // the whole match fits the unshifted screen
+      newCol = 0;
+    } else if (startCol > config.col && endCol < config.col + swidth) {
+      // already visible; leave the shift unchanged
+      newCol = config.col;
+    } else {
+      const eolCol = strWidth(text) - swidth;
+
+      newCol = startCol >= eolCol
+        ? eolCol
+        : startCol < optMatchShift() ? 0 : startCol - optMatchShift();
+    }
+
+    config.col = Math.max(newCol, 0);
   };
 
   /**

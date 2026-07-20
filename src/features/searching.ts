@@ -838,7 +838,7 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
   return true;
 }
 
-function stripStyles(line: string): string {
+export function stripStyles(line: string): string {
   if (!STYLE_REGEX.test(line)) return line;
   return line.replace(STYLE_REGEX_G, '');
 }
