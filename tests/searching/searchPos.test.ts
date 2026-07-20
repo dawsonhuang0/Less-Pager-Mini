@@ -118,6 +118,55 @@ describe('search_pos over wrapped lines', () => {
   });
 });
 
+describe('get_cvt_ops search conversions', () => {
+  it('gates the trailing-CR strip on the display modes', () => {
+    const crlf = ['abc\r', 'zzz'];
+    calculateEOF(crlf);
+
+    // default -u state: CVT_CRLF applies and $ matches past the CR
+    doSearch('/', 'abc$');
+    execSearch(crlf);
+    expect(search.message).toBe('');
+
+    // -U (BS_CONTROL) with proc-return unset keeps the CR
+    // (search.c:243), so $ no longer matches
+    opt.bsMode = 2;
+
+    try {
+      doSearch('/', 'abc$');
+      execSearch(crlf);
+      expect(search.message).toMatch(/^Pattern not found/);
+
+      // --proc-return restores the strip even under -U
+      opt.procReturn = 1;
+      search.message = '';
+      doSearch('/', 'abc$');
+      execSearch(crlf);
+      expect(search.message).toBe('');
+    } finally {
+      opt.bsMode = 0;
+      opt.procReturn = 0;
+    }
+  });
+
+  it("consults proc-BACKSPACE for the CRLF strip, og's own quirk", () => {
+    const crlf = ['abc\r', 'zzz'];
+    calculateEOF(crlf);
+
+    // any --proc-backspace state kills CVT_CRLF unless proc-return
+    // is ON (search.c:243 tests proc_backspace, not proc_return)
+    opt.procBackspace = 2;
+
+    try {
+      doSearch('/', 'abc$');
+      execSearch(crlf);
+      expect(search.message).toMatch(/^Pattern not found/);
+    } finally {
+      opt.procBackspace = 0;
+    }
+  });
+});
+
 describe('shift_visible rscroll width', () => {
   it('counts the marker column only while --rscroll is enabled', () => {
     // search.c:641: swidth = sc_width - (rscroll_char ? 1 : 0)

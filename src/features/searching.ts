@@ -27,6 +27,10 @@ import { revealSize } from "./files";
 import {
   jumpSindex,
   optHowSearch,
+  optBsMode,
+  optProcBackspace,
+  optProcReturn,
+  optCtldisp,
   optHiliteSearch,
   optNoHistDups,
   optHeader,
@@ -815,10 +819,13 @@ function stripStyles(line: string): string {
  * index back to its raw string index, like og's cvt chpos array.
  */
 function convertWithMap(raw: string): { text: string; map: number[] } {
+  const ops = cvtOps();
   const spans: Array<[number, number]> = [];
 
-  for (const m of raw.matchAll(STYLE_REGEX_G)) {
-    spans.push([m.index, m.index + m[0].length]);
+  if (ops.ansi) {
+    for (const m of raw.matchAll(STYLE_REGEX_G)) {
+      spans.push([m.index, m.index + m[0].length]);
+    }
   }
 
   const out: Array<{ ch: string; at: number }> = [];
@@ -834,7 +841,7 @@ function convertWithMap(raw: string): { text: string; map: number[] } {
     const ch = raw[i];
 
     // overstrikes collapse like cvt_text's CVT_BS
-    if (ch === '\x08' && out.length &&
+    if (ops.bs && ch === '\x08' && out.length &&
       out[out.length - 1].ch !== '\x08') {
       out.pop();
       continue;
@@ -844,7 +851,9 @@ function convertWithMap(raw: string): { text: string; map: number[] } {
   }
 
   // CVT_CRLF: a trailing carriage return drops
-  if (out.length && out[out.length - 1].ch === '\r') out.pop();
+  if (ops.crlf && out.length && out[out.length - 1].ch === '\r') {
+    out.pop();
+  }
 
   return { text: out.map(o => o.ch).join(''), map: out.map(o => o.at) };
 }
@@ -895,20 +904,40 @@ function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
   return true;
 }
 
+/**
+ * og's get_cvt_ops (search.c:230): which conversions apply to search
+ * candidates under the current display modes. The CRLF condition
+ * genuinely consults proc_BACKSPACE, quirky but og's own.
+ */
+function cvtOps(): { bs: boolean; crlf: boolean; ansi: boolean } {
+  const pb = optProcBackspace();
+
+  return {
+    bs: pb === 1 || (optBsMode() === 0 && pb === 0),
+    crlf: optProcReturn() === 1 || (optBsMode() !== 2 && pb === 0),
+    ansi: optCtldisp() === 2,
+  };
+}
+
 function matchesLine(line: string): boolean {
   const regex = search.regex;
   if (!regex) return false;
 
-  let text = stripStyles(line);
+  const ops = cvtOps();
+  let text = ops.ansi ? stripStyles(line) : line;
 
   // like cvt_text: overstrikes collapse (CVT_BS) and a trailing
-  // carriage return drops (CVT_CRLF) before matching
-  /* eslint-disable no-control-regex */
-  while (/[^\x08]\x08/.test(text)) {
-    text = text.replace(/[^\x08]\x08/g, '');
+  // carriage return drops (CVT_CRLF) before matching, each under
+  // its own display-mode gate
+  if (ops.bs) {
+    /* eslint-disable no-control-regex */
+    while (/[^\x08]\x08/.test(text)) {
+      text = text.replace(/[^\x08]\x08/g, '');
+    }
+    /* eslint-enable no-control-regex */
   }
-  /* eslint-enable no-control-regex */
-  if (text.endsWith('\r')) text = text.slice(0, -1);
+
+  if (ops.crlf && text.endsWith('\r')) text = text.slice(0, -1);
 
   // --no-search-header-columns cuts the pinned columns off before
   // matching, like search.c's skip_columns
