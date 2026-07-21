@@ -595,28 +595,35 @@ export function applyBracketedPaste(): void {
   );
 }
 
-/** Displays a control char like less's prchar (^X). */
-export const prChar = (char: string): string =>
-  char < ' ' ? '^' + String.fromCharCode(char.charCodeAt(0) + 0x40) : char;
+/** Displays a control char like less's prchar (^X, ESC, ^?). */
+export function prChar(char: string): string {
+  const code = char.charCodeAt(0);
+
+  if (code === 0x1B) return 'ESC';
+  if (code < 0x20) return '^' + String.fromCharCode(code + 0x40);
+  if (code === 0x7F) return '^?';
+  return char;
+}
 
 /**
  * Parses a comma-separated --emouse feature list, like decode.c's
  * parse_csl_bitmap: names prefix-match and combinations expand.
  *
- * @returns The bitmap, or null with a message set.
+ * Invalid/ambiguous members contribute no bits but do not stop the
+ * list, matching csl_bitmap_bit returning zero to parse_csl_bitmap.
  */
-export function parseEmouse(text: string): number | null {
+export function parseEmouse(text: string): number {
   if (!text || text === '-') return 0;
 
   let bits = 0;
 
-  for (const name of text.split(',')) {
+  for (const name of text.split(',').map(item => item.trim()).filter(Boolean)) {
     const matches = EMOUSE_DEFS.filter(([def]) => def.startsWith(name));
 
     if (matches.length !== 1) {
       const kind = matches.length ? 'ambiguous' : 'invalid';
-      search.message = `--emouse: ${kind} name "${name}"`;
-      return null;
+      optScanError(`--emouse: ${kind} name "${name}"`);
+      continue;
     }
 
     bits |= matches[0][1];

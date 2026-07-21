@@ -18,10 +18,7 @@ export const emouse: OptionSpec = {
     },
     set: value => {
       const bits = parseEmouse(String(value));
-
-      if (bits !== null) {
-        opt.emouse = bits;
-        applyMouse();
-      }
+      opt.emouse = bits;
+      applyMouse();
     },
   };
