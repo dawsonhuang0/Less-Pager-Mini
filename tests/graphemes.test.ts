@@ -44,7 +44,8 @@ describe('chopLongLines', () => {
   it('keeps ZWJ sequences intact when chopping', () => {
     const output = formatContent([FAMILY.repeat(3)]);
 
-    expect(output[0]).toBe(FAMILY + INVERSE_ON + ' >' + INVERSE_OFF);
+    // og pads with normal spaces and standouts only the rscroll char
+    expect(output[0]).toBe(FAMILY + ' ' + INVERSE_ON + '>' + INVERSE_OFF);
   });
 });
 

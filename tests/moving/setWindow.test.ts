@@ -16,7 +16,7 @@ beforeEach(() => {
   config.row = 0;
   config.subRow = 0;
   config.col = 0;
-  config.setWindow = 0;
+  config.setWindow = -1;
   config.screenWidth = 80;
   config.window = 24;
   config.chopLongLines = true;
@@ -48,7 +48,7 @@ describe('setWindowForward', () => {
     setWindowForward(content, []);
 
     expect(config.row).toBe(config.window - 1);
-    expect(config.setWindow).toBe(0);
+    expect(config.setWindow).toBe(-1);
   });
 });
 

@@ -11,7 +11,7 @@ import {
   highlightLine
 } from '../../src/features/searching';
 
-import { option, startOption, optionKey } from '../../src/features/options';
+import { option, startOption, optionKey } from '../../src/options';
 
 import { INVERSE_ON } from '../../src/constants';
 
@@ -56,13 +56,13 @@ function doSearch(dir: '/' | '?', pattern: string): void {
 describe('-i / -I option command', () => {
   it('-i toggles smart case sensitivity with less messages', () => {
     startOption('-');
-    optionKey('i');
+    optionKey([], 'i');
 
     expect(search.caseless).toBe(1);
     expect(search.message).toBe('Ignore case in searches');
 
     startOption('-');
-    optionKey('i');
+    optionKey([], 'i');
 
     expect(search.caseless).toBe(0);
     expect(search.message).toBe('Case is significant in searches');
@@ -70,13 +70,13 @@ describe('-i / -I option command', () => {
 
   it('-I toggles always-ignore case', () => {
     startOption('-');
-    optionKey('I');
+    optionKey([], 'I');
 
     expect(search.caseless).toBe(2);
     expect(search.message).toBe('Ignore case in searches and in patterns');
 
     startOption('-');
-    optionKey('I');
+    optionKey([], 'I');
 
     expect(search.caseless).toBe(0);
   });
@@ -85,7 +85,7 @@ describe('-i / -I option command', () => {
     search.caseless = 1;
 
     startOption('_');
-    optionKey('i');
+    optionKey([], 'i');
 
     expect(search.caseless).toBe(1);
     expect(search.message).toBe('Ignore case in searches');
@@ -93,9 +93,9 @@ describe('-i / -I option command', () => {
 
   it('reports unknown options', () => {
     startOption('-');
-    optionKey('z');
+    optionKey([], 'l');
 
-    expect(search.message).toBe('There is no z option');
+    expect(search.message).toBe('There is no -l option');
   });
 });
 
@@ -103,7 +103,7 @@ describe('case sensitivity in searches', () => {
   it('is case-sensitive by default', () => {
     doSearch('/', 'alpha');
 
-    expect(search.message).toBe('Pattern not found');
+    expect(search.message).toMatch(/^Pattern not found: /);
     expect(config.row).toBe(0);
   });
 
@@ -118,7 +118,7 @@ describe('case sensitivity in searches', () => {
     search.caseless = 1;
 
     doSearch('/', 'Alpha');
-    expect(search.message).toBe('Pattern not found');
+    expect(search.message).toMatch(/^Pattern not found: /);
   });
 
   it('-I ignores case even for uppercase patterns', () => {
@@ -134,7 +134,7 @@ describe('case sensitivity in searches', () => {
     expect(highlightLine('xx ALPHA yy')).toContain(INVERSE_ON);
 
     startOption('-');
-    optionKey('i');
+    optionKey([], 'i');
 
     expect(search.caseless).toBe(0);
     expect(highlightLine('xx ALPHA yy')).toBe('xx ALPHA yy');

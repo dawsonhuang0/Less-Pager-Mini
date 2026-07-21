@@ -196,10 +196,12 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
       checkStep(n, lt.steps[n].key);
     }
 
-    // leave the session; a prompt may need an extra escape first
+    // Leave the session; ^G cancels any open command buffer without
+    // triggering the pager's ISIG emulation (raw ^C would signal the
+    // entire Vitest process group and terminate the harness itself).
     if (dataHandler) {
       const quit = dataHandler as (data: string) => void;
-      quit('\x03');
+      quit('\x07');
       quit('q');
       quit('q');
     }
