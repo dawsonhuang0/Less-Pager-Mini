@@ -265,7 +265,8 @@ export async function bigPager(path: string): Promise<void> {
         }
 
         if (searchInterrupted()) {
-          // the aborting ^C is og's consumed signal, never a key;
+          // the aborting ^C is og's consumed signal, never a key
+          // (searchInterrupted itself rings u_interrupt's bell);
           // the pending S_INTERRUPT clears the next gate's key too
           consumeInterrupt();
           intrPending = true;
@@ -985,12 +986,36 @@ export async function bigPager(path: string): Promise<void> {
     draw();
     resolvingBlank = false;
 
-    if (countTo(view.top.pos) === null && scanMessaged) {
-      // og's abort_delayed_msg (linenum.c:254): numbers off, the
-      // gated message; the repaint drops any -N gutter
-      opt.linenums = 0;
-      message = 'Line numbers turned off  (press RETURN)';
-      msgReturn = true;
+    let repaintingAfterEarlyInterrupt = false;
+
+    for (;;) {
+      if (countTo(view.top.pos) !== null) break;
+
+      if (scanMessaged) {
+        // Once the delayed message has appeared, abort_delayed_msg
+        // turns line numbers off and gates on RETURN.
+        opt.linenums = 0;
+        message = 'Line numbers turned off  (press RETURN)';
+        msgReturn = true;
+        break;
+      }
+
+      if (repaintingAfterEarlyInterrupt) {
+        // A second early ^C interrupts jump_forw's recovery repaint.
+        // forw paints zero lines, leaving og's position table empty;
+        // make_display then falls back to jump_loc(ch_zero(), 1).
+        ringBell('eof');
+        view.gotoStart();
+        break;
+      }
+
+      // Before the delayed message, abort_delayed_msg is a no-op.
+      // jump_forw notices its incomplete landing and repaints the end,
+      // whose currline(BOTTOM) starts a fresh line-number walk.
+      repaintingAfterEarlyInterrupt = true;
+      resolvingBlank = true;
+      draw();
+      resolvingBlank = false;
     }
   };
 
