@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config, mode } from '../../src/config';
 
-import { search, startSearch, searchInputKey, execSearch }
+import { search, startSearch, searchInputKey, execSearch, searchCaseFlags }
   from '../../src/features/searching';
 
 import { opt } from '../../src/options';
@@ -29,6 +29,7 @@ beforeEach(() => {
 
   search.input = null;
   search.regex = null;
+  search.caseless = 0;
   search.invert = false;
   search.lastDir = 1;
   search.subs = new Set();
@@ -164,6 +165,19 @@ describe('get_cvt_ops search conversions', () => {
     } finally {
       opt.procBackspace = 0;
     }
+  });
+});
+
+describe('-i/-I case selection', () => {
+  it('uses the shared Unicode-aware smart-case rule', () => {
+    search.caseless = 1;
+    expect(searchCaseFlags('apple')).toBe('i');
+    expect(searchCaseFlags('Apple')).toBe('');
+    expect(searchCaseFlags('Äpfel')).toBe('');
+
+    search.caseless = 2;
+    expect(searchCaseFlags('Apple')).toBe('i');
+    expect(searchCaseFlags('ÄPFEL')).toBe('i');
   });
 });
 

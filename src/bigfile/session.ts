@@ -26,8 +26,8 @@ import { getAction, splitKeys, kentToNewline, tailCascade }
 
 import { forwLine, backLine } from './lineio';
 
-import { search, searchInterrupted, addHistory, onAutosave, onHistTouch,
-  onHistRecord, stripStyles } from '../features/searching';
+import { search, searchInterrupted, searchCaseFlags, addHistory, onAutosave,
+  onHistTouch, onHistRecord, stripStyles } from '../features/searching';
 
 import { addShellHistory, onShellAutosave, onShellHistTouch,
   onShellHistRecord } from '../features/misc';
@@ -137,6 +137,7 @@ export async function bigPager(path: string): Promise<void> {
   // streaming search state, like og search.c over ch positions
   let searching: '/' | '?' | '' = '';
   let pattern: RegExp | null = null;
+  let patternText = '';
   let lastDir: 1 | -1 = 1;
   let message = '';
 
@@ -1375,7 +1376,14 @@ export async function bigPager(path: string): Promise<void> {
         // - and -- run the shared option machinery; its reports
         // show like og's error() with the RETURN gate
         if (option.pending) {
+          const oldCaseless = search.caseless;
           optionKey([], key);
+
+          // opt_i's TOGGLE handler recompiles the saved search pattern
+          // (search.c:2045), so repeats immediately use the new mode.
+          if (patternText && search.caseless !== oldCaseless) {
+            pattern = new RegExp(patternText, searchCaseFlags(patternText));
+          }
 
           if (search.message) {
             message = search.message + '  (press RETURN)';
@@ -1394,11 +1402,8 @@ export async function bigPager(path: string): Promise<void> {
 
             if (text) {
               try {
-                // -i smart case / -I like og: caseless unless the
-                // pattern has uppercase under smart mode
-                const caseless = search.caseless === 2 ||
-                  (search.caseless === 1 && !/[A-Z]/.test(text));
-                pattern = new RegExp(text, caseless ? 'i' : '');
+                pattern = new RegExp(text, searchCaseFlags(text));
+                patternText = text;
                 lastDir = searching === '/' ? 1 : -1;
                 remember();
                 runSearch(lastDir, false);
@@ -1580,6 +1585,7 @@ export async function bigPager(path: string): Promise<void> {
           case 'CLEAR_SEARCH':
             // ESC-U forgets the pattern entirely
             pattern = null;
+            patternText = '';
             break;
           case 'SPAN_REPEAT_SEARCH':
             // a single-file list: ESC-n behaves like n

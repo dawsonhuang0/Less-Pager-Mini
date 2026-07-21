@@ -542,7 +542,7 @@ export function execFilter(): LineFilter | null | undefined {
     const source = input.noRegex ? escapeRegExp(pattern) : pattern;
 
     search.filters.push({
-      regex: new RegExp(source, caseFlags(pattern)),
+      regex: new RegExp(source, searchCaseFlags(pattern)),
       invert: input.invert,
       subs: new Set(input.subs),
     });
@@ -814,7 +814,7 @@ const escapeRegExp = (pattern: string): string =>
 const UPPERCASE_REGEX = /\p{Lu}/u;
 
 // smart case: -i ignores case unless the pattern contains uppercase
-const caseFlags = (pattern: string): string =>
+export const searchCaseFlags = (pattern: string): string =>
   search.caseless === 2 ||
   (search.caseless === 1 && !UPPERCASE_REGEX.test(pattern))
     ? 'i'
@@ -823,7 +823,7 @@ const caseFlags = (pattern: string): string =>
 function compile(pattern: string, literal: boolean, invert: boolean): boolean {
   try {
     const source = literal ? escapeRegExp(pattern) : pattern;
-    const flags = caseFlags(pattern);
+    const flags = searchCaseFlags(pattern);
     search.regex = new RegExp(source, flags);
     globalRegex = new RegExp(source, flags + 'dg');
   } catch {
