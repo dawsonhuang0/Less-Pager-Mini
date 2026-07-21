@@ -20,8 +20,12 @@ it('maps : combos to file commands', () => {
 });
 
 it('invalid keys should only have undefined as result', () => {
-  const invalidKeys = ['\x1BOP', '\x1B[17~', '\x1B[24~', '\x1B[25~', '\x1B[30~', '\x1B[35~'];
+  const invalidKeys = ['\x1B[17~', '\x1B[24~', '\x1B[25~', '\x1B[30~', '\x1B[35~'];
   invalidKeys.forEach(key => expect(getAction(key)).toBeUndefined());
+});
+
+it('maps the terminal F1 capability to help', () => {
+  expect(getAction('\x1BOP')).toBe('HELP');
 });
 
 it('maps digits to ADD_BUFFER', () => {

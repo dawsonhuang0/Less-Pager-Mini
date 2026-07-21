@@ -294,9 +294,8 @@ export const optNoEditWarn = (): boolean => opt.noEditWarn > 0;
 /** True when interactive shell, pipe and editor commands are disabled. */
 export const optNoShell = (): boolean => opt.noShell > 0;
 
-/** Message shown when --no-shell rejects an interactive command. */
-export const NO_SHELL_WARNING =
-  'Shell commands are disabled by --no-shell';
+/** OG's deliberately terse error for an unavailable process escape. */
+export const NO_SHELL_MESSAGE = 'Command not available';
 
 /** True when --follow-name makes F re-open the file by name. */
 export const optFollowName = (): boolean => opt.followName > 0;

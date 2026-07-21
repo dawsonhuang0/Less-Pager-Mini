@@ -103,18 +103,13 @@ const CATTR_CODES: Record<string, string> = {
   '&': '5', 'l': '5',
 };
 
-const MODE_ON = {
-  bold: BOLD_ON,
-  underline: UNDERLINE_ON,
-  blink: '\x1B[5m',
-  standout: INVERSE_ON,
-};
-
-const MODE_OFF = {
-  bold: BOLD_OFF,
-  underline: UNDERLINE_OFF,
-  blink: '\x1B[25m',
-  standout: INVERSE_OFF,
+const modeStrings = (attr: 'bold' | 'underline' | 'blink' | 'standout') => {
+  switch (attr) {
+    case 'bold': return [BOLD_ON, BOLD_OFF];
+    case 'underline': return [UNDERLINE_ON, UNDERLINE_OFF];
+    case 'standout': return [INVERSE_ON, INVERSE_OFF];
+    case 'blink': return ['\x1B[5m', '\x1B[25m'];
+  }
 };
 
 /**
@@ -264,11 +259,12 @@ export function attrText(
   text: string
 ): string {
   const map = colorMap[attr];
-  if (!map) return MODE_ON[attr] + text + MODE_OFF[attr];
+  const [on, off] = modeStrings(attr);
+  if (!map) return on + text + off;
 
   const open = colorSgr(map) ?? '';
 
   return map[0] === '+'
-    ? MODE_ON[attr] + open + text + STYLE_RESET
+    ? on + open + text + STYLE_RESET
     : open + text + STYLE_RESET;
 }

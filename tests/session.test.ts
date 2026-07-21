@@ -173,8 +173,8 @@ describe('$LESS_SHELL_LINES clamping', () => {
   it.each([
     [undefined, 1],
     ['', 1],
-    ['garbage', 1],
-    ['-5', 1],
+    ['garbage', 0],
+    ['-5', -5],
     ['4', 4],
     ['999', 23],
   ])('maps %j to %d reserved rows', (value, expected) => {
@@ -184,10 +184,10 @@ describe('$LESS_SHELL_LINES clamping', () => {
     expect(shellReserveLines()).toBe(expected);
   });
 
-  it('still reserves one row on a one-line terminal', () => {
+  it('clamps to zero rows on a one-line terminal', () => {
     config.window = 1;
     process.env.LESS_SHELL_LINES = '99';
 
-    expect(shellReserveLines()).toBe(1);
+    expect(shellReserveLines()).toBe(0);
   });
 });

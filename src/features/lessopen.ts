@@ -14,6 +14,8 @@ import { optUseLessopen, optShowPreprocError } from "../options";
 
 import { gateReturn } from "../keyboard";
 
+import { lgetenv } from '../environment';
+
 /** A $LESSOPEN replacement: its lines, byte size and alt file name. */
 export interface AltFile {
   lines: string[];
@@ -114,7 +116,7 @@ export function openAltFile(
   if (!secureAllow('lessopen')) return null;
   if (!optUseLessopen()) return null;
 
-  let lessopen = process.env.LESSOPEN;
+  let lessopen = lgetenv('LESSOPEN');
   if (!lessopen) return null;
 
   // leading pipes select the pipe preprocessor forms
@@ -203,7 +205,7 @@ export function closeAltFile(
   // and the interrupted action (help, quit, :n) continues after
   if (preprocError && optShowPreprocError()) gateReturn(preprocError);
 
-  const lessclose = process.env.LESSCLOSE;
+  const lessclose = lgetenv('LESSCLOSE');
   if (!lessclose) return;
 
   if (pctS(lessclose) > 2) {

@@ -77,4 +77,14 @@ describe('in-process interactive command loop', () => {
       'q',
     ], ['--emouse=all', '--no-paste']);
   }, 20000);
+
+  it('keeps multiple examined files on the file-backed engine', async () => {
+    const fixture = session([':', 'n', '=', ' ', ':', 'p', 'q']);
+    fixture.args = ['input.txt', 'second.txt'];
+    fixture.files['second.txt'] = 'second file\nline two\n';
+
+    const result = await runLt(fixture);
+    expect(result.steps).toBe(fixture.steps.length);
+    expect(result.mismatches).toEqual([]);
+  }, 20000);
 });

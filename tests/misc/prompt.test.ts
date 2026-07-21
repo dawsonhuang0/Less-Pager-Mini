@@ -1,13 +1,21 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { config, mode } from '../../src/config';
 
 import { files, initContent, revealSize, revealPipeEnd }
   from '../../src/features/files';
 
-import { prExpand, shellQuote } from '../../src/features/prompt';
+import { editCommand, prExpand, shellQuote, windowedEditCommand }
+  from '../../src/features/prompt';
+
+import { initEnvironment } from '../../src/environment';
 
 const content = Array.from({ length: 30 }, (_, i) => `p${i + 1}`);
+const editorEnv = {
+  LESSEDIT: process.env.LESSEDIT,
+  VISUAL: process.env.VISUAL,
+  EDITOR: process.env.EDITOR,
+};
 
 beforeEach(() => {
   config.row = 0;
@@ -24,6 +32,18 @@ beforeEach(() => {
 
   initContent(content);
   files.list[0].path = 'notes.txt';
+
+  delete process.env.LESSEDIT;
+  delete process.env.VISUAL;
+  delete process.env.EDITOR;
+  initEnvironment();
+});
+
+afterEach(() => {
+  for (const [name, value] of Object.entries(editorEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 });
 
 describe('prompt expansion', () => {
@@ -121,5 +141,22 @@ describe('prompt expansion', () => {
     expect(shellQuote('a b$c')).toBe('a\\ b\\$c');
     expect(shellQuote('plain.txt')).toBe('plain.txt');
     expect(shellQuote('a\nb')).toBe('a"\n"b');
+  });
+
+  it('expands LESSEDIT with VISUAL, line positions and quoted files', () => {
+    process.env.VISUAL = 'nvim';
+    process.env.LESSEDIT = '%E --line %lm %g';
+    files.list[0].path = 'my notes.txt';
+    config.row = 9;
+
+    expect(editCommand(content)).toBe('nvim --line 12 my\\ notes.txt');
+    expect(windowedEditCommand('huge file.txt', 123))
+      .toBe('nvim --line 123 huge\\ file.txt');
+  });
+
+  it('drops the default +line conditional when a line is unavailable', () => {
+    process.env.EDITOR = 'ed';
+    expect(windowedEditCommand('huge file.txt', null))
+      .toBe('ed  huge\\ file.txt');
   });
 });

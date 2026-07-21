@@ -24,6 +24,12 @@ import { help } from './lessHelp';
 
 import { markTerminalInvocation } from './invocation';
 
+import { actualEnv, initEnvironment, lgetenv } from './environment';
+
+import { initSecure, secureAllow } from './features/secure';
+
+import { loadLesskey } from './features/lesskey';
+
 /**
  * The `lmn` command, mirroring og main.c's startup: $LESS scans
  * first (inside the pager), then command line options override;
@@ -65,20 +71,25 @@ function globArg(name: string): string[] {
 }
 
 async function main(): Promise<void> {
+  initEnvironment();
+  // init_cmds precedes argv classification in og, so lesskey #env may
+  // define $LESS/$MORE options whose pending argument consumes argv.
+  initSecure();
+  if (secureAllow('lesskey')) loadLesskey();
   const argv = process.argv.slice(2);
   const files: string[] = [];
   const optArgs: string[] = [];
   let endOpts = false;
   let sawTag = false;
-  const posixlyCorrect = process.env.POSIXLY_CORRECT !== undefined;
+  const posixlyCorrect = actualEnv('POSIXLY_CORRECT') !== undefined;
 
   // og scans $LESS (or $MORE) before argv, so an option left dangling
   // at the end of the environment consumes the first argument
-  const lim = process.env.LESS_IS_MORE;
+  const lim = lgetenv('LESS_IS_MORE');
   opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
 
   let pending: OptionSpec | null = optionArgPending(
-    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', null);
+    lgetenv(opt.lessIsMore ? 'MORE' : 'LESS') ?? '', null);
 
   const isOptString = (s: string): boolean =>
     (s[0] === '-' || s[0] === '+') && s.length > 1;

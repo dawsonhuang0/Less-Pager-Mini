@@ -6,6 +6,8 @@ import path from 'path';
 
 import { search } from '../../src/features/searching';
 
+import { initEnvironment, lgetenv } from '../../src/environment';
+
 import {
   userBinding,
   userIsPrefix,
@@ -26,6 +28,9 @@ const saved = {
   LESSKEYIN: process.env.LESSKEYIN,
   LESSKEY: process.env.LESSKEY,
   LESSKEY_CONTENT: process.env.LESSKEY_CONTENT,
+  LESSKEYIN_SYSTEM: process.env.LESSKEYIN_SYSTEM,
+  LESSKEY_SYSTEM: process.env.LESSKEY_SYSTEM,
+  LESSKEY_CONTENT_SYSTEM: process.env.LESSKEY_CONTENT_SYSTEM,
   LESSNOCONFIG: process.env.LESSNOCONFIG,
 };
 
@@ -33,14 +38,18 @@ const saved = {
 const parse = (text: string) => parseLesskey(text, 'test');
 
 beforeEach(() => {
-  resetLesskey();
-  search.message = '';
-  search.messageQueue.length = 0;
-
   delete process.env.LESSKEYIN;
   delete process.env.LESSKEY;
   delete process.env.LESSKEY_CONTENT;
+  delete process.env.LESSKEYIN_SYSTEM;
+  delete process.env.LESSKEY_SYSTEM;
+  delete process.env.LESSKEY_CONTENT_SYSTEM;
   delete process.env.LESSNOCONFIG;
+
+  initEnvironment();
+  resetLesskey();
+  search.message = '';
+  search.messageQueue.length = 0;
 });
 
 afterEach(() => {
@@ -118,9 +127,9 @@ describe('#command bindings', () => {
     expect(search.messageQueue).toContain('test: line 2: missing action');
   });
 
-  it('keeps the first binding for a key, like cmd_search', () => {
+  it('keeps the later equal-length binding, like cmd_decode', () => {
     parse('x quit\nx help');
-    expect(userBinding('x')?.action).toBe('EXIT');
+    expect(userBinding('x')?.action).toBe('HELP');
   });
 
   it('stores multi-key sequences and answers prefixes', () => {
@@ -142,14 +151,12 @@ describe('#command bindings', () => {
 describe('#env section', () => {
   it('sets session environment variables', () => {
     parse('#env\nLPM_TEST_VAR = hello world');
-    expect(process.env.LPM_TEST_VAR).toBe('hello world');
-    delete process.env.LPM_TEST_VAR;
+    expect(lgetenv('LPM_TEST_VAR')).toBe('hello world');
   });
 
   it('appends with +=, like og', () => {
     parse('#env\nLPM_TEST_VAR = -i\nLPM_TEST_VAR += " -S"');
-    expect(process.env.LPM_TEST_VAR).toBe('-i" -S"');
-    delete process.env.LPM_TEST_VAR;
+    expect(lgetenv('LPM_TEST_VAR')).toBe('-i" -S"');
   });
 
   it('reports a missing =', () => {
@@ -162,16 +169,14 @@ describe('#env section', () => {
   it('expands ${NAME} from the environment, like evar.c', () => {
     process.env.LPM_SRC = 'value';
     parse('#env\nLPM_TEST_VAR = pre ${LPM_SRC} post');
-    expect(process.env.LPM_TEST_VAR).toBe('pre value post');
+    expect(lgetenv('LPM_TEST_VAR')).toBe('pre value post');
 
-    delete process.env.LPM_TEST_VAR;
     delete process.env.LPM_SRC;
   });
 
   it('expands an unset variable to nothing', () => {
     parse('#env\nLPM_TEST_VAR = a${LPM_NOT_SET}b');
-    expect(process.env.LPM_TEST_VAR).toBe('ab');
-    delete process.env.LPM_TEST_VAR;
+    expect(lgetenv('LPM_TEST_VAR')).toBe('ab');
   });
 
   it('drops the var and all later vars on a missing }', () => {
@@ -181,35 +186,30 @@ describe('#env section', () => {
       '#env\nLPM_TEST_VAR = keep${LPM_SRC\nLPM_AFTER = later'
     );
 
-    expect(process.env.LPM_TEST_VAR).toBeUndefined();
-    expect(process.env.LPM_AFTER).toBeUndefined();
+    expect(lgetenv('LPM_TEST_VAR')).toBeUndefined();
+    expect(lgetenv('LPM_AFTER')).toBeUndefined();
     delete process.env.LPM_SRC;
   });
 
   it('rewrites with ${NAME/pat/repl} pairs, later pairs first', () => {
     process.env.LPM_SRC = 'aaXcc';
     parse('#env\nLPM_TEST_VAR = ${LPM_SRC/aa/bb/cc/dd}');
-    expect(process.env.LPM_TEST_VAR).toBe('bbXdd');
+    expect(lgetenv('LPM_TEST_VAR')).toBe('bbXdd');
 
-    delete process.env.LPM_TEST_VAR;
     delete process.env.LPM_SRC;
   });
 
   it('allows an empty replacement without the second slash', () => {
     process.env.LPM_SRC = 'a:b:c';
     parse('#env\nLPM_TEST_VAR = ${LPM_SRC/:}');
-    expect(process.env.LPM_TEST_VAR).toBe('abc');
+    expect(lgetenv('LPM_TEST_VAR')).toBe('abc');
 
-    delete process.env.LPM_TEST_VAR;
     delete process.env.LPM_SRC;
   });
 
   it('sees variables defined earlier in the same file', () => {
     parse('#env\nLPM_A = one\nLPM_TEST_VAR = ${LPM_A} two');
-    expect(process.env.LPM_TEST_VAR).toBe('one two');
-
-    delete process.env.LPM_TEST_VAR;
-    delete process.env.LPM_A;
+    expect(lgetenv('LPM_TEST_VAR')).toBe('one two');
   });
 });
 
@@ -308,8 +308,7 @@ describe('binary lesskey files', () => {
     ));
 
     expect(translateEditKey('\x08')).toBe('\x7F');
-    expect(process.env.LPMBIN).toBe('yes');
-    delete process.env.LPMBIN;
+    expect(lgetenv('LPMBIN')).toBe('yes');
   });
 
   it('honors a compiled #stop', () => {
@@ -368,6 +367,57 @@ describe('loadLesskey', () => {
 
     loadLesskey();
     expect(userBinding('x')).toBeUndefined();
+  });
+
+  it('uses user table, real env, then system table precedence', () => {
+    parseLesskey('#env\nLPM_ORDER = system', 'system', true);
+    expect(lgetenv('LPM_ORDER')).toBe('system');
+
+    process.env.LPM_ORDER = 'real';
+    expect(lgetenv('LPM_ORDER')).toBe('real');
+
+    parseLesskey('#env\nLPM_ORDER = user', 'user');
+    expect(lgetenv('LPM_ORDER')).toBe('user');
+    delete process.env.LPM_ORDER;
+  });
+
+  it('loads system binary and both system/user content variants', () => {
+    const sysBinary = path.join(dir, 'sys.less');
+    fs.writeFileSync(sysBinary, Buffer.from([
+      0x00, 0x4D, 0x2B, 0x47,
+      0x63, 3, 0, 0x79, 0x00, 19,
+      0x78, 0x45, 0x6E, 0x64,
+    ]));
+
+    process.env.LESSKEYIN_SYSTEM = path.join(dir, 'no-system-source');
+    process.env.LESSKEY_SYSTEM = sysBinary;
+    process.env.LESSKEYIN = path.join(dir, 'no-user-source');
+    process.env.LESSKEY = path.join(dir, 'no-user-binary');
+    process.env.LESSKEY_CONTENT_SYSTEM =
+      '#env;LPM_SYSTEM_CONTENT = system';
+    process.env.LESSKEY_CONTENT =
+      '#command;x quit;#env;LPM_SYSTEM_CONTENT = user';
+
+    loadLesskey();
+
+    // user content is the later command table; its #env table is in
+    // the user tier and therefore beats system content as well.
+    expect(userBinding('x')?.action).toBe('EXIT');
+    expect(userBinding('y')?.action).toBe('HELP');
+    expect(lgetenv('LPM_SYSTEM_CONTENT')).toBe('user');
+  });
+
+  it('lets the real environment beat system content', () => {
+    process.env.LESSKEYIN_SYSTEM = path.join(dir, 'no-system-source-2');
+    process.env.LESSKEY_SYSTEM = path.join(dir, 'no-system-binary-2');
+    process.env.LESSKEYIN = path.join(dir, 'no-user-source-2');
+    process.env.LESSKEY = path.join(dir, 'no-user-binary-2');
+    process.env.LESSKEY_CONTENT_SYSTEM = '#env;LPM_REAL_WINS = system';
+    process.env.LPM_REAL_WINS = 'real';
+
+    loadLesskey();
+    expect(lgetenv('LPM_REAL_WINS')).toBe('real');
+    delete process.env.LPM_REAL_WINS;
   });
 });
 

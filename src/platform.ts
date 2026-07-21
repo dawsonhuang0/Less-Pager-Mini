@@ -1,5 +1,7 @@
 import os from 'os';
 
+import { actualEnv, lgetenv } from './environment';
+
 /**
  * Platform differences, like og's per-platform defines headers
  * (defines.h for unix, defines.wn for Windows, defines.ds/o2 for the
@@ -17,11 +19,12 @@ export const isWindows = process.platform === 'win32';
  * platform, like lgetenv("HOME").
  */
 export function homeDir(): string {
-  if (process.env.HOME) return process.env.HOME;
+  const home = lgetenv('HOME');
+  if (home) return home;
 
   if (process.platform === 'win32') {
-    const drive = process.env.HOMEDRIVE;
-    const rest = process.env.HOMEPATH;
+    const drive = lgetenv('HOMEDRIVE');
+    const rest = lgetenv('HOMEPATH');
     if (drive && rest) return drive + rest;
   }
 
@@ -41,6 +44,11 @@ export const LESSKEYFILE_NAME = isWindows ? '_less' : '.less';
 export const LESSKEYIN_SYS = isWindows
   ? 'c:\\_syslesskey'
   : '/usr/local/etc/syslesskey';
+
+/** The default system-wide compiled lesskey file (LESSKEYFILE_SYS). */
+export const LESSKEYFILE_SYS = isWindows
+  ? 'c:\\_sysless'
+  : '/usr/local/etc/sysless';
 
 /** The default editor (EDIT_PGM: "vi", "edit" on Windows). */
 export const EDIT_PGM = isWindows ? 'edit' : 'vi';
@@ -73,12 +81,12 @@ export const DEF_METAESCAPE = isWindows ? '' : '\\';
  */
 export function shellArgv(cmd: string): [string, string[]] {
   if (process.platform === 'win32') {
-    const comspec = process.env.COMSPEC || 'cmd.exe';
+    const comspec = actualEnv('COMSPEC') || 'cmd.exe';
     return [comspec, cmd ? ['/c', cmd] : []];
   }
 
-  const shell = process.env.SHELL || '/bin/sh';
-  const copt = process.env.LESS_SHELL_COPTION || '-c';
+  const shell = lgetenv('SHELL') || '/bin/sh';
+  const copt = lgetenv('LESS_SHELL_COPTION') || '-c';
 
   if (copt === '-') return ['/bin/sh', cmd ? ['-c', cmd] : []];
   return [shell, cmd ? [copt, cmd] : []];

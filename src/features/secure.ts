@@ -1,5 +1,7 @@
 import { search } from "./searching";
 
+import { lgetenv } from '../environment';
+
 /**
  * The $LESSSECURE feature gate, like main.c's init_secure: with
  * LESSSECURE set nothing is allowed except what $LESSSECURE_ALLOW
@@ -44,11 +46,11 @@ function parseFeatures(text: string, name: string): Set<SecureFeature> {
 
 /** Reads the LESSSECURE environment, like init_secure. */
 export function initSecure(): void {
-  allowed = process.env.LESSSECURE
+  allowed = lgetenv('LESSSECURE')
     ? new Set()
     : new Set(FEATURES);
 
-  const allow = process.env.LESSSECURE_ALLOW;
+  const allow = lgetenv('LESSSECURE_ALLOW');
 
   if (allow) {
     for (const f of parseFeatures(allow, 'LESSSECURE_ALLOW')) {
@@ -56,7 +58,7 @@ export function initSecure(): void {
     }
   }
 
-  const disallow = process.env.LESSSECURE_DISALLOW;
+  const disallow = lgetenv('LESSSECURE_DISALLOW');
 
   if (disallow) {
     for (const f of parseFeatures(disallow, 'LESSSECURE_DISALLOW')) {

@@ -1,3 +1,5 @@
+import { Readable } from 'stream';
+
 import { config, mode } from './config';
 
 import { Config, Mode } from './interfaces';
@@ -5,6 +7,8 @@ import { Config, Mode } from './interfaces';
 import { transformContent } from './lines/helpers';
 
 import { filterLines } from './features/searching';
+
+import { lgetenv } from './environment';
 
 /**
  * The pager session state, like og's globals spread across its C
@@ -74,7 +78,7 @@ export const session = {
   processTitle: '',
 
   // the still-delivering pipe state (og's lazy non-seekable reads)
-  pipeStream: null as NodeJS.ReadableStream | null,
+  pipeStream: null as Readable | null,
   pipePaused: false,
   pipeDrainTo: null as (() => void) | null,
   detachPipe: (() => {}) as () => void,
@@ -182,8 +186,7 @@ export function deriveContent(): string[] {
  * og get_one_screen's `nlines + shell_lines <= sc_height`.
  */
 export function shellReserveLines(): number {
-  return Math.min(
-    Math.max(parseInt(process.env.LESS_SHELL_LINES ?? '', 10) || 1, 1),
-    Math.max(config.window - 1, 1)
-  );
+  const env = lgetenv('LESS_SHELL_LINES');
+  const lines = env ? parseInt(env, 10) || 0 : 1;
+  return lines >= config.window ? config.window - 1 : lines;
 }

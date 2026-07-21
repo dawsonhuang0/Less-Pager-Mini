@@ -1,12 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 
-import { homeDir, LESSKEYIN_NAME, LESSKEYIN_SYS, LESSKEYFILE_NAME }
+import { homeDir, LESSKEYIN_NAME, LESSKEYIN_SYS, LESSKEYFILE_NAME,
+  LESSKEYFILE_SYS }
   from "../platform";
 
 import { Actions } from "../interfaces";
 
 import { search } from "./searching";
+
+import { actualEnv, deleteLesskeyEnv, lgetenv, resetLesskeyEnvironment,
+  setLesskeyEnv } from '../environment';
+
+import { terminalCapability } from '../terminal';
 
 /**
  * A #command binding: the pager action, an optional canonical key for
@@ -74,10 +80,10 @@ const CMD_ACTIONS: Record<string, Actions | null> = {
   'next-tag': 'NEXT_TAG',
   'no-scroll': 'FIRST_COL',
   'noaction': 'NOACTION',
-  'osc8-forw-search': null,
-  'osc8-back-search': null,
-  'osc8-jump': null,
-  'osc8-open': null,
+  'osc8-forw-search': 'OSC8_FORWARD',
+  'osc8-back-search': 'OSC8_BACKWARD',
+  'osc8-jump': 'OSC8_JUMP',
+  'osc8-open': 'OSC8_OPEN',
   'percent': 'PERCENT_LINE',
   'pipe': 'PIPE_COMMAND',
   'prev-file': 'PREV_FILE',
@@ -184,6 +190,32 @@ const SPECIAL_KEYS: Record<string, string> = {
   '+x': '\x1B[3;2~',
 };
 
+const SPECIAL_CAPS: Record<string, [string, string | null]> = {
+  d: ['kcud1', 'kd'], D: ['knp', 'kN'], e: ['kend', '@7'],
+  h: ['khome', 'kh'], i: ['kich1', 'kI'], l: ['kcub1', 'kl'],
+  r: ['kcuf1', 'kr'], t: ['kcbt', 'kB'], u: ['kcuu1', 'ku'],
+  U: ['kpp', 'kP'], x: ['kdch1', 'kD'], '1': ['kf1', 'k1'],
+  H: ['kHOM5', null], I: ['kHOM', '#2'], L: ['kLFT5', null],
+  M: ['kLFT', null], R: ['kRIT5', null], S: ['kRIT', null],
+  E: ['kEND5', null], F: ['kEND', '#7'],
+  '^d': ['kDN5', null], '^e': ['kEND5', null],
+  '^h': ['kHOM5', null], '^l': ['kLFT5', null],
+  '^r': ['kRIT5', null], '^u': ['kUP5', null],
+  '^x': ['kDC5', null],
+  '+d': ['kDN', null], '+e': ['kEND', '#7'],
+  '+h': ['kHOM', '#2'], '+l': ['kLFT', null],
+  '+r': ['kRIT', null], '+u': ['kUP', null], '+x': ['kDC', null],
+};
+
+function specialKey(name: string): string | undefined {
+  const cap = SPECIAL_CAPS[name];
+  if (cap) {
+    const value = terminalCapability(cap[0], cap[1]);
+    if (value !== undefined) return value;
+  }
+  return SPECIAL_KEYS[name];
+}
+
 /** Binary-file action codes (cmd.h A_*) mapped onto our actions. */
 const ACTION_CODES: Record<number, Actions | null> = {
   2: 'LINE_BACKWARD',            // A_B_LINE
@@ -254,10 +286,10 @@ const ACTION_CODES: Record<number, Actions | null> = {
   68: null,                      // A_X116MOUSE_IN
   69: 'PSHELL_COMMAND',          // A_PSHELL
   70: 'CLEAR_SEARCH',            // A_CLR_SEARCH
-  71: null,                      // A_OSC8_F_SEARCH
-  72: null,                      // A_OSC8_B_SEARCH
-  73: null,                      // A_OSC8_OPEN
-  74: null,                      // A_OSC8_JUMP
+  71: 'OSC8_FORWARD',            // A_OSC8_F_SEARCH
+  72: 'OSC8_BACKWARD',           // A_OSC8_B_SEARCH
+  73: 'OSC8_OPEN',               // A_OSC8_OPEN
+  74: 'OSC8_JUMP',               // A_OSC8_JUMP
   77: 'FOLLOW_BELL',             // A_F_FOREVER_BELL
   100: null,                     // A_INVALID
   101: 'NOACTION',               // A_NOACTION
@@ -327,6 +359,8 @@ let lastVarName = '';
 let lastVarRaw = '';
 let lastVarApplied = false;
 let varTableBroken = false;
+let parsingSystem = false;
+const currentVars = new Map<string, string>();
 
 /** The #command binding for a key sequence, if the user made one. */
 export const userBinding = (seq: string): UserBinding | undefined =>
@@ -347,56 +381,74 @@ export function resetLesskey(): void {
   bindings.clear();
   editKeys.clear();
   definedVars.clear();
+  currentVars.clear();
+  resetLesskeyEnvironment();
   stopped = false;
 }
 
 /**
  * Loads the lesskey source at startup, like decode.c's init_cmds:
- * $LESSKEY_CONTENT is searched before the file named by $LESSKEYIN,
- * which falls back to $XDG_CONFIG_HOME/lesskey, ~/.config/lesskey and
- * ~/.lesskey. $LESSNOCONFIG skips everything.
+ * System source/binary, user source/binary, then inline system/user
+ * content are added in decode.c order. $LESSKEYIN falls back through
+ * $XDG_CONFIG_HOME/lesskey, ~/.config/lesskey and ~/.lesskey.
+ * $LESSNOCONFIG skips everything.
  */
 export function loadLesskey(): void {
   resetLesskey();
 
-  if (process.env.LESSNOCONFIG) return;
+  if (actualEnv('LESSNOCONFIG')) return;
 
-  // the system-wide table loads first, like decode.c's
-  // add_hometable("LESSKEYIN_SYSTEM", LESSKEYINFILE_SYS)
-  const sysFile = process.env.LESSKEYIN_SYSTEM || LESSKEYIN_SYS;
+  // Tables are added in og's exact order. Later command definitions
+  // win ties; environment lookup keeps user and system tables apart.
+  const sysFile = lgetenv('LESSKEYIN_SYSTEM') || LESSKEYIN_SYS;
+  let sysSourceLoaded = false;
 
   try {
-    parseLesskey(fs.readFileSync(sysFile, 'utf8'), sysFile);
+    parseLesskey(fs.readFileSync(sysFile, 'utf8'), sysFile, true);
+    sysSourceLoaded = true;
   } catch {
     // a missing system file is the normal case
   }
 
-  // the content table is searched first in og, so it parses first
-  // here (bindings keep the first definition, like cmd_search)
-  const content = process.env.LESSKEY_CONTENT;
-  if (content) parseLesskeyContent(content);
+  if (!sysSourceLoaded) {
+    const sysBinary = lgetenv('LESSKEY_SYSTEM') || LESSKEYFILE_SYS;
+    try {
+      parseLesskeyBinary(fs.readFileSync(sysBinary), true);
+    } catch {
+      // like og, a missing system binary is not an error
+    }
+  }
 
   const file = lesskeyFile();
+  let userSourceLoaded = false;
 
   if (file) {
     try {
       parseLesskey(fs.readFileSync(file, 'utf8'), file);
-      return;
+      userSourceLoaded = true;
     } catch {
       // og opens the default file silently
     }
   }
 
-  // without a source file og falls back to the compiled binary file,
-  // $LESSKEY or ~/.less (_less on Windows)
-  const binary = process.env.LESSKEY ??
-    path.join(homeDir(), LESSKEYFILE_NAME);
+  if (!userSourceLoaded) {
+    // without a source file og falls back to the compiled binary file,
+    // $LESSKEY or ~/.less (_less on Windows)
+    const binary = lgetenv('LESSKEY') ??
+      path.join(homeDir(), LESSKEYFILE_NAME);
 
-  try {
-    parseLesskeyBinary(fs.readFileSync(binary));
-  } catch {
-    // like og, a missing binary file is not an error
+    try {
+      parseLesskeyBinary(fs.readFileSync(binary));
+    } catch {
+      // like og, a missing binary file is not an error
+    }
   }
+
+  const systemContent = lgetenv('LESSKEY_CONTENT_SYSTEM');
+  if (systemContent) parseLesskeyContent(systemContent, true);
+
+  const content = lgetenv('LESSKEY_CONTENT');
+  if (content) parseLesskeyContent(content);
 }
 
 /**
@@ -405,7 +457,10 @@ export function loadLesskey(): void {
  * "\0M+G" and "End" magics; the old format is one raw command table.
  * Invalid files are ignored silently, like og returning -1.
  */
-export function parseLesskeyBinary(buf: Buffer): void {
+export function parseLesskeyBinary(buf: Buffer, system: boolean = false): void {
+  parsingSystem = system;
+  definedVars.clear();
+  currentVars.clear();
   if (
     buf.length >= 4 && buf[0] === 0x00 && buf[1] === 0x4D &&
     buf[2] === 0x2B && buf[3] === 0x47
@@ -537,7 +592,8 @@ function parseBinaryVars(buf: Buffer): void {
       if (expanded === null) break;
 
       definedVars.add(name);
-      process.env[name] = expanded;
+      currentVars.set(name, expanded);
+      setLesskeyEnv(name, expanded, parsingSystem);
     }
   }
 }
@@ -546,9 +602,10 @@ function parseBinaryVars(buf: Buffer): void {
  * Finds the lesskey source file, like add_hometable's lookup.
  */
 function lesskeyFile(): string | null {
-  if (process.env.LESSKEYIN) return process.env.LESSKEYIN;
+  const configured = lgetenv('LESSKEYIN');
+  if (configured) return configured;
 
-  const xdg = process.env.XDG_CONFIG_HOME;
+  const xdg = lgetenv('XDG_CONFIG_HOME');
 
   if (xdg) {
     const name = path.join(xdg, 'lesskey');
@@ -573,7 +630,12 @@ function lesskeyFile(): string | null {
  * @param text - The lesskey source.
  * @param filename - Name reported in parse errors.
  */
-export function parseLesskey(text: string, filename: string): void {
+export function parseLesskey(
+  text: string,
+  filename: string,
+  system: boolean = false
+): void {
+  parsingSystem = system;
   parseLesskeyText(text, filename);
 }
 
@@ -585,7 +647,11 @@ export function parseLesskey(text: string, filename: string): void {
  *
  * @param text - The --lesskey-content / $LESSKEY_CONTENT value.
  */
-export function parseLesskeyContent(text: string): void {
+export function parseLesskeyContent(
+  text: string,
+  system: boolean = false
+): void {
+  parsingSystem = system;
   const lines: string[] = [];
   let line = '';
 
@@ -624,6 +690,8 @@ function parseLesskeyText(text: string, filename: string): void {
   lastVarRaw = '';
   lastVarApplied = false;
   varTableBroken = false;
+  definedVars.clear();
+  currentVars.clear();
 
   const lines = text.split('\n');
 
@@ -773,7 +841,7 @@ function tstr(
           next++;
         }
 
-        const seq = SPECIAL_KEYS[name];
+        const seq = specialKey(name);
 
         if (seq === undefined) {
           parseError(`invalid escape sequence "\\k${name}"`);
@@ -872,7 +940,6 @@ function addBinding(
   key?: string,
   extra?: string
 ): void {
-  if (bindings.has(seq)) return;
   bindings.set(seq, { action, key, extra });
 }
 
@@ -908,9 +975,11 @@ function parseVarLine(line: string): void {
 
       if (expanded === null) {
         varTableBroken = true;
-        delete process.env[lastVarName];
+        currentVars.delete(lastVarName);
+        deleteLesskeyEnv(lastVarName, parsingSystem);
       } else {
-        process.env[lastVarName] = expanded;
+        currentVars.set(lastVarName, expanded);
+        setLesskeyEnv(lastVarName, expanded, parsingSystem);
       }
     }
 
@@ -951,7 +1020,8 @@ function parseVarLine(line: string): void {
   }
 
   definedVars.add(name);
-  process.env[name] = expanded;
+  currentVars.set(name, expanded);
+  setLesskeyEnv(name, expanded, parsingSystem);
 }
 
 /**
@@ -1012,7 +1082,7 @@ function expandEvars(text: string): string | null {
 
     const name = text.slice(i, e);
     let term = text[e++];
-    const evar = process.env[name] ?? '';
+    const evar = currentVars.get(name) ?? lgetenv(name) ?? '';
 
     // (slash, pattern, slash, replacement)... like make_replaces
     const replaces: { fm: string, to: string }[] = [];

@@ -1,5 +1,7 @@
 import { Actions } from "./interfaces";
 
+import { terminalCapability } from './terminal';
+
 /**
  * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),
  * an ESC-prefixed combination, or a single code point.
@@ -30,7 +32,7 @@ export function splitKeys(data: string): string[] {
  * becomes the NEXT command's newline: dismiss AND move.
  */
 export function kentToNewline(key: string): string {
-  return key === '\x1bOM' ? '\n' : key;
+  return key === (terminalCapability('kent', '@8') ?? '\x1bOM') ? '\n' : key;
 }
 
 /**
@@ -42,7 +44,25 @@ export function kentToNewline(key: string): string {
 export function getAction(key: string): Actions | undefined {
   if (key.startsWith('\x1b[<64;')) return 'LINE_BACKWARD';
   if (key.startsWith('\x1b[<65;')) return 'LINE_FORWARD';
-  return keys[key];
+  if (keys[key]) return keys[key];
+
+  const terminalKeys: Array<[string, string, string, Actions]> = [
+    ['kcuf1', 'kr', '\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
+    ['kcub1', 'kl', '\x1b[D', 'SET_HALF_SCREEN_LEFT'],
+    ['kcuu1', 'ku', '\x1b[A', 'LINE_BACKWARD'],
+    ['kcud1', 'kd', '\x1b[B', 'LINE_FORWARD'],
+    ['kpp', 'kP', '\x1b[5~', 'WINDOW_BACKWARD'],
+    ['knp', 'kN', '\x1b[6~', 'WINDOW_FORWARD'],
+    ['khome', 'kh', '\x1b[H', 'FIRST_LINE'],
+    ['kend', '@7', '\x1b[F', 'LAST_LINE'],
+    ['kf1', 'k1', '\x1bOP', 'HELP'],
+  ];
+
+  for (const [ti, tc, fallback, action] of terminalKeys) {
+    if (key === (terminalCapability(ti, tc) ?? fallback)) return action;
+  }
+
+  return undefined;
 }
 
 /**
@@ -355,6 +375,16 @@ const keys: Record<string, Actions> = {
   // (*) go to a previously marked position
   '\x27': 'GO_MARK', // '
   '\x18\x18': 'GO_MARK', // ^X^X
+
+  // OSC 8 hyperlink selection, jump and open (v696+)
+  '\x0F\x0E': 'OSC8_FORWARD', // ^O^N
+  '\x0Fn': 'OSC8_FORWARD',
+  '\x0F\x10': 'OSC8_BACKWARD', // ^O^P
+  '\x0Fp': 'OSC8_BACKWARD',
+  '\x0F\x0C': 'OSC8_JUMP', // ^O^L
+  '\x0Fl': 'OSC8_JUMP',
+  '\x0F\x0F': 'OSC8_OPEN', // ^O^O
+  '\x0Fo': 'OSC8_OPEN',
 
   // clear a mark
   '\x1Bm': 'CLEAR_MARK', // ESC-m

@@ -133,4 +133,8 @@ export type Actions =
   | 'SPAN_REPEAT_SEARCH'
   | 'SPAN_REVERSE_SEARCH'
   | 'NEXT_TAG'
-  | 'PREV_TAG';
+  | 'PREV_TAG'
+  | 'OSC8_FORWARD'
+  | 'OSC8_BACKWARD'
+  | 'OSC8_JUMP'
+  | 'OSC8_OPEN';

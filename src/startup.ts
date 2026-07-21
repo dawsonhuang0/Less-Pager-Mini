@@ -16,9 +16,13 @@ import { loadLesskey } from './features/lesskey';
 
 import { initCharset } from './features/charset';
 
-import { initAnsiChars } from './constants';
+import { initAnsiChars, initTerminalCapabilities } from './constants';
 
 import { resetProtos } from './features/prompt';
+
+import { initEnvironment, lgetenv } from './environment';
+
+import { resetOsc8 } from './features/osc8';
 
 // error() calls before the screen initializes, counted for og's
 // main errmsgs gate ("Press RETURN to continue" before the screen
@@ -35,10 +39,12 @@ export const startupErrors = { count: 0 };
  *   scanning before any file opens.
  */
 export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
+  initEnvironment();
   startupErrors.count = 0;
   resetMisc();
   resetBellTimer();
   resetPrompting();
+  resetOsc8();
   onRebuild(() => {});
 
   // lesskey loads before $LESS scans, like og's init_cmds preceding
@@ -52,10 +58,11 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // like init_charset before the first file opens
   initCharset();
   initAnsiChars();
+  initTerminalCapabilities();
 
   // $LESS_IS_MORE selects more compatibility and the $MORE options,
   // like og's init_option and main reading the right variable
-  const lim = process.env.LESS_IS_MORE;
+  const lim = lgetenv('LESS_IS_MORE');
   opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
 
   // like og's init_prompt after less_is_more is known; $MORE below may
@@ -63,10 +70,10 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   resetProtos();
 
   // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
-  initUnsupport(process.env.LESS_UNSUPPORT ?? '');
+  initUnsupport(lgetenv('LESS_UNSUPPORT') ?? '');
 
   const startup = scanOptions(
-    process.env[opt.lessIsMore ? 'MORE' : 'LESS'] ?? '', content);
+    lgetenv(opt.lessIsMore ? 'MORE' : 'LESS') ?? '', content);
 
   // command line options follow the env, one scan per argument like
   // og's main; -r keeps its command line meaning there

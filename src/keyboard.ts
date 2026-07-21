@@ -4,6 +4,8 @@ import tty from 'tty';
 
 import { execFileSync } from 'child_process';
 
+import { terminalEnv } from './environment';
+
 /**
  * The keyboard stream, like og's ttyin.c: keys come from the
  * controlling terminal, not stdin, so piped input (`cmd | lmn`)
@@ -51,7 +53,7 @@ export function openTtyKeyboard(): boolean {
  * 10586), or when $TERM names dumb explicitly.
  */
 export function dumbTerminal(): boolean {
-  const term = process.env.TERM;
+  const term = terminalEnv();
 
   if (process.platform === 'win32') {
     if (term === 'dumb' || term === 'unknown') return true;
@@ -149,7 +151,7 @@ export function gateReturn(message: string): void {
       n = fs.readSync(keyboardFd(), buf, 0, 64, null);
       if (n > 0) break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EAGAIN') {
+      if ((error as { code?: string }).code !== 'EAGAIN') {
         n = 0;
         break;
       }

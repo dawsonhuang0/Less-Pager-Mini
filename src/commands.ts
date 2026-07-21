@@ -6,8 +6,6 @@ import { keyboard } from './keyboard';
 
 import { config, mode } from './config';
 
-import { maxSubRow } from './lines/helpers';
-
 import { session, deriveContent } from './session';
 
 import { suspendTerminal, enterScreen } from './screen';
@@ -44,12 +42,12 @@ import { pipeMark, shellCommand, setFirstCmd, getFirstCmd,
   addShellHistory,
   logFileTarget, writeLogFile } from './features/misc';
 
-import { prExpand } from './features/prompt';
+import { editCommand, prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
 import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
-  jumpSindex, resetHeaderStart, NO_SHELL_WARNING } from './options';
+  jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE } from './options';
 
 import {
   CONSOLE_CLEAR,
@@ -377,9 +375,13 @@ export function runExamine(): void {
  * lsystem: echoes the command (unless it starts with `-`), runs it
  * through $SHELL, then repaints and reports the done message.
  */
-export function runShell(cmd: string, doneMsg: string | null, input?: string): void {
+export function runShell(
+  cmd: string,
+  doneMsg: string | null,
+  input?: string
+): void {
   if (optNoShell()) {
-    search.message = NO_SHELL_WARNING;
+    search.message = NO_SHELL_MESSAGE;
     return;
   }
 
@@ -493,7 +495,7 @@ export function runPipe(cmd: string): void {
  */
 export function runEditor(): void {
   if (optNoShell()) {
-    search.message = NO_SHELL_WARNING;
+    search.message = NO_SHELL_MESSAGE;
     return;
   }
 
@@ -516,13 +518,7 @@ export function runEditor(): void {
 
   session.pendingEditWarn = false;
 
-  const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
-  const line = Math.min(
-    config.row + Math.floor((config.window - 1) / 2),
-    session.content.length - 1
-  ) + 1;
-
-  runShell(`${editor} +${line} "${entry.path}"`, null);
+  runShell(editCommand(session.content), null);
 
   // the file may have changed: re-examine it, like less's reedit
   switchToFile(files.index);
@@ -533,7 +529,7 @@ export function runMiscInput(
   text: string
 ): void {
   if ((kind === '!' || kind === '#' || kind === '|') && optNoShell()) {
-    search.message = NO_SHELL_WARNING;
+    search.message = NO_SHELL_MESSAGE;
     return;
   }
 

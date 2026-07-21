@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { Readable } from 'stream';
 
 import v8 from 'v8';
 
@@ -37,12 +38,14 @@ import { POLLHUP_EXITS_F } from '../platform';
 
 import { PipeDecoder } from './charset';
 
+import { envDelay } from '../environment';
+
 /**
  * The still-delivering input, like og's non-seekable ch file: the
  * entry paths set it before contentPager attaches it.
  */
 export const pipeInput = {
-  source: null as NodeJS.ReadableStream | null,
+  source: null as Readable | null,
   decoder: null as PipeDecoder | null,
 };
 
@@ -83,8 +86,6 @@ export function pipeFilling(): boolean {
 
 // og's waiting_for_data_delay: a fill stalled this long (or poked by
 // a typed key) shows wait_message() once, via ixerror (ch.c:331)
-const STALL_DELAY = 4000;
-
 let stallTimer: ReturnType<typeof setTimeout> | null = null;
 
 function armStallTimer(): void {
@@ -102,7 +103,7 @@ function armStallTimer(): void {
       session.pipeWaiting = true;
       render(session.content, session.buffer);
     }
-  }, STALL_DELAY);
+  }, envDelay('LESS_DATA_DELAY', 4000));
 
   stallTimer.unref?.();
 }
@@ -263,8 +264,7 @@ export function attachPipe(): void {
   // finished): 'end' has already been emitted and will not repeat,
   // so run its bookkeeping now — og's reads at EOF would learn this
   // naturally on the first forward past the data
-  if ((stream as NodeJS.ReadableStream & { readableEnded?: boolean })
-    .readableEnded) {
+  if (stream.readableEnded) {
     onEnd();
   }
 

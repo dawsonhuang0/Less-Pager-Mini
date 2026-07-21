@@ -12,7 +12,6 @@ import { maxSubRow, visualWidth, isStyled } from './lines/helpers';
 import { search, searchPrompt, statusColChar } from './features/searching';
 
 import {
-  opt,
   option,
   optQuiet,
   optNoVbell,
@@ -49,7 +48,7 @@ import { follow } from './features/follow';
 import { brackets, marks, markAtRow } from './features/jumping';
 
 import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
-  sizeIsKnown, lineBase }
+  sizeIsKnown }
   from './features/files';
 
 import { session } from './session';
@@ -72,11 +71,12 @@ import {
   CLEAR_BELOW,
   CLEAR_SCREEN,
   REVERSE_INDEX,
+  TERMINAL_SUSPEND,
+  TERMINAL_RESUME,
+  VISUAL_BELL,
   SCROLL_UP,
   SCROLL_DOWN,
-  CURSOR_TO,
-  SYNC_ON,
-  SYNC_OFF
+  CURSOR_TO
 } from './constants';
 
 /**
@@ -363,6 +363,10 @@ function visualBell(): void {
 
   // cmd_exec's clear_bot precedes the flash too when a marker fires
   const epr = eprPrefix();
+  if (VISUAL_BELL !== null) {
+    process.stdout.write((epr ? epr + clearBot() : '') + VISUAL_BELL);
+    return;
+  }
   process.stdout.write((epr ? epr + clearBot() : '') + '\x1B[?5h');
   setTimeout(() => process.stdout.write('\x1B[?5l'), 100);
 }
@@ -1277,8 +1281,8 @@ function sameRows(a: string[], b: string[]): boolean {
 
 // LESS_TERMCAP_SUSPEND/RESUME (v684) replace the strings wrapped
 // around screen updates; our default is the sync-update pair
-const syncOn = (): string => process.env.LESS_TERMCAP_SUSPEND ?? SYNC_ON;
-const syncOff = (): string => process.env.LESS_TERMCAP_RESUME ?? SYNC_OFF;
+const syncOn = (): string => TERMINAL_SUSPEND;
+const syncOff = (): string => TERMINAL_RESUME;
 
 function fullFrame(rows: string[]): string {
   const body = rows.map(row => CLEAR_LINE + row).join('\n');

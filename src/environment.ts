@@ -1,0 +1,110 @@
+/**
+ * OG-compatible environment lookup.
+ *
+ * less searches local lesskey variables first, then the real process
+ * environment, then system lesskey variables. LESSNOCONFIG filters every
+ * lookup except the raw TERM/POSIXLY_CORRECT/platform probes which call
+ * `actualEnv` explicitly.
+ */
+
+const userVars = new Map<string, string>();
+const systemVars = new Map<string, string>();
+
+function seedSystemDefaults(): void {
+  // decode.c's compiled dflt_vartable. A real environment value still
+  // wins because system tables are the final lgetenv tier.
+  systemVars.set('LESS_OSC8_OPEN_ANY', '-less-osc8-open');
+}
+
+let noConfig: string | undefined;
+let invocationStart = Date.now();
+
+/** Starts a fresh invocation before lesskey tables are loaded. */
+export function initEnvironment(): void {
+  userVars.clear();
+  systemVars.clear();
+  seedSystemDefaults();
+
+  const value = process.env.LESSNOCONFIG;
+  noConfig = value ? value : undefined;
+  invocationStart = Date.now();
+}
+
+/** Clears only lesskey-provided values, used by isolated parser tests. */
+export function resetLesskeyEnvironment(): void {
+  userVars.clear();
+  systemVars.clear();
+  seedSystemDefaults();
+}
+
+/** Adds one #env value to the matching lesskey table. */
+export function setLesskeyEnv(
+  name: string,
+  value: string,
+  system: boolean = false
+): void {
+  (system ? systemVars : userVars).set(name, value);
+}
+
+/** Removes a broken value from the matching lesskey table. */
+export function deleteLesskeyEnv(
+  name: string,
+  system: boolean = false
+): void {
+  (system ? systemVars : userVars).delete(name);
+}
+
+/** Reads the unfiltered process environment, like OG's direct getenv calls. */
+export const actualEnv = (name: string): string | undefined =>
+  process.env[name];
+
+/** True when LESSNOCONFIG excludes this variable from lgetenv. */
+function ignored(name: string): boolean {
+  if (!noConfig) return false;
+
+  for (const item of noConfig.split(',')) {
+    if (item.trim() === name) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Reads a less environment value with user > process > system precedence.
+ * Empty real-environment values are absent, while an empty lesskey value
+ * remains a winning table entry just like cmd_decode(EV_OK).
+ */
+export function lgetenv(name: string): string | undefined {
+  if (ignored(name)) return undefined;
+
+  if (userVars.has(name)) return userVars.get(name);
+
+  const real = process.env[name];
+  if (real !== undefined && real !== '') return real;
+
+  return systemVars.get(name);
+}
+
+/** TERM uniquely falls back to real getenv even under LESSNOCONFIG. */
+export const terminalEnv = (): string | undefined =>
+  lgetenv('TERM') || actualEnv('TERM');
+
+/** Integer lookup with OG's atoi-style invalid fallback. */
+export function envInteger(name: string, fallback: number): number {
+  const value = lgetenv(name);
+  if (!value) return fallback;
+
+  const parsed = parseInt(value, 10);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+/** Positive millisecond option, preserving the compiled default otherwise. */
+export function envDelay(name: string, fallback: number): number {
+  const value = envInteger(name, 0);
+  return value > 0 ? value : fallback;
+}
+
+/** True during og's initial no-poll screen-fill grace period. */
+export function screenFillGrace(): boolean {
+  return Date.now() < invocationStart + envDelay('LESS_SCREENFILL_TIME', 3000);
+}

@@ -26,6 +26,48 @@ import {
 
 import { DEFAULT_WINDOW, DEFAULT_COLUMN } from './config';
 
+import { lgetenv } from './environment';
+
+import { terminalNumber } from './terminal';
+
+const atoi = (value: string): number => parseInt(value, 10) || 0;
+
+/** OG scrsize precedence, before gutters are reserved. */
+export function detectedDimensions(): [number, number] {
+  const size = freshWindowSize();
+  const sysWidth = (size ? size[0] : process.stdout.columns) || 0;
+  const sysHeight = (size ? size[1] : process.stdout.rows) || 0;
+
+  let rows = sysHeight > 0
+    ? sysHeight
+    : lgetenv('LINES') !== undefined
+      ? atoi(lgetenv('LINES') ?? '')
+      : terminalNumber('lines', 'li') ?? 0;
+
+  let columns = sysWidth > 0
+    ? sysWidth
+    : lgetenv('COLUMNS') !== undefined
+      ? atoi(lgetenv('COLUMNS') ?? '')
+      : terminalNumber('cols', 'co') ?? 0;
+
+  const lessRows = lgetenv('LESS_LINES');
+  if (lessRows !== undefined) {
+    const value = atoi(lessRows);
+    rows = value < 0 ? rows + value : value;
+  }
+
+  const lessColumns = lgetenv('LESS_COLUMNS');
+  if (lessColumns !== undefined) {
+    const value = atoi(lessColumns);
+    columns = value < 0 ? columns + value : value;
+  }
+
+  return [
+    columns > 0 ? columns : DEFAULT_COLUMN,
+    rows > 0 ? rows : DEFAULT_WINDOW,
+  ];
+}
+
 /**
  * Leaves the alternate screen and raw mode so a child process can use
  * the terminal, like less de-initializing before running a command.
@@ -78,25 +120,9 @@ export function calculateDimensions(): void {
   // og's scrsize queries the terminal itself: node's cached
   // winsize lags blocked loops and raw SIGWINCH handlers; a zero
   // size (some pseudo-terminals) falls back like og
-  const size = freshWindowSize();
-  config.window = (size ? size[1] : process.stdout.rows) || DEFAULT_WINDOW;
-  config.screenWidth =
-    (size ? size[0] : process.stdout.columns) || DEFAULT_COLUMN;
-
-  // LESS_LINES / LESS_COLUMNS override the detected size, like
-  // scrsize: a negative value is relative to the real size
-  const lines = parseInt(process.env.LESS_LINES ?? '', 10);
-  const cols = parseInt(process.env.LESS_COLUMNS ?? '', 10);
-
-  if (!isNaN(lines)) {
-    config.window = lines < 0 ? config.window + lines : lines;
-    if (config.window <= 0) config.window = DEFAULT_WINDOW;
-  }
-
-  if (!isNaN(cols)) {
-    config.screenWidth = cols < 0 ? config.screenWidth + cols : cols;
-    if (config.screenWidth <= 0) config.screenWidth = DEFAULT_COLUMN;
-  }
+  const [columns, rows] = detectedDimensions();
+  config.window = rows;
+  config.screenWidth = columns;
 
   // -N and -J reserve gutter columns inside the screen width
   reserveGutter();

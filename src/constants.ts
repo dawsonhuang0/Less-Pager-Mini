@@ -1,5 +1,9 @@
 /* eslint-disable no-control-regex */
 
+import { lgetenv } from './environment';
+
+import { formatTerminalCapability, terminalCapability } from './terminal';
+
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
 
 // escape-sequence recognition, like line.c's ansi_step: any run of
@@ -11,14 +15,40 @@ const DEFAULT_END_CHARS = 'm';
 const classEscape = (text: string): string =>
   text.replace(/[\\\]^-]/g, '\\$&');
 
+const regexEscape = (text: string): string =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** Builds the sequence regex from mid and end character sets. */
-function styleRegex(mid: string, end: string, flags: string): RegExp {
+function styleRegex(
+  mid: string,
+  end: string,
+  flags: string,
+  oscAllow: string = '',
+  oscChars: string = ''
+): RegExp {
   // an end character never acts as a middle one, like is_ansi_middle
   const pureMid = [...mid].filter(ch => !end.includes(ch)).join('');
 
-  return new RegExp(
-    `\\x1b[${classEscape(pureMid)}]*[${classEscape(end)}]`, flags
-  );
+  const csi = `\\x1b[${classEscape(pureMid)}]*[${classEscape(end)}]`;
+  const types = new Set(['8']);
+  for (const match of oscAllow.matchAll(/\d+/g)) types.add(match[0]);
+
+  // In file contents, an extra untyped OSC intro is enabled only by
+  // the following '*' marker. The standard ']' intro is typed and
+  // validated against OSC 8 plus LESSANSIOSCALLOW.
+  const custom: string[] = [];
+  for (let i = 0; i + 1 < oscChars.length; i++) {
+    if (oscChars[i + 1] === '*') custom.push(oscChars[i]);
+  }
+  const body = `(?:[^\\x07\\x1b]|\\x1b(?!\\\\))*`;
+  const endOsc = `(?:\\x07|\\x1b\\\\)`;
+  const osc = [
+    `\\x1b\\](?:${[...types].join('|')});${body}${endOsc}`,
+    ...custom.map(char =>
+      `\\x1b${regexEscape(char)}${body}${endOsc}`),
+  ];
+
+  return new RegExp(`(?:${csi}|${osc.join('|')})`, flags);
 }
 
 export let STYLE_REGEX = styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, '');
@@ -30,11 +60,13 @@ export let STYLE_REGEX_G =
  * $LESSANSIENDCHARS, like init_line.
  */
 export function initAnsiChars(): void {
-  const mid = process.env.LESSANSIMIDCHARS || DEFAULT_MID_CHARS;
-  const end = process.env.LESSANSIENDCHARS || DEFAULT_END_CHARS;
+  const mid = lgetenv('LESSANSIMIDCHARS') || DEFAULT_MID_CHARS;
+  const end = lgetenv('LESSANSIENDCHARS') || DEFAULT_END_CHARS;
+  const oscAllow = lgetenv('LESSANSIOSCALLOW') || '';
+  const oscChars = lgetenv('LESSANSIOSCCHARS') || '';
 
-  STYLE_REGEX = styleRegex(mid, end, '');
-  STYLE_REGEX_G = styleRegex(mid, end, 'g');
+  STYLE_REGEX = styleRegex(mid, end, '', oscAllow, oscChars);
+  STYLE_REGEX_G = styleRegex(mid, end, 'g', oscAllow, oscChars);
 }
 
 export const CONSOLE_TITLE_START = '\x1b]0;';
@@ -43,67 +75,116 @@ export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
 
 export const CONSOLE_CLEAR = '\x1b[2J\x1b[H';
 
-export const CURSOR_HOME = '\x1b[H';
-export const CLEAR_LINE = '\x1b[K';
-export const CLEAR_BELOW = '\x1b[J';
+export let CURSOR_HOME = '\x1b[H';
+export let CLEAR_LINE = '\x1b[K';
+export let CLEAR_BELOW = '\x1b[J';
 
 // og's terminfo clear (home + erase) and scroll-reverse strings,
 // used by the -X main-screen paint model
-export const CLEAR_SCREEN = '\x1b[H\x1b[2J';
-export const REVERSE_INDEX = '\x1bM';
+export let CLEAR_SCREEN = '\x1b[H\x1b[2J';
+export let REVERSE_INDEX = '\x1bM';
 
 export const SCROLL_UP = (n: number): string => `\x1b[${n}S`;
 export const SCROLL_DOWN = (n: number): string => `\x1b[${n}T`;
+let cursorToCapability = '\x1b[%p1%d;%p2%dH';
 export const CURSOR_TO = (row: number, col: number): string =>
-  `\x1b[${row};${col}H`;
+  formatTerminalCapability(cursorToCapability, row, col);
 
 // synchronized output (mode 2026): supporting terminals render the
 // whole frame atomically; others ignore it
 export const SYNC_ON = '\x1b[?2026h';
 export const SYNC_OFF = '\x1b[?2026l';
 
-export const ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
-export const ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
+export let ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
+export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
 export const ALTERNATE_SCROLL_ON = '\x1b[?1007h';
 export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
 
 // terminfo smkx/rmkx (DECCKM + DECKPAM), like less's keypad init;
 // Apple Terminal converts wheel scrolling to arrow keys in this mode
-export const KEYPAD_ON = '\x1b[?1h\x1b=';
-export const KEYPAD_OFF = '\x1b[?1l\x1b>';
+export let KEYPAD_ON = '\x1b[?1h\x1b=';
+export let KEYPAD_OFF = '\x1b[?1l\x1b>';
 
 // og's mousecap enables button events, button-motion (drags) and
 // SGR encoding: "\e[?1000h\e[?1002h\e[?1006h" (screen.c)
-export const MOUSE_ON = '\x1b[?1000h\x1b[?1002h';
-export const MOUSE_OFF = '\x1b[?1002l\x1b[?1000l';
+export let MOUSE_ON = '\x1b[?1000h\x1b[?1002h';
+export let MOUSE_OFF = '\x1b[?1002l\x1b[?1000l';
 
-export const MOUSE_SGR_ON = '\x1b[?1006h';
-export const MOUSE_SGR_OFF = '\x1b[?1006l';
+export let MOUSE_SGR_ON = '\x1b[?1006h';
+export let MOUSE_SGR_OFF = '\x1b[?1006l';
 
 // bracketed paste markers, enabled by --no-paste
-export const BRACKETED_PASTE_ON = '\x1b[?2004h';
-export const BRACKETED_PASTE_OFF = '\x1b[?2004l';
+export let BRACKETED_PASTE_ON = '\x1b[?2004h';
+export let BRACKETED_PASTE_OFF = '\x1b[?2004l';
+
+export let TERMINAL_SUSPEND = SYNC_ON;
+export let TERMINAL_RESUME = SYNC_OFF;
+export let VISUAL_BELL: string | null = null;
 
 export const SCROLL_UP_REGEX = /^\x1b\[<64;.*?M/;
 export const SCROLL_DOWN_REGEX = /^\x1b\[<65;.*?M/;
 
-export const STYLE_RESET = '\x1b[0m';
+export let STYLE_RESET = '\x1b[0m';
 
-export const INVERSE_ON = '\x1b[7m';
-export const INVERSE_OFF = '\x1b[27m';
+export let INVERSE_ON = '\x1b[7m';
+export let INVERSE_OFF = '\x1b[27m';
 
-export const BOLD_ON = '\x1b[1m';
+export let BOLD_ON = '\x1b[1m';
 
 // og exits bold through terminfo's sgr0 (no individual bold-off
 // exists), a FULL attribute reset: a leaked SGR — say an
 // --end-prompt color marker — dies at the first bold text (the
 // tilde rows, help's SUMMARY), while standout/underline end with
 // their own 27/24 and let it live on
-export const BOLD_OFF = '\x1b[m';
+export let BOLD_OFF = '\x1b[m';
 
-export const UNDERLINE_ON = '\x1B[4m';
-export const UNDERLINE_OFF = '\x1B[24m';
+export let UNDERLINE_ON = '\x1B[4m';
+export let UNDERLINE_OFF = '\x1B[24m';
 
-export const TILDE = BOLD_ON + '~' + BOLD_OFF;
-export const END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
+export let TILDE = BOLD_ON + '~' + BOLD_OFF;
+export let END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
+
+/** Rebuilds every terminal string that this pager consumes. */
+export function initTerminalCapabilities(): void {
+  ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ?? '\x1b[?1049h';
+  ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ?? '\x1b[?1049l';
+  KEYPAD_ON = terminalCapability('smkx', 'ks') ?? '\x1b[?1h\x1b=';
+  KEYPAD_OFF = terminalCapability('rmkx', 'ke') ?? '\x1b[?1l\x1b>';
+
+  const mouseStart = terminalCapability('MOUSE_START', 'MOUSE_START');
+  MOUSE_ON = mouseStart ?? '\x1b[?1000h\x1b[?1002h';
+  MOUSE_SGR_ON = mouseStart === undefined ? '\x1b[?1006h' : '';
+  const mouseEnd = terminalCapability('MOUSE_END', 'MOUSE_END');
+  MOUSE_OFF = mouseEnd ?? '\x1b[?1002l\x1b[?1000l';
+  MOUSE_SGR_OFF = mouseEnd === undefined ? '\x1b[?1006l' : '';
+
+  BRACKETED_PASTE_ON =
+    terminalCapability('BRACKETED_PASTE_START', 'BRACKETED_PASTE_START') ??
+    '\x1b[?2004h';
+  BRACKETED_PASTE_OFF =
+    terminalCapability('BRACKETED_PASTE_END', 'BRACKETED_PASTE_END') ??
+    '\x1b[?2004l';
+
+  TERMINAL_SUSPEND = terminalCapability('SUSPEND', 'SUSPEND') ?? SYNC_ON;
+  TERMINAL_RESUME = terminalCapability('RESUME', 'RESUME') ?? SYNC_OFF;
+  CURSOR_HOME = terminalCapability('home', 'ho') ?? '\x1b[H';
+  cursorToCapability = terminalCapability('cup', 'cm') ??
+    '\x1b[%p1%d;%p2%dH';
+  CLEAR_LINE = terminalCapability('el', 'ce') ?? '\x1b[K';
+  CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '\x1b[J';
+  CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\x1b[H\x1b[2J';
+  REVERSE_INDEX = terminalCapability('ri', 'sr') ?? '\x1bM';
+  VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
+
+  const reset = terminalCapability('sgr0', 'me') ?? '\x1b[m';
+  STYLE_RESET = reset;
+  INVERSE_ON = terminalCapability('smso', 'so') ?? '\x1b[7m';
+  INVERSE_OFF = terminalCapability('rmso', 'se') ?? reset;
+  BOLD_ON = terminalCapability('bold', 'md') ?? '\x1b[1m';
+  BOLD_OFF = reset;
+  UNDERLINE_ON = terminalCapability('smul', 'us') ?? '\x1b[4m';
+  UNDERLINE_OFF = terminalCapability('rmul', 'ue') ?? reset;
+  TILDE = BOLD_ON + '~' + BOLD_OFF;
+  END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
+}

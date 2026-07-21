@@ -279,8 +279,7 @@ describe('shell, pipe, and editor commands', () => {
     runPipe('wc -l');
     runEditor();
 
-    expect(search.message)
-      .toBe('Shell commands are disabled by --no-shell');
+    expect(search.message).toBe('Command not available');
     expect(fake.spawnSync).not.toHaveBeenCalled();
     expect(fake.suspendTerminal).not.toHaveBeenCalled();
   });

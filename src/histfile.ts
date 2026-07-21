@@ -11,6 +11,8 @@ import { shellHistory, setShellHistory } from './features/misc';
 
 import { optPermaMarks } from './options';
 
+import { lgetenv } from './environment';
+
 import {
   FileMark,
   setFileMarks,
@@ -331,7 +333,7 @@ function markOrder(char: string): number {
 // helpers
 
 function histfilePath(mustExist: boolean): string | null {
-  const env = process.env.LESSHISTFILE;
+  const env = lgetenv('LESSHISTFILE');
 
   if (env) {
     if (env === '-' || env === '/dev/null') return null;
@@ -341,16 +343,18 @@ function histfilePath(mustExist: boolean): string | null {
   const home = homeDir();
   const candidates: string[] = [];
 
-  if (process.env.XDG_STATE_HOME) {
-    candidates.push(path.join(process.env.XDG_STATE_HOME, 'lesshst'));
+  const stateHome = lgetenv('XDG_STATE_HOME');
+  if (stateHome) {
+    candidates.push(path.join(stateHome, 'lesshst'));
   }
 
   if (home) {
     candidates.push(path.join(home, '.local', 'state', 'lesshst'));
   }
 
-  if (process.env.XDG_DATA_HOME) {
-    candidates.push(path.join(process.env.XDG_DATA_HOME, 'lesshst'));
+  const dataHome = lgetenv('XDG_DATA_HOME');
+  if (dataHome) {
+    candidates.push(path.join(dataHome, 'lesshst'));
   }
 
   if (home) {
@@ -374,6 +378,6 @@ function histfilePath(mustExist: boolean): string | null {
 }
 
 function historyLimit(): number {
-  const size = parseInt(process.env.LESSHISTSIZE ?? '', 10);
+  const size = parseInt(lgetenv('LESSHISTSIZE') ?? '', 10);
   return size > 0 ? size : 100;
 }

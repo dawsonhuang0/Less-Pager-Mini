@@ -6,6 +6,8 @@ import { optTagsFile, resetTagsFile } from "../options";
 
 import { shellQuote } from "./prompt";
 
+import { lgetenv } from '../environment';
+
 /** One tag match, like tags.c's struct tag. */
 export interface Tag {
   file: string;
@@ -226,10 +228,10 @@ function findCtag(tag: string, tagsFile: string): string | null {
  * the output parses like ctags -x (name [type] linenum file ...).
  */
 function findGtag(tag: string, flag: string): string | null {
-  const cmd = process.env.LESSGLOBALTAGS;
+  const cmd = lgetenv('LESSGLOBALTAGS');
   if (!cmd) return 'No tags file';
 
-  const shell = process.env.SHELL || '/bin/sh';
+  const shell = lgetenv('SHELL') || '/bin/sh';
   const result = spawnSync(
     shell,
     ['-c', `${cmd} -x${flag} ${shellQuote(tag)}`],

@@ -3,7 +3,7 @@ import fs from 'fs';
 import { spawnSync } from 'child_process';
 
 import { keyboard, closeTtyKeyboard, consumeInterrupt, takeUngot,
-  watchWinch, unwatchWinch, freshWindowSize }
+  watchWinch, unwatchWinch }
   from '../keyboard';
 
 import { help } from '../lessHelp';
@@ -24,7 +24,7 @@ import { config } from '../config';
 import { getAction, splitKeys, kentToNewline, tailCascade }
   from '../keys';
 
-import { forwLine, backLine } from './lineio';
+import { forwLine, backLine, MAX_LINE } from './lineio';
 
 import { search, searchInterrupted, searchCaseFlags, addHistory, onAutosave,
   onHistTouch, onHistRecord, stripStyles } from '../features/searching';
@@ -42,16 +42,36 @@ import { realPath, getFileMarks, dropFileMark, subRowStart,
 
 import { displayPrType, optIntrChar, prChar } from '../options/shared';
 
-import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
-  flushPendopt, applyMouse, applyBracketedPaste, hook, opt,
+import { chopLine, onTrimBufSpace,
+  applyMouse, applyBracketedPaste, hook, opt,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
   optHowSearch, jumpSindex, optQuitOnIntr, optNoSearchHeaders,
   optHeader, checkModelines, optMatchShift, optRscroll, optNoShell,
-  NO_SHELL_WARNING }
+  optQuitIfOneScreen, NO_SHELL_MESSAGE }
   from '../options';
 
 import { strWidth } from 'char-width';
+
+import { visualWidth } from '../lines/helpers';
+
+import { shellReserveLines } from '../session';
+
+import { lgetenv } from '../environment';
+
+import { startupInit } from '../startup';
+
+import { detectedDimensions } from '../screen';
+
+import { shellArgv } from '../platform';
+
+import { windowedEditCommand } from '../features/prompt';
+
+import { osc8CommandForUri, osc8Links } from '../features/osc8';
+
+import { PipeSpool, SPOOL_READ_AHEAD, SpoolEvent } from './spool';
+
+import { secureAllow } from '../features/secure';
 
 import {
   cmd,
@@ -83,18 +103,40 @@ import {
 } from '../constants';
 
 /**
- * The file-backed pager session for huge files, mirroring og's real
+ * The file-backed pager session for examined files and pipe spools,
+ * mirroring og's real
  * architecture: a BigView position drives the screen and every frame
  * materializes only the visible lines. Feature parity grows toward
  * the in-memory session; movement, jumps and percent work today.
  */
 
-/** Files at or above this size take the windowed path (128MB). */
-export const BIG_FILE_THRESHOLD = 128 * 1024 * 1024;
+export interface FileSessionSource {
+  /** Name shown in prompts and expanded by shell/editor commands. */
+  displayPath?: string;
+  /** Growing seekable backing file for a non-seekable pipe. */
+  spool?: PipeSpool;
+  /** Position in an examined-file list, enabling :n/:p navigation. */
+  fileIndex?: number;
+  fileCount?: number;
+  /** A wrapper is retaining the keyboard for the next file session. */
+  keepKeyboard?: boolean;
+}
 
-export async function bigPager(path: string): Promise<void> {
+export type FileSessionResult =
+  { kind: 'quit' } |
+  { kind: 'relative', offset: number } |
+  { kind: 'index', index: number } |
+  { kind: 'remove' };
+
+export async function bigPager(
+  path: string,
+  startupReady: boolean = false,
+  source: FileSessionSource = {}
+): Promise<FileSessionResult> {
   const bf = new BlockFile(path);
   const view = new BigView(bf);
+  const displayPath = source.displayPath ?? path;
+  const spool = source.spool;
 
   // a -b toggle trims the block pool at once, like ch_setbufspace
   onTrimBufSpace(() => bf.trim());
@@ -103,12 +145,19 @@ export async function bigPager(path: string): Promise<void> {
   // a seekable file's length is always known, so the toggle only
   // reports (the regular session's pipe hook is restored at exit)
   const prevScanFileSize = hook.scanFileSize;
-  hook.scanFileSize = () => {};
+  hook.scanFileSize = () => { spool?.drain(); };
 
-  // $LESS applies here too, then the lmn command line options
-  scanOptions(process.env.LESS ?? '', []);
-  for (const arg of takeCliOptions()) scanOptions(arg, [], false);
-  flushPendopt();
+  // Full startup is shared with the regular session: lesskey #env,
+  // secure/charset/ANSI setup, $LESS/$MORE, then command-line options.
+  if (!startupReady) startupInit([]);
+
+  // --file-size on a non-seekable input makes its length known before
+  // painting. The bytes still land in the seekable spool, never in RAM.
+  if (spool && opt.wantFileSize > 0 && !spool.ended) {
+    spool.drain();
+    await spool.waitForEnd();
+    bf.refreshSize();
+  }
 
   // og's check_modelines runs at every edit_ifile (edit.c:632),
   // any file size: read the first --modelines lines from the head
@@ -129,8 +178,9 @@ export async function bigPager(path: string): Promise<void> {
   keyboard().setRawMode(true);
   keyboard().resume();
 
-  config.window = process.stdout.rows || 24;
-  config.screenWidth = process.stdout.columns || 80;
+  let [baseWidth, baseHeight] = detectedDimensions();
+  config.window = baseHeight;
+  config.screenWidth = baseWidth;
 
   let buffer: string[] = [];
   let first = true;
@@ -144,6 +194,8 @@ export async function bigPager(path: string): Promise<void> {
 
   // a pending lone ESC, like og's A_PREFIX waiting for the rest
   let escPrefix = '';
+  let oscPrefix = false;
+  let selectedOsc: { pos: number; uri: string } | null = null;
 
 
   // marks and the quote mark, like og mark.c over POSITIONs
@@ -163,10 +215,10 @@ export async function bigPager(path: string): Promise<void> {
   onShellHistTouch(touchShellList);
   onShellHistRecord(recordShellEntry);
 
-  const realpath = realPath(path);
+  const realpath = spool ? null : realPath(displayPath);
 
   for (const restored of getFileMarks()) {
-    if (realPath(restored.path) !== realpath) continue;
+    if (realpath === null || realPath(restored.path) !== realpath) continue;
 
     if (restored.char === "'") {
       quoteMark = { pos: restored.pos, subRow: 0 };
@@ -178,6 +230,8 @@ export async function bigPager(path: string): Promise<void> {
 
   // --save-marks reads this session's live marks at each write
   onSessionMarks(() => {
+    if (realpath === null) return [];
+
     const out = [...marks].map(([char, m]) => ({
       char, sline: m.sline ?? 1, pos: m.pos, path: realpath,
     }));
@@ -224,7 +278,7 @@ export async function bigPager(path: string): Promise<void> {
 
   /** Shows a gated error when --no-shell rejects a process escape. */
   const warnNoShell = (): void => {
-    message = NO_SHELL_WARNING + '  (press RETURN)';
+    message = NO_SHELL_MESSAGE + '  (press RETURN)';
     msgReturn = true;
   };
 
@@ -364,11 +418,56 @@ export async function bigPager(path: string): Promise<void> {
   // existed: og's psignals runs update_term before the first paint,
   // so re-measure like scrsize
   {
-    const fresh = freshWindowSize();
-    if (fresh) {
-      config.window = fresh[1] || config.window;
-      config.screenWidth = fresh[0] || config.screenWidth;
+    [baseWidth, baseHeight] = detectedDimensions();
+    config.window = baseHeight;
+    config.screenWidth = baseWidth;
+  }
+
+  // -F cats one short input without entering the alternate screen. A pipe
+  // advances in small bounded requests only until it exceeds the screen or
+  // reaches real EOF; it never drains merely to answer the one-screen test.
+  if (optQuitIfOneScreen() && (source.fileCount ?? 1) <= 1) {
+    const room = Math.max(config.window - shellReserveLines(), 0);
+    const inspect = (): {
+      rows: ReturnType<BigView['visible']>['rows'],
+      hidden: boolean,
+    } => {
+      const visible = view.visible(room + 1);
+      return {
+        rows: visible.rows,
+        hidden: (chopLine() || config.col > 0) && visible.rows.some(row =>
+          visualWidth(displayText(row.text)) > config.screenWidth),
+      };
+    };
+
+    let state = inspect();
+
+    while (spool && !spool.ended && state.rows.length <= room &&
+           !state.hidden) {
+      spool.requestThrough(spool.size + 64 * 1024);
+      await spool.waitForSettled();
+      bf.refreshSize();
+      state = inspect();
     }
+
+    if (view.atEof && (!spool || spool.ended) &&
+        state.rows.length <= room && !state.hidden) {
+      const output = state.rows.map(row => {
+        const text = displayText(row.text);
+        const layout = getLayout(text);
+        return emitRow(layout, chopLine() || config.col ? 0 : row.subRow);
+      });
+
+      process.stdout.write(output.join('\n') + '\n');
+      keyboard().setRawMode(false);
+      keyboard().pause();
+      hook.scanFileSize = prevScanFileSize;
+      onSessionMarks(null);
+      bf.close();
+      return { kind: 'quit' };
+    }
+
+    opt.quitIfOneScreen = 0;
   }
 
   process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
@@ -382,6 +481,38 @@ export async function bigPager(path: string): Promise<void> {
   let following = false;
   let followQueue: string[] = [];
   let followTimer: ReturnType<typeof setInterval> | null = null;
+  let lastVisibleEnd = 0;
+  let waitingForGrowth = false;
+  let pendingForward: { rows: number, window?: number } | null = null;
+  let pendingJump: { kind: 'end' } |
+    { kind: 'percent', value: number } |
+    { kind: 'position', value: number } | null = null;
+  let pendingPipeSearch: {
+    direction: 1 | -1,
+    afterTarget: boolean,
+    start: number,
+  } | null = null;
+
+  const requestAhead = (): void => {
+    if (!spool || spool.ended) return;
+    spool.requestThrough(Math.max(lastVisibleEnd, bf.size) +
+      SPOOL_READ_AHEAD);
+  };
+
+  /** Moves over currently seekable bytes and waits for the remainder. */
+  const moveForward = (rows: number, window?: number): number => {
+    const moved = view.lineForward(rows, window);
+
+    if (moved < rows && spool && !spool.ended) {
+      pendingForward = { rows: rows - moved, window };
+      waitingForGrowth = true;
+      requestAhead();
+    } else if (moved === 0) {
+      ringBell('eof');
+    }
+
+    return moved;
+  };
 
   /** og's load_line: an overlong prompt keeps its tail, one column
    *  reserved (line.c:1924). */
@@ -411,6 +542,7 @@ export async function bigPager(path: string): Promise<void> {
     fs.writeSync(1, '\r' + CLEAR_LINE);
 
     const { rows, endPos } = view.visible(config.window - 1);
+    const lengthKnown = !spool || spool.ended;
     const pct = bf.size
       ? Math.floor((endPos * 100) / bf.size)
       : 100;
@@ -441,9 +573,10 @@ export async function bigPager(path: string): Promise<void> {
         `${botNum === null ? '?' : botNum + 1}/` +
         `${total === null ? '?' : total + 1} `;
 
-    const eq =
-      `${path} ${lines}byte ${endPos}/${bf.size} ${pct}%` +
-      '  (press RETURN)';
+    const progress = lengthKnown
+      ? `byte ${endPos}/${bf.size} ${pct}%`
+      : `byte ${endPos}/?`;
+    const eq = `${displayPath} ${lines}${progress}  (press RETURN)`;
 
     if (aborted && scanMessaged) {
       opt.linenums = 0;
@@ -551,7 +684,11 @@ export async function bigPager(path: string): Promise<void> {
    * bounds the first candidate to the remainder (forward) or head
    * (backward) of the straddling line.
    */
-  const runSearch = (dir: 1 | -1, afterTarget: boolean): boolean => {
+  const runSearch = (
+    dir: 1 | -1,
+    afterTarget: boolean,
+    resumeAt?: number
+  ): boolean => {
     if (!pattern) return false;
 
     // og's exec_mca starts with cmd_exec(): clear_bot + flush wipe
@@ -573,7 +710,9 @@ export async function bigPager(path: string): Promise<void> {
       if (dir > 0) addOne = true;
     }
 
-    let start = view.screenPos(k);
+    let start = resumeAt === undefined
+      ? view.screenPos(k)
+      : { pos: resumeAt, subRow: 0 };
 
     if (start && addOne) {
       // og's add_one reads past the whole target line
@@ -682,6 +821,21 @@ export async function bigPager(path: string): Promise<void> {
       }
     }
 
+    if (dir > 0 && spool && !spool.ended) {
+      // Retry from the final line-sized overlap once the next bounded
+      // read-ahead window settles. This stays linear for enormous pipes and
+      // still catches a match spanning the previous spool boundary.
+      pendingPipeSearch = {
+        direction: dir,
+        afterTarget,
+        start: Math.max(bf.size - MAX_LINE, 0),
+      };
+      waitingForGrowth = true;
+      requestAhead();
+      message = '';
+      return false;
+    }
+
     message = `Pattern not found: ${cmdText() || '(previous)'}`;
     return false;
   };
@@ -689,7 +843,7 @@ export async function bigPager(path: string): Promise<void> {
   const draw = (): void => {
     // -N and -J reserve gutter columns inside the width, like og's
     // line prefix (line.c pfx); recompute per frame so toggles apply
-    config.screenWidth = (process.stdout.columns || 80) - gutterWidth();
+    config.screenWidth = baseWidth - gutterWidth();
 
     // the h help overlay pages og's FAKE_HELPFILE with its prompts
     if (helpTop >= 0) {
@@ -715,6 +869,7 @@ export async function bigPager(path: string): Promise<void> {
 
     const count = config.window - 1;
     const { rows, endPos } = view.visible(count);
+    lastVisibleEnd = endPos;
 
     const display: string[] = [];
 
@@ -809,10 +964,11 @@ export async function bigPager(path: string): Promise<void> {
     }
 
     // og's %pB: the percent of the BOTTOM displayed byte
-    const percent = bf.size
+    const lengthKnown = !spool || spool.ended;
+    const percent = lengthKnown && bf.size
       ? Math.floor((endPos * 100) / bf.size)
       : 100;
-    const name = first ? `${path} ` : '';
+    const name = first ? `${displayPath} ` : '';
 
     // -M is og's M_proto: "%f lines %lt-%lb/%L" resolved through the
     // same countTo walk (first paint runs the full-count scan with
@@ -830,7 +986,7 @@ export async function bigPager(path: string): Promise<void> {
         const lb = lt === null || !rows.length
           ? null
           : countTo(rows[rows.length - 1].pos);
-        const total = lb === null
+        const total = lb === null || !lengthKnown
           ? null
           : countTo(Math.max(bf.size - 1, 0));
 
@@ -847,7 +1003,7 @@ export async function bigPager(path: string): Promise<void> {
         }
       }
 
-      if (!mSeg) mSeg = `byte ${endPos}/${bf.size} `;
+      if (!mSeg) mSeg = `byte ${endPos}/${lengthKnown ? bf.size : '?'} `;
     }
 
     // the - prompt echoes like og's mca_opt: the doubled dash for a
@@ -878,21 +1034,23 @@ export async function bigPager(path: string): Promise<void> {
           : marking === 'M' ? 'set mark bottom: '
           : marking === 'c' ? 'clear mark: '
           : 'goto mark: ')
-        : following
+        : following || waitingForGrowth
           ? INVERSE_ON + 'Waiting for data... (' +
             `${prChar(optIntrChar())} or interrupt to abort)` + INVERSE_OFF
           : message
             ? `${INVERSE_ON}${message}${INVERSE_OFF}`
-            : view.atEof
+            : view.atEof && lengthKnown
               ? INVERSE_ON + clipPrompt((displayPrType() === 2
-                  ? `${path} ${mSeg}`
+                  ? `${displayPath} ${mSeg}`
                   : name) + '(END)') + INVERSE_OFF
               : displayPrType() === 2
                 ? INVERSE_ON +
-                  clipPrompt(`${path} ${mSeg}${percent}%`) + INVERSE_OFF
-                : displayPrType() === 1
-                  ? INVERSE_ON + clipPrompt(`${name}${percent}%`) +
+                  clipPrompt(`${displayPath} ${mSeg}` +
+                    (lengthKnown ? `${percent}%` : '')) +
                     INVERSE_OFF
+                : displayPrType() === 1
+                  ? INVERSE_ON + clipPrompt(name +
+                    (lengthKnown ? `${percent}%` : '')) + INVERSE_OFF
                   : first
                     // og protos end in %t: the %f separator space
                     // trims away when nothing follows the file name
@@ -915,7 +1073,7 @@ export async function bigPager(path: string): Promise<void> {
     }
 
     // og's fexpand: % is the current file name
-    const expanded = text.replace(/%/g, path);
+    const expanded = text.replace(/%/g, displayPath);
 
     // lsystem echoes the command and deinits the screen
     process.stdout.write('\r' + CLEAR_LINE + bang + expanded + '\n');
@@ -923,9 +1081,10 @@ export async function bigPager(path: string): Promise<void> {
     keyboard().setRawMode(false);
     keyboard().pause();
 
-    const shell = process.env.SHELL || 'sh';
-    spawnSync(shell, expanded ? ['-c', expanded] : [],
-      { stdio: 'inherit' });
+    // Share the platform shell policy with the regular pager:
+    // LESS_SHELL_COPTION replaces -c, and a bare "-" bypasses SHELL.
+    const [shell, args] = shellArgv(expanded);
+    spawnSync(shell, args, { stdio: 'inherit' });
 
     keyboard().setRawMode(true);
     keyboard().resume();
@@ -943,6 +1102,91 @@ export async function bigPager(path: string): Promise<void> {
 
   };
 
+  /** Selects the Nth OSC 8 hyperlink without materializing the file. */
+  const findOsc8 = (direction: 1 | -1, count: number): boolean => {
+    let pos = selectedOsc?.pos ?? view.top.pos;
+    let remaining = Math.max(count, 1);
+
+    // A repeat begins after the selected line; an initial search may
+    // include the current top line, matching og's OSC search origin.
+    if (selectedOsc && direction > 0) {
+      pos = forwLine(bf, pos)?.next ?? bf.size;
+    }
+
+    while (direction > 0 ? pos < bf.size : pos > 0) {
+      if (direction > 0) {
+        const line = forwLine(bf, pos);
+        if (!line) break;
+        const links = osc8Links([line.text]);
+        for (const link of links) {
+          if (--remaining === 0) {
+            selectedOsc = { pos, uri: link.uri };
+            view.top = { pos, subRow: 0 };
+            return true;
+          }
+        }
+        pos = line.next;
+      } else {
+        const line = backLine(bf, pos);
+        if (!line) break;
+        const links = osc8Links([line.text]).reverse();
+        for (const link of links) {
+          if (--remaining === 0) {
+            selectedOsc = { pos: line.start, uri: link.uri };
+            view.top = { pos: line.start, subRow: 0 };
+            return true;
+          }
+        }
+        pos = line.start;
+      }
+    }
+
+    message = 'No OSC8 links found  (press RETURN)';
+    msgReturn = true;
+    return false;
+  };
+
+  /** Runs the handler selected by LESS_OSC8_OPEN_<scheme>. */
+  const openOsc8 = (): void => {
+    if (!selectedOsc) {
+      message = 'No OSC8 link selected  (press RETURN)';
+      msgReturn = true;
+      return;
+    }
+    if (!secureAllow('osc8')) return;
+    if (optNoShell()) {
+      warnNoShell();
+      return;
+    }
+
+    const open = osc8CommandForUri(selectedOsc.uri);
+    if (!open) {
+      message = search.message + '  (press RETURN)';
+      search.message = '';
+      msgReturn = true;
+      return;
+    }
+
+    let command = open.command;
+    const hidden = command.startsWith('-');
+    if (hidden) command = command.slice(1);
+    if (!hidden) process.stdout.write('\r' + CLEAR_LINE + '!' + command + '\n');
+    process.stdout.write(KEYPAD_OFF + ALTERNATE_CONSOLE_OFF);
+    keyboard().setRawMode(false);
+    keyboard().pause();
+    const [shell, args] = shellArgv(command);
+    spawnSync(shell, args, { stdio: 'inherit' });
+    keyboard().setRawMode(true);
+    keyboard().resume();
+
+    if (open.done) {
+      process.stdout.write(open.done + '  (press RETURN)');
+      shellPausing = true;
+    } else {
+      process.stdout.write(ALTERNATE_CONSOLE_ON + KEYPAD_ON);
+    }
+  };
+
   /** v spawns the editor at the current line, like og's %E +%lm %g. */
   const runEditor = (): void => {
     if (optNoShell()) {
@@ -950,7 +1194,6 @@ export async function bigPager(path: string): Promise<void> {
       return;
     }
 
-    const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
     // og's cmd_exec clear_bot, then currline(TOP) — the line
     // number may need the scan
     fs.writeSync(1, '\r' + CLEAR_LINE);
@@ -960,8 +1203,10 @@ export async function bigPager(path: string): Promise<void> {
     keyboard().setRawMode(false);
     keyboard().pause();
 
-    spawnSync(editor, line === null ? [path] : [`+${line + 1}`, path],
-      { stdio: 'inherit' });
+    const command = windowedEditCommand(
+      displayPath, line === null ? null : line + 1);
+    const [shell, args] = shellArgv(command);
+    spawnSync(shell, args, { stdio: 'inherit' });
 
     keyboard().setRawMode(true);
     keyboard().resume();
@@ -1043,19 +1288,21 @@ export async function bigPager(path: string): Promise<void> {
     if (followTimer) clearInterval(followTimer);
     followTimer = null;
     followQueue = [];
+    spool?.cancelDrain();
   };
 
-  await new Promise<void>(resolve => {
+  const result = await new Promise<FileSessionResult>(resolve => {
     let done = false;
+    let unsubscribeGrowth = (): void => {};
+    let growthPaintPending = false;
 
     /** Repaints for the new terminal size, like og's winch(). */
     const onResize = (): void => {
       // og's update_term re-runs scrsize itself: node's cached
       // winsize lags both blocked loops and raw SIGWINCH handlers
-      const size = freshWindowSize();
-      config.window = (size ? size[1] : process.stdout.rows) || 24;
-      config.screenWidth =
-        (size ? size[0] : process.stdout.columns) || 80;
+      [baseWidth, baseHeight] = detectedDimensions();
+      config.window = baseHeight;
+      config.screenWidth = baseWidth - gutterWidth();
 
       // a WINCH queued during a blocking scan never reached og's
       // get_return: the message it produced stays waiting on the
@@ -1085,7 +1332,7 @@ export async function bigPager(path: string): Promise<void> {
     };
 
     /** The one exit path: every listener leaves with the session. */
-    const quit = (): void => {
+    const quit = (result: FileSessionResult = { kind: 'quit' }): void => {
       if (done) return;
       done = true;
 
@@ -1100,11 +1347,32 @@ export async function bigPager(path: string): Promise<void> {
       keyboard().off('data', onKey);
       process.off('SIGTERM', quit);
       process.off('SIGHUP', quit);
+      process.off('SIGUSR1', onSigusr1);
       unwatchWinch(onResize);
-      resolve();
+      unsubscribeGrowth();
+      resolve(result);
+    };
+
+    const relativeFile = (offset: number): boolean => {
+      const index = source.fileIndex ?? 0;
+      const count = source.fileCount ?? 1;
+      const target = index + offset;
+
+      if (target < 0 || target >= count) {
+        message = offset > 0
+          ? 'No next file  (press RETURN)'
+          : 'No previous file  (press RETURN)';
+        msgReturn = true;
+        return false;
+      }
+
+      quit({ kind: 'relative', offset });
+      return true;
     };
 
     const onKey = (data: Buffer): void => {
+      if (done) return;
+
       const pending = splitKeys(data.toString());
 
       while (pending.length > 0) {
@@ -1180,6 +1448,20 @@ export async function bigPager(path: string): Promise<void> {
         key = kentToNewline(key);
 
         message = '';
+
+        // A movement/search/G wait over a growing spool is the pipe read
+        // itself. ^C or --intr abandons it and restores bounded read-ahead.
+        if (waitingForGrowth &&
+            (key === '\x03' || key === optIntrChar())) {
+          pendingForward = null;
+          pendingJump = null;
+          pendingPipeSearch = null;
+          waitingForGrowth = false;
+          spool?.cancelDrain();
+          if (key === '\x03') ringBell();
+          draw();
+          continue;
+        }
 
         // F wait: ^C / --intr return to paging; other keys queue like
         // og's read poll ungetting them — but an interrupt exit runs
@@ -1357,21 +1639,31 @@ export async function bigPager(path: string): Promise<void> {
               showInfo();
               break;
             case 'NEXT_FILE':
-              // a single-file list, like og's edit_next failing
-              message = 'No next file  (press RETURN)';
-              msgReturn = true;
+              if (relativeFile(parseInt(buffer.join(''), 10) || 1)) return;
               break;
             case 'PREV_FILE':
-              message = 'No previous file  (press RETURN)';
-              msgReturn = true;
+              if (relativeFile(-(parseInt(buffer.join(''), 10) || 1))) return;
               break;
             case 'REMOVE_FILE':
-              // og's getoff_ifile on the only file: just a bell
-              process.stdout.write('\x07');
+              if ((source.fileCount ?? 1) <= 1) process.stdout.write('\x07');
+              else {
+                quit({ kind: 'remove' });
+                return;
+              }
               break;
             case 'INDEX_FILE':
-              // :x to the first (only) file: og's edit_ifile
-              // short-circuits on the current ifile
+              {
+                const index = (parseInt(buffer.join(''), 10) || 1) - 1;
+                if (index >= 0 && index < (source.fileCount ?? 1)) {
+                  if (index !== (source.fileIndex ?? 0)) {
+                    quit({ kind: 'index', index });
+                    return;
+                  }
+                } else {
+                  message = 'No such file  (press RETURN)';
+                  msgReturn = true;
+                }
+              }
               break;
             case 'OPEN_FILE':
               // examining another file is outside this session
@@ -1461,6 +1753,16 @@ export async function bigPager(path: string): Promise<void> {
           escPrefix = '';
         }
 
+        if (key === '\x0F') {
+          oscPrefix = true;
+          continue;
+        }
+
+        if (oscPrefix) {
+          key = '\x0F' + key;
+          oscPrefix = false;
+        }
+
         if (key === '/' || key === '?') {
           searching = key;
           cmdOpen(key, { history: search.history });
@@ -1487,7 +1789,7 @@ export async function bigPager(path: string): Promise<void> {
         if (SCROLL_UP_REGEX.test(key) || SCROLL_DOWN_REGEX.test(key)) {
           const down = SCROLL_DOWN_REGEX.test(key) !== optMouseReverse();
           if (down) {
-            if (!view.lineForward(optWheelLines(), config.window)) ringBell('eof');
+            moveForward(optWheelLines(), config.window);
           } else if (!view.lineBackward(optWheelLines())) {
             ringBell('eof');
           }
@@ -1522,12 +1824,12 @@ export async function bigPager(path: string): Promise<void> {
             return;
           case 'LINE_FORWARD':
           case 'NEWLINE_FORWARD':
-            if (!view.lineForward(n, config.window)) ringBell('eof');
+            moveForward(n, config.window);
             break;
           case 'FORCE_LINE_FORWARD':
             // og's J forces past the eof, stopping only when the
             // last line reaches the top (forw with force=TRUE)
-            if (!view.lineForward(n)) ringBell('eof');
+            moveForward(n);
             break;
           case 'LINE_BACKWARD':
           case 'FORCE_LINE_BACKWARD':
@@ -1536,16 +1838,11 @@ export async function bigPager(path: string): Promise<void> {
             break;
           case 'WINDOW_FORWARD':
           case 'SET_WINDOW_FORWARD':
-            if (!view.lineForward(
-              n === 1 ? config.window - 1 : n, config.window)) {
-              ringBell('eof');
-            }
+            moveForward(n === 1 ? config.window - 1 : n, config.window);
             break;
           case 'NO_EOF_WINDOW_FORWARD':
             // ESC-SPACE forces a full window past the eof, like og
-            if (!view.lineForward(n === 1 ? config.window - 1 : n)) {
-              ringBell('eof');
-            }
+            moveForward(n === 1 ? config.window - 1 : n);
             break;
           case 'WINDOW_BACKWARD':
           case 'FORCE_WINDOW_BACKWARD':
@@ -1555,10 +1852,7 @@ export async function bigPager(path: string): Promise<void> {
             }
             break;
           case 'SET_HALF_WINDOW_FORWARD':
-            if (!view.lineForward(
-              Math.floor(config.window / 2), config.window)) {
-              ringBell('eof');
-            }
+            moveForward(Math.floor(config.window / 2), config.window);
             break;
           case 'SET_HALF_WINDOW_BACKWARD':
             if (!view.lineBackward(Math.floor(config.window / 2))) {
@@ -1585,14 +1879,29 @@ export async function bigPager(path: string): Promise<void> {
             break;
           }
           case 'FIRST_LINE': remember(); view.gotoStart(); break;
-          case 'LAST_LINE': remember(); view.gotoEnd(config.window); break;
+          case 'LAST_LINE':
+            remember();
+            if (spool && !spool.ended) {
+              pendingJump = { kind: 'end' };
+              waitingForGrowth = true;
+              spool.drain();
+            } else {
+              view.gotoEnd(config.window);
+            }
+            break;
           case 'GO_POS':
             // P goes to the N-th byte, like og's A_GOPOS
             remember();
-            view.gotoPos(Math.min(
-              parseInt(buffer.join(''), 10) || 0,
-              Math.max(bf.size - 1, 0)
-            ));
+            {
+              const position = parseInt(buffer.join(''), 10) || 0;
+              if (spool && !spool.ended && position >= bf.size) {
+                pendingJump = { kind: 'position', value: position };
+                waitingForGrowth = true;
+                spool.requestThrough(position + SPOOL_READ_AHEAD);
+              } else {
+                view.gotoPos(Math.min(position, Math.max(bf.size - 1, 0)));
+              }
+            }
             break;
           case 'HIGHLIGHT_TOGGLE':
             // ESC-u, like og's undo_search toggling hilites
@@ -1612,8 +1921,17 @@ export async function bigPager(path: string): Promise<void> {
             break;
           case 'PERCENT_LINE':
             remember();
-            view.gotoPercent(Math.min(parseInt(buffer.join(''), 10) || 0,
-              100));
+            {
+              const value = Math.min(
+                parseInt(buffer.join(''), 10) || 0, 100);
+              if (spool && !spool.ended) {
+                pendingJump = { kind: 'percent', value };
+                waitingForGrowth = true;
+                spool.drain();
+              } else {
+                view.gotoPercent(value);
+              }
+            }
             break;
           case 'SET_MARK': marking = 'm'; break;
           case 'SET_MARK_BOTTOM': marking = 'M'; break;
@@ -1670,6 +1988,23 @@ export async function bigPager(path: string): Promise<void> {
             message = 'No previous tag  (press RETURN)';
             msgReturn = true;
             break;
+          case 'OSC8_FORWARD':
+            findOsc8(1, n);
+            break;
+          case 'OSC8_BACKWARD':
+            findOsc8(-1, n);
+            break;
+          case 'OSC8_JUMP':
+            if (!selectedOsc) {
+              message = 'No OSC8 link selected  (press RETURN)';
+              msgReturn = true;
+            } else {
+              view.top = { pos: selectedOsc.pos, subRow: 0 };
+            }
+            break;
+          case 'OSC8_OPEN':
+            openOsc8();
+            break;
           case 'OPTION_TAG':
             startOption('-');
             optionKey([], 't');
@@ -1679,17 +2014,31 @@ export async function bigPager(path: string): Promise<void> {
             msgReturn = true;
             break;
           case 'NEXT_FILE':
-            message = 'No next file  (press RETURN)';
-            msgReturn = true;
+            if (relativeFile(n)) return;
             break;
           case 'PREV_FILE':
-            message = 'No previous file  (press RETURN)';
-            msgReturn = true;
+            if (relativeFile(-n)) return;
             break;
           case 'REMOVE_FILE':
-            process.stdout.write('\x07');
+            if ((source.fileCount ?? 1) <= 1) process.stdout.write('\x07');
+            else {
+              quit({ kind: 'remove' });
+              return;
+            }
             break;
-          case 'INDEX_FILE':
+          case 'INDEX_FILE': {
+            const index = n - 1;
+            if (index >= 0 && index < (source.fileCount ?? 1)) {
+              if (index !== (source.fileIndex ?? 0)) {
+                quit({ kind: 'index', index });
+                return;
+              }
+            } else {
+              message = 'No such file  (press RETURN)';
+              msgReturn = true;
+            }
+            break;
+          }
           case 'NOACTION':
             break;
           case 'REPAINT':
@@ -1707,6 +2056,7 @@ export async function bigPager(path: string): Promise<void> {
           case 'FOLLOW_HILITE':
           case 'FOLLOW': {
             // F: jump to the end and wait for data, like forw_loop
+            spool?.drain();
             bf.refreshSize();
             view.gotoEnd(config.window);
             following = true;
@@ -1742,14 +2092,92 @@ export async function bigPager(path: string): Promise<void> {
       }
     };
 
+    /** Makes newly spooled bytes visible and completes commands which were
+     *  blocked at the provisional end of a non-seekable input. */
+    const onGrowth = (event: SpoolEvent): void => {
+      if (done) return;
+
+      const before = bf.size;
+      bf.refreshSize();
+      let moved = false;
+
+      if (event.error) {
+        message = event.error.message + '  (press RETURN)';
+        msgReturn = true;
+      }
+
+      if (pendingJump) {
+        const jump = pendingJump;
+        const ready = jump.kind === 'position'
+          ? bf.size > jump.value || event.ended
+          : event.ended;
+
+        if (ready) {
+          pendingJump = null;
+          if (jump.kind === 'end') view.gotoEnd(config.window);
+          else if (jump.kind === 'percent') view.gotoPercent(jump.value);
+          else view.gotoPos(Math.min(jump.value, bf.size));
+          moved = true;
+        }
+      }
+
+      if (pendingForward && (bf.size > before || event.ended)) {
+        const pending = pendingForward;
+        pendingForward = null;
+        moveForward(pending.rows, pending.window);
+        moved = true;
+      }
+
+      if (pendingPipeSearch && (event.settled || event.ended)) {
+        const pending = pendingPipeSearch;
+        pendingPipeSearch = null;
+        moved = runSearch(
+          pending.direction, pending.afterTarget, pending.start) || moved;
+      }
+
+      if (following && bf.size > before) {
+        view.gotoEnd(config.window);
+        moved = true;
+      }
+
+      waitingForGrowth = pendingForward !== null || pendingJump !== null ||
+        pendingPipeSearch !== null;
+
+      if (!growthPaintPending &&
+          (moved || event.ended || event.settled ||
+            (view.atEof && !pendingJump && !pendingPipeSearch))) {
+        growthPaintPending = true;
+        setImmediate(() => {
+          growthPaintPending = false;
+          if (!done) {
+            if (moved) resolveBottom();
+            draw();
+          }
+        });
+      }
+    };
+
+    /** Runs the $LESS_SIGUSR1 command string through this session's
+     *  ordinary key decoder, matching the regular pager and og's sigusr. */
+    const onSigusr1 = (): void => {
+      if (done) return;
+
+      const command = lgetenv('LESS_SIGUSR1');
+      if (command) onKey(Buffer.from(command));
+    };
+
     // SIGTERM/SIGHUP restore the terminal like og's terminate();
+    // SIGUSR1 injects $LESS_SIGUSR1 as pager command keys.
     // 'resize' fires on every platform, unlike SIGWINCH
     process.on('SIGTERM', quit);
     process.on('SIGHUP', quit);
+    process.on('SIGUSR1', onSigusr1);
     watchWinch(onResize);
 
     keyboard().on('data', onKey);
+    if (spool) unsubscribeGrowth = spool.subscribe(onGrowth);
     draw();
+    requestAhead();
 
     // the RETURN gate's ungot key runs as the first command
     if (gateKey) onKey(Buffer.from(gateKey));
@@ -1777,6 +2205,7 @@ export async function bigPager(path: string): Promise<void> {
   hook.scanFileSize = prevScanFileSize;
 
   // a /dev/tty keyboard holds the event loop open until destroyed
-  closeTtyKeyboard();
+  if (!source.keepKeyboard) closeTtyKeyboard();
   bf.close();
+  return result;
 }

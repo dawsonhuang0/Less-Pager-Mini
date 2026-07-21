@@ -34,6 +34,8 @@ import {
 
 import { opt, hook } from '../src/options';
 
+import { initEnvironment } from '../src/environment';
+
 import {
   suspendTerminal,
   enterScreen,
@@ -45,6 +47,8 @@ const stdoutWrite = vi.spyOn(process.stdout, 'write')
 
 const originalLines = process.env.LESS_LINES;
 const originalColumns = process.env.LESS_COLUMNS;
+const originalGenericLines = process.env.LINES;
+const originalGenericColumns = process.env.COLUMNS;
 
 beforeEach(() => {
   fake.size = null;
@@ -65,6 +69,9 @@ beforeEach(() => {
 
   delete process.env.LESS_LINES;
   delete process.env.LESS_COLUMNS;
+  delete process.env.LINES;
+  delete process.env.COLUMNS;
+  initEnvironment();
 });
 
 afterEach(() => {
@@ -73,6 +80,12 @@ afterEach(() => {
 
   if (originalColumns === undefined) delete process.env.LESS_COLUMNS;
   else process.env.LESS_COLUMNS = originalColumns;
+
+  if (originalGenericLines === undefined) delete process.env.LINES;
+  else process.env.LINES = originalGenericLines;
+
+  if (originalGenericColumns === undefined) delete process.env.COLUMNS;
+  else process.env.COLUMNS = originalGenericColumns;
 });
 
 const writes = (): unknown[] => stdoutWrite.mock.calls.map(call => call[0]);
@@ -167,6 +180,20 @@ describe('terminal dimensions', () => {
 
     expect(config.window).toBe(37);
     expect(config.screenWidth).toBe(72);
+  });
+
+  it('uses LINES/COLUMNS only when the kernel reports no size', () => {
+    process.env.LINES = '31';
+    process.env.COLUMNS = '93';
+
+    calculateDimensions();
+    expect(config.window).toBe(31);
+    expect(config.screenWidth).toBe(93);
+
+    fake.size = [100, 40];
+    calculateDimensions();
+    expect(config.window).toBe(40);
+    expect(config.screenWidth).toBe(100);
   });
 
   it('falls back after zero or over-negative overrides', () => {

@@ -1,6 +1,8 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { EventEmitter } from 'events';
+import { Readable } from 'stream';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,6 +13,8 @@ import { search, chgCaseless } from '../../src/features/searching';
 import { opt, initUnsupport, setCliOptions } from '../../src/options';
 
 import { bigPager } from '../../src/bigfile/session';
+
+import { pagerPipe } from '../../src';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-big-loop-'));
 const file = path.join(dir, 'large-path-small-fixture.txt');
@@ -26,16 +30,34 @@ const ENV_NAMES = [
   'LESS',
   'LESSHISTFILE',
   'LESSNOCONFIG',
+  'LESS_SHELL_COPTION',
+  'LESS_SIGUSR1',
 ] as const;
 
 const originalEnv = Object.fromEntries(
   ENV_NAMES.map(name => [name, process.env[name]])
 );
 
+class FakePipe extends EventEmitter {
+  paused = true;
+  destroyed = false;
+  onResume: (() => void) | null = null;
+  pause = () => { this.paused = true; return this; };
+  resume = () => {
+    this.paused = false;
+    this.onResume?.();
+    return this;
+  };
+  destroy = () => { this.destroyed = true; return this; };
+}
+
 beforeEach(() => {
   process.env.LESSHISTFILE = '-';
-  process.env.LESSNOCONFIG = '1';
+  process.env.LESSNOCONFIG =
+    'LESS,LESSHISTFILE,LESS_SHELL_COPTION,LESS_SIGUSR1';
   delete process.env.LESS;
+  delete process.env.LESS_SHELL_COPTION;
+  delete process.env.LESS_SIGUSR1;
 
   config.row = 0;
   config.subRow = 0;
@@ -78,7 +100,13 @@ afterAll(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-async function drive(keys: string[], less: string = ''): Promise<string> {
+async function drive(
+  keys: string[],
+  less: string = '',
+  ready?: () => void,
+  start?: () => Promise<void>,
+  boot?: () => void
+): Promise<string> {
   process.env.LESS = less;
 
   const stdout = process.stdout as unknown as Record<string, unknown>;
@@ -130,10 +158,14 @@ async function drive(keys: string[], less: string = ''): Promise<string> {
   };
 
   try {
-    const running = bigPager(file);
+    const running = start ? start() : bigPager(file);
+    boot?.();
     await new Promise(resolve => setImmediate(resolve));
 
     if (!dataHandler) throw new Error('bigPager did not install a key handler');
+
+    ready?.();
+    await new Promise(resolve => setImmediate(resolve));
 
     for (const key of keys) {
       dataHandler(Buffer.from(key));
@@ -228,8 +260,90 @@ describe('windowed big-file command loop', () => {
         'v', '\r',
       ], '--no-shell');
 
-      expect(output).toContain(
-        'Shell commands are disabled by --no-shell'
-      );
+      expect(output).toContain('Command not available');
     }, 20000);
+
+  it('runs LESS_SIGUSR1 command keys and removes its signal listener',
+    async () => {
+      process.env.LESS_SIGUSR1 = 'G';
+      const listeners = process.listenerCount('SIGUSR1');
+
+      const output = await drive([], '', () => {
+        process.emit('SIGUSR1');
+      });
+
+      expect(output).toContain('(END)');
+      expect(process.listenerCount('SIGUSR1')).toBe(listeners);
+    }, 20000);
+
+  it('honors LESS_SHELL_COPTION in big-file shell commands', async () => {
+    const sentinel = path.join(dir, 'shell-coption-ran');
+    if (fs.existsSync(sentinel)) fs.unlinkSync(sentinel);
+    process.env.LESS_SHELL_COPTION = '-ec';
+
+    const command = `false; touch ${sentinel}`;
+    await drive(['!', ...command, '\r', '\r']);
+
+    expect(fs.existsSync(sentinel)).toBe(false);
+  }, 20000);
+
+  it('pages a bounded growing spool for non-seekable input', async () => {
+    const stream = new FakePipe();
+    const first = Buffer.from(
+      Array.from({ length: 20 }, (_, i) => `pipe line ${i}`).join('\n') + '\n');
+
+    const output = await drive(['j'], '', () => {
+      // Satisfy the view's fixed read-ahead target with a newline-free
+      // chunk: it lands directly on disk and pauses upstream again.
+      stream.emit('data', Buffer.alloc(8 * 1024 * 1024, 0x78));
+      expect(stream.paused).toBe(true);
+      stream.emit('end');
+    }, () => pagerPipe(stream as unknown as Readable), () => {
+      stream.emit('data', first);
+    });
+
+    expect(output).toContain('pipe line 0');
+    expect(stream.destroyed).toBe(true);
+  }, 20000);
+
+  it('continues a forward search across bounded spool windows', async () => {
+    const stream = new FakePipe();
+    const first = Buffer.from(
+      Array.from({ length: 20 }, (_, i) => `before ${i}`).join('\n') + '\n');
+    let fed = false;
+
+    const output = await drive([
+      '/', 'N', 'E', 'E', 'D', 'L', 'E', '\r', 'r',
+    ], '', () => {
+      stream.onResume = () => {
+        if (fed) return;
+        fed = true;
+        setImmediate(() => {
+          stream.emit('data', Buffer.from('after NEEDLE here\n'));
+          stream.emit('end');
+        });
+      };
+    }, () => pagerPipe(stream as unknown as Readable), () => {
+      stream.emit('data', first);
+    });
+
+    expect(output).toContain('NEEDLE');
+  }, 20000);
+
+  it('aborts a pending G drain and restores pipe backpressure', async () => {
+    const stream = new FakePipe();
+    const first = Buffer.from(
+      Array.from({ length: 20 }, (_, i) => `held ${i}`).join('\n') + '\n');
+
+    const output = await drive([
+      'G', '\x03', 'k',
+    ], '', undefined, () => pagerPipe(stream as unknown as Readable), () => {
+      stream.emit('data', first);
+    });
+
+    expect(output).toContain('Waiting for data');
+    expect(output).not.toContain('- 100%');
+    expect(stream.paused).toBe(true);
+    expect(stream.destroyed).toBe(true);
+  }, 20000);
 });

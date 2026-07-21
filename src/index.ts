@@ -1,7 +1,12 @@
 import fs from 'fs';
+import { Readable } from 'stream';
+
+import { lgetenv, screenFillGrace } from './environment';
+
+import { jumpOsc8, osc8OpenCommand, searchOsc8 } from './features/osc8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
-  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyboardFd,
+  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
   gateReturn, gateReleasedByWinch, gateReleaseKind }
   from "./keyboard";
 
@@ -19,7 +24,7 @@ import { calculateDimensions, suspendTerminal, enterScreen }
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
   stepFile, removeFile, runExamine, runEditor, runMiscInput,
-  applyFilter, openByName } from "./commands";
+  applyFilter, openByName, runShell } from "./commands";
 
 import {
   config,
@@ -141,14 +146,9 @@ import {
   binFile
 } from "./features/files";
 
-import {
-  follow,
-  FollowKind
-, beginFollow, endFollow } from "./features/follow";
+import { follow, beginFollow, endFollow } from "./features/follow";
 
 import { openAltFile } from "./features/lessopen";
-
-import { PipeDecoder } from "./features/charset";
 
 import {
   option,
@@ -161,8 +161,6 @@ import {
   optIncrSearch,
   optNoPaste,
   optRedrawOnQuit,
-  optPermaMarks,
-  optAutosaveAction,
   optNoInit,
   optNoKeypad,
   optMouseReverse,
@@ -188,7 +186,7 @@ import {
   optTildes,
   optOldBot,
   optNoShell,
-  NO_SHELL_WARNING,
+  NO_SHELL_MESSAGE,
   opt
 } from "./options";
 
@@ -213,8 +211,6 @@ import {
   onShellHistRecord
 } from "./features/misc";
 
-import { prExpand } from "./features/prompt";
-
 import {
   onTagJump
 } from "./features/tags";
@@ -228,7 +224,9 @@ import { pipeInput, attachPipe, pipeDemand, pipeDrain,
 
 import { secureAllow } from "./features/secure";
 
-import { bigPager, BIG_FILE_THRESHOLD } from "./bigfile/session";
+import { bigPager } from "./bigfile/session";
+
+import { PipeSpool } from './bigfile/spool';
 
 import { initInvocationOptions } from './invocation';
 
@@ -260,8 +258,6 @@ import {
   MOUSE_SGR_OFF,
   BRACKETED_PASTE_OFF,
   CLEAR_LINE,
-  INVERSE_ON,
-  INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
   CURSOR_TO
@@ -282,10 +278,6 @@ const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
  * @param examineFile - If true, treats input as file path(s) and reads from
  *                      disk.
  */
-// a pipe still delivering data into the session (og's non-seekable
-// ch input); set by pagerPipe before the session starts
-
-
 /**
  * Pages a pipe the way og does: the first data displays immediately,
  * further reads happen on demand with the pipe paused in between, and
@@ -296,7 +288,7 @@ const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
  * @param stream - The piped input (stdin).
  */
 export async function pagerPipe(
-  stream: NodeJS.ReadableStream
+  stream: Readable
 ): Promise<void> {
   initInvocationOptions();
 
@@ -304,44 +296,19 @@ export async function pagerPipe(
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
 
-  const decoder = new PipeDecoder();
+  const startup = startupInit([]);
 
-  // the session starts with the first chunk (or an already-ended
-  // pipe), like og displaying lines as the first screenful reads
-  const first = await new Promise<{ lines: string[], ended: boolean }>(
-    resolve => {
-      const onData = (chunk: Buffer): void => {
-        stream.off('end', onEnd);
-        stream.pause();
-        resolve({ lines: decoder.push(chunk), ended: false });
-      };
-
-      const onEnd = (): void => {
-        stream.off('data', onData);
-        resolve({ lines: decoder.flush(), ended: true });
-      };
-
-      stream.once('data', onData);
-      stream.once('end', onEnd);
-    }
-  );
-
-  const lines = first.lines;
-  if (first.ended && !lines.length) lines.push('');
-
-  initContent(lines);
-
-  if (!first.ended) {
-    files.list[0].streaming = true;
-    pipeInput.source = stream;
-    pipeInput.decoder = decoder;
+  if (startup.version) {
+    printVersion();
+    return;
   }
 
+  const spool = await PipeSpool.create(stream);
+
   try {
-    await contentPager(lines);
+    await bigPager(spool.path, true, { displayPath: '-', spool });
   } finally {
-    pipeInput.source = null;
-    pipeInput.decoder = null;
+    spool.close();
   }
 }
 
@@ -379,21 +346,8 @@ export default async function pager(
 async function filePager(filePaths: string[]): Promise<void> {
   if (!filePaths.length) return;
 
-  // huge files take the og-style windowed session: never loaded,
-  // read in blocks on demand (the ch.c model)
-  if (filePaths.length === 1) {
-    try {
-      if (fs.statSync(filePaths[0]).size >= BIG_FILE_THRESHOLD) {
-        await bigPager(filePaths[0]);
-        return;
-      }
-    } catch {
-      // fall through to the normal open error path
-    }
-  }
-
-  // options apply before any file opens, like og's main scanning
-  // ahead of edit_first: -f must already guard the first loadFile
+  // Options and lesskey #env are established before deciding the file
+  // architecture: LESSOPEN may replace even a physically huge input.
   const startup = startupInit([]);
 
   if (startup.version) {
@@ -401,17 +355,86 @@ async function filePager(filePaths: string[]): Promise<void> {
     return;
   }
 
+  // Plain seekable inputs always take the position/block session,
+  // regardless of their size. A LESSOPEN replacement or a special file
+  // still falls through to the content/stream machinery below.
+  if (!lgetenv('LESSOPEN')) {
+    let allRegular = true;
+
+    for (const path of filePaths) {
+      try {
+        if (!fs.statSync(path).isFile()) allRegular = false;
+      } catch {
+        allRegular = false;
+      }
+    }
+
+    if (allRegular) {
+      const paths = [...filePaths];
+      let index = 0;
+
+      const confirmBinary = async (path: string): Promise<boolean> => {
+        if (opt.forceOpen || !keyboard().isTTY) return true;
+
+        const fd = fs.openSync(path, 'r');
+        const head = Buffer.alloc(256);
+        let count = 0;
+
+        try {
+          count = fs.readSync(fd, head, 0, head.length, 0);
+        } finally {
+          fs.closeSync(fd);
+        }
+
+        if (!binFile(head.subarray(0, count))) return true;
+
+        process.stdout.write(
+          `"${path}" may be a binary file.  See it anyway? `);
+        const answer = await warnReturn();
+        keyboard().setRawMode(false);
+        keyboard().pause();
+        process.stdout.write('\n');
+        return answer === 'y' || answer === 'Y';
+      };
+
+      try {
+        while (paths.length) {
+          const path = paths[index];
+
+          if (!await confirmBinary(path)) {
+            paths.splice(index, 1);
+            if (!paths.length) return;
+            index = Math.min(index, paths.length - 1);
+            continue;
+          }
+
+          addExamineHistory(path);
+          const result = await bigPager(path, true, {
+            fileIndex: index,
+            fileCount: paths.length,
+            keepKeyboard: true,
+          });
+
+          if (result.kind === 'quit') return;
+          if (result.kind === 'relative') index += result.offset;
+          else if (result.kind === 'index') index = result.index;
+          else {
+            paths.splice(index, 1);
+            if (!paths.length) return;
+            index = Math.min(index, paths.length - 1);
+          }
+        }
+      } finally {
+        closeTtyKeyboard();
+      }
+
+      return;
+    }
+  }
+
   pendingStartup = startup;
 
   initFiles(filePaths);
-
-  // a single sizable file streams its tail through the pipe
-  // machinery so the first screenful paints immediately, like og's
-  // ch reading blocks on demand instead of the whole file
-  if (files.list.length === 1 && !process.env.LESSOPEN) {
-    const streamed = await streamSingleFile();
-    if (streamed) return;
-  }
 
   for (let i = 0; i < files.list.length; i++) {
     let lines = loadFile(i);
@@ -461,92 +484,8 @@ async function filePager(filePaths: string[]): Promise<void> {
 // contentPager consumes it (og applies options ahead of edit_first)
 let pendingStartup: ReturnType<typeof startupInit> | null = null;
 
-// files at least this big stream instead of loading eagerly
-const STREAM_FILE_MIN = 1024 * 1024;
-
 // og's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
 const MAX_PASTE_IGNORE_MS = 5000;
-
-/**
- * Opens a single regular file as a stream: the head block reads
- * synchronously (og's edit reading its first block for bin_file) and
- * the rest arrives through the pipe machinery's on-demand reads,
- * like og's ch layer pulling blocks as the display needs them. The
- * file's length is known from stat, so unlike a true pipe the
- * prompts and (END) never wait on EOI.
- *
- * @returns True when the session ran (or was refused) here; false
- *   falls back to the eager loader.
- */
-async function streamSingleFile(): Promise<boolean> {
-  const entry = files.list[0];
-
-  let stat;
-  try {
-    stat = fs.statSync(entry.path);
-  } catch {
-    return false;
-  }
-
-  if (!stat.isFile() || stat.size < STREAM_FILE_MIN) return false;
-
-  let head = Buffer.alloc(64 * 1024);
-  let n = 0;
-
-  try {
-    const fd = fs.openSync(entry.path, 'r');
-    n = fs.readSync(fd, head, 0, head.length, 0);
-    fs.closeSync(fd);
-  } catch {
-    return false;
-  }
-
-  head = head.subarray(0, n);
-
-  // og's edit asks about a binary-looking file before the screen
-  // starts; refusing the only file quits
-  if (!opt.forceOpen && keyboard().isTTY && binFile(head)) {
-    process.stdout.write(
-      `"${entry.path}" may be a binary file.  See it anyway? `
-    );
-
-    const answer = await warnReturn();
-    keyboard().setRawMode(false);
-    keyboard().pause();
-    process.stdout.write('\n');
-
-    if (answer !== 'y' && answer !== 'Y') return true;
-  }
-
-  entry.size = stat.size;
-  entry.sizeKnown = true;
-  entry.everOpened = true;
-  entry.streaming = true;
-
-  const decoder = new PipeDecoder();
-  const lines = decoder.push(head);
-  if (!lines.length) lines.push('');
-
-  checkModelines(lines);
-
-  files.index = 0;
-  files.newFile = true;
-  addExamineHistory(entry.path);
-
-  pipeInput.source = fs.createReadStream(entry.path, { start: n });
-  pipeInput.decoder = decoder;
-
-  try {
-    await contentPager(lines);
-  } finally {
-    pipeInput.source = null;
-    pipeInput.decoder = null;
-  }
-
-  return true;
-}
-
-
 
 /**
  * Starts an interactive pager session to navigate through string content.
@@ -883,7 +822,7 @@ function startShellFeature(
   start: () => void
 ): void {
   if (optNoShell()) {
-    search.message = NO_SHELL_WARNING;
+    search.message = NO_SHELL_MESSAGE;
     return;
   }
 
@@ -915,6 +854,20 @@ const acts: Record<Actions, () => void> = {
   SPAN_REVERSE_SEARCH: () => spanningSearch(true),
   NEXT_TAG: () => tagStep(1),
   PREV_TAG: () => tagStep(-1),
+  OSC8_FORWARD: () => {
+    if (searchOsc8(session.fullContent, 1,
+      bufferToNum(session.buffer) || 1)) jumpOsc8();
+  },
+  OSC8_BACKWARD: () => {
+    if (searchOsc8(session.fullContent, -1,
+      bufferToNum(session.buffer) || 1)) jumpOsc8();
+  },
+  OSC8_JUMP: () => { jumpOsc8(); },
+  OSC8_OPEN: () => {
+    if (!secureAllow('osc8')) return;
+    const open = osc8OpenCommand();
+    if (open) runShell(open.command, open.done);
+  },
   LINE_BACKWARD: () => lineBackward(session.content, bufferToNum(session.buffer) || 1),
   WINDOW_FORWARD: () => windowForward(session.content, session.buffer),
   WINDOW_BACKWARD: () => windowBackward(session.content, session.buffer),
@@ -1145,6 +1098,14 @@ function keyHandler(data: Buffer): void {
   // and the first queued key surfaces the wait message (READ_AGAIN)
   // — a forward move blocked on the pipe (forw_line) gates the same
   if ((pipeFilling() || pendingScroll.rows > 0) && !session.shellPause) {
+    // Before LESS_SCREENFILL_TIME expires og does not poll the tty
+    // while acquiring its first screen. Preserve non-signal keys for
+    // the eventual command loop without prematurely showing a wait.
+    if (pipeFilling() && screenFillGrace() && !text.includes('\x03')) {
+      session.fillKeys.push(text);
+      return;
+    }
+
     if (text.includes('\x03') || text.includes(optIntrChar())) {
       if (pendingScroll.rows) {
         abortPendingScroll(text.includes('\x03'));
@@ -1593,7 +1554,8 @@ function dispatchKey(sequence: string): void {
   }
 
   // ^X and : start two-key commands (^X^X, :n), like less's tables
-  if (config.keyPrefix === '\x18' || config.keyPrefix === ':') {
+  if (config.keyPrefix === '\x18' || config.keyPrefix === ':' ||
+      config.keyPrefix === '\x0F') {
     const prefix = config.keyPrefix;
 
     // erase and newline cancel a prefix silently (CF_QUIT_ON_ERASE)
@@ -1644,7 +1606,8 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  if ((session.key === '\x18' || session.key === ':') && !session.escCount) {
+  if ((session.key === '\x18' || session.key === ':' ||
+       session.key === '\x0F') && !session.escCount) {
     config.keyPrefix = session.key;
     render(session.content, session.buffer);
     return;
@@ -1833,7 +1796,8 @@ function dispatchKey(sequence: string): void {
     // a partial match on a longer binding collects and echoes, like
     // og's A_PREFIX state (the built-in ^X/: prefixes own theirs)
     if (
-      seq[0] !== ':' && seq[0] !== '\x18' && userIsPrefix(seq)
+      seq[0] !== ':' && seq[0] !== '\x18' && seq[0] !== '\x0F' &&
+      userIsPrefix(seq)
     ) {
       session.userSeq = seq;
       config.keyPrefix = seq;
@@ -2029,7 +1993,7 @@ function onSigint(): void {
 function onSigusr1(): void {
   if (session.exited) return;
 
-  const cmd = process.env.LESS_SIGUSR1;
+  const cmd = lgetenv('LESS_SIGUSR1');
   if (!cmd) return;
 
   for (const sequence of splitKeys(cmd)) handleKey(sequence);

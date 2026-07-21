@@ -1,6 +1,8 @@
 import fs from 'fs';
 import os from 'os';
 
+import { spawnSync } from 'child_process';
+
 import { config, mode } from "../config";
 
 import { ringBell } from "../helpers";
@@ -32,11 +34,14 @@ import { keyboard } from "../keyboard";
 
 import { STYLE_REGEX_G } from "../constants";
 
-import { DEF_METAESCAPE } from "../platform";
+import { DEF_METACHARS, DEF_METAESCAPE, isWindows, shellArgv }
+  from "../platform";
 
 import { prExpand, eqProto, shellQuote } from "./prompt";
 
 import { openAltFile, closeAltFile } from "./lessopen";
+
+import { lgetenv } from '../environment';
 
 /**
  * One entry in the command line file list, like less's ifile.
@@ -512,7 +517,7 @@ export function fexpand(text: string): string {
  */
 function splitWords(text: string): string[] {
   const { open, close } = optQuotes();
-  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+  const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
 
   const words: string[] = [];
   let word = '';
@@ -561,7 +566,7 @@ function splitWords(text: string): string[] {
  */
 function unquoteWord(word: string): string {
   const { open, close } = optQuotes();
-  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+  const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
   let out = '';
 
   if (open && word[0] === open) {
@@ -621,6 +626,26 @@ export function glob(pattern: string): string[] {
   if (!secureAllow('glob')) return [pattern];
 
   if (!/[*?[]/.test(pattern)) return [pattern];
+
+  // A configured LESSECHO replaces the helper executable exactly as
+  // in filename.c. The shell expands the pattern; lessecho quotes the
+  // resulting names so init_textlist can recover spaces safely.
+  const lessecho = lgetenv('LESSECHO');
+  if (lessecho) {
+    const { open, close } = optQuotes();
+    const escape = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
+    const metas = lgetenv('LESSMETACHARS') ?? DEF_METACHARS;
+    const flags = [
+      `-p0x${(open.charCodeAt(0) || 0).toString(16)}`,
+      `-d0x${(close.charCodeAt(0) || 0).toString(16)}`,
+      `-e${shellQuote(escape || '-')}`,
+      ...[...metas].map(char => `-n0x${char.charCodeAt(0).toString(16)}`),
+    ].join(' ');
+    const [shell, args] = shellArgv(`${lessecho} ${flags} -- ${pattern}`);
+    const result = spawnSync(shell, args, { encoding: 'utf8' });
+    const text = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+    if (text) return splitWords(text);
+  }
 
   const absolute = pattern.startsWith('/');
   const segments = pattern.split('/').filter(Boolean);
@@ -757,7 +782,13 @@ function buildCompletions(): boolean {
   cmd.inCompletion = true;
   completion.wordStart = start;
   // og shell_quotes each expanded name (lglob, filename.c:665)
-  completion.trials = [...matches.map(shellQuote), word];
+  const separator = lgetenv('LESSSEPARATOR') ?? (isWindows ? '\\' : '/');
+  completion.trials = [
+    ...matches.map(name => shellQuote(name) +
+      (fs.statSync(name, { throwIfNoEntry: false })?.isDirectory()
+        ? separator : '')),
+    word,
+  ];
   completion.index = -1;
 
   return true;
@@ -769,7 +800,7 @@ function buildCompletions(): boolean {
  */
 function wordStart(text: string): number {
   const { open, close } = optQuotes();
-  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+  const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
   let start = 0;
   let quoted = false;
 

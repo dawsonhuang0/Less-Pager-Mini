@@ -14,6 +14,8 @@ import { opt, optLinenums, optQuotes, optHeader, vlinenum }
 
 import { ntags, currTag } from "./tags";
 
+import { lgetenv } from '../environment';
+
 // screen positions selected by the where char, like less's position.h
 type Where = 't' | 'm' | 'b' | 'B' | 'j';
 
@@ -297,7 +299,7 @@ function protochar(
 
     case 'E':
       // EDIT_PGM is "vi" on unix and "edit" on Windows (defines.wn)
-      return out + (process.env.VISUAL || process.env.EDITOR || EDIT_PGM);
+      return out + (lgetenv('VISUAL') || lgetenv('EDITOR') || EDIT_PGM);
 
     case 'f': return out + (entry ? entry.path : '?');
     case 'F': return out + (entry ? path.basename(entry.path) : '?');
@@ -383,11 +385,11 @@ export function shellQuote(name: string): string {
   // $LESSMETACHARS and $LESSMETAESCAPE override the defaults, like
   // filename.c's metachars()/esc_metachars(); an empty escape means
   // the whole name gets the quote characters instead
-  const meta = process.env.LESSMETACHARS ?? METACHARS;
+  const meta = lgetenv('LESSMETACHARS') ?? METACHARS;
 
   // the Windows shell has no backslash escaping, so og's
   // DEF_METAESCAPE is empty there and names quote-wrap instead
-  const esc = process.env.LESSMETAESCAPE ?? DEF_METAESCAPE;
+  const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
 
   if (esc === '' && [...name].some(char => meta.includes(char))) {
     return open + name + close;
@@ -402,4 +404,57 @@ export function shellQuote(name: string): string {
   }
 
   return quoted;
+}
+
+/** Expands LESSEDIT for the regular session through the full prompt engine. */
+export function editCommand(content: string[]): string {
+  const proto = lgetenv('LESSEDIT') ?? '%E ?lm+%lm. %g';
+  return prExpand(content, proto);
+}
+
+/**
+ * Expands the edit-oriented prompt fields for a windowed file, whose
+ * contents intentionally are not materialized into the regular file table.
+ */
+export function windowedEditCommand(
+  filename: string,
+  line: number | null
+): string {
+  const proto = lgetenv('LESSEDIT') ?? '%E ?lm+%lm. %g';
+  const editor = lgetenv('VISUAL') || lgetenv('EDITOR') || EDIT_PGM;
+
+  // LESSEDIT's usual ?lm... condition: include its body only when a
+  // line number is known. Nested prompt conditionals are handled too.
+  const conditionals = (text: string): string => {
+    let out = '';
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] !== '?' || text[i + 1] !== 'l' ||
+          !'tmbBj'.includes(text[i + 2] ?? '')) {
+        out += text[i];
+        continue;
+      }
+
+      let depth = 1;
+      let end = i + 3;
+      for (; end < text.length; end++) {
+        if (text[end] === '?' && text[end + 1] === 'l') depth++;
+        else if (text[end] === '.' && --depth === 0) break;
+      }
+      if (line !== null) out += conditionals(text.slice(i + 3, end));
+      i = end;
+    }
+    return out;
+  };
+
+  return conditionals(proto).replace(
+    /%(%|E|[fgG]|l[tmbBj])/g,
+    (_all, code: string) => {
+      if (code === '%') return '%';
+      if (code === 'E') return editor;
+      if (code === 'f') return filename;
+      if (code === 'g') return shellQuote(filename);
+      if (code === 'G') return shellQuote(path.basename(filename));
+      return line === null ? '?' : String(line);
+    }
+  );
 }

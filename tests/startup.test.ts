@@ -37,7 +37,9 @@ const originalEnv = Object.fromEntries(
 
 beforeEach(() => {
   for (const name of ENV_NAMES) delete process.env[name];
-  process.env.LESSNOCONFIG = '1';
+  process.env.LESSNOCONFIG = ENV_NAMES
+    .filter(name => name !== 'LESSNOCONFIG')
+    .join(',');
   process.env.TERM = 'xterm-256color';
 
   stdoutWrite.mockClear();

@@ -250,8 +250,6 @@ export function miscPromptLabel(
  * @returns `run` to execute, `pending` or `cancel`.
  */
 export function miscInputKey(key: string): 'run' | 'pending' | 'cancel' {
-  const kind = miscInput.pending;
-
   if (!cmd.prefix) {
     if (key === '\x0D' || key === '\x0A') {
       miscInput.pending = '';

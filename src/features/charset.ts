@@ -5,6 +5,8 @@ import { colored } from "./color";
 
 import { search } from "./searching";
 
+import { lgetenv } from '../environment';
+
 /**
  * The charset machinery, ported from og's charset.c: a per-byte class
  * map built from $LESSCHARSET/$LESSCHARDEF, and the $LESSBINFMT /
@@ -247,19 +249,19 @@ export function initCharset(): void {
   utfBinFmt = '<U+%04lX>';
   binAttrKind = 'standout';
 
-  parseUtfChardef(process.env.LESSUTFCHARDEF ?? '');
+  parseUtfChardef(lgetenv('LESSUTFCHARDEF') ?? '');
 
-  const binEnv = setFmt(process.env.LESSBINFMT, '*s<%02X>');
+  const binEnv = setFmt(lgetenv('LESSBINFMT'), '*s<%02X>');
   binFmt = binEnv.fmt;
   if (binEnv.attr !== null) binAttrKind = binEnv.attr;
 
-  const utfEnv = setFmt(process.env.LESSUTFBINFMT, '<U+%04lX>');
+  const utfEnv = setFmt(lgetenv('LESSUTFBINFMT'), '<U+%04lX>');
   utfBinFmt = utfEnv.fmt;
   if (utfEnv.attr !== null) binAttrKind = utfEnv.attr;
 
-  if (useCharset(process.env.LESSCHARSET)) return;
+  if (useCharset(lgetenv('LESSCHARSET'))) return;
 
-  const chardefEnv = process.env.LESSCHARDEF;
+  const chardefEnv = lgetenv('LESSCHARDEF');
 
   if (chardefEnv) {
     parseChardef(chardefEnv);
@@ -267,8 +269,8 @@ export function initCharset(): void {
     return;
   }
 
-  const locale = process.env.LC_ALL || process.env.LC_CTYPE ||
-    process.env.LANG || '';
+  const locale = lgetenv('LC_ALL') || lgetenv('LC_CTYPE') ||
+    lgetenv('LANG') || '';
 
   if (/utf-?8/i.test(locale)) {
     useCharset('utf-8');
@@ -330,16 +332,18 @@ export function utfBinText(code: number): string {
   return binText(hexFmt(utfBinFmt, code));
 }
 
-const ATTR_WRAP: Record<string, [string, string]> = {
-  bold: [BOLD_ON, BOLD_OFF],
-  blink: ['\x1B[5m', '\x1B[25m'],
-  standout: [INVERSE_ON, INVERSE_OFF],
-  underline: [UNDERLINE_ON, UNDERLINE_OFF],
-  normal: ['', ''],
-};
+function attrWrap(kind: typeof binAttrKind): [string, string] {
+  switch (kind) {
+    case 'bold': return [BOLD_ON, BOLD_OFF];
+    case 'blink': return ['\x1B[5m', '\x1B[25m'];
+    case 'standout': return [INVERSE_ON, INVERSE_OFF];
+    case 'underline': return [UNDERLINE_ON, UNDERLINE_OFF];
+    case 'normal': return ['', ''];
+  }
+}
 
 function binText(text: string): string {
-  const [on, off] = ATTR_WRAP[binAttrKind];
+  const [on, off] = attrWrap(binAttrKind);
 
   // the BIN color wins under --use-color, like binattr's AT_COLOR_BIN
   return colored('bin', text, on, off);
