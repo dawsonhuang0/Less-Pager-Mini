@@ -101,6 +101,7 @@ import { noSearchHeaderColumns } from './no-search-header-columns';
 import { fileSize } from './file-size';
 import { noVbell } from './no-vbell';
 import { noEditWarn } from './no-edit-warn';
+import { noShell } from './no-shell';
 import { exitFollowOnClose } from './exit-follow-on-close';
 import { showPreprocErrors } from './show-preproc-errors';
 import { redrawOnQuit } from './redraw-on-quit';
@@ -192,6 +193,7 @@ const OPTIONS: OptionSpec[] = [
   fileSize,
   noVbell,
   noEditWarn,
+  noShell,
   exitFollowOnClose,
   showPreprocErrors,
   redrawOnQuit,

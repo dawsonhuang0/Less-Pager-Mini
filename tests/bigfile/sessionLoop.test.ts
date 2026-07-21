@@ -53,6 +53,7 @@ beforeEach(() => {
   opt.mouseMode = 0;
   opt.emouse = 0;
   opt.noPaste = 0;
+  opt.noShell = 0;
   opt.quitOnIntr = 0;
   opt.modelines = 0;
   opt.wantFileSize = 0;
@@ -217,5 +218,18 @@ describe('windowed big-file command loop', () => {
       expect(output).toContain('Input is not a pipe');
       expect(output).toContain('\x1b[?1006h');
       expect(output).toContain('\x1b[?2004h');
+    }, 20000);
+
+  it('warns instead of opening big-file shell and editor commands',
+    async () => {
+      const output = await drive([
+        '!', '\r',
+        '#', '\r',
+        'v', '\r',
+      ], '--no-shell');
+
+      expect(output).toContain(
+        'Shell commands are disabled by --no-shell'
+      );
     }, 20000);
 });

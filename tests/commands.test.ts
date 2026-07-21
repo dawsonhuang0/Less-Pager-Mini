@@ -114,6 +114,7 @@ beforeEach(() => {
 
   opt.quitAtEof = 0;
   opt.noEditWarn = 0;
+  opt.noShell = 0;
   opt.oldBot = 0;
   opt.squeeze = 0;
   setNoSearchHeaders(0, 0);
@@ -268,6 +269,22 @@ describe(':e examine execution', () => {
 });
 
 describe('shell, pipe, and editor commands', () => {
+  it('blocks shell, pipe, and editor execution under --no-shell', () => {
+    opt.noShell = 1;
+    pipeMark.rows = [0, 1];
+
+    runShell('echo direct', null);
+    runMiscInput('!', 'echo bang');
+    runMiscInput('#', 'echo prompt');
+    runPipe('wc -l');
+    runEditor();
+
+    expect(search.message)
+      .toBe('Shell commands are disabled by --no-shell');
+    expect(fake.spawnSync).not.toHaveBeenCalled();
+    expect(fake.suspendTerminal).not.toHaveBeenCalled();
+  });
+
   it('runs a hidden shell command and re-enters immediately', () => {
     runShell('-echo hidden', null);
 

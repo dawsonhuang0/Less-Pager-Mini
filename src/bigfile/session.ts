@@ -47,7 +47,8 @@ import { scanOptions, chopLine, onTrimBufSpace, takeCliOptions,
   option, startOption, optionKey, gutterWidth, optWheelLines,
   optMouseReverse, optTildes, optPermaMarks, optAutosaveAction,
   optHowSearch, jumpSindex, optQuitOnIntr, optNoSearchHeaders,
-  optHeader, checkModelines, optMatchShift, optRscroll }
+  optHeader, checkModelines, optMatchShift, optRscroll, optNoShell,
+  NO_SHELL_WARNING }
   from '../options';
 
 import { strWidth } from 'char-width';
@@ -220,6 +221,12 @@ export async function bigPager(path: string): Promise<void> {
   // message survives — the queued signal repaints at psignals only
   // after a real key dismisses it
   let winchGuard = false;
+
+  /** Shows a gated error when --no-shell rejects a process escape. */
+  const warnNoShell = (): void => {
+    message = NO_SHELL_WARNING + '  (press RETURN)';
+    msgReturn = true;
+  };
 
   /**
    * Newlines before `target`, like find_linenum walking raw lines
@@ -902,6 +909,10 @@ export async function bigPager(path: string): Promise<void> {
 
   /** ! and # run through the shell, like og's lsystem. */
   const runShellCmd = (bang: '!' | '#', text: string): void => {
+    if (optNoShell()) {
+      warnNoShell();
+      return;
+    }
 
     // og's fexpand: % is the current file name
     const expanded = text.replace(/%/g, path);
@@ -934,6 +945,11 @@ export async function bigPager(path: string): Promise<void> {
 
   /** v spawns the editor at the current line, like og's %E +%lm %g. */
   const runEditor = (): void => {
+    if (optNoShell()) {
+      warnNoShell();
+      return;
+    }
+
     const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
     // og's cmd_exec clear_bot, then currline(TOP) — the line
     // number may need the scan
@@ -1629,15 +1645,22 @@ export async function bigPager(path: string): Promise<void> {
             msgReturn = true;
             break;
           case 'EDIT_FILE':
-            runEditor();
+            if (optNoShell()) warnNoShell();
+            else runEditor();
             break;
           case 'SHELL_COMMAND':
-            shelling = '!';
-            cmdOpen('!');
+            if (optNoShell()) warnNoShell();
+            else {
+              shelling = '!';
+              cmdOpen('!');
+            }
             break;
           case 'PSHELL_COMMAND':
-            shelling = '#';
-            cmdOpen('#');
+            if (optNoShell()) warnNoShell();
+            else {
+              shelling = '#';
+              cmdOpen('#');
+            }
             break;
           case 'NEXT_TAG':
             message = 'No next tag  (press RETURN)';

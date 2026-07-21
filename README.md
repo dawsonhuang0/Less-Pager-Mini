@@ -96,6 +96,10 @@ const example = ['a', 'b', 'c'];
 await pager(example);
 ```
 
+JavaScript calls are safe by default: interactive process escapes (`!`, `#`,
+`|`, and `v`) are disabled. The `lmn` executable keeps them enabled unless it
+is started with `--no-shell`.
+
 ### Function Parameters:
 
 <code>input</code>: Any unknown input (except <code>symbol</code>) to page.

@@ -291,6 +291,13 @@ export const optShowPreprocError = (): boolean => opt.showPreprocError > 0;
 /** True when --no-edit-warn skips the LESSOPEN editing warning. */
 export const optNoEditWarn = (): boolean => opt.noEditWarn > 0;
 
+/** True when interactive shell, pipe and editor commands are disabled. */
+export const optNoShell = (): boolean => opt.noShell > 0;
+
+/** Message shown when --no-shell rejects an interactive command. */
+export const NO_SHELL_WARNING =
+  'Shell commands are disabled by --no-shell';
+
 /** True when --follow-name makes F re-open the file by name. */
 export const optFollowName = (): boolean => opt.followName > 0;
 

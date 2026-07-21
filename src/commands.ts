@@ -48,8 +48,8 @@ import { prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
-import { optQuitAtEof, optNoEditWarn, optOldBot,
-  jumpSindex, resetHeaderStart } from './options';
+import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
+  jumpSindex, resetHeaderStart, NO_SHELL_WARNING } from './options';
 
 import {
   CONSOLE_CLEAR,
@@ -378,6 +378,11 @@ export function runExamine(): void {
  * through $SHELL, then repaints and reports the done message.
  */
 export function runShell(cmd: string, doneMsg: string | null, input?: string): void {
+  if (optNoShell()) {
+    search.message = NO_SHELL_WARNING;
+    return;
+  }
+
   // og's putchr fires --end-prompt before the clear_bot that erases
   // the prompt for the command's output (output.c:496)
   const endPrompt = eprPrefix();
@@ -487,6 +492,11 @@ export function runPipe(cmd: string): void {
  * displayed line, then re-examines it, like less's LESSEDIT proto.
  */
 export function runEditor(): void {
+  if (optNoShell()) {
+    search.message = NO_SHELL_WARNING;
+    return;
+  }
+
   if (mode.HELP || !secureAllow('edit')) return;
 
   const entry = files.list[files.index];
@@ -522,6 +532,11 @@ export function runMiscInput(
   kind: '!' | '#' | '|' | 's' | 'S' | '+',
   text: string
 ): void {
+  if ((kind === '!' || kind === '#' || kind === '|') && optNoShell()) {
+    search.message = NO_SHELL_WARNING;
+    return;
+  }
+
   // ^P prefixed commands still join the history bare, like og
   // eslint-disable-next-line no-control-regex
   const bare = text.replace(/^\x10/, '');

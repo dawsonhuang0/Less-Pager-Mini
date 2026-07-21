@@ -22,6 +22,8 @@ import {
 
 import { help } from './lessHelp';
 
+import { markTerminalInvocation } from './invocation';
+
 /**
  * The `lmn` command, mirroring og main.c's startup: $LESS scans
  * first (inside the pager), then command line options override;
@@ -163,6 +165,7 @@ async function main(): Promise<void> {
       usageError('cannot open terminal');
     }
 
+    markTerminalInvocation();
     await pager(files, false, true);
     return;
   }
@@ -175,6 +178,7 @@ async function main(): Promise<void> {
       usageError('cannot open terminal');
     }
 
+    markTerminalInvocation();
     await pager(help.join('\n'), true, false);
     return;
   }
@@ -186,6 +190,7 @@ async function main(): Promise<void> {
       usageError('cannot open terminal');
     }
 
+    markTerminalInvocation();
     await pager('', true, false);
     return;
   }
@@ -196,6 +201,7 @@ async function main(): Promise<void> {
     // an endless writer pages immediately
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
+    markTerminalInvocation();
     await pagerPipe(process.stdin);
     return;
   }

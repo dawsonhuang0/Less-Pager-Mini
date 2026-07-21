@@ -187,6 +187,8 @@ import {
   optShowPreprocError,
   optTildes,
   optOldBot,
+  optNoShell,
+  NO_SHELL_WARNING,
   opt
 } from "./options";
 
@@ -227,6 +229,8 @@ import { pipeInput, attachPipe, pipeDemand, pipeDrain,
 import { secureAllow } from "./features/secure";
 
 import { bigPager, BIG_FILE_THRESHOLD } from "./bigfile/session";
+
+import { initInvocationOptions } from './invocation';
 
 import {
   userBinding,
@@ -294,6 +298,8 @@ const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
 export async function pagerPipe(
   stream: NodeJS.ReadableStream
 ): Promise<void> {
+  initInvocationOptions();
+
   if (!keyboard().isTTY) {
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
@@ -344,6 +350,8 @@ export default async function pager(
   preserveFormat: boolean = false,
   examineFile: boolean = false
 ): Promise<void> {
+  initInvocationOptions();
+
   if (!keyboard().isTTY) {
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
@@ -869,6 +877,19 @@ async function contentPager(initialContent: string[]): Promise<void> {
   cleanUp();
 }
 
+/** Starts an interactive process escape unless policy forbids it. */
+function startShellFeature(
+  feature: 'shell' | 'pipe',
+  start: () => void
+): void {
+  if (optNoShell()) {
+    search.message = NO_SHELL_WARNING;
+    return;
+  }
+
+  if (secureAllow(feature)) start();
+}
+
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
 const acts: Record<Actions, () => void> = {
   FORCE_EXIT: () => session.exit(),
@@ -1015,9 +1036,9 @@ const acts: Record<Actions, () => void> = {
   REMOVE_FILE: () => removeFile(),
   CURRENT_INFO: () => fileInfo(session.content),
   NOACTION: () => {},
-  SHELL_COMMAND: () => { if (secureAllow('shell')) startMiscInput('!'); },
-  PSHELL_COMMAND: () => { if (secureAllow('shell')) startMiscInput('#'); },
-  PIPE_COMMAND: () => { if (secureAllow('pipe')) startPipe(); },
+  SHELL_COMMAND: () => startShellFeature('shell', () => startMiscInput('!')),
+  PSHELL_COMMAND: () => startShellFeature('shell', () => startMiscInput('#')),
+  PIPE_COMMAND: () => startShellFeature('pipe', startPipe),
   SAVE_FILE: () => startLogFile(false),
   ADD_COMMAND: () => startMiscInput('+'),
   EDIT_FILE: () => runEditor(),
