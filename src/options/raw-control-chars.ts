@@ -13,7 +13,7 @@ export const rawControlChars: OptionSpec = {
       'Display control characters directly (not recommended)',
       'Display ANSI sequences directly, other control characters as ^X',
     ],
-    defaultValue: 2,
+    defaultValue: 0,
     get: () => opt.ctldisp,
     set: value => {
       opt.ctldisp = value as number;

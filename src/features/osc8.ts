@@ -6,6 +6,14 @@ import { shellQuote } from './prompt';
 
 import { search } from './searching';
 
+import { bottomRow } from './files';
+
+import { jumpLoc } from './jumping';
+
+import { jumpSindex } from '../options';
+
+import { setOsc8Display } from '../lines/helpers';
+
 export interface Osc8Link {
   row: number;
   start: number;
@@ -19,8 +27,9 @@ let selected: Osc8Link | null = null;
 export const selectedOsc8 = (): Osc8Link | null => selected;
 export const setSelectedOsc8 = (link: Osc8Link | null): void => {
   selected = link;
+  setOsc8Display(link ? { row: link.row, start: link.start } : null);
 };
-export const resetOsc8 = (): void => { selected = null; };
+export const resetOsc8 = (): void => { setSelectedOsc8(null); };
 
 /** Extracts complete OSC 8 open/text/close pairs from materialized lines. */
 export function osc8Links(lines: string[]): Osc8Link[] {
@@ -60,42 +69,70 @@ export function osc8Links(lines: string[]): Osc8Link[] {
 }
 
 /** Selects the Nth OSC 8 link in either direction, wrapping once. */
+/** True while the selected link's row is displayed, og's onscreen(). */
+export function osc8Visible(lines: string[]): boolean {
+  if (!selected) return false;
+  return selected.row >= config.row && selected.row <= bottomRow(lines);
+}
+
+/** og's osc8_search (search.c:2005): continue from an on-screen
+ *  selection (same line first — link order covers it); an off-screen
+ *  or absent selection starts at the -j line like search_pos; no
+ *  wrap — a miss errors and KEEPS the old selection. */
 export function searchOsc8(
   lines: string[],
   direction: 1 | -1,
   count: number = 1
 ): boolean {
   const links = osc8Links(lines);
-  if (!links.length) {
-    search.message = 'No OSC8 links found';
-    selected = null;
+  let remaining = Math.max(count, 1);
+
+  let at: number;
+
+  const sel = selected;
+  const selAt = sel ? links.findIndex(link =>
+    link.row === sel.row && link.start === sel.start) : -1;
+
+  if (selAt >= 0 && osc8Visible(lines)) {
+    at = selAt;
+  } else {
+    // start at the -j line, like a normal search
+    const startRow = config.row + jumpSindex();
+
+    if (direction > 0) {
+      const first = links.findIndex(link => link.row >= startRow);
+      at = (first < 0 ? links.length : first) - 1;
+    } else {
+      at = links.findLastIndex(link => link.row <= startRow) + 1;
+    }
+  }
+
+  at += direction * remaining;
+  remaining = 0;
+
+  if (at < 0 || at >= links.length) {
+    // og errors and returns: the old selection survives
+    search.message = 'OSC 8 link not found';
     return false;
   }
 
-  let at = selected ? links.findIndex(link =>
-    link.row === selected!.row && link.start === selected!.start) : -1;
-  if (at < 0) {
-    at = direction > 0
-      ? links.findIndex(link => link.row >= config.row) - 1
-      : links.findLastIndex(link => link.row <= config.row) + 1;
-  }
-
-  const steps = Math.max(count, 1);
-  for (let n = 0; n < steps; n++) {
-    at = (at + direction + links.length) % links.length;
-  }
   selected = links[at];
+  setOsc8Display({ row: selected.row, start: selected.start });
+
+  // og saves the URI at every selection; the next prompt cycle
+  // reports it (command.c:905 "Link: %s")
+  search.message = `Link: ${selected.uri}`;
   return true;
 }
 
 /** Positions the selected link's line at the top of the display. */
-export function jumpOsc8(): boolean {
+export function jumpOsc8(lines: string[]): boolean {
   if (!selected) {
     search.message = 'No OSC8 link selected';
     return false;
   }
-  config.row = selected.row;
-  config.subRow = 0;
+  // og's osc8_jump: an unconditional jump_loc to the -j line
+  jumpLoc(lines, selected.row, 0, jumpSindex());
   return true;
 }
 

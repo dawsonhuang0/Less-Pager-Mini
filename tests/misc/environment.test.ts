@@ -111,7 +111,13 @@ describe('OG lgetenv precedence and filtering', () => {
   });
 
   it('provides OG defaults and positive-only timing overrides', () => {
-    expect(lgetenv('LESS_OSC8_OPEN_ANY')).toBe('-less-osc8-open');
+    // og's unix build bakes LIBEXECDIR into dflt_vartable; only the
+    // Windows build falls back to the bare PATH lookup
+    expect(lgetenv('LESS_OSC8_OPEN_ANY')).toBe(
+      process.platform === 'win32'
+        ? '-less-osc8-open'
+        : '-/usr/local/libexec/less-osc8-open'
+    );
     expect(envDelay('LESS_DATA_DELAY', 4000)).toBe(4000);
     process.env.LESS_DATA_DELAY = '-2';
     expect(envDelay('LESS_DATA_DELAY', 4000)).toBe(4000);

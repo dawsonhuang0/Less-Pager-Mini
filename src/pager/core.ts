@@ -2,7 +2,8 @@ import fs from 'fs';
 
 import { lgetenv, screenFillGrace } from '../environment';
 
-import { jumpOsc8, osc8OpenCommand, searchOsc8 } from '../features/osc8';
+import { jumpOsc8, osc8OpenCommand, osc8Visible, searchOsc8 }
+  from '../features/osc8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
@@ -661,15 +662,19 @@ const acts: Record<Actions, () => void> = {
   ),
   NEXT_TAG: () => tagStep(1),
   PREV_TAG: () => tagStep(-1),
+  // "If new link is on screen, just highlight it without scrolling."
+  // (og search.c:2049)
   OSC8_FORWARD: () => {
     if (searchOsc8(session.fullContent, 1,
-      bufferToNum(session.buffer) || 1)) jumpOsc8();
+      bufferToNum(session.buffer) || 1) &&
+      !osc8Visible(session.content)) jumpOsc8(session.content);
   },
   OSC8_BACKWARD: () => {
     if (searchOsc8(session.fullContent, -1,
-      bufferToNum(session.buffer) || 1)) jumpOsc8();
+      bufferToNum(session.buffer) || 1) &&
+      !osc8Visible(session.content)) jumpOsc8(session.content);
   },
-  OSC8_JUMP: () => { jumpOsc8(); },
+  OSC8_JUMP: () => { jumpOsc8(session.content); },
   OSC8_OPEN: () => {
     if (!secureAllow('osc8')) return;
     const open = osc8OpenCommand();
@@ -865,10 +870,15 @@ function act(action: Actions | undefined): void {
   // og's forw()/back() end with currline(BOTTOM) (forwback.c:382,
   // 457): the moved rows are already up, the eager line-number walk
   // runs now, and the prompt below paints only after it completes
-  if (!session.exited && !drained) pagerInput?.resolveBottom?.();
+  if (!session.exited && !drained && !session.shellPause) {
+    pagerInput?.resolveBottom?.();
 
-  // quitting must not repaint over the final prompt, like less
-  if (!session.exited && !drained) render(session.content, session.buffer);
+    // quitting must not repaint over the final prompt, like less —
+    // and a shell done-message pause owns the screen until its key
+    // (og's lsystem blocks inside the command; ours resumes at the
+    // shellPause dismissal, which repaints)
+    render(session.content, session.buffer);
+  }
 }
 
 /**
@@ -1443,11 +1453,15 @@ function dispatchKey(sequence: string): void {
     const action = userStop() ? undefined : getAction(prefix + session.key);
 
     // og's tail cascade covers the ^X/: prefixed bytes all the same
-    // (the ":" entries live in the same cmd_decode tables)
+    // (the ":" entries live in the same cmd_decode tables); the
+    // prefix ages out WITH the cascade — leaving it set would feed
+    // every re-dispatched piece back into this branch forever
     if (
       action === undefined && !userStop() && session.key.length > 1 &&
       !mode.DUMB
     ) {
+      config.keyPrefix = '';
+
       for (const piece of tailCascade(prefix + session.key)) {
         if (session.exited) return;
 

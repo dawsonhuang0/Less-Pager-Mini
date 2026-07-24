@@ -221,11 +221,18 @@ describe('display transforms', () => {
       .toEqual(['a', '', '', 'b']);
   });
 
-  it('shows control chars in caret standout, ANSI passing through', () => {
+  it('shows control chars in caret standout, ANSI passing under -R', () => {
     expect(transformContent(['a\x01b'])).toEqual(
       ['a' + INVERSE_ON + '^A' + INVERSE_OFF + 'b']
     );
 
+    // og's default carets data escapes (prchar's "ESC", charset.c:534)
+    expect(transformContent(['\x1b[31mred'])).toEqual(
+      [INVERSE_ON + 'ESC' + INVERSE_OFF + '[31mred']
+    );
+
+    // -R (CD_ANSI) passes style sequences through
+    toggle('-R');
     expect(transformContent(['\x1b[31mred'])).toEqual(['\x1b[31mred']);
   });
 

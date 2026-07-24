@@ -483,6 +483,18 @@ describe('unified file command loop', () => {
       expect(output).toContain('less-pager-mini 1.11.0');
     }, 20000);
 
+  it('ages a ^O prefix out over an unbound sequence, like cmd_decode',
+    async () => {
+      // ^O + up-arrow has no binding: og's tail cascade drops the
+      // prefix silently and runs the arrow — a stale prefix once
+      // re-entered the cascade forever (stack overflow)
+      const output = await drive([
+        '10g', '\x0f', '\x1b[A',
+      ], '', file);
+
+      expect(output).toContain('line 9');
+    }, 20000);
+
   it('drives mouse scrolling, runtime display options, and follow exit',
     async () => {
       const output = await drive([

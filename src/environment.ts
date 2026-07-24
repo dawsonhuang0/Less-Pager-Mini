@@ -12,8 +12,14 @@ const systemVars = new Map<string, string>();
 
 function seedSystemDefaults(): void {
   // decode.c's compiled dflt_vartable. A real environment value still
-  // wins because system tables are the final lgetenv tier.
-  systemVars.set('LESS_OSC8_OPEN_ANY', '-less-osc8-open');
+  // wins because system tables are the final lgetenv tier. The unix
+  // build bakes LIBEXECDIR in (Makefile: ${exec_prefix}/libexec, so
+  // /usr/local/libexec by default); only the no-LIBEXECDIR build
+  // (Windows) falls back to a bare PATH lookup. The leading "-" is
+  // lsystem's echo suppression (lsystem.c:61).
+  systemVars.set('LESS_OSC8_OPEN_ANY', process.platform === 'win32'
+    ? '-less-osc8-open'
+    : '-/usr/local/libexec/less-osc8-open');
 }
 
 let noConfig: string | undefined;

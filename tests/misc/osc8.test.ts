@@ -74,8 +74,18 @@ describe('OSC 8 selection and handler variables', () => {
 
     expect(searchOsc8(lines, 1)).toBe(true);
     expect(selectedOsc8()?.uri).toBe('https://a');
-    expect(searchOsc8(lines, -1)).toBe(true);
+
+    expect(searchOsc8(lines, 1)).toBe(true);
     expect(selectedOsc8()?.uri).toBe('file:x');
+
+    expect(searchOsc8(lines, -1)).toBe(true);
+    expect(selectedOsc8()?.uri).toBe('https://a');
+
+    // og never wraps: a miss errors and keeps the old selection
+    // (osc8_search returns after "OSC 8 link not found")
+    expect(searchOsc8(lines, -1)).toBe(false);
+    expect(selectedOsc8()?.uri).toBe('https://a');
+    expect(search.message).toBe('OSC 8 link not found');
   });
 
   it('lowercases schemes, distinguishes NONE, and quotes the URI', () => {

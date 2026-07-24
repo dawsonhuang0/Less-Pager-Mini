@@ -27,7 +27,9 @@ import {
   STYLE_REGEX_G,
   STYLE_RESET,
   INVERSE_ON,
-  INVERSE_OFF
+  INVERSE_OFF,
+  UNDERLINE_ON,
+  UNDERLINE_OFF
 } from '../constants';
 
 /**
@@ -45,7 +47,6 @@ export function maxSubRow(line: string): number {
   if (chopLine()) return 0;
 
   // --wordwrap boundaries live in the layout, even for plain lines
-  // eslint-disable-next-line no-control-regex
   if (!optWordwrap() && !isStyled(line) && isAscii(line) &&
       !line.includes('\x08')) {
     return Math.floor(Math.max(line.length - 1, 0) / config.screenWidth);
@@ -72,14 +73,89 @@ let charCache = new Map<string, [string, number]>();
  * @param lines - Raw content lines.
  * @returns The display lines.
  */
+// og paints every OSC8 link's TEXT with AT_UNDERLINE (AT_COLOR_OSC8
+// under --use-color) while the escape bytes pass through as AT_ANSI,
+// and the selected link additionally hilites (line.c:880-886); the
+// selection coordinates arrive via setter to keep imports one-way
+/* eslint-disable no-control-regex */
+const OSC8_SEQ_G = /\x1b\]8;[^;\x07\x1b]*;([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+const OSC8_ONE = /\x1b\]8;[^;\x07\x1b]*;[^\x07\x1b]*(?:\x07|\x1b\\)/g;
+/* eslint-enable no-control-regex */
+
+let osc8SelectedAt: { row: number, start: number } | null = null;
+
+/** Registers the selected link's row/offset for display styling. */
+export function setOsc8Display(
+  at: { row: number, start: number } | null
+): void {
+  osc8SelectedAt = at;
+}
+
+/** Styles a line's OSC8 link text on the RAW line, sentinel-coded so
+ *  the styles ride through every ctldisp mode: the underline is og's
+ *  CD_ANSI in_osc8_link attr (ANSI mode only — probed, -r emits no
+ *  \e[4m), while the SELECTION standout is og's hilite machinery and
+ *  paints over caret and raw renderings alike (line.c:880). */
+function styleOsc8Line(
+  line: string,
+  row: number,
+  underline: boolean
+): string {
+  OSC8_SEQ_G.lastIndex = 0;
+
+  // eslint-disable-next-line no-control-regex
+  const own = (code: string): string => code.replace(/\x1b/g, OWN_STYLE);
+
+  let out = '';
+  let last = 0;
+  let inLink = false;
+  let linkStart = -1;
+  let m: RegExpExecArray | null;
+
+  while ((m = OSC8_SEQ_G.exec(line)) !== null) {
+    const text = line.slice(last, m.index);
+
+    if (inLink && text) {
+      const isSelected = osc8SelectedAt !== null &&
+        osc8SelectedAt.row === row && osc8SelectedAt.start === linkStart;
+
+      if (isSelected) {
+        // og's selection paints underline+standout in EVERY ctldisp
+        // mode (probed: caret mode too emits \e[4m\e[7m text)
+        out += own(UNDERLINE_ON) + own(INVERSE_ON) + text +
+          own(INVERSE_OFF) + own(UNDERLINE_OFF);
+      } else if (underline) {
+        out += own(colored('osc8', text, UNDERLINE_ON, UNDERLINE_OFF));
+      } else {
+        out += text;
+      }
+    } else {
+      out += text;
+    }
+
+    out += m[0];
+    inLink = m[1] !== '';
+    // Osc8Link.start records where the link TEXT begins
+    if (inLink) linkStart = OSC8_SEQ_G.lastIndex;
+    last = OSC8_SEQ_G.lastIndex;
+  }
+
+  out += line.slice(last);
+  return out;
+}
+
 export function transformContent(lines: string[]): string[] {
   charCache = new Map();
 
   const squeeze = optSqueeze();
+  const ctldisp = optCtldisp();
   const out: string[] = [];
   let blank = false;
+  let row = -1;
 
   for (const raw of lines) {
+    row++;
+
     if (squeeze && raw === '') {
       if (blank) continue;
       blank = true;
@@ -87,7 +163,16 @@ export function transformContent(lines: string[]): string[] {
       blank = false;
     }
 
-    out.push(CONTROL_REGEX.test(raw) ? transformLine(raw) : raw);
+    let line = raw;
+
+    // style BEFORE the control transform: caret mode still standouts
+    // the selected link's text between its caret-rendered sequences
+    if (line.includes('\x1b]8;') &&
+        (ctldisp === 2 || osc8SelectedAt?.row === row)) {
+      line = styleOsc8Line(line, row, ctldisp === 2);
+    }
+
+    out.push(CONTROL_REGEX.test(line) ? transformLine(line) : line);
   }
 
   return out;
@@ -143,6 +228,19 @@ function transformLine(line: string): string {
       continue;
     }
 
+    // styling WE injected (overstrike bold/underline): swap the
+    // sentinel back to a real ESC in every ctldisp mode — og keeps
+    // these attrs out-of-band, so only DATA escapes caret
+    if (char === OWN_STYLE) {
+      const seq = /^\[[0-9;]*m/.exec(line.slice(i + 1));
+
+      if (seq) {
+        out += '\x1b' + seq[0];
+        i += 1 + seq[0].length;
+        continue;
+      }
+    }
+
     // og expands tabs unless --proc-tab (or -U with it unset) says
     // control display (line.c:1389) - then ^I falls through below
     const pt = optProcTab();
@@ -163,6 +261,18 @@ function transformLine(line: string): string {
       if (match && match.index === i) {
         out += match[0];
         i += match[0].length;
+        continue;
+      }
+
+      // og's ansi machine recognizes a COMPLETE OSC8 sequence and
+      // stores it AT_ANSI (line.c osc_return): the whole sequence —
+      // BEL terminator and ST alike — passes through at zero width
+      OSC8_ONE.lastIndex = i;
+      const osc8 = OSC8_ONE.exec(line);
+
+      if (osc8 && osc8.index === i) {
+        out += osc8[0];
+        i += osc8[0].length;
         continue;
       }
     }
@@ -214,8 +324,15 @@ function transformLine(line: string): string {
         if (!entry) {
           const caret = char === '\x7F'
             ? '^?'
-            : '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
-          entry = [colored('ctrl', caret, INVERSE_ON, INVERSE_OFF), 2];
+            // og's prchar special-cases the escape byte as "ESC"
+            // (charset.c:534), every other control ^X
+            : char === '\x1B'
+              ? 'ESC'
+              : '^' + String.fromCharCode(char.charCodeAt(0) + 0x40);
+          entry = [
+            colored('ctrl', caret, INVERSE_ON, INVERSE_OFF),
+            caret.length,
+          ];
           charCache.set(char, entry);
         }
 
@@ -242,7 +359,10 @@ function transformLine(line: string): string {
  * is also where a leaked --end-prompt SGR dies.
  */
 function coalesceAttr(text: string, attr: 'bold' | 'underline'): string {
-  const [on, off] = attrText(attr, '\x00').split('\x00');
+  const [on, off] = attrText(attr, '\x00')
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b/g, OWN_STYLE)
+    .split('\x00');
   if (!on || !off) return text;
 
   return text.split(off + on).join('');
@@ -252,7 +372,17 @@ function coalesceAttr(text: string, attr: 'bold' | 'underline'): string {
  * Converts nroff-style overstrikes for --proc-backspace: `X\bX` prints
  * bold and `_\bX` underlined, leftover backspaces just erase.
  */
+// stands in for the ESC of styling WE generate mid-transform (the
+// overstrike bold/underline): og keeps such attrs out-of-band, so
+// they render in EVERY ctldisp mode while data ESCs caret — the
+// transform loop swaps the sentinel back to a real ESC on emission
+const OWN_STYLE = '\uE100';
+
 function procBackspaces(line: string): string {
+  const own = (kind: 'bold' | 'underline', c: string): string =>
+    // eslint-disable-next-line no-control-regex
+    attrText(kind, c).replace(/\x1b/g, OWN_STYLE);
+
   // og's do_append order: an identical pair is bold FIRST (so _\b_
   // is bold, not underline), then an underscore on either side
   // underlines - X\b_ keeps the PREVIOUS char (line.c "we replace
@@ -260,9 +390,9 @@ function procBackspaces(line: string): string {
   // non-underscore overstrikes)
   /* eslint-disable no-control-regex */
   const out = line
-    .replace(/(.)\x08\1/g, (_, c: string) => attrText('bold', c))
-    .replace(/_\x08(.)/g, (_, c: string) => attrText('underline', c))
-    .replace(/(.)\x08_/g, (_, c: string) => attrText('underline', c))
+    .replace(/(.)\x08\1/g, (_, c: string) => own('bold', c))
+    .replace(/_\x08(.)/g, (_, c: string) => own('underline', c))
+    .replace(/(.)\x08_/g, (_, c: string) => own('underline', c))
     .replace(/.\x08(.)/g, '$1');
   /* eslint-enable no-control-regex */
 

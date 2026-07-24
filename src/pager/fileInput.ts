@@ -19,6 +19,7 @@ import {
   binFile,
   files,
   onSourceFiles,
+  pipeDraining,
 } from '../features/files';
 
 import { osc8Links, setSelectedOsc8 } from '../features/osc8';
@@ -62,10 +63,12 @@ import {
   optHowSearch,
   optMatchShift,
   optNoSearchHeaders,
+  optPastEof,
   optRscroll,
 } from '../options';
 
-import { maxSubRow, transformContent } from '../lines/helpers';
+import { maxSubRow, setOsc8Display, transformContent }
+  from '../lines/helpers';
 
 import { CLEAR_LINE, INVERSE_OFF, INVERSE_ON } from '../constants';
 
@@ -96,6 +99,8 @@ export class FileInput implements PagerInput {
   private lineAnchors = [{ pos: 0, num: 0 }];
   private lineScanAborted = false;
   private selectedOscPos: number | null = null;
+  // which link within that line (its text-start offset)
+  private selectedOscStart = -1;
   private incrementalOrigin: { pos: number, subRow: number } | null = null;
   private headerRow = 0;
   private headerPos = 0;
@@ -122,9 +127,21 @@ export class FileInput implements PagerInput {
   private growthPaint = false;
   private unsubscribeGrowth: (() => void) | null = null;
 
+  // og's interrupted drain leaves ch_length NULL even though the
+  // writer died: the residual pipe data sits unread, so prompts and
+  // = keep showing an unknown length until the NEXT forward read
+  // reaches EOI — the spool has actually read everything, but the
+  // og state machine must not know it yet
+  private softEnd = false;
+
   // the view position of the previous resolveBottom, so only real
   // moves re-enter the walk (og's find_linenum caches resolve this)
   private lastResolved = '';
+
+  // og's forced back (K, ESC-b, --past-eof) pads null rows above
+  // BOF; forward moves consume them first, any jump clears them
+  private padTop = 0;
+  private keepPad = false;
 
   constructor(
     private bf: BlockFile,
@@ -200,18 +217,78 @@ export class FileInput implements PagerInput {
     this.sync();
   }
 
-  /** ^C or --intr abandons a wait on the growing spool, restoring
-   *  bounded read-ahead, like og's READ_INTR out of a pipe read. */
+  /** Marks the spool drain a command started, owning the command
+   *  line like og's ch_end_seek: blank for G, ierror's note for %. */
+  private startDrain(note: string, cancelMessage: string): void {
+    pipeDraining.active = true;
+    pipeDraining.note = note;
+    pipeDraining.cancelMessage = cancelMessage;
+  }
+
+  /** Releases the drain's hold on the command line. */
+  private endDrain(): void {
+    pipeDraining.active = false;
+    pipeDraining.note = '';
+    pipeDraining.cancelMessage = '';
+  }
+
+  /** A forward read reaching the spooled end after an interrupted
+   *  drain: og's ch_forw_get finally returns the real EOI and the
+   *  length becomes known (ch_fsize learned). */
+  private discoverEnd(): void {
+    if (!this.softEnd || !this.spool?.ended) return;
+
+    this.softEnd = false;
+    const entry = files.list[this.fileIndex];
+    if (entry) {
+      entry.size = this.spool.size;
+      entry.sizeKnown = true;
+      entry.streaming = false;
+    }
+  }
+
+  /** ^C or --intr during a wait on the growing spool: og's READ_INTR
+   *  surfaces as EOI at the current position, so ch_end_seek returns
+   *  SUCCESS and G jumps to the BUFFERED end — only % fails its
+   *  ch_length check and errors; a blocked move simply stops. */
   interrupt(): boolean {
     const waiting = this.pendingForward !== null ||
       this.pendingJump !== null || this.pendingPipeSearch !== null;
 
     if (!waiting) return false;
 
+    const jump = this.pendingJump;
+    const cancel = pipeDraining.cancelMessage;
+
     this.pendingForward = null;
     this.pendingJump = null;
     this.pendingPipeSearch = null;
     this.spool?.cancelDrain();
+    this.endDrain();
+
+    // og stops at READ_INTR without the residual read: the length
+    // stays unknown until a later forward read reaches EOI
+    this.softEnd = true;
+
+    if (jump) {
+      if (cancel) {
+        search.message = cancel;
+      } else {
+        this.bf.refreshSize();
+
+        if (jump.kind === 'end') {
+          if (session.lastFilter) this.gotoFilteredEnd();
+          else this.view.gotoEnd(config.window);
+        } else if (jump.kind === 'position') {
+          this.view.gotoPos(Math.min(jump.value, this.bf.size));
+        }
+
+        this.clampHeader();
+        this.sync();
+        markPosClear();
+      }
+    }
+
     return true;
   }
 
@@ -226,7 +303,7 @@ export class FileInput implements PagerInput {
 
     if (event.error) search.message = event.error.message;
 
-    if (event.ended) {
+    if (event.ended && !this.softEnd) {
       const entry = files.list[this.fileIndex];
       if (entry) {
         entry.size = this.spool?.size ?? this.bf.size;
@@ -243,6 +320,7 @@ export class FileInput implements PagerInput {
 
       if (ready) {
         this.pendingJump = null;
+        this.endDrain();
         if (jump.kind === 'end') {
           if (session.lastFilter) this.gotoFilteredEnd();
           else this.view.gotoEnd(config.window);
@@ -299,11 +377,15 @@ export class FileInput implements PagerInput {
         this.forward(count || 1, false);
         return true;
       case 'LINE_BACKWARD':
-      case 'FORCE_LINE_BACKWARD':
         this.backward(count || 1);
         return true;
+      case 'FORCE_LINE_BACKWARD':
+        // og's K: back with force=TRUE, padding past BOF
+        this.backward(count || 1, true);
+        return true;
       case 'FORCE_WINDOW_BACKWARD':
-        this.backward(count || getSwindow());
+        // og's ESC-b: A_BF_SCREEN, backward(force=TRUE)
+        this.backward(count || getSwindow(), true);
         return true;
       case 'WINDOW_FORWARD':
       case 'SET_WINDOW_FORWARD':
@@ -340,11 +422,14 @@ export class FileInput implements PagerInput {
         this.gotoLine(count > 0 ? count - 1 : optHeader().start);
         return true;
       case 'LAST_LINE':
+        this.discoverEnd();
         if (count) {
           this.gotoLine(count - 1);
         } else if (this.spoolAlive()) {
-          // G must read the pipe to its true end, like og's ch_end_seek
+          // G must read the pipe to its true end, like og's
+          // ch_end_seek, with a blank command line while it reads
           this.pendingJump = { kind: 'end' };
+          this.startDrain('', '');
           this.spool?.drain();
         } else {
           if (session.lastFilter) {
@@ -357,12 +442,16 @@ export class FileInput implements PagerInput {
         }
         return true;
       case 'PERCENT_LINE':
+        this.discoverEnd();
         if (this.spoolAlive()) {
-          // a percent of a length still unknown drains first, like og
+          // a percent of a length still unknown drains first, like
+          // og's jump_percent behind ierror's interruptible note
           this.pendingJump = {
             kind: 'percent',
             value: Math.min(count, 100),
           };
+          this.startDrain('Determining length of file',
+            'Don\'t know length of file');
           this.spool?.drain();
           return true;
         }
@@ -372,8 +461,10 @@ export class FileInput implements PagerInput {
         markPosClear();
         return true;
       case 'GO_POS':
+        this.discoverEnd();
         if (this.spoolAlive() && count >= this.bf.size) {
           this.pendingJump = { kind: 'position', value: count };
+          this.startDrain('', '');
           this.spool?.requestThrough(count + SPOOL_READ_AHEAD);
           return true;
         }
@@ -392,7 +483,10 @@ export class FileInput implements PagerInput {
         if (this.selectedOscPos === null) {
           search.message = 'No OSC8 link selected';
         } else {
+          // og's osc8_jump is an unconditional jump_loc to the -j
+          // line (search.c:2002), on-screen or not
           this.view.top = { pos: this.selectedOscPos, subRow: 0 };
+          this.view.lineBackward(jumpSindex());
           this.sync();
           markPosClear();
         }
@@ -795,6 +889,7 @@ export class FileInput implements PagerInput {
   close(): void {
     this.unsubscribeGrowth?.();
     this.unsubscribeGrowth = null;
+    if (this.pendingJump) this.endDrain();
     onSourceMarks(null);
     onSourceFiles(null);
     onSourceFollow(null);
@@ -955,34 +1050,71 @@ export class FileInput implements PagerInput {
   }
 
   private forward(rows: number, clampAtLastScreen: boolean): void {
+    // scrolling forward consumes blank rows padded above BOF first,
+    // like the array session's lineForward blankTop branch
+    let want = rows;
+
+    if (this.padTop > 0) {
+      const consumed = Math.min(this.padTop, want);
+      this.padTop -= consumed;
+      want -= consumed;
+
+      if (!want) {
+        this.keepPad = true;
+        this.sync();
+        return;
+      }
+    }
+
     const moved = session.lastFilter
-      ? this.filteredForward(rows, clampAtLastScreen)
+      ? this.filteredForward(want, clampAtLastScreen)
       : this.view.lineForward(
-        rows,
+        want,
         clampAtLastScreen ? config.window : undefined
       );
 
+    // a short forward move read the end: og's forw discovers the
+    // EOI a post-interrupt length wait left unread
+    if (moved < want) this.discoverEnd();
+
     // a move over a growing spool is the pipe read itself: wait for
     // the remainder instead of belling at the provisional end
-    if (moved < rows && this.spoolAlive()) {
+    if (moved < want && this.spoolAlive()) {
       this.pendingForward = {
-        rows: rows - moved,
+        rows: want - moved,
         clamp: clampAtLastScreen,
       };
+    } else if (!moved && want === rows) {
+      ringBell('eof');
+    }
+
+    if ((moved || want < rows) && mode.INIT) mode.INIT = false;
+    this.keepPad = true;
+    this.sync();
+  }
+
+  private backward(rows: number, force: boolean = false): void {
+    // --past-eof forces every backward scroll, like og's back()
+    if (optPastEof()) force = true;
+
+    const moved = session.lastFilter
+      ? this.filteredBackward(rows)
+      : this.fileBackward(rows);
+
+    // og's forced back (K, ESC-b) keeps revealing null lines above
+    // the beginning, capped one short of an empty screen — file
+    // distance consumes first, like the array forceLineBackward
+    if (force && moved < rows) {
+      const cap = Math.max(config.window - 2, 0);
+      const before = this.padTop;
+      this.padTop = Math.min(this.padTop + (rows - moved), cap);
+      if (this.padTop === before && !moved) ringBell('eof');
     } else if (!moved) {
       ringBell('eof');
     }
 
-    if (moved && mode.INIT) mode.INIT = false;
-    this.sync();
-  }
-
-  private backward(rows: number): void {
-    const moved = session.lastFilter
-      ? this.filteredBackward(rows)
-      : this.fileBackward(rows);
-    if (!moved) ringBell('eof');
-    if (moved && mode.INIT) mode.INIT = false;
+    if ((moved || this.padTop) && mode.INIT) mode.INIT = false;
+    this.keepPad = true;
     this.sync();
   }
 
@@ -1451,6 +1583,8 @@ export class FileInput implements PagerInput {
       if (hit !== 'miss') return candidatePositions[hit];
     }
 
+    // the scan read to the spooled end, og's EOI discovery
+    this.discoverEnd();
     return null;
   }
 
@@ -1493,12 +1627,55 @@ export class FileInput implements PagerInput {
   }
 
   /** Fable's byte-position OSC 8 walk over the complete file. */
-  private findOsc8(direction: 1 | -1, count: number): void {
-    let pos = this.selectedOscPos ?? this.view.top.pos;
-    let remaining = Math.max(count, 1);
+  /** The line-start positions currently displayed, og's onscreen(). */
+  private onscreen(pos: number): boolean {
+    if (pos < this.view.top.pos) return false;
+    return pos < this.view.visible(config.window - 1).endPos;
+  }
 
-    if (this.selectedOscPos !== null && direction > 0) {
-      pos = forwLine(this.bf, pos)?.next ?? this.bf.size;
+  /** og's osc8_search (search.c:2005): continue within the selected
+   *  line first; an off-screen selection restarts at the -j line; a
+   *  found link only scrolls when it is NOT already on screen; a
+   *  miss errors WITHOUT clearing the selection. */
+  private findOsc8(direction: 1 | -1, count: number): void {
+    let remaining = Math.max(count, 1);
+    let pos: number;
+
+    const selectedVisible = this.selectedOscPos !== null &&
+      this.onscreen(this.selectedOscPos);
+
+    if (selectedVisible && this.selectedOscPos !== null) {
+      // continue the search in the same line as the current match
+      const line = forwLine(this.bf, this.selectedOscPos);
+
+      if (line) {
+        const links = osc8Links([line.text]);
+        const sameLine = direction > 0
+          ? links.filter(l => l.start > this.selectedOscStart)
+          : links.filter(l => l.start < this.selectedOscStart).reverse();
+
+        for (const link of sameLine) {
+          if (--remaining !== 0) continue;
+          this.selectOsc8(this.selectedOscPos, link);
+          return;
+        }
+      }
+
+      pos = direction > 0
+        ? line?.next ?? this.bf.size
+        : this.selectedOscPos;
+    } else {
+      // og starts at the -j line like a normal search (search_pos)
+      const start = this.view.screenPos(jumpSindex());
+
+      if (start === null) {
+        search.message = 'Nothing to search';
+        return;
+      }
+
+      pos = start.pos;
+      // a backward search examines lines before the start line
+      if (direction < 0) pos = Math.min(pos + 1, this.bf.size);
     }
 
     while (direction > 0 ? pos < this.bf.size : pos > 0) {
@@ -1527,9 +1704,8 @@ export class FileInput implements PagerInput {
       }
     }
 
-    setSelectedOsc8(null);
-    this.selectedOscPos = null;
-    search.message = 'No OSC8 links found';
+    // og errors and RETURNS: osc8_linepos keeps the old selection
+    search.message = 'OSC 8 link not found';
   }
 
   private selectOsc8(
@@ -1537,13 +1713,28 @@ export class FileInput implements PagerInput {
     link: ReturnType<typeof osc8Links>[number]
   ): void {
     this.selectedOscPos = pos;
-    this.view.top = { pos, subRow: 0 };
+    this.selectedOscStart = link.start;
+
+    // "If new link is on screen, just highlight it without
+    // scrolling." (search.c:2049) — else jump_loc to the -j line;
+    // only the jump pos_clears (the highlight is repaint_hilite)
+    if (!this.onscreen(pos)) {
+      this.view.top = { pos, subRow: 0 };
+      this.view.lineBackward(jumpSindex());
+      markPosClear();
+    }
+
+    // sync resolves the selection's current row itself (the og
+    // position-range model), so one materialization styles it
     this.sync();
     setSelectedOsc8({
       ...link,
       row: Math.max(this.positions.indexOf(pos), 0),
     });
-    markPosClear();
+
+    // og saves the URI at every selection; the next prompt cycle
+    // reports it (command.c:905 "Link: %s")
+    search.message = `Link: ${link.uri}`;
   }
 
   /**
@@ -1631,7 +1822,7 @@ export class FileInput implements PagerInput {
         // same screen-vs-batch distinction as the seekable branch:
         // accepted lines beyond one screenful keep (END) unlit even
         // when the batch consumed the whole file
-        atEof = accepted <= Math.max(config.window - 1, 1) &&
+        atEof = accepted <= Math.max(config.window - 1 - this.padTop, 1) &&
           this.nextAccepted(pos) === null;
       }
     } else {
@@ -1650,11 +1841,22 @@ export class FileInput implements PagerInput {
       // remains from the top fits the single displayed screenful
       atEof = visible.rows.length === 0 ||
         (this.view.atEof &&
-          visible.rows.length <= Math.max(config.window - 1, 1));
+          visible.rows.length <= Math.max(config.window - 1 - this.padTop, 1));
     }
 
     // An empty file still has one display line in the array-backed core.
     if (!raw.length) raw.push('');
+
+    // og's osc8 hilite is a byte-position range checked at paint
+    // (is_hilited_attr, search.c:686): resolve the selected line's
+    // CURRENT row before this materialization styles, so the
+    // standout follows the text through scrolls and repaints
+    if (this.selectedOscPos !== null) {
+      const selRow = positions.indexOf(this.selectedOscPos);
+      setOsc8Display(selRow >= 0
+        ? { row: selRow, start: this.selectedOscStart }
+        : null);
+    }
 
     session.fullContent = raw;
     session.content = deriveContent();
@@ -1665,7 +1867,10 @@ export class FileInput implements PagerInput {
     this.positions = positions;
     config.row = Math.min(displayBody, Math.max(session.content.length - 1, 0));
     config.subRow = this.view.top.subRow;
-    config.blankTop = 0;
+    // scroll moves carry their over-BOF pad; any jump clears it
+    if (!this.keepPad) this.padTop = 0;
+    this.keepPad = false;
+    config.blankTop = this.padTop;
 
     calculateEOF(session.content);
     mode.EOF = atEof;

@@ -22,7 +22,9 @@ export const opt = {
   prType: 0,
   linenums: 1,
   quiet: 0,
-  ctldisp: 2,
+  // og's default: caret ALL escape sequences (user revoked the old
+  // ctldisp=2 divergence 2026-07-24 — full og parity, -R for ANSI)
+  ctldisp: 0,
   squeeze: 0,
   tagsFile: 'tags',
   bsMode: 0,

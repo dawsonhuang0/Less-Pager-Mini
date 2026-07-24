@@ -290,8 +290,12 @@ function protochar(
 
   switch (char) {
     case 'b':
-      // recycled pipe data still counts in the offset (og positions)
-      return out + Math.min(absoluteByte(), size);
+      // recycled pipe data still counts in the offset (og positions);
+      // an unknown length never clamps — entry.size is stale while a
+      // pipe still streams (og's curr_byte reports the raw position)
+      return out + (sizeIsKnown()
+        ? Math.min(absoluteByte(), size)
+        : absoluteByte());
 
     case 'c': return out + (config.col + 1);
     case 'C': return out + (config.col + config.screenWidth);
