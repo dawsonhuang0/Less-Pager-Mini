@@ -986,23 +986,53 @@ export class FileInput implements PagerInput {
     this.sync();
   }
 
-  /** Moves by file lines while retaining Fable's wrapped sub-row position. */
+  /** og's to_newline scroll (forwback.c:302): rows reveal at the
+   *  bottom edge until `lines` of them end their file line, wrap
+   *  continuations riding free; the top may land mid-wrap. */
   private newlineForward(lines: number): void {
-    let moved = 0;
+    const cur = { pos: this.view.top.pos, subRow: this.view.top.subRow };
+    let line = forwLine(this.bf, cur.pos);
 
-    while (moved < lines) {
-      const line = forwLine(this.bf, this.view.top.pos);
-      if (!line || line.next >= this.bf.size) break;
+    const advance = (): boolean => {
+      if (!line) return false;
+
+      if (cur.subRow + 1 < this.view.rowsOf(line.text)) {
+        cur.subRow++;
+        return true;
+      }
+
       const next = session.lastFilter
         ? this.nextAccepted(line.next)
         : line.next;
-      if (next === null) break;
-      this.view.top = { pos: next, subRow: 0 };
-      moved++;
+      if (next === null || next >= this.bf.size) return false;
+
+      const nl = forwLine(this.bf, next);
+      if (!nl) return false;
+
+      cur.pos = next;
+      cur.subRow = 0;
+      line = nl;
+      return true;
+    };
+
+    // find the current bottom display row
+    let steps = Math.max(config.window - 2, 0);
+    while (steps > 0 && advance()) steps--;
+
+    let rows = 0;
+
+    for (let n = lines; n > 0; ) {
+      if (!advance()) break;
+      rows++;
+      if (line && cur.subRow === this.view.rowsOf(line.text) - 1) n--;
     }
 
-    if (!moved) ringBell('eof');
-    this.sync();
+    if (rows) {
+      this.forward(rows, true);
+    } else {
+      ringBell('eof');
+      this.sync();
+    }
   }
 
   private newlineBackward(lines: number): void {

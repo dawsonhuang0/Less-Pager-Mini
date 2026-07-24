@@ -279,6 +279,19 @@ describe('unified file command loop', () => {
       expect(headAgain).toBeGreaterThan(tail);
     }, 20000);
 
+  it('completes the wrapped bottom line on ESC-j, like og forw()',
+    async () => {
+      // top at line 111 leaves the 130-char line 121 half shown: og's
+      // to_newline reveals its remaining rows, so ' wide tail' (its
+      // last wrap row) must reach the screen; a file-line top jump
+      // would stop one row short of it
+      const output = await drive([
+        '1', '1', '1', 'g', '\x1bj',
+      ], '', file);
+
+      expect(output).toContain(' wide tail');
+    }, 20000);
+
   it('searches forward and backward outside the materialized window',
     async () => {
       const output = await drive([

@@ -39,7 +39,7 @@ export class BigView {
   }
 
   /** Display sub-rows a line occupies under the current mode. */
-  private rowsOf(text: string): number {
+  rowsOf(text: string): number {
     if (chopLine() || config.col) return 1;
     return getLayout(displayText(text)).rowStart.length;
   }

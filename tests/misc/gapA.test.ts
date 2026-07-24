@@ -134,19 +134,42 @@ describe('K blank top with the end of file on screen', () => {
 });
 
 describe('ESC-j / ESC-k newline scrolling', () => {
-  it('moves by whole lines in wrap mode', () => {
-    const wrapped = ['aaaaaaaaaaaaaaaaaaaaaaaaa',
-      'bb', 'cc', 'dd', 'ee', 'ff', 'gg', 'hh', 'ii', 'jj'];
+  const wrapped = ['aaaaaaaaaaaaaaaaaaaaaaaaa',
+    'bb', 'cc', 'dd', 'ee', 'ff', 'gg', 'hh', 'ii', 'jj'];
+
+  beforeEach(() => {
     initContent(wrapped);
     config.chopLongLines = false;
     calculateEOF(wrapped);
+  });
 
-    // ESC-j from a wrapped first line skips all its sub-rows
+  it('scrolls until a revealed bottom row ends its file line', () => {
+    // bottom_plus_one is the unwrapped 'dd': one screen row scrolls
+    // and the wrapped top line stays on screen mid-wrap, like forw()
     newlineForward(wrapped, 1);
-    expect(config.row).toBe(1);
-    expect(config.subRow).toBe(0);
+    expect(config.row).toBe(0);
+    expect(config.subRow).toBe(1);
+  });
 
-    // ESC-k from a mid-line top snaps to the line start first
+  it('rides a wrapped incoming line for free', () => {
+    const tail = ['bb', 'cc', 'dd', 'ee', 'ff',
+      'aaaaaaaaaaaaaaaaaaaaaaaaa', 'gg'];
+    initContent(tail);
+    calculateEOF(tail);
+
+    // all three rows of the wrapped line reveal before its end counts
+    newlineForward(tail, 1);
+    expect(config.row).toBe(3);
+    expect(config.subRow).toBe(0);
+  });
+
+  it('counts N file lines at the bottom edge', () => {
+    newlineForward(wrapped, 2);
+    expect(config.row).toBe(0);
+    expect(config.subRow).toBe(2);
+  });
+
+  it('ESC-k from a mid-line top snaps to the line start first', () => {
     config.row = 0;
     config.subRow = 2;
     newlineBackward(wrapped, 1);

@@ -476,20 +476,43 @@ export function newlineForward(content: string[], offset: number): void {
   // ESC-j shares A_F_NEWLINE's -W-with-count condition
   setAttnForward(content, optShowAttn() === 2 && offset > 1);
 
-  // land on the next line boundary, but never past the EOF anchor
-  const target = config.row + offset;
+  // og's to_newline counts at the BOTTOM edge (forwback.c:302): rows
+  // reveal from BOTTOM_PLUS_ONE and only ones ending their file line
+  // decrement the count — wrap continuations ride free — so convert
+  // the file-line count into the screen rows forw() would scroll
+  let r = config.row;
+  let s = config.subRow;
+  let steps = Math.max(config.window - 2 - config.blankTop, 0);
 
-  if (target > config.endRow) {
-    config.row = config.endRow;
-    config.subRow = config.endSubRow;
-  } else {
-    config.row = target;
-    config.subRow = 0;
+  const advance = (): boolean => {
+    if (s < maxSubRow(content[r])) {
+      s++;
+      return true;
+    }
+
+    if (r + 1 >= content.length) return false;
+    r++;
+    s = 0;
+    return true;
+  };
+
+  // find the current bottom display row
+  while (steps > 0 && advance()) steps--;
+
+  let rows = 0;
+
+  for (let n = offset; n > 0; ) {
+    if (!advance()) {
+      // a forced move keeps revealing a null row per remaining line
+      if (optPastEof()) rows += n;
+      break;
+    }
+    rows++;
+    if (s === maxSubRow(content[r])) n--;
   }
 
-  mode.EOF = config.row > config.endRow || (
-    config.row === config.endRow && config.subRow >= config.endSubRow
-  );
+  if (rows) lineForward(content, rows);
+  else ringBell('eof');
 }
 
 /**
