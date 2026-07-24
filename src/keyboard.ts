@@ -43,6 +43,32 @@ export function openTtyKeyboard(): boolean {
   }
 }
 
+// og's check_poll (os.c) peeks the tty with a zero-timeout poll; a
+// readSync on the keyboard fd can BLOCK when that fd is in blocking
+// mode (fs.openSync default; fd 0's state is whatever the shell
+// left), freezing a scan at its first poll — so interrupt polls use
+// a dedicated O_NONBLOCK tty fd sharing the same input queue
+let pollFd: number | null = null;
+
+/** A never-blocking tty fd for mid-scan interrupt polls, or null
+ *  when the platform has no pollable terminal device. */
+export function keyboardPollFd(): number | null {
+  if (pollFd !== null) return pollFd < 0 ? null : pollFd;
+  if (process.platform === 'win32') {
+    pollFd = -1;
+    return null;
+  }
+
+  try {
+    pollFd = fs.openSync(
+      '/dev/tty', fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+    return pollFd;
+  } catch {
+    pollFd = -1;
+    return null;
+  }
+}
+
 /**
  * True when the terminal lacks cursor capabilities, like og's
  * missing_cap: on unix a missing $TERM loads the "unknown" termcap
@@ -277,4 +303,13 @@ export function closeTtyKeyboard(): void {
     stream = stdin;
     ttyFd = null;
   }
+
+  if (pollFd !== null && pollFd >= 0) {
+    try {
+      fs.closeSync(pollFd);
+    } catch {
+      // already gone
+    }
+  }
+  pollFd = null;
 }

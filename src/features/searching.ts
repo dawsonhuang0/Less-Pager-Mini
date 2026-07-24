@@ -3,7 +3,7 @@ import vm from 'vm';
 
 import { strWidth } from 'char-width';
 
-import { keyboard, keyboardFd, pushUngot } from '../keyboard';
+import { keyboard, keyboardPollFd, pushUngot } from '../keyboard';
 
 import { config, mode } from "../config";
 
@@ -1410,11 +1410,18 @@ export function searchInterrupted(): boolean {
   if (now - lastInterruptPoll < 100) return false;
   lastInterruptPoll = now;
 
+  // the poll must NEVER block: the keyboard fd's blocking state is
+  // not ours to trust (fs.openSync default, or fd 0 as the shell
+  // left it) — a blocking read here freezes the scan until a key
+  // arrives, so peek through the dedicated O_NONBLOCK tty fd
+  const fd = keyboardPollFd();
+  if (fd === null) return false;
+
   const data = Buffer.alloc(64);
   let n: number;
 
   try {
-    n = fs.readSync(keyboardFd(), data, 0, data.length, null);
+    n = fs.readSync(fd, data, 0, data.length, null);
   } catch {
     // EAGAIN: nothing typed
     return false;

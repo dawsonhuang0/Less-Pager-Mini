@@ -28,6 +28,15 @@ export interface PagerInput {
   /** Re-materializes the active file window after a display option changes. */
   rebuild(): boolean;
 
+  /** ^C/--intr during an input-side wait: true when a pending
+   *  operation (a growing-spool move, jump or search) was abandoned. */
+  interrupt?(): boolean;
+
+  /** og's currline(BOTTOM) at the end of every forw()/back(): the
+   *  eager line-number walk running after the rows paint and before
+   *  the prompt, with its delayed "Calculating..." and abort chain. */
+  resolveBottom?(): void;
+
   /** Releases the source's file descriptors. */
   close(): void;
 }

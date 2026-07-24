@@ -6,7 +6,13 @@ import { config, mode } from '../config';
 
 import { session, deriveContent } from '../session';
 
-import { calculateEOF, markPosClear, ringBell } from '../helpers';
+import {
+  calculateEOF,
+  dirtyBottomRow,
+  markPosClear,
+  render,
+  ringBell,
+} from '../helpers';
 
 import {
   binaryConfirm,
@@ -25,6 +31,7 @@ import {
   Mark,
   onSourceMarks,
   recordLastPosition,
+  subRowOfIndex,
   subRowStart,
 } from '../features/jumping';
 
@@ -35,7 +42,10 @@ import {
   scanSearchBatch,
   search,
   searchInterrupted,
+  stripStyles,
 } from '../features/searching';
+
+import { strWidth } from 'char-width';
 
 import { consumeInterrupt } from '../keyboard';
 
@@ -45,11 +55,14 @@ import {
   getSwindow,
   jumpSindex,
   checkModelines,
+  chopLine,
   hook,
   opt,
   optHeader,
   optHowSearch,
+  optMatchShift,
   optNoSearchHeaders,
+  optRscroll,
 } from '../options';
 
 import { maxSubRow, transformContent } from '../lines/helpers';
@@ -60,11 +73,13 @@ import { PipeDecoder } from '../features/charset';
 
 import { BlockFile } from './blockFile';
 
-import { BigView } from './fileView';
+import { BigView, displayText } from './fileView';
 
-import { forwLine, backLine } from './fileLines';
+import { forwLine, backLine, MAX_LINE } from './fileLines';
 
 import { PagerInput } from './input';
+
+import { PipeSpool, SPOOL_READ_AHEAD, SpoolEvent } from './spool';
 
 /**
  * The seekable-file side of the shared pager.
@@ -92,12 +107,46 @@ export class FileInput implements PagerInput {
   private readonly saved = new Map<string, { pos: number, subRow: number }>();
   private activePath: string;
 
+  // commands blocked at the provisional end of a still-growing spool,
+  // completed by onGrowth like og's forw_line read returning with data
+  private pendingForward: { rows: number, clamp: boolean } | null = null;
+  private pendingJump: { kind: 'end' } |
+    { kind: 'percent', value: number } |
+    { kind: 'position', value: number } | null = null;
+  private pendingPipeSearch: {
+    request: SearchRequest,
+    start: number,
+    wrapStart: number,
+    state: { remaining: number },
+  } | null = null;
+  private growthPaint = false;
+  private unsubscribeGrowth: (() => void) | null = null;
+
+  // the view position of the previous resolveBottom, so only real
+  // moves re-enter the walk (og's find_linenum caches resolve this)
+  private lastResolved = '';
+
   constructor(
     private bf: BlockFile,
-    private fileIndex: number
+    private fileIndex: number,
+    private spool: PipeSpool | null = null
   ) {
     this.view = new BigView(bf);
     this.activePath = files.list[fileIndex]?.path ?? '';
+  }
+
+  /** True while the source is a pipe whose end has not been read. */
+  private spoolAlive(): boolean {
+    return this.spool !== null && !this.spool.ended;
+  }
+
+  /** Keeps the upstream flowing until read-ahead covers the view. */
+  private requestAhead(): void {
+    if (!this.spoolAlive()) return;
+    const edge = this.positions.length
+      ? this.positions[this.positions.length - 1]
+      : this.view.top.pos;
+    this.spool?.requestThrough(edge + SPOOL_READ_AHEAD);
   }
 
   ready(): void {
@@ -111,8 +160,11 @@ export class FileInput implements PagerInput {
     hook.sourceLineNumber = row => this.sourceActive()
       ? this.lineNumber(row)
       : undefined;
+    // og's curr_byte (prompt.c): a row past the screen's position
+    // table falls back to ch_length — BOTTOM_PLUS_ONE at (END) is
+    // the file size, never 0
     hook.sourceBytePosition = row => this.sourceActive()
-      ? this.positions[row] ?? null
+      ? this.positions[row] ?? this.bf.size
       : undefined;
     hook.sourceLineCount = () => this.sourceActive()
       ? this.lineCount()
@@ -134,8 +186,102 @@ export class FileInput implements PagerInput {
       refresh: () => this.refreshFollow(),
     });
     onSourceTagJump(tag => this.jumpTag(tag));
+
+    if (this.spool) {
+      this.unsubscribeGrowth = this.spool.subscribe(
+        event => this.onGrowth(event)
+      );
+      // --file-size wants the pipe's true length: read it all, like
+      // og's scan_eof running the EOI-discovering read up front
+      if (opt.wantFileSize > 0 && this.spoolAlive()) this.spool.drain();
+    }
+
     this.seekLine(config.row, false);
     this.sync();
+  }
+
+  /** ^C or --intr abandons a wait on the growing spool, restoring
+   *  bounded read-ahead, like og's READ_INTR out of a pipe read. */
+  interrupt(): boolean {
+    const waiting = this.pendingForward !== null ||
+      this.pendingJump !== null || this.pendingPipeSearch !== null;
+
+    if (!waiting) return false;
+
+    this.pendingForward = null;
+    this.pendingJump = null;
+    this.pendingPipeSearch = null;
+    this.spool?.cancelDrain();
+    return true;
+  }
+
+  /** Makes newly spooled bytes visible and completes commands which
+   *  were blocked at the provisional end of a non-seekable input. */
+  private onGrowth(event: SpoolEvent): void {
+    if (session.exited || files.index !== this.fileIndex) return;
+
+    const before = this.bf.size;
+    this.bf.refreshSize();
+    let moved = false;
+
+    if (event.error) search.message = event.error.message;
+
+    if (event.ended) {
+      const entry = files.list[this.fileIndex];
+      if (entry) {
+        entry.size = this.spool?.size ?? this.bf.size;
+        entry.sizeKnown = true;
+        entry.streaming = false;
+      }
+    }
+
+    if (this.pendingJump) {
+      const jump = this.pendingJump;
+      const ready = jump.kind === 'position'
+        ? this.bf.size > jump.value || event.ended
+        : event.ended;
+
+      if (ready) {
+        this.pendingJump = null;
+        if (jump.kind === 'end') {
+          if (session.lastFilter) this.gotoFilteredEnd();
+          else this.view.gotoEnd(config.window);
+        } else if (jump.kind === 'percent') {
+          this.view.gotoPercent(jump.value);
+        } else {
+          this.view.gotoPos(Math.min(jump.value, this.bf.size));
+        }
+        this.clampHeader();
+        markPosClear();
+        moved = true;
+      }
+    }
+
+    if (this.pendingForward && (this.bf.size > before || event.ended)) {
+      const pending = this.pendingForward;
+      this.pendingForward = null;
+      this.forward(pending.rows, pending.clamp);
+      moved = true;
+    }
+
+    if (this.pendingPipeSearch && (event.settled || event.ended)) {
+      moved = this.resumePipeSearch() || moved;
+    }
+
+    if (!this.growthPaint &&
+        (moved || event.ended || event.settled || mode.EOF)) {
+      this.growthPaint = true;
+      setImmediate(() => {
+        this.growthPaint = false;
+        if (session.exited || session.shellPause || mode.HELP ||
+            files.index !== this.fileIndex) {
+          return;
+        }
+        this.sync();
+        this.resolveBottom();
+        render(session.content, session.buffer);
+      });
+    }
   }
 
   handle(action: Actions, count: number): boolean {
@@ -196,6 +342,10 @@ export class FileInput implements PagerInput {
       case 'LAST_LINE':
         if (count) {
           this.gotoLine(count - 1);
+        } else if (this.spoolAlive()) {
+          // G must read the pipe to its true end, like og's ch_end_seek
+          this.pendingJump = { kind: 'end' };
+          this.spool?.drain();
         } else {
           if (session.lastFilter) {
             this.gotoFilteredEnd();
@@ -207,12 +357,26 @@ export class FileInput implements PagerInput {
         }
         return true;
       case 'PERCENT_LINE':
+        if (this.spoolAlive()) {
+          // a percent of a length still unknown drains first, like og
+          this.pendingJump = {
+            kind: 'percent',
+            value: Math.min(count, 100),
+          };
+          this.spool?.drain();
+          return true;
+        }
         this.view.gotoPercent(Math.min(count, 100));
         this.clampHeader();
         this.sync();
         markPosClear();
         return true;
       case 'GO_POS':
+        if (this.spoolAlive() && count >= this.bf.size) {
+          this.pendingJump = { kind: 'position', value: count };
+          this.spool?.requestThrough(count + SPOOL_READ_AHEAD);
+          return true;
+        }
         this.view.gotoPos(count);
         this.clampHeader();
         this.sync();
@@ -280,6 +444,21 @@ export class FileInput implements PagerInput {
       return true;
     }
 
+    if (found === null && request.dir > 0 && this.spoolAlive()) {
+      // the provisional end is not "hit bottom": retry from a final
+      // line-sized overlap once the next read-ahead window settles —
+      // linear for enormous pipes, and still catching a match that
+      // spans the previous spool boundary
+      this.pendingPipeSearch = {
+        request,
+        start: Math.max(this.bf.size - MAX_LINE, 0),
+        wrapStart: start,
+        state,
+      };
+      this.requestAhead();
+      return true;
+    }
+
     if (found === null && request.wrap) {
       found = request.dir > 0
         ? this.scanForward(0, start, state)
@@ -302,12 +481,98 @@ export class FileInput implements PagerInput {
       return true;
     }
 
-    this.view.top = { pos: found, subRow: 0 };
-    this.view.lineBackward(jumpSindex());
+    this.landMatch(found);
+    return true;
+  }
+
+  /** Places a found match like og's search jump: normally the match
+   *  line at the -j target, a deep wrapped match bottoming its final
+   *  sub-row (get_lastlinepos), a chopped off-screen match shifted
+   *  into view (shift_visible). */
+  private landMatch(found: number): void {
+    const bSub = this.bottomSub(found);
+
+    if (bSub !== null) {
+      this.view.top = { pos: found, subRow: bSub };
+      this.view.lineBackward(config.window - 2);
+    } else {
+      this.view.top = { pos: found, subRow: 0 };
+      this.view.lineBackward(jumpSindex());
+    }
+
+    this.shiftMatch(found);
     this.sync();
     recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
     markPosClear();
-    return true;
+  }
+
+  /** og's long-line landing (search.c plastlinepos + the
+   *  end_off >= swidth*sheight/4 heuristic): a wrapped match ending
+   *  deep in its line bottoms the final sub-row instead of topping. */
+  private bottomSub(linePos: number): number | null {
+    const regex = search.regex;
+    if (chopLine() || config.col || !regex) return null;
+
+    const line = linePos < this.bf.size ? forwLine(this.bf, linePos) : null;
+    if (!line) return null;
+
+    const display = displayText(line.text);
+    const plain = stripStyles(display);
+    const m = regex.exec(plain);
+    if (!m) return null;
+
+    const end = m.index + m[0].length;
+    const sheight = config.window - jumpSindex();
+
+    if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
+
+    // og 707's zeroed chpos sentinel: a match ending exactly at the
+    // line end computes tpos = linepos and never bottom-jumps
+    if (end >= plain.length) return null;
+
+    const endSub = subRowOfIndex(display, end);
+    return endSub >= sheight ? endSub : null;
+  }
+
+  /**
+   * Shifts the screen horizontally so the match is visible, like
+   * search.c's shift_visible: an off-screen match lands --match-shift
+   * columns from the left edge. og only shifts in the chop branch;
+   * wrapped long lines bottom-jump instead (bottomSub).
+   */
+  private shiftMatch(linePos: number): void {
+    const regex = search.regex;
+    if (!chopLine() || !regex) return;
+
+    const line = linePos < this.bf.size ? forwLine(this.bf, linePos) : null;
+    if (!line) return;
+
+    const text = stripStyles(displayText(line.text));
+    const match = regex.exec(text);
+    if (!match) return;
+
+    const startCol = strWidth(text.slice(0, match.index));
+    const endCol = startCol + strWidth(match[0]);
+    // the marker column only exists while --rscroll is enabled
+    // (search.c:641: sc_width - (rscroll_char ? 1 : 0))
+    const swidth = config.screenWidth - (optRscroll() ? 1 : 0);
+    let newCol: number;
+
+    if (endCol < swidth) {
+      // the whole match fits the unshifted screen
+      newCol = 0;
+    } else if (startCol > config.col && endCol < config.col + swidth) {
+      // already visible; leave the shift unchanged
+      newCol = config.col;
+    } else {
+      const eolCol = strWidth(text) - swidth;
+
+      newCol = startCol >= eolCol
+        ? eolCol
+        : startCol < optMatchShift() ? 0 : startCol - optMatchShift();
+    }
+
+    config.col = Math.max(newCol, 0);
   }
 
   restoreSearchOrigin(): void {
@@ -315,6 +580,99 @@ export class FileInput implements PagerInput {
     this.view.top = { ...this.incrementalOrigin };
     this.incrementalOrigin = null;
     this.sync();
+  }
+
+  /** og's currline(BOTTOM) closing every forw()/back(): the eager
+   *  line-number resolution running after each move's paint. */
+  resolveBottom(): void {
+    if (opt.linenums === 0 || mode.HELP || !this.sourceActive()) return;
+
+    const at = this.view.top.pos + ':' + this.view.top.subRow;
+    if (at === this.lastResolved) return;
+    this.lastResolved = at;
+
+    // og paints the moved content BEFORE the walk: forw() puts its
+    // rows up, currline(BOTTOM) runs after, and the prompt comes
+    // last — so the screen always shows the move immediately, with
+    // a blank command line while the count runs
+    render(session.content, session.buffer);
+    fs.writeSync(1, '\r' + CLEAR_LINE);
+
+    let retriedAfterEarlyInterrupt = false;
+
+    for (;;) {
+      this.lineScanAborted = false;
+      if (this.countTo(this.view.top.pos) !== null) break;
+
+      // abort_delayed_msg after the message showed: countTo turned
+      // line numbers off and queued the og error text
+      if (opt.linenums === 0) break;
+
+      if (retriedAfterEarlyInterrupt) {
+        // A second early ^C interrupts jump_forw's recovery repaint.
+        // forw paints zero lines, leaving og's position table empty;
+        // make_display then falls back to jump_loc(ch_zero(), 1).
+        ringBell('eof');
+        this.view.gotoStart();
+        this.sync();
+        break;
+      }
+
+      // Before the delayed message, abort_delayed_msg is a no-op.
+      // jump_forw notices its incomplete landing and repaints the
+      // end, whose currline(BOTTOM) starts a fresh line-number walk.
+      retriedAfterEarlyInterrupt = true;
+      render(session.content, session.buffer);
+      fs.writeSync(1, '\r' + CLEAR_LINE);
+    }
+
+    // the blank and any mid-scan message bypassed the renderer: the
+    // prompt row must repaint, like og's prompt() after the walk
+    dirtyBottomRow();
+  }
+
+  /** Continues a forward search that ran out of spooled bytes. */
+  private resumePipeSearch(): boolean {
+    const pending = this.pendingPipeSearch;
+    if (!pending) return false;
+    this.pendingPipeSearch = null;
+
+    const { request, state } = pending;
+    let found = this.scanForward(pending.start, this.bf.size, state);
+
+    if (found === 'stop') {
+      if (!search.message) search.message = 'Search interrupted';
+      return false;
+    }
+
+    if (found === null && this.spoolAlive()) {
+      this.pendingPipeSearch = {
+        ...pending,
+        start: Math.max(this.bf.size - MAX_LINE, 0),
+      };
+      this.requestAhead();
+      return false;
+    }
+
+    if (found === null && request.wrap) {
+      found = this.scanForward(0, pending.wrapStart, state);
+
+      if (found === 'stop') {
+        if (!search.message) search.message = 'Search interrupted';
+        return false;
+      }
+      if (found !== null) {
+        search.message = 'Search hit bottom; continuing at top';
+      }
+    }
+
+    if (found === null) {
+      search.message = `Pattern not found: ${request.pattern}`;
+      return false;
+    }
+
+    this.landMatch(found);
+    return true;
   }
 
   bracket(open: string, close: string, forward: boolean, n: number): boolean {
@@ -435,6 +793,8 @@ export class FileInput implements PagerInput {
   }
 
   close(): void {
+    this.unsubscribeGrowth?.();
+    this.unsubscribeGrowth = null;
     onSourceMarks(null);
     onSourceFiles(null);
     onSourceFollow(null);
@@ -528,6 +888,10 @@ export class FileInput implements PagerInput {
   private pinFollowEnd(): boolean {
     if (!this.sourceActive()) return false;
 
+    // F on a pipe reads to the true end and keeps reading, like
+    // og's forw_loop with ignore_eoi
+    if (this.spoolAlive()) this.spool?.drain();
+
     this.bf.refreshSize();
     const entry = files.list[this.fileIndex];
     if (entry) entry.size = this.bf.size;
@@ -598,7 +962,17 @@ export class FileInput implements PagerInput {
         clampAtLastScreen ? config.window : undefined
       );
 
-    if (!moved) ringBell('eof');
+    // a move over a growing spool is the pipe read itself: wait for
+    // the remainder instead of belling at the provisional end
+    if (moved < rows && this.spoolAlive()) {
+      this.pendingForward = {
+        rows: rows - moved,
+        clamp: clampAtLastScreen,
+      };
+    } else if (!moved) {
+      ringBell('eof');
+    }
+
     if (moved && mode.INIT) mode.INIT = false;
     this.sync();
   }
@@ -1224,7 +1598,11 @@ export class FileInput implements PagerInput {
           }
         }
 
-        atEof = this.nextAccepted(pos) === null;
+        // same screen-vs-batch distinction as the seekable branch:
+        // accepted lines beyond one screenful keep (END) unlit even
+        // when the batch consumed the whole file
+        atEof = accepted <= Math.max(config.window - 1, 1) &&
+          this.nextAccepted(pos) === null;
       }
     } else {
       const visible = this.view.visible(Math.max(config.window * 3, 64));
@@ -1237,7 +1615,12 @@ export class FileInput implements PagerInput {
         seen.add(row.pos);
       }
 
-      atEof = visible.rows.length === 0 || this.view.atEof;
+      // the batch materializes THREE windows: view.atEof describes
+      // that batch, not the screen — (END) lights only when what
+      // remains from the top fits the single displayed screenful
+      atEof = visible.rows.length === 0 ||
+        (this.view.atEof &&
+          visible.rows.length <= Math.max(config.window - 1, 1));
     }
 
     // An empty file still has one display line in the array-backed core.
@@ -1256,5 +1639,9 @@ export class FileInput implements PagerInput {
 
     calculateEOF(session.content);
     mode.EOF = atEof;
+
+    // keep the upstream pipe flowing 8MB past the materialized window,
+    // paused otherwise, so `yes | lmn` holds bounded spool growth
+    this.requestAhead();
   }
 }

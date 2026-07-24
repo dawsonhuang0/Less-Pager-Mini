@@ -5,7 +5,7 @@ import { lgetenv, screenFillGrace } from '../environment';
 import { jumpOsc8, osc8OpenCommand, searchOsc8 } from '../features/osc8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
-  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyboardFd,
+  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
   gateReturn, gateReleasedByWinch, gateReleaseKind }
   from "../keyboard";
 
@@ -141,10 +141,7 @@ import {
   lineBase,
 } from "../features/files";
 
-import {
-  follow,
-  FollowKind
-, beginFollow, endFollow } from "../features/follow";
+import { follow, beginFollow, endFollow } from "../features/follow";
 
 import { openAltFile } from "../features/lessopen";
 
@@ -159,8 +156,6 @@ import {
   optIncrSearch,
   optNoPaste,
   optRedrawOnQuit,
-  optPermaMarks,
-  optAutosaveAction,
   optNoInit,
   optNoKeypad,
   optMouseReverse,
@@ -178,7 +173,6 @@ import {
   applyBracketedPaste,
   hook,
   chopLine,
-  gutterWidth,
   getSwindow,
   applyPendingHeader,
   optHeader,
@@ -211,8 +205,6 @@ import {
   onShellHistTouch,
   onShellHistRecord
 } from "../features/misc";
-
-import { prExpand } from "../features/prompt";
 
 import {
   onTagJump
@@ -255,8 +247,6 @@ import {
   MOUSE_SGR_OFF,
   BRACKETED_PASTE_OFF,
   CLEAR_LINE,
-  INVERSE_ON,
-  INVERSE_OFF,
   BOLD_ON,
   BOLD_OFF,
   CURSOR_TO
@@ -872,6 +862,11 @@ function act(action: Actions | undefined): void {
     return;
   }
 
+  // og's forw()/back() end with currline(BOTTOM) (forwback.c:382,
+  // 457): the moved rows are already up, the eager line-number walk
+  // runs now, and the prompt below paints only after it completes
+  if (!session.exited && !drained) pagerInput?.resolveBottom?.();
+
   // quitting must not repaint over the final prompt, like less
   if (!session.exited && !drained) render(session.content, session.buffer);
 }
@@ -965,6 +960,22 @@ function keyHandler(data: Buffer): void {
       session.pipeWaiting = true;
       render(session.content, session.buffer);
     }
+
+    return;
+  }
+
+  // a movement/search/G wait over a growing spool is the pipe read
+  // itself: ^C or --intr abandons it and restores bounded read-ahead,
+  // like og's READ_INTR breaking out of a blocked pipe read
+  if ((text.includes('\x03') || text.includes(optIntrChar())) &&
+      pagerInput?.interrupt?.()) {
+    if (text.includes('\x03')) ringBell();
+    render(session.content, session.buffer);
+
+    const cut = Math.max(
+      text.lastIndexOf('\x03'), text.lastIndexOf(optIntrChar()));
+    const tail = text.slice(cut + 1);
+    if (tail && !session.exited) keyHandler(Buffer.from(tail));
 
     return;
   }

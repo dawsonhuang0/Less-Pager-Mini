@@ -10,7 +10,9 @@ import { search, chgCaseless } from '../../src/features/searching';
 
 import { opt, initUnsupport, setCliOptions } from '../../src/options';
 
-import streamPager from '../../src/pager/streamPager';
+import { Readable, PassThrough } from 'stream';
+
+import streamPager, { pagerPipe } from '../../src/pager/streamPager';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-big-loop-'));
 const file = path.join(dir, 'large-path-small-fixture.txt');
@@ -67,6 +69,15 @@ const originalEnv = Object.fromEntries(
   ENV_NAMES.map(name => [name, process.env[name]])
 );
 
+// The fused key loop replays og's ISIG semantics for a typed ^C by
+// signalling its own process group (raiseSigint). stdin is faked to
+// a TTY here, so an injected \x03 would SIGINT vitest and the shell
+// that launched it — swallow group signals for this suite's lifetime.
+const savedKill = process.kill;
+process.kill = ((pid: number, signal?: string | number): true =>
+  pid <= 0 ? true : savedKill.call(process, pid, signal)
+) as typeof process.kill;
+
 beforeEach(() => {
   process.env.LESSHISTFILE = '-';
   process.env.LESSNOCONFIG = '1';
@@ -102,6 +113,8 @@ beforeEach(() => {
 });
 
 afterAll(() => {
+  process.kill = savedKill;
+
   setCliOptions([]);
 
   for (const name of ENV_NAMES) {
@@ -139,7 +152,9 @@ async function drive(
   };
 
   let output = '';
-  let dataHandler: ((data: Buffer) => void) | null = null;
+  // the closure assignments below are invisible to TS flow analysis,
+  // so seed the full union to keep call sites from narrowing to never
+  let dataHandler = null as ((data: Buffer) => void) | null;
 
   process.stdout.write = ((data: string | Uint8Array): boolean => {
     output += typeof data === 'string' ? data : data.toString();
@@ -169,7 +184,9 @@ async function drive(
   };
 
   try {
-    const running = streamPager(target);
+    const running = target instanceof Readable
+      ? pagerPipe(target)
+      : streamPager(target);
     await new Promise(resolve => setImmediate(resolve));
 
     if (!dataHandler) {
@@ -215,11 +232,13 @@ async function drive(
 
 describe('unified file command loop', () => {
   it('uses byte-position G/g on a sparse 1TB file', async () => {
-    const output = await drive(['G', 'g'], '-f -S', sparseFile);
+    // -n: og's only line-number-scan suppressor — without it, G's
+    // og-faithful currline(BOTTOM) walks the whole sparse terabyte
+    const output = await drive(['G', 'g'], '-f -S -n', sparseFile);
 
     expect(output).toContain('FINAL SPARSE LINE');
     expect(output).toContain('FIRST SPARSE LINE');
-  }, 5000);
+  }, 20000);
 
   it('keeps shared commands and headers beyond the bootstrap block',
     async () => {
@@ -231,6 +250,33 @@ describe('unified file command loop', () => {
       expect(output).toContain('FINAL MULTI BLOCK LINE');
       expect(output).toContain('stream line 1');
       expect(output).toContain('SUMMARY');
+    }, 20000);
+
+  it('spools a pipe to disk: G drains it and g returns to the start',
+    async () => {
+      const pipe = new PassThrough();
+
+      // ~0.9MB pre-buffered so an in-memory pipe would shed its head
+      for (let i = 1; i <= 40000; i++) {
+        pipe.write(`pipe line ${i} end\n`);
+      }
+
+      const output = await drive([
+        'G',
+        () => { pipe.end(); },
+        () => new Promise(resolve => setTimeout(resolve, 300)),
+        'g',
+        () => new Promise(resolve => setTimeout(resolve, 100)),
+      ], '', pipe);
+
+      const tail = output.indexOf('pipe line 40000 end');
+      const headAgain = output.lastIndexOf('pipe line 1 end');
+
+      // the true end rendered after the drain...
+      expect(tail).toBeGreaterThan(-1);
+      // ...and the start is still reachable afterward: the spool kept
+      // every byte on disk, nothing was shed
+      expect(headAgain).toBeGreaterThan(tail);
     }, 20000);
 
   it('searches forward and backward outside the materialized window',

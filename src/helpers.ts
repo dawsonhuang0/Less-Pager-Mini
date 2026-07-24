@@ -416,6 +416,9 @@ export function formatContent(content: string[]): string[] {
  */
 function overlayHeaderLines(content: string[], lines: string[]): string[] {
   const header = optHeader();
+  // og keeps the header machinery live on the help file too: its own
+  // top lines pin and underline while help scrolls (probed v707,
+  // --header=2 + h + j: \e[4m SUMMARY stays at the top)
   if (header.lines <= 0) return lines;
   const headerRow = hook.sourceHeaderRow?.() ?? header.start;
 
@@ -599,6 +602,17 @@ export function seedBlankFrame(): void {
  */
 export function seedFrameRows(rows: string[]): void {
   prevRows = rows;
+  prevCursorCol = -1;
+}
+
+/**
+ * Marks the bottom line as clobbered by a raw writeSync (a mid-scan
+ * ierror like "Calculating line numbers..."): the next render must
+ * repaint the prompt row instead of deduping it, og's prompt()
+ * rewriting the cleared bottom line at every command loop.
+ */
+export function dirtyBottomRow(): void {
+  if (prevRows?.length) prevRows[prevRows.length - 1] = '\0';
   prevCursorCol = -1;
 }
 

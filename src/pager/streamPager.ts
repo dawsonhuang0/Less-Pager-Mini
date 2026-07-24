@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { Readable } from 'stream';
 
-import { lgetenv } from '../environment';
+import { lgetenv, screenFillGrace } from '../environment';
 
 import { keyboard } from '../keyboard';
 
@@ -23,7 +23,7 @@ import { PipeDecoder } from '../features/charset';
 
 import { pipeInput } from '../features/pipe';
 
-import { checkModelines, opt } from '../options';
+import { checkModelines, hook, opt } from '../options';
 
 import { inputToRawPaths } from '../helpers';
 
@@ -37,6 +37,8 @@ import { BlockFile } from './blockFile';
 
 import { FileInput } from './fileInput';
 
+import { PipeSpool } from './spool';
+
 /**
  * Pages non-seekable input. Acquiring and decoding the stream is isolated
  * here; the interactive behavior is the completed shared pager core.
@@ -48,43 +50,75 @@ export async function pagerPipe(stream: Readable): Promise<void> {
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
 
-  const decoder = new PipeDecoder();
-
-  const first = await new Promise<{ lines: string[], ended: boolean }>(
-    resolve => {
-      const onData = (chunk: Buffer): void => {
-        stream.off('end', onEnd);
-        stream.pause();
-        resolve({ lines: decoder.push(chunk), ended: false });
-      };
-
-      const onEnd = (): void => {
-        stream.off('data', onData);
-        resolve({ lines: decoder.flush(), ended: true });
-      };
-
-      stream.once('data', onData);
-      stream.once('end', onEnd);
-    }
-  );
-
-  const lines = first.lines;
-  if (first.ended && !lines.length) lines.push('');
-
-  initContent(lines);
-
-  if (!first.ended) {
-    files.list[0].streaming = true;
-    pipeInput.source = stream;
-    pipeInput.decoder = decoder;
-  }
+  // the pipe spools to a private temp file, becoming seekable: the
+  // whole session then runs the same block-backed engine as a file,
+  // with the upstream paused close to the view (og's ch buffers)
+  const spool = await PipeSpool.create(stream);
 
   try {
-    await contentPager(lines);
+    // og's initial read blocks until a screenful is seekable (or
+    // LESS_SCREENFILL_TIME expires): a screen of newlines for short
+    // lines, or a wrapped screen's worth of bytes for long ones
+    const rows = process.stdout.rows ?? 24;
+    const cols = process.stdout.columns ?? 80;
+
+    while (!spool.ended && spool.size < rows * cols * 2 &&
+           spooledNewlines(spool.path, rows) < rows &&
+           screenFillGrace()) {
+      spool.requestThrough(spool.size + 64 * 1024);
+      await Promise.race([
+        spool.waitForSettled(),
+        new Promise(resolve => setTimeout(resolve, 50)),
+      ]);
+    }
+
+    const bf = new BlockFile(spool.path);
+    const head = bf.readRange(0, 64 * 1024);
+    const decoder = new PipeDecoder();
+    const lines = decoder.push(head);
+
+    if (spool.ended && head.length >= spool.size) {
+      lines.push(...decoder.flush());
+    }
+    if (!lines.length) lines.push('');
+
+    initContent(lines);
+
+    const entry = files.list[0];
+    entry.size = spool.size;
+    entry.sizeKnown = spool.ended;
+    entry.streaming = !spool.ended;
+    entry.everOpened = true;
+
+    const input = new FileInput(bf, 0, spool);
+    const prevScan = hook.scanFileSize;
+    hook.scanFileSize = () => { spool.drain(); };
+
+    try {
+      await contentPager(lines, null, input);
+    } finally {
+      hook.scanFileSize = prevScan;
+      input.close();
+    }
   } finally {
-    pipeInput.source = null;
-    pipeInput.decoder = null;
+    spool.close();
   }
+}
+
+/** Counts newlines already spooled, capped at the screenful asked for. */
+function spooledNewlines(path: string, cap: number): number {
+  let data: Buffer;
+  try {
+    data = fs.readFileSync(path);
+  } catch {
+    return 0;
+  }
+
+  let count = 0;
+  for (let i = 0; i < data.length && count < cap; i++) {
+    if (data[i] === 0x0A) count++;
+  }
+  return count;
 }
 
 /**
