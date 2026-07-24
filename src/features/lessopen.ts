@@ -4,7 +4,7 @@ import { secureAllow } from "./secure";
 
 import { spawnSync, SpawnSyncReturns } from 'child_process';
 
-import { shellArgv } from '../platform';
+import { shellArgv } from '../tty/platform';
 
 import { search } from "./searching";
 
@@ -12,9 +12,9 @@ import { shellQuote } from "./prompt";
 
 import { optUseLessopen, optShowPreprocError } from "../options";
 
-import { gateReturn } from "../keyboard";
+import { gateReturn } from "../tty/keyboard";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 /** A $LESSOPEN replacement: its lines, byte size and alt file name. */
 export interface AltFile {

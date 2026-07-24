@@ -3,9 +3,9 @@ import vm from 'vm';
 
 import { strWidth } from 'char-width';
 
-import { keyboard, keyboardPollFd, pushUngot } from '../keyboard';
+import { keyboard, keyboardPollFd, pushUngot } from '../tty/keyboard';
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import {
   cmd,
@@ -52,7 +52,7 @@ import {
   INVERSE_ON,
   INVERSE_OFF,
   CLEAR_LINE
-} from "../constants";
+} from "../state/constants";
 
 interface SearchInput {
   /** `/` forward search, `?` backward search, `&` display filter. */

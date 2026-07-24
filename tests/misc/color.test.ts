@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, startSearch, searchInputKey, execSearch, highlightLine }
   from '../../src/features/searching';
@@ -14,7 +14,7 @@ import { colorSgr, colored, attrText, resetColors, setColor }
 
 import { formatContent, calculateEOF, screenRows } from '../../src/helpers';
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from '../../src/constants';
+import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

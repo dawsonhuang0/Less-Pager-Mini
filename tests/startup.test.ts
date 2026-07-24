@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config } from '../src/config';
+import { config } from '../src/state/config';
 
 import { search } from '../src/features/searching';
 
@@ -13,7 +13,7 @@ import {
   startupInit,
   printStartupError,
   warnReturn
-} from '../src/startup';
+} from '../src/startup/startup';
 
 const stdoutWrite = vi.spyOn(process.stdout, 'write')
   .mockImplementation(() => true);

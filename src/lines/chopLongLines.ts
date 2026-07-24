@@ -1,4 +1,4 @@
-import { config } from "../config";
+import { config } from "../state/config";
 
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from "../helpers";
@@ -12,7 +12,7 @@ import { optRscroll, optRscrollAttr, optHeader } from "../options";
 
 import { colored } from "../features/color";
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "../constants";
+import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "../state/constants";
 
 const getFillingSpace = (length: number): string =>
   length > 0 ? INVERSE_ON + ' '.repeat(length) + INVERSE_OFF : '';

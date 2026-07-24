@@ -1,6 +1,6 @@
 import { strWidth } from 'char-width';
 
-import { config } from '../config';
+import { config } from '../state/config';
 
 import { getLayout } from './lineLayout';
 
@@ -30,7 +30,7 @@ import {
   INVERSE_OFF,
   UNDERLINE_ON,
   UNDERLINE_OFF
-} from '../constants';
+} from '../state/constants';
 
 /**
  * Returns how many extra sub-rows a line will take if it overflows screen

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../src/config';
+import { config, mode } from '../src/state/config';
 
 import { opt } from '../src/options';
 
@@ -9,7 +9,7 @@ import {
   resetSession,
   deriveContent,
   shellReserveLines
-} from '../src/session';
+} from '../src/state/session';
 
 const originalShellLines = process.env.LESS_SHELL_LINES;
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, it } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { text, content } from '../utils/mockContent';
 
@@ -8,7 +8,7 @@ import { implementLineForward, implementLineBackward } from '../utils/testUtils'
 
 import { calculateEOF } from '../../src/helpers';
 
-import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
+import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/state/constants';
 
 import { CYAN, RESET, YELLOW, MAGENTA, UNDERLINE } from '../utils/constants';
 

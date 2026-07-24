@@ -8,14 +8,14 @@ const fake = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../src/keyboard', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/keyboard')>(),
+vi.mock('../src/tty/keyboard', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/tty/keyboard')>(),
   keyboard: () => fake.keyboard,
   freshWindowSize: () => fake.size,
 }));
 
 import { config, mode, DEFAULT_COLUMN, DEFAULT_WINDOW }
-  from '../src/config';
+  from '../src/state/config';
 
 import {
   ALTERNATE_CONSOLE_ON,
@@ -30,17 +30,17 @@ import {
   MOUSE_SGR_OFF,
   BRACKETED_PASTE_ON,
   BRACKETED_PASTE_OFF
-} from '../src/constants';
+} from '../src/state/constants';
 
 import { opt, hook } from '../src/options';
 
-import { initEnvironment } from '../src/environment';
+import { initEnvironment } from '../src/startup/environment';
 
 import {
   suspendTerminal,
   enterScreen,
   calculateDimensions
-} from '../src/screen';
+} from '../src/tty/screen';
 
 const stdoutWrite = vi.spyOn(process.stdout, 'write')
   .mockImplementation(() => true);

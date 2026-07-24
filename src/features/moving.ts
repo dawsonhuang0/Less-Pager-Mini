@@ -1,7 +1,7 @@
 import { ringBell, bufferToNum } from "../helpers";
 import { maxSubRow, visualWidth } from "../lines/helpers";
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import {
   optShowAttn,
@@ -17,7 +17,7 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { INVERSE_ON } from "../constants";
+import { INVERSE_ON } from "../state/constants";
 
 /**
  * Whether a display line is a form feed line, for --form-feed: the raw

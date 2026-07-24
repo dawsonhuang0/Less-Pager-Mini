@@ -19,7 +19,7 @@ import {
   watchWinch,
   unwatchWinch,
   closeTtyKeyboard
-} from '../src/keyboard';
+} from '../src/tty/keyboard';
 
 const realPlatform = process.platform;
 const stdoutTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');

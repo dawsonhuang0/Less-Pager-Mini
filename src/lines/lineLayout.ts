@@ -1,12 +1,12 @@
 import { strWidth } from 'char-width';
 
-import { config } from '../config';
+import { config } from '../state/config';
 
 import { isAscii, splitChars } from './helpers';
 
 import { optWordwrap } from '../options';
 
-import { STYLE_REGEX_G, STYLE_RESET } from '../constants';
+import { STYLE_REGEX_G, STYLE_RESET } from '../state/constants';
 
 /**
  * Pre-computed layout of a single content line.

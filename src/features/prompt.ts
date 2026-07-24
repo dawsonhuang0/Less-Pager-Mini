@@ -1,8 +1,8 @@
 import path from 'path';
 
-import { DEF_METACHARS, DEF_METAESCAPE, EDIT_PGM } from "../platform";
+import { DEF_METACHARS, DEF_METAESCAPE, EDIT_PGM } from "../tty/platform";
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import { visualWidth } from "../lines/helpers";
 
@@ -15,7 +15,7 @@ import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
 
 import { ntags, currTag } from "./tags";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 // screen positions selected by the where char, like less's position.h
 type Where = 't' | 'm' | 'b' | 'B' | 'j';

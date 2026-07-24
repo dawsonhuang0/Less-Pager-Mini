@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../src/config';
+import { config, mode } from '../src/state/config';
 
 import { render, resetRender } from '../src/helpers';
 

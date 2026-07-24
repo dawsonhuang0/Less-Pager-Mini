@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { config } from '../state/config';
 
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from '../helpers';

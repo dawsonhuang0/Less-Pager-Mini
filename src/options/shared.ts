@@ -1,7 +1,7 @@
 
 import { opt } from './state';
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import { calculateEOF } from "../helpers";
 
@@ -28,7 +28,7 @@ import {
   BOLD_OFF,
   UNDERLINE_ON,
   UNDERLINE_OFF
-} from "../constants";
+} from "../state/constants";
 
 /**
  * Option value types, like opttbl.c: BOOL toggles, TRIPLE has lower and

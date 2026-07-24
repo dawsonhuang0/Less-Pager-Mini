@@ -1,6 +1,6 @@
 import { search } from "./searching";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 /**
  * The $LESSSECURE feature gate, like main.c's init_secure: with

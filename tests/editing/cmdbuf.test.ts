@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config } from '../../src/config';
+import { config } from '../../src/state/config';
 
 import {
   cmd,

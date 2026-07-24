@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, startSearch, searchInputKey, execSearch,
   chgCaseless }
@@ -34,7 +34,7 @@ import {
   BOLD_OFF,
   UNDERLINE_ON,
   UNDERLINE_OFF
-} from '../../src/constants';
+} from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

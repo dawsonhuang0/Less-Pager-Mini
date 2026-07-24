@@ -4,11 +4,11 @@ import { config, mode } from './config';
 
 import { Config, Mode } from './interfaces';
 
-import { transformContent } from './lines/helpers';
+import { transformContent } from '../lines/helpers';
 
-import { filterLines } from './features/searching';
+import { filterLines } from '../features/searching';
 
-import { lgetenv } from './environment';
+import { lgetenv } from '../startup/environment';
 
 /**
  * The pager session state, like og's globals spread across its C

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import {
   search,
@@ -17,7 +17,7 @@ import {
 
 import { screenRows } from '../../src/helpers';
 
-import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/constants';
+import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/state/constants';
 
 import { RED, RESET } from '../utils/constants';
 

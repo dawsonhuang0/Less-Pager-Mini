@@ -1,4 +1,4 @@
-import { Actions } from '../interfaces';
+import { Actions } from '../state/interfaces';
 
 import { SearchRequest } from '../features/searching';
 

@@ -1,14 +1,14 @@
 import { spawnSync } from 'child_process';
 
-import { shellArgv } from './platform';
+import { shellArgv } from './tty/platform';
 
-import { keyboard } from './keyboard';
+import { keyboard } from './tty/keyboard';
 
-import { config, mode } from './config';
+import { config, mode } from './state/config';
 
-import { session, deriveContent } from './session';
+import { session, deriveContent } from './state/session';
 
-import { suspendTerminal, enterScreen } from './screen';
+import { suspendTerminal, enterScreen } from './tty/screen';
 
 import { ringBell, bufferToNum, calculateEOF, clearBot, eprPrefix,
   freezeFrame, render }
@@ -56,7 +56,7 @@ import {
   CURSOR_TO,
   INVERSE_ON,
   INVERSE_OFF
-} from './constants';
+} from './state/constants';
 
 /**
  * Switches the session to another file entry, like less's edit_ifile:

@@ -13,7 +13,7 @@ import {
 import {
   initInvocationOptions,
   markTerminalInvocation,
-} from '../../src/invocation';
+} from '../../src/startup/invocation';
 
 const enterOption = (keys: string): void => {
   startOption(keys[0] as '-' | '_');

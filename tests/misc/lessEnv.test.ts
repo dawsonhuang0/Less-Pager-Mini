@@ -5,9 +5,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
-import { STYLE_REGEX, initAnsiChars } from '../../src/constants';
+import { STYLE_REGEX, initAnsiChars } from '../../src/state/constants';
 
 import { search, chgCaseless } from '../../src/features/searching';
 

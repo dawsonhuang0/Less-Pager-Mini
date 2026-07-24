@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import os from 'os';
 
-import { dumbTerminal } from '../../src/keyboard';
+import { dumbTerminal } from '../../src/tty/keyboard';
 
 const realPlatform = process.platform;
 const realTerm = process.env.TERM;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import {
   search,
@@ -13,7 +13,7 @@ import {
 
 import { option, startOption, optionKey } from '../../src/options';
 
-import { INVERSE_ON } from '../../src/constants';
+import { INVERSE_ON } from '../../src/state/constants';
 
 const content = [
   'foo line',

@@ -1,6 +1,6 @@
-import { Actions } from "./interfaces";
+import { Actions } from "./state/interfaces";
 
-import { terminalCapability } from './terminal';
+import { terminalCapability } from './tty/terminal';
 
 /**
  * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),

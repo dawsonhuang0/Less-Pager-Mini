@@ -1,6 +1,6 @@
 import { OptionSpec } from './spec';
 
-import { config } from '../config';
+import { config } from '../state/config';
 
 import { parseFraction, queryFraction } from './shared';
 

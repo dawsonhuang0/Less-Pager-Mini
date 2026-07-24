@@ -6,9 +6,9 @@ import { files, errorText } from "./files";
 
 import { optFollowName, optExitFollowOnClose } from "../options";
 
-import { POLLHUP_EXITS_F } from "../platform";
+import { POLLHUP_EXITS_F } from "../tty/platform";
 
-import { session, deriveContent } from '../session';
+import { session, deriveContent } from '../state/session';
 
 import { render, ringBell, calculateEOF } from '../helpers';
 
@@ -16,7 +16,7 @@ import { lastLine, endPad } from './jumping';
 
 import { loadFile, bottomRow, revealPipeEnd } from './files';
 
-import { config, mode } from '../config';
+import { config, mode } from '../state/config';
 
 import { lineMatches } from './searching';
 

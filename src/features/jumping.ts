@@ -5,7 +5,7 @@ import { maxSubRow, isAscii, isStyled } from "../lines/helpers";
 
 import { getLayout } from "../lines/lineLayout";
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import { search } from "./searching";
 
@@ -14,7 +14,7 @@ import { files, lineBase, byteBase } from "./files";
 import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
   optPermaMarks, optAutosaveAction } from "../options";
 
-import { saveHistory, touchMarks } from "../histfile";
+import { saveHistory, touchMarks } from "../startup/histfile";
 
 /**
  * Jumps to line `lineNum` in the content, placing it at the top of the

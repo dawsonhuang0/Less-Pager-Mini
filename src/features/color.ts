@@ -8,7 +8,7 @@ import {
   BOLD_OFF,
   UNDERLINE_ON,
   UNDERLINE_OFF
-} from "../constants";
+} from "../state/constants";
 
 /**
  * Color selector kinds, like less.h's AT_COLOR_* slots plus the

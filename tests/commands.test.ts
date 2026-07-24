@@ -19,18 +19,18 @@ vi.mock('child_process', async importOriginal => ({
   spawnSync: fake.spawnSync,
 }));
 
-vi.mock('../src/keyboard', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/keyboard')>(),
+vi.mock('../src/tty/keyboard', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/tty/keyboard')>(),
   keyboard: () => fake.keyboard,
 }));
 
-vi.mock('../src/screen', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/screen')>(),
+vi.mock('../src/tty/screen', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/tty/screen')>(),
   suspendTerminal: fake.suspendTerminal,
   enterScreen: fake.enterScreen,
 }));
 
-import { config, mode } from '../src/config';
+import { config, mode } from '../src/state/config';
 
 import {
   files,
@@ -60,7 +60,7 @@ import { opt, setNoSearchHeaders } from '../src/options';
 
 import { calculateEOF } from '../src/helpers';
 
-import { session, resetSession } from '../src/session';
+import { session, resetSession } from '../src/state/session';
 
 import {
   switchToFile,

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { lgetenv, screenFillGrace } from '../environment';
+import { lgetenv, screenFillGrace } from '../startup/environment';
 
 import { jumpOsc8, osc8OpenCommand, osc8Visible, searchOsc8 }
   from '../features/osc8';
@@ -8,21 +8,21 @@ import { jumpOsc8, osc8OpenCommand, osc8Visible, searchOsc8 }
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
   gateReturn, gateReleasedByWinch, gateReleaseKind }
-  from "../keyboard";
+  from "../tty/keyboard";
 
 
-import { Actions } from "../interfaces";
+import { Actions } from "../state/interfaces";
 
 import { PagerInput } from './input';
 
 import { session, resetSession, deriveContent, shellReserveLines }
-  from "../session";
+  from "../state/session";
 
 import { startupInit, printStartupError, startupErrors, warnReturn }
-  from "../startup";
+  from "../startup/startup";
 
 import { calculateDimensions, suspendTerminal, enterScreen }
-  from "../screen";
+  from "../tty/screen";
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
   stepFile, removeFile, runExamine, runEditor, runMiscInput,
@@ -35,9 +35,9 @@ import {
   applyMode,
   resetConfig,
   resetMode
-} from "../config";
+} from "../state/config";
 
-import { help } from "../lessHelp";
+import { help } from "../startup/lessHelp";
 
 import { getAction, splitKeys, kentToNewline, tailCascade }
   from "../keys";
@@ -229,7 +229,7 @@ import {
 
 
 import { loadHistory, saveHistory, touchSearchList, touchShellList,
-  recordSearchEntry, recordShellEntry } from "../histfile";
+  recordSearchEntry, recordShellEntry } from "../startup/histfile";
 
 import { chopLongLines } from "../lines/chopLongLines";
 import { wrapLongLines } from "../lines/wrapLongLines";
@@ -251,7 +251,7 @@ import {
   BOLD_ON,
   BOLD_OFF,
   CURSOR_TO
-} from "../constants";
+} from "../state/constants";
 
 const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
 

@@ -9,7 +9,7 @@ import { setShellHistory } from '../../src/features/misc';
 import { search } from '../../src/features/searching';
 
 import { loadHistory, saveHistory, recordSearchEntry, touchSearchList,
-  touchMarks } from '../../src/histfile';
+  touchMarks } from '../../src/startup/histfile';
 
 let dir: string;
 let file: string;

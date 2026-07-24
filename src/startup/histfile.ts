@@ -1,15 +1,15 @@
-import { secureAllow } from "./features/secure";
+import { secureAllow } from "../features/secure";
 
 import fs from 'fs';
 import path from 'path';
 
-import { homeDir, HISTFILE_NAME } from './platform';
+import { homeDir, HISTFILE_NAME } from '../tty/platform';
 
-import { search, resetHistoryRecall } from './features/searching';
+import { search, resetHistoryRecall } from '../features/searching';
 
-import { shellHistory, setShellHistory } from './features/misc';
+import { shellHistory, setShellHistory } from '../features/misc';
 
-import { optPermaMarks } from './options';
+import { optPermaMarks } from '../options';
 
 import { lgetenv } from './environment';
 
@@ -19,9 +19,9 @@ import {
   getFileMarks,
   allMarks,
   realPath
-} from './features/jumping';
+} from '../features/jumping';
 
-import { files, loadFile, byteOffset } from './features/files';
+import { files, loadFile, byteOffset } from '../features/files';
 
 const FIRST_LINE = '.less-history-file:';
 const SEARCH_SECTION = '.search';

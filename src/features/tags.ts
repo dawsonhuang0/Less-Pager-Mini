@@ -6,7 +6,7 @@ import { optTagsFile, resetTagsFile } from "../options";
 
 import { shellQuote } from "./prompt";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 /** One tag match, like tags.c's struct tag. */
 export interface Tag {

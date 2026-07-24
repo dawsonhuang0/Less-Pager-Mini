@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, startSearch, searchInputKey, execSearch,
   incrementalSearch, restoreSearchOrigin, highlightLine, clearHighlight }
@@ -31,7 +31,7 @@ import { screenRows, calculateEOF } from '../../src/helpers';
 
 import { transformContent } from '../../src/lines/helpers';
 
-import { BOLD_ON, BOLD_OFF, INVERSE_ON, INVERSE_OFF } from '../../src/constants';
+import { BOLD_ON, BOLD_OFF, INVERSE_ON, INVERSE_OFF } from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

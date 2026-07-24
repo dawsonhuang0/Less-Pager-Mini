@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../src/config';
+import { config, mode } from '../src/state/config';
 
 import { formatContent } from '../src/helpers';
 import { maxSubRow } from '../src/lines/helpers';
 
-import { INVERSE_ON, INVERSE_OFF } from '../src/constants';
+import { INVERSE_ON, INVERSE_OFF } from '../src/state/constants';
 
 // ZWJ sequence: 4 emoji joined by zero-width joiners, display width 2
 const FAMILY = '👨‍👩‍👧‍👦';

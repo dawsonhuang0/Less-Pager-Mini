@@ -1,11 +1,11 @@
 import { INVERSE_ON, INVERSE_OFF, BOLD_ON, BOLD_OFF, UNDERLINE_ON,
-  UNDERLINE_OFF } from "../constants";
+  UNDERLINE_OFF } from "../state/constants";
 
 import { colored } from "./color";
 
 import { search } from "./searching";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 /**
  * The charset machinery, ported from og's charset.c: a per-byte class

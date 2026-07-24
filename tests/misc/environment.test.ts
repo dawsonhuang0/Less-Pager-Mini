@@ -11,7 +11,7 @@ import {
   lgetenv,
   setLesskeyEnv,
   terminalEnv,
-} from '../../src/environment';
+} from '../../src/startup/environment';
 
 import {
   ALTERNATE_CONSOLE_ON,
@@ -22,12 +22,12 @@ import {
   MOUSE_ON,
   VISUAL_BELL,
   initTerminalCapabilities,
-} from '../../src/constants';
+} from '../../src/state/constants';
 
 import { getAction, kentToNewline } from '../../src/keys';
 
 import { terminalCapability, terminalFlag, terminalNumber }
-  from '../../src/terminal';
+  from '../../src/tty/terminal';
 
 import { cmdChar, cmdClose, cmdOpen, cmdText }
   from '../../src/features/cmdbuf';

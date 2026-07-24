@@ -6,7 +6,7 @@ import path from 'path';
 
 import { search } from '../../src/features/searching';
 
-import { initEnvironment, lgetenv } from '../../src/environment';
+import { initEnvironment, lgetenv } from '../../src/startup/environment';
 
 import {
   userBinding,

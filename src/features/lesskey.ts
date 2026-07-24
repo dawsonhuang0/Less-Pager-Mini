@@ -3,16 +3,16 @@ import path from 'path';
 
 import { homeDir, LESSKEYIN_NAME, LESSKEYIN_SYS, LESSKEYFILE_NAME,
   LESSKEYFILE_SYS }
-  from "../platform";
+  from "../tty/platform";
 
-import { Actions } from "../interfaces";
+import { Actions } from "../state/interfaces";
 
 import { search } from "./searching";
 
 import { actualEnv, deleteLesskeyEnv, lgetenv, resetLesskeyEnvironment,
-  setLesskeyEnv } from '../environment';
+  setLesskeyEnv } from '../startup/environment';
 
-import { terminalCapability } from '../terminal';
+import { terminalCapability } from '../tty/terminal';
 
 /**
  * A #command binding: the pager action, an optional canonical key for

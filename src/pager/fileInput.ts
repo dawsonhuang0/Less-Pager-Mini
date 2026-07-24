@@ -1,10 +1,10 @@
 import fs from 'fs';
 
-import { Actions } from '../interfaces';
+import { Actions } from '../state/interfaces';
 
-import { config, mode } from '../config';
+import { config, mode } from '../state/config';
 
-import { session, deriveContent } from '../session';
+import { session, deriveContent } from '../state/session';
 
 import {
   calculateEOF,
@@ -48,9 +48,9 @@ import {
 
 import { strWidth } from 'char-width';
 
-import { consumeInterrupt } from '../keyboard';
+import { consumeInterrupt } from '../tty/keyboard';
 
-import { keyboard } from '../keyboard';
+import { keyboard } from '../tty/keyboard';
 
 import {
   getSwindow,
@@ -70,7 +70,7 @@ import {
 import { maxSubRow, setOsc8Display, transformContent }
   from '../lines/helpers';
 
-import { CLEAR_LINE, INVERSE_OFF, INVERSE_ON } from '../constants';
+import { CLEAR_LINE, INVERSE_OFF, INVERSE_ON } from '../state/constants';
 
 import { PipeDecoder } from '../features/charset';
 

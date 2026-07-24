@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { lgetenv, terminalEnv } from './environment';
+import { lgetenv, terminalEnv } from '../startup/environment';
 
 /** Decodes the string syntax used by an inline TERMCAP entry. */
 function decodeTermcap(text: string): string {

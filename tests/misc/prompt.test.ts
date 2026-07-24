@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { files, initContent, revealSize, revealPipeEnd }
   from '../../src/features/files';
@@ -8,7 +8,7 @@ import { files, initContent, revealSize, revealPipeEnd }
 import { editCommand, prExpand, shellQuote, windowedEditCommand }
   from '../../src/features/prompt';
 
-import { initEnvironment } from '../../src/environment';
+import { initEnvironment } from '../../src/startup/environment';
 
 const content = Array.from({ length: 30 }, (_, i) => `p${i + 1}`);
 const editorEnv = {

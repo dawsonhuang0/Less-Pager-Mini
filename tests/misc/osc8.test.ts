@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { config } from '../../src/config';
+import { config } from '../../src/state/config';
 
-import { initAnsiChars, STYLE_REGEX } from '../../src/constants';
+import { initAnsiChars, STYLE_REGEX } from '../../src/state/constants';
 
-import { initEnvironment } from '../../src/environment';
+import { initEnvironment } from '../../src/startup/environment';
 
 import {
   osc8CommandForUri,

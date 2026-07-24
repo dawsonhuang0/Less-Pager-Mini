@@ -4,7 +4,7 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { config } from '../../src/config';
+import { config } from '../../src/state/config';
 
 import { search, chgCaseless } from '../../src/features/searching';
 

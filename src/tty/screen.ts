@@ -1,11 +1,11 @@
 import { keyboard } from './keyboard';
 
-import { config, mode } from './config';
+import { config, mode } from '../state/config';
 
 import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
-  reserveGutter, hook } from './options';
+  reserveGutter, hook } from '../options';
 
-import { resetRender, screenEntered } from './helpers';
+import { resetRender, screenEntered } from '../helpers';
 
 import { freshWindowSize } from './keyboard';
 
@@ -22,11 +22,11 @@ import {
   MOUSE_SGR_OFF,
   BRACKETED_PASTE_ON,
   BRACKETED_PASTE_OFF
-} from './constants';
+} from '../state/constants';
 
-import { DEFAULT_WINDOW, DEFAULT_COLUMN } from './config';
+import { DEFAULT_WINDOW, DEFAULT_COLUMN } from '../state/config';
 
-import { lgetenv } from './environment';
+import { lgetenv } from '../startup/environment';
 
 import { terminalNumber } from './terminal';
 

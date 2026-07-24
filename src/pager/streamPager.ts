@@ -1,11 +1,11 @@
 import fs from 'fs';
 import { Readable } from 'stream';
 
-import { lgetenv, screenFillGrace } from '../environment';
+import { lgetenv, screenFillGrace } from '../startup/environment';
 
-import { keyboard } from '../keyboard';
+import { keyboard } from '../tty/keyboard';
 
-import { initInvocationOptions } from '../invocation';
+import { initInvocationOptions } from '../startup/invocation';
 
 import { search } from '../features/searching';
 
@@ -27,7 +27,7 @@ import { checkModelines, hook, opt } from '../options';
 
 import { inputToRawPaths } from '../helpers';
 
-import { startupInit, printStartupError, warnReturn } from '../startup';
+import { startupInit, printStartupError, warnReturn } from '../startup/startup';
 
 import { printVersion } from '../features/misc';
 

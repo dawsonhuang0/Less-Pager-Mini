@@ -1,6 +1,6 @@
 import { strWidth } from 'char-width';
 
-import { config } from "../config";
+import { config } from "../state/config";
 
 import { ringBell } from "../helpers";
 

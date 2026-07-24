@@ -3,7 +3,7 @@ import os from 'os';
 
 import { spawnSync } from 'child_process';
 
-import { config, mode } from "../config";
+import { config, mode } from "../state/config";
 
 import { ringBell } from "../helpers";
 import { maxSubRow } from "../lines/helpers";
@@ -30,18 +30,18 @@ import { opt, optNoHistDups, optQuotes, resetHeaderStart, checkModelines,
 import { decodeContent, rawByteOf, binaryByte, ubinChar }
   from "./charset";
 
-import { keyboard } from "../keyboard";
+import { keyboard } from "../tty/keyboard";
 
-import { STYLE_REGEX_G } from "../constants";
+import { STYLE_REGEX_G } from "../state/constants";
 
 import { DEF_METACHARS, DEF_METAESCAPE, isWindows, shellArgv }
-  from "../platform";
+  from "../tty/platform";
 
 import { prExpand, eqProto, shellQuote } from "./prompt";
 
 import { openAltFile, closeAltFile } from "./lessopen";
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 /**
  * One entry in the command line file list, like less's ifile.

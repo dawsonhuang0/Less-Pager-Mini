@@ -1,8 +1,8 @@
 import fs from 'fs';
 
-import { hasUngot } from './keyboard';
+import { hasUngot } from './tty/keyboard';
 
-import { config, mode } from './config';
+import { config, mode } from './state/config';
 
 import { chopLongLines } from './lines/chopLongLines';
 import { wrapLongLines } from './lines/wrapLongLines';
@@ -52,7 +52,7 @@ import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
   sizeIsKnown }
   from './features/files';
 
-import { session } from './session';
+import { session } from './state/session';
 
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
@@ -78,7 +78,7 @@ import {
   SCROLL_UP,
   SCROLL_DOWN,
   CURSOR_TO
-} from './constants';
+} from './state/constants';
 
 /**
  * Converts a buffer string to a number.

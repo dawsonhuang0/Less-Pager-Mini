@@ -2,9 +2,9 @@ import { inputToString } from '../helpers';
 
 import { initContent } from '../features/files';
 
-import { initInvocationOptions } from '../invocation';
+import { initInvocationOptions } from '../startup/invocation';
 
-import { keyboard } from '../keyboard';
+import { keyboard } from '../tty/keyboard';
 
 import { contentPager } from './core';
 

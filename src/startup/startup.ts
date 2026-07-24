@@ -1,28 +1,28 @@
 import { keyboard, dumbTerminal, watchWinch, unwatchWinch }
-  from './keyboard';
+  from '../tty/keyboard';
 
 import { opt, scanOptions, initUnsupport, takeCliOptions,
-  flushPendopt, onRebuild, optKnowDumb } from './options';
+  flushPendopt, onRebuild, optKnowDumb } from '../options';
 
-import { search } from './features/searching';
+import { search } from '../features/searching';
 
-import { resetMisc } from './features/misc';
+import { resetMisc } from '../features/misc';
 
-import { resetBellTimer, resetPrompting } from './helpers';
+import { resetBellTimer, resetPrompting } from '../helpers';
 
-import { initSecure, secureAllow } from './features/secure';
+import { initSecure, secureAllow } from '../features/secure';
 
-import { loadLesskey } from './features/lesskey';
+import { loadLesskey } from '../features/lesskey';
 
-import { initCharset } from './features/charset';
+import { initCharset } from '../features/charset';
 
-import { initAnsiChars, initTerminalCapabilities } from './constants';
+import { initAnsiChars, initTerminalCapabilities } from '../state/constants';
 
-import { resetProtos } from './features/prompt';
+import { resetProtos } from '../features/prompt';
 
 import { initEnvironment, lgetenv } from './environment';
 
-import { resetOsc8 } from './features/osc8';
+import { resetOsc8 } from '../features/osc8';
 
 // error() calls before the screen initializes, counted for og's
 // main errmsgs gate ("Press RETURN to continue" before the screen

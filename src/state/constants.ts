@@ -1,8 +1,8 @@
 /* eslint-disable no-control-regex */
 
-import { lgetenv } from './environment';
+import { lgetenv } from '../startup/environment';
 
-import { formatTerminalCapability, terminalCapability } from './terminal';
+import { formatTerminalCapability, terminalCapability } from '../tty/terminal';
 
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
 

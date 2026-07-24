@@ -3,9 +3,9 @@ import { Readable } from 'stream';
 
 import v8 from 'v8';
 
-import { session, deriveContent, shellReserveLines } from '../session';
+import { session, deriveContent, shellReserveLines } from '../state/session';
 
-import { config, mode } from '../config';
+import { config, mode } from '../state/config';
 
 import { opt, optSqueeze, optQuitOnIntr, optExitFollowOnClose,
   onTrimBufSpace, hook } from '../options';
@@ -19,11 +19,11 @@ import { searchInterrupted } from './searching';
 
 import { appendLogLines } from './misc';
 
-import { keyboard, consumeInterrupt } from '../keyboard';
+import { keyboard, consumeInterrupt } from '../tty/keyboard';
 
-import { startupErrors } from '../startup';
+import { startupErrors } from '../startup/startup';
 
-import { CLEAR_LINE, INVERSE_ON, INVERSE_OFF } from '../constants';
+import { CLEAR_LINE, INVERSE_ON, INVERSE_OFF } from '../state/constants';
 
 import { transformContent, maxSubRow } from '../lines/helpers';
 
@@ -34,11 +34,11 @@ import { shiftMarkRows } from './jumping';
 
 import { follow } from './follow';
 
-import { POLLHUP_EXITS_F } from '../platform';
+import { POLLHUP_EXITS_F } from '../tty/platform';
 
 import { PipeDecoder } from './charset';
 
-import { envDelay } from '../environment';
+import { envDelay } from '../startup/environment';
 
 /**
  * The still-delivering input, like og's non-seekable ch file: the

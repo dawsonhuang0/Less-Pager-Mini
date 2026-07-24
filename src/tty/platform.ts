@@ -1,6 +1,6 @@
 import os from 'os';
 
-import { actualEnv, lgetenv } from './environment';
+import { actualEnv, lgetenv } from '../startup/environment';
 
 /**
  * Platform differences, like og's per-platform defines headers

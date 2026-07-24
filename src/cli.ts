@@ -2,11 +2,11 @@
 import fs from 'fs';
 import path from 'path';
 
-import { isWindows } from './platform';
+import { isWindows } from './tty/platform';
 
 import pager, { pagerPipe } from './index';
 
-import { openTtyKeyboard } from './keyboard';
+import { openTtyKeyboard } from './tty/keyboard';
 
 import { printVersion } from './features/misc';
 
@@ -20,11 +20,11 @@ import {
   setCliOptions
 } from './options';
 
-import { help } from './lessHelp';
+import { help } from './startup/lessHelp';
 
-import { markTerminalInvocation } from './invocation';
+import { markTerminalInvocation } from './startup/invocation';
 
-import { actualEnv, initEnvironment, lgetenv } from './environment';
+import { actualEnv, initEnvironment, lgetenv } from './startup/environment';
 
 import { initSecure, secureAllow } from './features/secure';
 

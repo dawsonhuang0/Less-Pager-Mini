@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { initContent, files, pendingScroll, pipeDraining }
   from '../../src/features/files';
@@ -25,7 +25,7 @@ import {
 
 import { opt, hook } from '../../src/options';
 
-import { resetSession, session } from '../../src/session';
+import { resetSession, session } from '../../src/state/session';
 
 class FakePipe extends EventEmitter {
   paused = false;

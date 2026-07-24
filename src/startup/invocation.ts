@@ -1,4 +1,4 @@
-import { opt } from './options/state';
+import { opt } from '../options/state';
 
 // The package entry point is safe-by-default. The executable marks its next
 // pager call so the terminal command retains less's ordinary shell behavior.

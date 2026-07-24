@@ -4,7 +4,7 @@ import tty from 'tty';
 
 import { execFileSync } from 'child_process';
 
-import { terminalEnv } from './environment';
+import { terminalEnv } from '../startup/environment';
 
 /**
  * The keyboard stream, like og's ttyin.c: keys come from the

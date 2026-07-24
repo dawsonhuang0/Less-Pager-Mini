@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import {
   BOLD_ON,
@@ -9,7 +9,7 @@ import {
   UNDERLINE_OFF,
   INVERSE_ON,
   INVERSE_OFF
-} from '../../src/constants';
+} from '../../src/state/constants';
 
 import { search } from '../../src/features/searching';
 

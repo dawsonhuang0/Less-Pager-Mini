@@ -7,7 +7,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { BlockFile } from '../../src/pager/blockFile';
 import { BigView } from '../../src/pager/fileView';
 
-import { config } from '../../src/config';
+import { config } from '../../src/state/config';
 import { opt } from '../../src/options/state';
 import { initCharset } from '../../src/features/charset';
 

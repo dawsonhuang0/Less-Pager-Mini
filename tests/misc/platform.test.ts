@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { homeDir, shellArgv } from '../../src/platform';
+import { homeDir, shellArgv } from '../../src/tty/platform';
 
 const realPlatform = process.platform;
 const saved: Record<string, string | undefined> = {};

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, startSearch, searchInputKey, execSearch }
   from '../../src/features/searching';
@@ -25,9 +25,9 @@ import { formatContent, calculateEOF } from '../../src/helpers';
 
 import { transformContent } from '../../src/lines/helpers';
 
-import { help } from '../../src/lessHelp';
+import { help } from '../../src/startup/lessHelp';
 
-import { UNDERLINE_ON, UNDERLINE_OFF } from '../../src/constants';
+import { UNDERLINE_ON, UNDERLINE_OFF } from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

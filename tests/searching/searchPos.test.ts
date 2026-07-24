@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { config, mode } from '../../src/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, startSearch, searchInputKey, execSearch, searchCaseFlags }
   from '../../src/features/searching';

@@ -2,7 +2,7 @@ import { BlockFile } from './blockFile';
 
 import { forwLine, backLine, lastLineStart } from './fileLines';
 
-import { config } from '../config';
+import { config } from '../state/config';
 import { chopLine } from '../options';
 
 import { transformContent } from '../lines/helpers';

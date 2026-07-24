@@ -1,6 +1,6 @@
-import { config } from '../config';
+import { config } from '../state/config';
 
-import { lgetenv } from '../environment';
+import { lgetenv } from '../startup/environment';
 
 import { shellQuote } from './prompt';
 
