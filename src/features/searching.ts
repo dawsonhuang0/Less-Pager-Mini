@@ -207,7 +207,10 @@ export function restoreSearchOrigin(input: {
  *
  * @param content - Full content lines.
  */
-export function incrementalSearch(content: string[]): void {
+export function incrementalSearch(
+  content: string[],
+  finder: SearchFinder | null = null
+): void {
   const input = search.input;
   if (!input || input.type === '&') return;
 
@@ -221,7 +224,19 @@ export function incrementalSearch(content: string[]): void {
   if (compile(pattern, input.noRegex, input.invert)) {
     search.subs = new Set(input.subs);
     const dir: 1 | -1 = input.type === '?' ? -1 : 1;
-    findMatch(content, dir, input.count, input.fromStart, input.wrap, false);
+    const request: SearchRequest = {
+      dir,
+      count: input.count,
+      fromStart: input.fromStart,
+      wrap: input.wrap,
+      afterTarget: false,
+      pattern,
+      incremental: true,
+    };
+
+    if (!finder?.(request)) {
+      findMatch(content, dir, input.count, input.fromStart, input.wrap, false);
+    }
   }
 
   // errors wait for RETURN, like less's incsearch staying quiet
@@ -468,7 +483,22 @@ function handleModifier(input: SearchInput, key: string): boolean {
  * - An empty pattern repeats the previous search in the typed direction.
  * - `^K` compiles and highlights without moving.
  */
-export function execSearch(content: string[]): void {
+export interface SearchRequest {
+  dir: 1 | -1;
+  count: number;
+  fromStart: boolean;
+  wrap: boolean;
+  afterTarget: boolean;
+  pattern: string;
+  incremental?: boolean;
+}
+
+export type SearchFinder = (request: SearchRequest) => boolean;
+
+export function execSearch(
+  content: string[],
+  finder: SearchFinder | null = null
+): void {
   // og's exec_mca runs cmd_exec() before the search: the /pattern
   // command line clears and flushes ahead of a possibly long walk
   // (command.c:267); sync, since the search blocks the loop
@@ -505,8 +535,19 @@ export function execSearch(content: string[]): void {
 
     // an empty pattern repeats the previous search past the current
     // position
-    findMatch(content, dir, input.count, input.fromStart, input.wrap,
-      !pattern);
+    const request: SearchRequest = {
+      dir,
+      count: input.count,
+      fromStart: input.fromStart,
+      wrap: input.wrap,
+      afterTarget: !pattern,
+      pattern: pattern || compiledPattern,
+    };
+
+    if (!finder?.(request)) {
+      findMatch(content, dir, input.count, input.fromStart, input.wrap,
+        !pattern);
+    }
   } finally {
     addHistory(pattern);
   }
@@ -569,7 +610,8 @@ export function execFilter(): LineFilter | null | undefined {
 export function repeatSearch(
   content: string[],
   count: number,
-  reverse: boolean
+  reverse: boolean,
+  finder: SearchFinder | null = null
 ): void {
   if (!search.regex) {
     search.message = 'No previous regular expression';
@@ -582,7 +624,18 @@ export function repeatSearch(
     ? (search.lastDir === 1 ? -1 : 1)
     : search.lastDir;
 
-  findMatch(content, dir, count, false, false, true);
+  const request: SearchRequest = {
+    dir,
+    count,
+    fromStart: false,
+    wrap: false,
+    afterTarget: true,
+    pattern: compiledPattern,
+  };
+
+  if (!finder?.(request)) {
+    findMatch(content, dir, count, false, false, true);
+  }
 }
 
 /**
@@ -948,7 +1001,7 @@ function cvtOps(): { bs: boolean; crlf: boolean; ansi: boolean } {
   };
 }
 
-function matchesLine(line: string): boolean {
+export function matchesSearchLine(line: string): boolean {
   const regex = search.regex;
   if (!regex) return false;
 
@@ -1213,7 +1266,7 @@ function scanRange(
           : content[row].slice(0, fromOffset))
         : content[row];
 
-      if (matchesLine(line) && --state.remaining === 0) {
+      if (matchesSearchLine(line) && --state.remaining === 0) {
         hit = row;
         return true;
       }
@@ -1233,6 +1286,23 @@ function scanRange(
 
   if (outcome === 'stop') return 'stop';
   return hit >= 0 ? hit : 'miss';
+}
+
+/**
+ * Runs the normal guarded matcher over one bounded source batch. The
+ * remaining count is shared across batches, allowing a file input to scan
+ * by byte position without retaining the traversed lines.
+ */
+export function scanSearchBatch(
+  lines: string[],
+  state: { remaining: number }
+): number | 'miss' | 'stop' {
+  return scanRange(lines, 0, 1, null, state);
+}
+
+/** Records the local row a source-backed search landed on for -g. */
+export function recordSearchMatch(row: number): void {
+  lastMatchRow = row;
 }
 
 /**
@@ -1282,6 +1352,40 @@ export function filterLines(
 
   if (outcome === 'stop') return null;
   return kept;
+}
+
+/**
+ * The guarded filter result for each input row. File-backed inputs use the
+ * mask to retain byte positions while sharing the regular filter engine.
+ */
+export function filterLineMask(
+  lines: string[],
+  filter: (line: string) => boolean
+): boolean[] | null {
+  const mask = new Array<boolean>(lines.length);
+  let at = 0;
+
+  const outcome = guardedSlices(() => {
+    const deadline = Date.now() + 100;
+    let steps = 0;
+
+    while (at < lines.length) {
+      mask[at] = filter(lines[at]);
+      at++;
+
+      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
+    }
+
+    return true;
+  });
+
+  if (outcome === 'complex') {
+    search.filters = [];
+    search.message = 'Pattern too complex';
+    return null;
+  }
+
+  return outcome === 'stop' ? null : mask;
 }
 
 // the last synchronous interrupt poll, at most one per ~100ms of scan
@@ -1536,7 +1640,7 @@ function shiftVisible(content: string[], row: number): void {
  */
 export function lineMatches(line: string): boolean {
   if (!search.regex || !search.highlight) return false;
-  return matchesLine(line);
+  return matchesSearchLine(line);
 }
 
 /**

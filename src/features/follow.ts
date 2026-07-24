@@ -54,6 +54,20 @@ export const follow = {
   queued: [] as string[],
 };
 
+interface SourceFollowHooks {
+  /** Pins the active source to its current physical end. */
+  pinEnd(): boolean;
+  /** Refreshes the source after pollFollow observed new bytes. */
+  refresh(): boolean;
+}
+
+let sourceFollowHooks: SourceFollowHooks | null = null;
+
+/** Registers the active seekable input with the shared follow loop. */
+export function onSourceFollow(hooks: SourceFollowHooks | null): void {
+  sourceFollowHooks = hooks;
+}
+
 /**
  * Opens the current file for the F command, like forw_loop entering
  * ignore_eoi mode. The in-memory pseudo-file has no descriptor and can
@@ -265,7 +279,7 @@ export function beginFollow(kind: FollowKind): void {
   // og's forw_loop enters through jump_forw_buffered: re-entering
   // F while already at the end rings the at-end bell (jump_loc's
   // back(0) hitting eof_bell); the first F just moves there
-  lastLine(session.content, 0);
+  if (!sourceFollowHooks?.pinEnd()) lastLine(session.content, 0);
   session.followTimer = setInterval(followTick, 50);
 }
 
@@ -274,6 +288,8 @@ export function beginFollow(kind: FollowKind): void {
  * forw_loop's jump_forw_buffered.
  */
 export function pinToEnd(): void {
+  if (sourceFollowHooks?.pinEnd()) return;
+
   // short content that grew needs its over-BOF pad re-derived even
   // when the top position is unchanged (row 0 while under a screen)
   if (config.row !== config.endRow || config.subRow !== config.endSubRow ||
@@ -307,17 +323,19 @@ export function followTick(): void {
   const lines = result.lines;
   let matchLines = lines;
 
-  // the first new line completes a displayed partial last line
-  if (result.extendTail && session.fullContent.length) {
-    const tail = session.fullContent.length - 1;
-    session.fullContent[tail] += lines.shift();
-    matchLines = [session.fullContent[tail], ...lines];
-  }
+  if (!sourceFollowHooks?.refresh()) {
+    // the first new line completes a displayed partial last line
+    if (result.extendTail && session.fullContent.length) {
+      const tail = session.fullContent.length - 1;
+      session.fullContent[tail] += lines.shift();
+      matchLines = [session.fullContent[tail], ...lines];
+    }
 
-  session.fullContent.push(...lines);
-  session.content = deriveContent();
-  calculateEOF(session.content);
-  pinToEnd();
+    session.fullContent.push(...lines);
+    session.content = deriveContent();
+    calculateEOF(session.content);
+    pinToEnd();
+  }
 
   // ESC-f bells when the search pattern matches new data, ESC-F
   // stops there, like forw_loop watching highest_hilite

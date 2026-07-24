@@ -191,7 +191,18 @@ export function startBrackets(forward: boolean, n: number): void {
  * @param content - Full content lines.
  * @param key - Raw key input following `ESC-^F` / `ESC-^B`.
  */
-export function bracketsKey(content: string[], key: string): void {
+export type BracketFinder = (
+  open: string,
+  close: string,
+  forward: boolean,
+  n: number
+) => boolean;
+
+export function bracketsKey(
+  content: string[],
+  key: string,
+  finder: BracketFinder | null = null
+): void {
   if (key === '\x03' || key.startsWith('\x1B')) {
     brackets.pending = '';
     return;
@@ -203,13 +214,20 @@ export function bracketsKey(content: string[], key: string): void {
   const forward = brackets.pending === 'f';
   brackets.pending = '';
 
-  matchBracket(
-    content,
+  if (!finder?.(
     brackets.chars[0],
     brackets.chars[1],
     forward,
     brackets.n
-  );
+  )) {
+    matchBracket(
+      content,
+      brackets.chars[0],
+      brackets.chars[1],
+      forward,
+      brackets.n
+    );
+  }
 }
 
 /**
@@ -339,11 +357,13 @@ export function subRowOfIndex(line: string, index: number): number {
  * A marked position: a content position plus the 1-based screen line it
  * occupied, like less's scrpos, and the file it belongs to (m_ifile).
  */
-interface Mark {
+export interface Mark {
   file: number;
   row: number;
   subRow: number;
   sline: number;
+  /** Seekable inputs retain og's byte POSITION across window changes. */
+  pos?: number;
 }
 
 const MARK_LETTER_REGEX = /^[a-zA-Z#]$/;
@@ -442,6 +462,19 @@ let markSwitchHook: (mark: Mark, sline: number) => void = () => {};
 let markEditHook: (path: string, char: string, sline: number) => void =
   () => {};
 
+interface SourceMarkHooks {
+  position(row: number, subRow: number): number | null;
+  linePosition(line: number): number | null | undefined;
+  jump(mark: Mark, sline: number): boolean;
+}
+
+let sourceMarkHooks: SourceMarkHooks | null = null;
+
+/** Registers the active seekable input's byte-position mark operations. */
+export function onSourceMarks(hooks: SourceMarkHooks | null): void {
+  sourceMarkHooks = hooks;
+}
+
 /** Registers gomark's edit_ifile paths: switching to an open entry's
  *  mark, and opening a restored mark's file by name. */
 export function onMarkSwitch(
@@ -501,6 +534,7 @@ export function adoptFileMarks(index: number, lines: string[]): void {
       row,
       subRow: 0,
       sline: restored.sline,
+      pos: restored.pos,
     };
 
     // the restored LASTMARK lands in the ' slot, like restore_mark
@@ -562,8 +596,12 @@ export function startClearMark(): void {
  * @param row - Content row to look up.
  */
 export function markAtRow(row: number): string {
+  const pos = sourceMarkHooks?.position(row, 0);
+
   for (const [char, mark] of userMarks) {
-    if (mark.file === files.index && mark.row === row) return char;
+    if (mark.file !== files.index) continue;
+    if (pos !== null && pos !== undefined && mark.pos === pos) return char;
+    if (mark.pos === undefined && mark.row === row) return char;
   }
 
   return '';
@@ -631,26 +669,44 @@ function setMark(
     return;
   }
 
-  if (lineNum > content.length) {
+  const numberedPos = lineNum > 0
+    ? sourceMarkHooks?.linePosition(lineNum)
+    : undefined;
+
+  if (lineNum > content.length && numberedPos === undefined) {
     search.message = `Cannot find line number ${lineNum}`;
     return;
   }
 
+  if (numberedPos === null) {
+    search.message = `Cannot find line number ${lineNum}`;
+    return;
+  }
+
+  let mark: Mark;
+
   if (lineNum) {
-    userMarks.set(char, {
+    mark = {
       file: files.index,
-      row: lineNum - 1,
+      row: Math.min(lineNum - 1, Math.max(content.length - 1, 0)),
       subRow: 0,
       sline: bottom ? config.window - 1 : 1,
-    });
+      pos: numberedPos,
+    };
   } else {
-    userMarks.set(char, bottom ? lastVisiblePosition(content) : {
+    mark = bottom ? lastVisiblePosition(content) : {
       file: files.index,
       row: config.row,
       subRow: config.subRow,
       sline: config.blankTop + 1,
-    });
+    };
   }
+
+  if (mark.pos === undefined) {
+    const pos = sourceMarkHooks?.position(mark.row, mark.subRow);
+    if (pos !== null && pos !== undefined) mark.pos = pos;
+  }
+  userMarks.set(char, mark);
 
   // og's setmark raises marks_modified BEFORE its autosave check, so
   // the very first m of a session writes immediately (unlike search
@@ -674,7 +730,7 @@ function goMark(content: string[], char: string, sline: number): void {
 
   switch (char) {
     case '^':
-      mark = { file: files.index, row: 0, subRow: 0, sline: 0 };
+      mark = { file: files.index, row: 0, subRow: 0, sline: 0, pos: 0 };
       break;
 
     case '$': {
@@ -682,7 +738,13 @@ function goMark(content: string[], char: string, sline: number): void {
       const subRow = chopLine() || config.col
         ? 0
         : maxSubRow(content[row]);
-      mark = { file: files.index, row, subRow, sline: config.window - 1 };
+      mark = {
+        file: files.index,
+        row,
+        subRow,
+        sline: config.window - 1,
+        pos: Number.MAX_SAFE_INTEGER,
+      };
       break;
     }
 
@@ -694,6 +756,7 @@ function goMark(content: string[], char: string, sline: number): void {
         subRow: config.subRow,
         sline: config.blankTop + 1,
       };
+      mark.pos = sourceMarkHooks?.position(mark.row, mark.subRow) ?? undefined;
       break;
 
     case ';':
@@ -739,6 +802,10 @@ function goMark(content: string[], char: string, sline: number): void {
       }
   }
 
+  if (mark.pos === undefined && mark.file === files.index) {
+    mark.pos = sourceMarkHooks?.position(mark.row, mark.subRow) ?? undefined;
+  }
+
   if (mark.file !== files.index) {
     // og's gomark edits the mark's file (edit_ifile) and jumps there;
     // "Mark not in current file" belongs to markpos (the | command)
@@ -758,6 +825,8 @@ export function jumpToMark(
   sline: number,
   fresh: boolean = false
 ): void {
+  if (mark.pos !== undefined && sourceMarkHooks?.jump(mark, sline)) return;
+
   if (mark.row >= content.length) {
     search.message = 'Cannot seek to that file position';
     return;
@@ -1036,6 +1105,11 @@ export function recordLastPosition(): void {
     subRow: config.subRow,
     sline: config.blankTop + 1,
   };
+
+  quoteMark.pos = sourceMarkHooks?.position(
+    quoteMark.row,
+    quoteMark.subRow
+  ) ?? undefined;
 }
 
 /**

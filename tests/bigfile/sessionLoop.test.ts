@@ -1,8 +1,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { EventEmitter } from 'events';
-import { Readable } from 'stream';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -12,12 +10,16 @@ import { search, chgCaseless } from '../../src/features/searching';
 
 import { opt, initUnsupport, setCliOptions } from '../../src/options';
 
-import { bigPager } from '../../src/bigfile/session';
-
-import { pagerPipe } from '../../src';
+import streamPager from '../../src/pager/streamPager';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-big-loop-'));
 const file = path.join(dir, 'large-path-small-fixture.txt');
+const streamedFile = path.join(dir, 'multi-block-fixture.txt');
+const sparseFile = path.join(dir, 'sparse-terabyte-fixture.txt');
+const oscFile = path.join(dir, 'multi-block-osc8-fixture.txt');
+const followFile = path.join(dir, 'follow-fixture.txt');
+const bracketFile = path.join(dir, 'multi-block-bracket-fixture.txt');
+const tagsFile = path.join(dir, 'tags');
 
 fs.writeFileSync(file, Array.from({ length: 240 }, (_, i) => {
   if (i === 30) return 'alpha NEEDLE omega';
@@ -26,38 +28,49 @@ fs.writeFileSync(file, Array.from({ length: 240 }, (_, i) => {
   return `line ${i + 1}`;
 }).join('\n') + '\n');
 
+fs.writeFileSync(streamedFile, Array.from({ length: 12000 }, (_, i) =>
+  i === 11999 ? 'FINAL MULTI BLOCK LINE' : `stream line ${i + 1}`
+).join('\n') + '\n');
+
+fs.writeFileSync(oscFile, Array.from({ length: 12000 }, (_, i) =>
+  i === 10999
+    ? '\x1b]8;;https://example.test\x07DEEP OSC LINK\x1b]8;;\x07'
+    : `plain line ${i + 1}`
+).join('\n') + '\n');
+
+fs.writeFileSync(followFile, 'follow start\n');
+
+fs.writeFileSync(bracketFile, Array.from({ length: 12000 }, (_, i) => {
+  if (i === 0) return '{ DISTANT BRACKET START';
+  if (i === 11999) return 'DISTANT BRACKET END }';
+  return `bracket filler ${i + 1}`;
+}).join('\n') + '\n');
+
+fs.writeFileSync(tagsFile, `deep\t${streamedFile}\t11000\n`);
+
+{
+  const fd = fs.openSync(sparseFile, 'w');
+  fs.writeSync(fd, 'FIRST SPARSE LINE\n');
+  fs.ftruncateSync(fd, 2 ** 40);
+  const tail = Buffer.from('\nFINAL SPARSE LINE\n');
+  fs.writeSync(fd, tail, 0, tail.length, 2 ** 40 - tail.length);
+  fs.closeSync(fd);
+}
+
 const ENV_NAMES = [
   'LESS',
   'LESSHISTFILE',
   'LESSNOCONFIG',
-  'LESS_SHELL_COPTION',
-  'LESS_SIGUSR1',
 ] as const;
 
 const originalEnv = Object.fromEntries(
   ENV_NAMES.map(name => [name, process.env[name]])
 );
 
-class FakePipe extends EventEmitter {
-  paused = true;
-  destroyed = false;
-  onResume: (() => void) | null = null;
-  pause = () => { this.paused = true; return this; };
-  resume = () => {
-    this.paused = false;
-    this.onResume?.();
-    return this;
-  };
-  destroy = () => { this.destroyed = true; return this; };
-}
-
 beforeEach(() => {
   process.env.LESSHISTFILE = '-';
-  process.env.LESSNOCONFIG =
-    'LESS,LESSHISTFILE,LESS_SHELL_COPTION,LESS_SIGUSR1';
+  process.env.LESSNOCONFIG = '1';
   delete process.env.LESS;
-  delete process.env.LESS_SHELL_COPTION;
-  delete process.env.LESS_SIGUSR1;
 
   config.row = 0;
   config.subRow = 0;
@@ -101,13 +114,11 @@ afterAll(() => {
 });
 
 async function drive(
-  keys: string[],
+  keys: Array<string | (() => void | Promise<void>)>,
   less: string = '',
-  ready?: () => void,
-  start?: () => Promise<void>,
-  boot?: () => void
+  target: unknown = file
 ): Promise<string> {
-  process.env.LESS = less;
+  setCliOptions(less ? less.split(' ') : []);
 
   const stdout = process.stdout as unknown as Record<string, unknown>;
   const stdin = process.stdin as unknown as Record<string, unknown>;
@@ -158,17 +169,19 @@ async function drive(
   };
 
   try {
-    const running = start ? start() : bigPager(file);
-    boot?.();
+    const running = streamPager(target);
     await new Promise(resolve => setImmediate(resolve));
 
-    if (!dataHandler) throw new Error('bigPager did not install a key handler');
-
-    ready?.();
-    await new Promise(resolve => setImmediate(resolve));
+    if (!dataHandler) {
+      throw new Error('streamPager did not install a key handler');
+    }
 
     for (const key of keys) {
-      dataHandler(Buffer.from(key));
+      if (typeof key === 'function') {
+        await key();
+      } else {
+        dataHandler(Buffer.from(key));
+      }
       await new Promise(resolve => setImmediate(resolve));
     }
 
@@ -200,7 +213,182 @@ async function drive(
   }
 }
 
-describe('windowed big-file command loop', () => {
+describe('unified file command loop', () => {
+  it('uses byte-position G/g on a sparse 1TB file', async () => {
+    const output = await drive(['G', 'g'], '-f -S', sparseFile);
+
+    expect(output).toContain('FINAL SPARSE LINE');
+    expect(output).toContain('FIRST SPARSE LINE');
+  }, 5000);
+
+  it('keeps shared commands and headers beyond the bootstrap block',
+    async () => {
+      const output = await drive([
+        'G', 'g',
+        'h', 'j', 'q',
+      ], '--header=2,3,1 -N -S', streamedFile);
+
+      expect(output).toContain('FINAL MULTI BLOCK LINE');
+      expect(output).toContain('stream line 1');
+      expect(output).toContain('SUMMARY');
+    }, 20000);
+
+  it('searches forward and backward outside the materialized window',
+    async () => {
+      const output = await drive([
+        '/', ...'FINAL MULTI BLOCK LINE', '\r',
+        'g', 'G',
+        '?', ...'stream line 11000', '\r',
+      ], '', streamedFile);
+
+      expect(output).toContain('FINAL MULTI BLOCK LINE');
+      expect(output).toContain('stream line 11000');
+    }, 20000);
+
+  it('restores a seekable source when distant incsearch is cancelled',
+    async () => {
+      const pattern = 'stream line 11000';
+      const output = await drive([
+        '/', ...pattern, '\x03',
+        '/', ...pattern, '\r',
+      ], '--incsearch -S', streamedFile);
+
+      const firstMatch = output.indexOf('stream line 11000');
+      const restored = output.indexOf('stream line 1\n', firstMatch + 1);
+      const accepted = output.indexOf('stream line 11000', restored + 1);
+
+      expect(firstMatch).toBeGreaterThan(-1);
+      expect(restored).toBeGreaterThan(firstMatch);
+      expect(accepted).toBeGreaterThan(restored);
+    }, 20000);
+
+  it('keeps byte-position marks across distant file windows', async () => {
+    const output = await drive([
+      'm', 'a',
+      'G', 'm', 'b',
+      "'", 'a',
+      "'", 'b',
+    ], '-S -J', streamedFile);
+
+    expect(output).toContain('stream line 1');
+    expect(output).toContain('FINAL MULTI BLOCK LINE');
+  }, 20000);
+
+  it('sets a numbered mark outside the materialized window', async () => {
+    const output = await drive([
+      ...'10000', 'm', 'z',
+      "'", 'z',
+    ], '-S', streamedFile);
+
+    expect(output).toContain('stream line 10000');
+  }, 20000);
+
+  it('keeps absolute line numbers after a byte-position jump', async () => {
+    const output = await drive(['G'], '-N -S', streamedFile);
+
+    expect(output).toContain('12000');
+    expect(output).toContain('FINAL MULTI BLOCK LINE');
+  }, 20000);
+
+  it('expands long prompts from absolute file positions', async () => {
+    const lines = await drive(['G'], '-M -S', streamedFile);
+    const bytes = await drive(['G'], '-n -M -S', streamedFile);
+
+    expect(lines).toContain('/12000');
+    expect(bytes).toContain(String(fs.statSync(streamedFile).size));
+  }, 20000);
+
+  it('finds OSC 8 links outside the materialized window', async () => {
+    const output = await drive(['\x0F', 'n'], '-S', oscFile);
+
+    expect(output).toContain('DEEP OSC LINK');
+  }, 20000);
+
+  it('moves through filtered byte-position lines outside the window',
+    async () => {
+      const output = await drive([
+        '&', ...'FINAL MULTI BLOCK LINE', '\r',
+        'G', 'g',
+        '&', '\r', 'g',
+      ], '-S', streamedFile);
+
+      expect(output).toContain('FINAL MULTI BLOCK LINE');
+      expect(output).toContain('stream line 1');
+    }, 20000);
+
+  it('keeps later command-line files on the seekable source', async () => {
+    const output = await drive([
+      ':', 'n', '\r', 'G',
+      ':', 'p', '\r', 'G',
+    ], '-S', [streamedFile, oscFile]);
+
+    expect(output).toContain('plain line 12000');
+    expect(output).toContain('FINAL MULTI BLOCK LINE');
+  }, 20000);
+
+  it('spans a search into a distant window of the next source file',
+    async () => {
+      const output = await drive([
+        '/', ...'DEEP OSC LINK', '\r',
+        '\x1b', 'n',
+      ], '-S', [streamedFile, oscFile]);
+
+      expect(output).toContain('DEEP OSC LINK');
+    }, 20000);
+
+  it('reverse-spans from EOF into a distant previous source window',
+    async () => {
+      const output = await drive([
+        ':', 'n', '\r',
+        '/', ...'stream line 11000', '\r',
+        '\x1b', 'N',
+      ], '-S', [streamedFile, oscFile]);
+
+      expect(output).toContain('stream line 11000');
+    }, 20000);
+
+  it('refreshes a followed regular file through BlockFile', async () => {
+    const output = await drive([
+      'F',
+      () => { fs.appendFileSync(followFile, 'FOLLOW APPENDED LINE\n'); },
+      () => new Promise<void>(resolve => setTimeout(resolve, 120)),
+      '\x18',
+    ], '-S', followFile);
+
+    expect(output).toContain('FOLLOW APPENDED LINE');
+  }, 20000);
+
+  it('matches brackets across distant source windows', async () => {
+    const output = await drive(['{', '}'], '-S', bracketFile);
+
+    expect(output).toContain('DISTANT BRACKET END }');
+    expect(output).toContain('{ DISTANT BRACKET START');
+  }, 20000);
+
+  it('pins a header whose absolute start is beyond the bootstrap',
+    async () => {
+      const output = await drive(
+        ['k', 'G'],
+        '--header=2,0,11000 -S',
+        streamedFile
+      );
+
+      expect(output).toContain('stream line 11000');
+      expect(output).toContain('stream line 11001');
+      expect(output).toContain('FINAL MULTI BLOCK LINE');
+      expect(output).not.toContain('stream line 10999');
+    }, 20000);
+
+  it('jumps to a distant numeric tag through the source', async () => {
+    const output = await drive(
+      [],
+      `-T${tagsFile} -tdeep -S`,
+      streamedFile
+    );
+
+    expect(output).toContain('stream line 11000');
+  }, 20000);
+
   it('drives movement, byte/percent jumps, horizontal shifts, and info',
     async () => {
       const output = await drive([
@@ -233,7 +421,7 @@ describe('windowed big-file command loop', () => {
 
       expect(output).toContain('No next file');
       expect(output).toContain('No previous file');
-      expect(output).toContain('Command not available');
+      expect(output).toContain('less-pager-mini 1.11.0');
     }, 20000);
 
   it('drives mouse scrolling, runtime display options, and follow exit',
@@ -262,88 +450,4 @@ describe('windowed big-file command loop', () => {
 
       expect(output).toContain('Command not available');
     }, 20000);
-
-  it('runs LESS_SIGUSR1 command keys and removes its signal listener',
-    async () => {
-      process.env.LESS_SIGUSR1 = 'G';
-      const listeners = process.listenerCount('SIGUSR1');
-
-      const output = await drive([], '', () => {
-        process.emit('SIGUSR1');
-      });
-
-      expect(output).toContain('(END)');
-      expect(process.listenerCount('SIGUSR1')).toBe(listeners);
-    }, 20000);
-
-  it('honors LESS_SHELL_COPTION in big-file shell commands', async () => {
-    const sentinel = path.join(dir, 'shell-coption-ran');
-    if (fs.existsSync(sentinel)) fs.unlinkSync(sentinel);
-    process.env.LESS_SHELL_COPTION = '-ec';
-
-    const command = `false; touch ${sentinel}`;
-    await drive(['!', ...command, '\r', '\r']);
-
-    expect(fs.existsSync(sentinel)).toBe(false);
-  }, 20000);
-
-  it('pages a bounded growing spool for non-seekable input', async () => {
-    const stream = new FakePipe();
-    const first = Buffer.from(
-      Array.from({ length: 20 }, (_, i) => `pipe line ${i}`).join('\n') + '\n');
-
-    const output = await drive(['j'], '', () => {
-      // Satisfy the view's fixed read-ahead target with a newline-free
-      // chunk: it lands directly on disk and pauses upstream again.
-      stream.emit('data', Buffer.alloc(8 * 1024 * 1024, 0x78));
-      expect(stream.paused).toBe(true);
-      stream.emit('end');
-    }, () => pagerPipe(stream as unknown as Readable), () => {
-      stream.emit('data', first);
-    });
-
-    expect(output).toContain('pipe line 0');
-    expect(stream.destroyed).toBe(true);
-  }, 20000);
-
-  it('continues a forward search across bounded spool windows', async () => {
-    const stream = new FakePipe();
-    const first = Buffer.from(
-      Array.from({ length: 20 }, (_, i) => `before ${i}`).join('\n') + '\n');
-    let fed = false;
-
-    const output = await drive([
-      '/', 'N', 'E', 'E', 'D', 'L', 'E', '\r', 'r',
-    ], '', () => {
-      stream.onResume = () => {
-        if (fed) return;
-        fed = true;
-        setImmediate(() => {
-          stream.emit('data', Buffer.from('after NEEDLE here\n'));
-          stream.emit('end');
-        });
-      };
-    }, () => pagerPipe(stream as unknown as Readable), () => {
-      stream.emit('data', first);
-    });
-
-    expect(output).toContain('NEEDLE');
-  }, 20000);
-
-  it('aborts a pending G drain and restores pipe backpressure', async () => {
-    const stream = new FakePipe();
-    const first = Buffer.from(
-      Array.from({ length: 20 }, (_, i) => `held ${i}`).join('\n') + '\n');
-
-    const output = await drive([
-      'G', '\x03', 'k',
-    ], '', undefined, () => pagerPipe(stream as unknown as Readable), () => {
-      stream.emit('data', first);
-    });
-
-    expect(output).toContain('Waiting for data');
-    expect(output).not.toContain('- 100%');
-    expect(stream.paused).toBe(true);
-    expect(stream.destroyed).toBe(true);
-  }, 20000);
 });

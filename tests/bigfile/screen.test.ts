@@ -4,8 +4,8 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { BlockFile } from '../../src/bigfile/ch';
-import { BigView } from '../../src/bigfile/screen';
+import { BlockFile } from '../../src/pager/blockFile';
+import { BigView } from '../../src/pager/fileView';
 
 import { config } from '../../src/config';
 import { opt } from '../../src/options/state';

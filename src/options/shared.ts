@@ -45,6 +45,18 @@ export const hook = {
   screenActive: false,
   /** --file-size draining a still-unknown pipe (og's opt_filesize). */
   scanFileSize: (() => {}) as () => void,
+  /** Absolute 1-based line number for a source-backed local row. */
+  sourceLineNumber: null as null |
+    ((row: number) => number | null | undefined),
+  /** Absolute byte position for a source-backed local row. */
+  sourceBytePosition: null as null |
+    ((row: number) => number | null | undefined),
+  /** Total raw line count for a seekable source. */
+  sourceLineCount: null as null | (() => number | null | undefined),
+  /** Local materialized row holding the absolute header start. */
+  sourceHeaderRow: null as null | (() => number | undefined),
+  /** Moves a seekable source when --header changes its absolute start. */
+  sourceHeaderChanged: null as null | ((start: number) => void),
 };
 
 /** Registers the immediate -b pool trim, like og's ch_setbufspace. */
@@ -219,7 +231,7 @@ export const optDefSearchType = (): typeof defSearchType => defSearchType;
  */
 export function optMatchShift(): number {
   if (opt.matchShiftFraction < 0) return opt.matchShift;
-  return mulFrac(config.screenWidth, opt.matchShiftFraction);
+  return mulFrac(fullScreenWidth(), opt.matchShiftFraction);
 }
 
 /** True when --emouse enables left-click mark setting. */
@@ -365,19 +377,35 @@ export function modelineOptions(text: string, endChar: string): void {
  * no number (0), lines below the header restart at 1.
  */
 export function vlinenum(linenum: number): number {
+  const sourced = hook.sourceLineNumber?.(linenum - 1);
+  const absolute = sourced === undefined
+    ? linenum + lineBase()
+    : sourced ?? 0;
+
+  return vlinenumAbsolute(absolute);
+}
+
+/** Applies --no-number-headers to an already absolute line number. */
+export function vlinenumAbsolute(absolute: number): number {
   if (opt.nonumHeaders && opt.headerLines > 0) {
     const headerEnd = opt.headerStart + 1 + opt.headerLines;
-    return linenum < headerEnd ? 0 : linenum - headerEnd + 1;
+    return absolute < headerEnd ? 0 : absolute - headerEnd + 1;
   }
 
-  // recycled pipe data still counts in the true line number, like
-  // og's find_linenum over absolute positions
-  return linenum + lineBase();
+  return absolute;
 }
 
 /** Rounded n*frac/1,000,000, like og's muldiv on a fraction. */
 export const mulFrac = (n: number, frac: number): number =>
   Math.round(n * frac / 1000000);
+
+/**
+ * OG keeps sc_width as the complete terminal width. Our renderer stores the
+ * text width after reserving the line prefix, so commands defined in terms
+ * of sc_width must add that applied reservation back.
+ */
+export const fullScreenWidth = (): number =>
+  config.screenWidth + opt.appliedGutter;
 
 /** The -j target as a 0-based screen row for the current window. */
 export function jumpSindex(): number {
@@ -398,7 +426,7 @@ export function jumpSindex(): number {
  *  like og's calc_shift_count; 0 means the half-screen default. */
 export function optShiftCount(): number {
   if (opt.shiftFraction >= 0) {
-    return mulFrac(config.screenWidth, opt.shiftFraction);
+    return mulFrac(fullScreenWidth(), opt.shiftFraction);
   }
   return config.setCol;
 }
@@ -533,9 +561,10 @@ export function gutterWidth(): number {
  * right after config.screenWidth is set from the terminal size.
  */
 export function reserveGutter(): void {
+  const width = config.screenWidth;
   opt.appliedGutter = gutterWidth();
-  config.screenWidth -= opt.appliedGutter;
-  config.halfScreenWidth = Math.floor(config.screenWidth / 2);
+  config.screenWidth = width - opt.appliedGutter;
+  config.halfScreenWidth = Math.floor(width / 2);
 }
 
 /**
@@ -545,8 +574,9 @@ export function applyGutter(content: string[]): void {
   const gutter = gutterWidth();
   if (gutter === opt.appliedGutter) return;
 
-  config.screenWidth += opt.appliedGutter - gutter;
-  config.halfScreenWidth = Math.floor(config.screenWidth / 2);
+  const width = fullScreenWidth();
+  config.screenWidth = width - gutter;
+  config.halfScreenWidth = Math.floor(width / 2);
   opt.appliedGutter = gutter;
 
   recalculateEOF(content);
@@ -882,9 +912,16 @@ export function setHeader(text: string, content: string[]): void {
   if (values[0] >= 0) opt.headerLines = values[0];
   if (values[1] >= 0) opt.headerCols = values[1];
 
+  const sourcedLine = hook.sourceLineNumber?.(config.row);
+  const sourced = sourcedLine !== undefined;
+
   opt.headerStart = values[2] > 0
-    ? Math.min(values[2] - 1, Math.max(content.length - 1, 0))
-    : config.row;
+    ? (sourced
+      ? values[2] - 1
+      : Math.min(values[2] - 1, Math.max(content.length - 1, 0)))
+    : sourcedLine !== null && sourcedLine !== undefined
+      ? sourcedLine - 1
+      : config.row;
 
   // og's O_REPAINT repaints through jump_loc, whose after_header_pos
   // clamps a top above the new header start up to it: the view lands
@@ -894,5 +931,6 @@ export function setHeader(text: string, content: string[]): void {
   // header lines/columns force chopping (og's chop_line), so the
   // sub-row layout changed shape
   config.subRow = 0;
+  if (sourced) hook.sourceHeaderChanged?.(opt.headerStart);
   recalculateEOF(content);
 }

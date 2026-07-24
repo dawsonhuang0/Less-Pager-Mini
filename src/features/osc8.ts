@@ -17,6 +17,9 @@ export interface Osc8Link {
 let selected: Osc8Link | null = null;
 
 export const selectedOsc8 = (): Osc8Link | null => selected;
+export const setSelectedOsc8 = (link: Osc8Link | null): void => {
+  selected = link;
+};
 export const resetOsc8 = (): void => { selected = null; };
 
 /** Extracts complete OSC 8 open/text/close pairs from materialized lines. */

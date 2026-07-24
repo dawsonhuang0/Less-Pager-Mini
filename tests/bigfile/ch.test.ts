@@ -4,10 +4,10 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { BlockFile, BLOCK_SIZE } from '../../src/bigfile/ch';
+import { BlockFile, BLOCK_SIZE } from '../../src/pager/blockFile';
 
 import { forwLine, backLine, lastLineStart, MAX_LINE }
-  from '../../src/bigfile/lineio';
+  from '../../src/pager/fileLines';
 
 import { opt } from '../../src/options/state';
 

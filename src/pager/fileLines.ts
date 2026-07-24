@@ -1,4 +1,4 @@
-import { BlockFile } from './ch';
+import { BlockFile } from './blockFile';
 
 import { decodeContent } from '../features/charset';
 

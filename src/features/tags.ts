@@ -22,6 +22,21 @@ export interface Tag {
 let list: Tag[] = [];
 let cur = 0;
 
+let sourceTagJump: ((tag: Tag) => boolean) | null = null;
+
+/** Registers a seekable input's complete-file tag jump. */
+export function onSourceTagJump(
+  jump: ((tag: Tag) => boolean) | null
+): void {
+  sourceTagJump = jump;
+}
+
+/** Lets the active source handle the current tag before array lookup. */
+export function jumpSourceTag(): boolean {
+  const tag = list[cur - 1];
+  return tag ? sourceTagJump?.(tag) ?? false : false;
+}
+
 /** The number of loaded tag matches, like ntags(). */
 export const ntags = (): number => list.length;
 
@@ -50,10 +65,10 @@ export function requestTagJump(): void {
 }
 
 /** Registers the pager's tag jump, running one queued by $LESS -t. */
-export function onTagJump(fn: () => void): void {
+export function onTagJump(fn: (() => void) | null): void {
   tagJumpHook = fn;
 
-  if (pendingJump) {
+  if (fn && pendingJump) {
     pendingJump = false;
     fn();
   }

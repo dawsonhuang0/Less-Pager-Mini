@@ -88,6 +88,25 @@ export const files = {
   newFile: false,
 };
 
+interface SourceFileHooks {
+  /** Undefined declines the file; null is an acquisition failure. */
+  load(index: number): string[] | null | undefined;
+  /** Completes a successful shared switch after files.index changes. */
+  activate(index: number): void;
+}
+
+let sourceFileHooks: SourceFileHooks | null = null;
+
+/** Registers the active seekable input with the shared file workflow. */
+export function onSourceFiles(hooks: SourceFileHooks | null): void {
+  sourceFileHooks = hooks;
+}
+
+/** Finishes a source-backed switch after the common edit bookkeeping. */
+export function activateSourceFile(index: number): void {
+  sourceFileHooks?.activate(index);
+}
+
 /**
  * `Examine: ` prompt state (`:e`, `^X^V`).
  */
@@ -225,6 +244,9 @@ export function binFile(bytes: Buffer): boolean {
 export function loadFile(index: number): string[] | null {
   const entry = files.list[index];
   if (!entry) return null;
+
+  const sourced = sourceFileHooks?.load(index);
+  if (sourced !== undefined) return sourced;
 
   if (entry.lines) return entry.lines;
 

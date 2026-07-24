@@ -217,7 +217,9 @@ describe('terminal dimensions', () => {
     calculateDimensions();
 
     expect(config.screenWidth).toBe(71);
-    expect(config.halfScreenWidth).toBe(35);
+    // OG's ESC-(/ESC-) default is half of full sc_width, not half
+    // of the text area left after line_pfx_width is reserved.
+    expect(config.halfScreenWidth).toBe(40);
     expect(opt.appliedGutter).toBe(9);
   });
 });

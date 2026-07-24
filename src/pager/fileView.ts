@@ -1,6 +1,6 @@
-import { BlockFile } from './ch';
+import { BlockFile } from './blockFile';
 
-import { forwLine, backLine, lastLineStart } from './lineio';
+import { forwLine, backLine, lastLineStart } from './fileLines';
 
 import { config } from '../config';
 import { chopLine } from '../options';

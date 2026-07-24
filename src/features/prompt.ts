@@ -9,7 +9,8 @@ import { visualWidth } from "../lines/helpers";
 import { files, bottomRow, byteOffset, percentage, sizeIsKnown,
   byteBase } from "./files";
 
-import { opt, optLinenums, optQuotes, optHeader, vlinenum }
+import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
+  vlinenumAbsolute }
   from "../options";
 
 import { ntags, currTag } from "./tags";
@@ -273,29 +274,53 @@ function protochar(
 
   // pages shrink by the pinned --header lines, like prompt.c's PAGE_NUM
   const pageSize = Math.max(config.window - 1 - optHeader().lines, 1);
+  const row = whereRow(content, where);
+
+  const absoluteByte = (): number => {
+    const sourced = hook.sourceBytePosition?.(row);
+    return sourced === undefined
+      ? byteOffset(content, row) + byteBase()
+      : sourced ?? 0;
+  };
+
+  const absoluteLine = (): number => {
+    const sourced = hook.sourceLineNumber?.(row);
+    return sourced === undefined ? row + 1 : sourced ?? 0;
+  };
 
   switch (char) {
     case 'b':
       // recycled pipe data still counts in the offset (og positions)
-      return out + Math.min(
-        byteOffset(content, whereRow(content, where)) + byteBase(), size);
+      return out + Math.min(absoluteByte(), size);
 
     case 'c': return out + (config.col + 1);
     case 'C': return out + (config.col + config.screenWidth);
 
     case 'd':
       return out + (optLinenums()
-        ? String(Math.floor(whereRow(content, where) / pageSize) + 1)
+        ? String(Math.floor(Math.max(absoluteLine() - 1, 0) / pageSize) + 1)
         : '?');
 
     // og's %D expands '?' while ch_length is unknown even without
     // the ?D guard (prompt.c:317), 0 for an empty file
     case 'D':
-      return out + (!optLinenums() || !sizeIsKnown()
-        ? '?'
-        : content.length
-          ? String(Math.floor((content.length - 1) / pageSize) + 1)
-          : '0');
+      if (!optLinenums() || !sizeIsKnown()) return out + '?';
+      if (hook.sourceLineCount) {
+        const total = hook.sourceLineCount();
+        if (total === undefined) {
+          return out + (content.length
+            ? String(Math.floor((content.length - 1) / pageSize) + 1)
+            : '0');
+        }
+        return out + (total === null
+          ? '?'
+          : total
+            ? String(Math.floor((total - 1) / pageSize) + 1)
+            : '0');
+      }
+      return out + (content.length
+        ? String(Math.floor((content.length - 1) / pageSize) + 1)
+        : '0');
 
     case 'E':
       // EDIT_PGM is "vi" on unix and "edit" on Windows (defines.wn)
@@ -318,9 +343,17 @@ function protochar(
     // og's %L is '?' while ch_length is unknown, and also for an
     // EMPTY file (len == ch_zero, prompt.c:379) — unlike %D's 0
     case 'L':
-      return out + (optLinenums() && sizeIsKnown() && content.length
-        ? String(vlinenum(content.length))
-        : '?');
+      if (!optLinenums() || !sizeIsKnown()) return out + '?';
+      if (hook.sourceLineCount) {
+        const total = hook.sourceLineCount();
+        if (total === undefined) {
+          return out + (content.length
+            ? String(vlinenum(content.length))
+            : '?');
+        }
+        return out + (total ? String(vlinenumAbsolute(total)) : '?');
+      }
+      return out + (content.length ? String(vlinenum(content.length)) : '?');
     case 'm':
       return out + (ntags() ? ntags() : files.list.length);
 
@@ -328,7 +361,7 @@ function protochar(
       return out + (sizeIsKnown()
         ? percentage(
           Math.min(
-            byteOffset(content, whereRow(content, where)) + byteBase(),
+            absoluteByte(),
             size
           ),
           size
@@ -336,9 +369,17 @@ function protochar(
         : '?');
 
     case 'P':
-      return out + (optLinenums()
-        ? String(percentage(whereRow(content, where) + 1, content.length))
-        : '?');
+      if (!optLinenums()) return out + '?';
+      if (hook.sourceLineCount) {
+        const total = hook.sourceLineCount();
+        if (total === undefined) {
+          return out + String(percentage(row + 1, content.length));
+        }
+        return out + (total
+          ? String(percentage(absoluteLine(), total))
+          : '?');
+      }
+      return out + String(percentage(row + 1, content.length));
 
     case 'Q':
       return out + percentage(

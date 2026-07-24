@@ -128,5 +128,4 @@ export function calculateDimensions(): void {
   reserveGutter();
 
   config.halfWindow = Math.floor(config.window / 2);
-  config.halfScreenWidth = Math.floor(config.screenWidth / 2);
 }

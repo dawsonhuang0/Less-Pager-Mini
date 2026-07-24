@@ -267,15 +267,6 @@ function histDebug(text: string): void {
   }
 }
 
-// the active-marks provider for --save-marks: the bigfile session
-// substitutes its own byte-position marks while it runs
-let sessionMarks: (() => FileMark[]) | null = null;
-
-/** Registers (or clears) a session's own active-marks source. */
-export function onSessionMarks(fn: (() => FileMark[]) | null): void {
-  sessionMarks = fn;
-}
-
 /**
  * Builds the `.mark` section lines: the restored history-file marks
  * merged with the active marks when --save-marks is on, like less's
@@ -289,25 +280,24 @@ function markLines(): string[] {
       mark.path);
   }
 
-  if (optPermaMarks() && sessionMarks) {
-    for (const m of sessionMarks()) {
-      merged.set(m.char, `m ${m.char} ${m.sline} ${m.pos} ${m.path}`);
-    }
-  } else if (optPermaMarks()) {
+  if (optPermaMarks()) {
     const lineCache = new Map<number, string[] | null>();
 
     for (const { char, mark } of allMarks()) {
       const entry = files.list[mark.file];
       if (!entry || entry.path === '-') continue;
 
-      if (!lineCache.has(mark.file)) {
-        lineCache.set(mark.file, loadFile(mark.file));
+      let pos = mark.pos;
+
+      if (pos === undefined) {
+        if (!lineCache.has(mark.file)) {
+          lineCache.set(mark.file, loadFile(mark.file));
+        }
+
+        const lines = lineCache.get(mark.file);
+        if (!lines) continue;
+        pos = byteOffset(lines, mark.row);
       }
-
-      const lines = lineCache.get(mark.file);
-      if (!lines) continue;
-
-      const pos = byteOffset(lines, mark.row);
 
       // og's save_marks writes get_real_filename: the canonical
       // path, so a relative open restores from anywhere

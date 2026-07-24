@@ -51,7 +51,7 @@ function ffCapForward(content: string[], offset: number): number {
   // find the current bottom display row
   while (steps > 0 && advance()) steps--;
 
-  // the first incoming row that starts with form feed caps the move there
+  // the first incoming row that STARTS a  line caps the move there
   for (let k = 1; k <= offset; k++) {
     if (!advance()) break;
     if (s === 0 && isFormFeed(content[r])) return k;

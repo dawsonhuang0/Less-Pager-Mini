@@ -34,7 +34,8 @@ import {
   optIntrChar,
   optEndPrompt,
   gutterWidth,
-  chopLine
+  chopLine,
+  hook
 } from './options';
 
 import { prExpand, prProto, hProto, wProto } from './features/prompt';
@@ -415,7 +416,8 @@ export function formatContent(content: string[]): string[] {
  */
 function overlayHeaderLines(content: string[], lines: string[]): string[] {
   const header = optHeader();
-  if (header.lines <= 0 || mode.HELP) return lines;
+  if (header.lines <= 0) return lines;
+  const headerRow = hook.sourceHeaderRow?.() ?? header.start;
 
   const saved = {
     row: config.row,
@@ -425,7 +427,7 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
     window: config.window,
   };
 
-  config.row = header.start;
+  config.row = headerRow;
   config.subRow = 0;
   config.blankTop = 0;
   config.window = header.lines + 1;
@@ -447,20 +449,29 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
   // the tilde padding block holds several rows in one entry
   const flat = lines.join('\n').split('\n');
 
-  const seamless = saved.row === header.start && saved.subRow === 0 &&
+  const seamless = saved.row === headerRow && saved.subRow === 0 &&
     saved.blankTop === 0;
 
   for (let i = 0; i < header.lines && i < flat.length; i++) {
-    let row = colored('header', rows[i] ?? '');
+    const raw = rows[i] ?? '';
+
+    // og keeps plinestart's -J/-N prefix in a separate buffer.
+    // set_attr_line starts at linebuf.print, so header color and the
+    // boundary underline apply only to the file text, never its gutter.
+    // A configured header forces chopped rows, making each overlay row
+    // correspond to exactly one content row here.
+    const gutter = gutterFor(content, headerRow + i);
+    const prefix = gutter && raw.startsWith(gutter) ? gutter : '';
+    let body = colored('header', raw.slice(prefix.length));
 
     if (i === header.lines - 1 && !seamless) {
       // inner resets would drop the underline for the rest of the row
-      row = UNDERLINE_ON +
-        row.split(STYLE_RESET).join(STYLE_RESET + UNDERLINE_ON) +
+      body = UNDERLINE_ON +
+        body.split(STYLE_RESET).join(STYLE_RESET + UNDERLINE_ON) +
         UNDERLINE_OFF;
     }
 
-    flat[i] = row;
+    flat[i] = prefix + body;
   }
 
   return flat;

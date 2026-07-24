@@ -26,17 +26,19 @@ import {
   setPreviousPath,
   bottomRow,
   closeAlt,
-  revealAltEnd
+  revealAltEnd,
+  activateSourceFile
 } from './features/files';
 
-import { search, repeatSearch, execFilter }
+import { search, repeatSearch, execFilter, SearchFinder }
   from './features/searching';
 
 import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition,
   marksFileSpliced }
   from './features/jumping';
 
-import { stepTag, tagRow, currTagFile } from './features/tags';
+import { stepTag, tagRow, currTagFile, jumpSourceTag }
+  from './features/tags';
 
 import { pipeMark, shellCommand, setFirstCmd, getFirstCmd,
   addShellHistory,
@@ -125,6 +127,8 @@ export function switchToFile(target: number): boolean {
     );
   }
 
+  activateSourceFile(target);
+
   // schedule the +cmd replay for the newly examined file
   const firstCmd = getFirstCmd();
   session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
@@ -183,6 +187,8 @@ export function gotoCurrentTag(): void {
 
   if (!openByName(file)) return;
 
+  if (jumpSourceTag()) return;
+
   const row = tagRow(session.content);
 
   if (row === null) {
@@ -207,10 +213,19 @@ export function tagStep(delta: 1 | -1): void {
  * Repeats the search across the file list (ESC-n / ESC-N), like og's
  * A_T_AGAIN_SEARCH continuing into the next (or previous) files.
  */
-export function spanningSearch(reverse: boolean): void {
-  repeatSearch(session.content, bufferToNum(session.buffer) || 1, reverse);
+export function spanningSearch(
+  reverse: boolean,
+  finder: SearchFinder | null = null,
+  sourceEnd: (() => boolean) | null = null
+): void {
+  repeatSearch(
+    session.content,
+    bufferToNum(session.buffer) || 1,
+    reverse,
+    finder
+  );
 
-  while (search.message === 'Pattern not found') {
+  while (search.message.startsWith('Pattern not found')) {
     const forward = (search.lastDir === 1) !== reverse;
     const target = files.index + (forward ? 1 : -1);
 
@@ -218,10 +233,10 @@ export function spanningSearch(reverse: boolean): void {
     if (!switchToFile(target)) return;
 
     // a fresh file searches from its top (its end going backward)
-    if (!forward) lastLine(session.content, 0);
+    if (!forward && !sourceEnd?.()) lastLine(session.content, 0);
 
     search.message = '';
-    repeatSearch(session.content, 1, reverse);
+    repeatSearch(session.content, 1, reverse, finder);
   }
 }
 

@@ -15,12 +15,17 @@ import {
   resetHeaderStart,
   setNoSearchHeaders,
   jumpSindex,
-  vlinenum
+  vlinenum,
+  opt
 } from '../../src/options';
 
 import { firstLine } from '../../src/features/jumping';
 
 import { formatContent, calculateEOF } from '../../src/helpers';
+
+import { transformContent } from '../../src/lines/helpers';
+
+import { help } from '../../src/lessHelp';
 
 import { UNDERLINE_ON, UNDERLINE_OFF } from '../../src/constants';
 
@@ -130,6 +135,28 @@ describe('header line overlay', () => {
     expect(lines[2]).toBe('m3');
   });
 
+  it('does not underline the line-number gutter', () => {
+    const saved = opt.linenums;
+    opt.linenums = 2;
+
+    try {
+      toggle('--header=2\x0D');
+      config.row = 10;
+
+      const boundary = formatContent(content)[1];
+      const underline = boundary.indexOf(UNDERLINE_ON);
+      // eslint-disable-next-line no-control-regex
+      const plain = (line: string): string => line.replace(/\x1B\[[\d;]*m/g, '');
+
+      expect(underline).toBeGreaterThan(0);
+      expect(boundary.slice(0, underline)).not.toContain(UNDERLINE_ON);
+      expect(plain(boundary.slice(0, underline))).toBe('      2 ');
+      expect(plain(boundary.slice(underline))).toBe('m2');
+    } finally {
+      opt.linenums = saved;
+    }
+  });
+
   it('shifts headers with hshift like og overlay_header', () => {
     // og's overlay draws header lines through forw_line, which
     // honors the live hshift (pty-verified: L01 fghij... under
@@ -143,6 +170,28 @@ describe('header line overlay', () => {
 
     const lines = formatContent(wide);
     expect(lines[0]).toBe(UNDERLINE_ON + 'EFGHIJ' + UNDERLINE_OFF);
+  });
+
+  it('stays active on the help pseudo-file', () => {
+    const helpContent = transformContent(help);
+    initContent(helpContent);
+    toggle('--header=2,3,1\x0D');
+
+    // Once help has moved below its beginning, og overlays lines 1-2,
+    // underlines the second one, and continues with help line 4.
+    mode.HELP = true;
+    config.row = 1;
+
+    const lines = formatContent(helpContent);
+    // eslint-disable-next-line no-control-regex
+    const plain = (line: string): string => line.replace(/\x1B\[[\d;]*m/g, '');
+
+    expect(plain(lines[0])).toBe('');
+    expect(lines[1].startsWith(UNDERLINE_ON)).toBe(true);
+    expect(lines[1].endsWith(UNDERLINE_OFF)).toBe(true);
+    expect(plain(lines[1])).toContain('SUMMARY OF LESS COMMANDS');
+    expect(plain(lines[2]))
+      .toBe('      Commands marked with * may be preceded by a number, N.');
   });
 });
 
