@@ -54,3 +54,21 @@ fs.openSync = ((path: unknown, ...args: unknown[]): number => {
 process.stdout.getWindowSize = ((): [number, number] =>
   [process.stdout.columns, process.stdout.rows]) as
   typeof process.stdout.getWindowSize;
+
+/**
+ * Gives the faked terminal a capable $TERM.
+ *
+ * The harnesses drive an INTERACTIVE pager: they fake a tty on stdin
+ * and stdout, so the environment has to look like one too. A runner
+ * has no $TERM (or sets it to 'dumb'), which makes dumbTerminal()
+ * true; startup then prints og's missing_cap warning and holds the
+ * screen at its "Press RETURN to continue" gate, which swallows the
+ * keys the test sends. Locally $TERM is set, so the suite passed
+ * while CI failed on eight tests.
+ *
+ * Tests about dumb terminals set $TERM themselves and restore it.
+ */
+if (!process.env.TERM || process.env.TERM === 'dumb' ||
+    process.env.TERM === 'unknown') {
+  process.env.TERM = 'xterm';
+}
