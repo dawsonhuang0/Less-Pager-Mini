@@ -48,6 +48,7 @@ import {
   render,
   freezeFrame,
   unfreezeFrame,
+  markFullRepaint,
   seedFrameRows,
   seedBlankFrame,
   resetRender,
@@ -342,6 +343,10 @@ export async function contentPager(
       calculateEOF(session.content);
       return;
     }
+
+    // og's O_REPAINT: the option's repaint() runs once the toggle
+    // returns, painting the whole screen fresh
+    markFullRepaint();
 
     if (pagerInput?.rebuild()) return;
 

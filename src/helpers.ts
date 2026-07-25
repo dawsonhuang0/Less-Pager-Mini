@@ -527,6 +527,9 @@ export function resetRender(): void {
   prevRows = null;
   prevCursorCol = -1;
   prevTopRow = -1;
+  prevTopKnown = false;
+  prevBottomEcho = false;
+  fullRepaintPending = false;
   prevTopSub = 0;
   scrollOpen = false;
   promptAtBottom = false;
@@ -576,6 +579,11 @@ let frozenFrame = false;
 let frozenHome = false;
 let dumbHomePending = false;
 
+/** Arms og's post-toggle repaint(), run at the next true prompt. */
+export function markFullRepaint(): void {
+  fullRepaintPending = true;
+}
+
 export function freezeFrame(homeOnUnfreeze: boolean = false): void {
   frozenFrame = true;
   frozenHome = homeOnUnfreeze;
@@ -618,11 +626,56 @@ export function dirtyBottomRow(): void {
   prevCursorCol = -1;
 }
 
+// rows this frame lost to a NUL collapse, so the cursor still parks
+// on the prompt row rather than the blank filler below it
+let nulCollapsed = 0;
+
+/**
+ * Applies og's put_line truncation to a built frame (output.c:72):
+ * the loop writing a line stops at the first NUL, and since the
+ * newline ending the line lives in the same buffer, NOTHING after
+ * the NUL reaches the terminal — not the rest of the text, not the
+ * line break. The next row therefore continues on the same physical
+ * row, and every row below drifts up one.
+ *
+ * Only -r can put a raw NUL on screen: the caret and binary modes
+ * rewrite it as ^@ or <00> long before the line buffer, so every
+ * ordinary frame takes the untouched fast path.
+ *
+ * @param rows - The frame's logical rows, top to bottom.
+ * @returns The physical rows the terminal actually shows.
+ */
+function collapseNulRows(rows: string[]): string[] {
+  if (!rows.some(row => row.includes('\0'))) return rows;
+
+  const out: string[] = [];
+  let carry = '';
+
+  for (const row of rows) {
+    const nul = row.indexOf('\0');
+
+    if (nul < 0) {
+      out.push(carry + row);
+      carry = '';
+      continue;
+    }
+
+    // og wrote the text before the NUL and left the cursor there
+    carry += row.slice(0, nul);
+  }
+
+  if (carry) out.push(carry);
+
+  return out;
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole
   // screen, tildes and all, before showing (output.c:719)
-  if (mode.INIT && search.message && !optOldBot()) mode.INIT = false;
+  const squishMessage = mode.INIT && !!search.message && !optOldBot();
+
+  if (squishMessage) mode.INIT = false;
 
   // a still-filling first screen of a pipe paints its lines bare,
   // like og's initial forw: the prompt appears only with the
@@ -637,7 +690,31 @@ export function render(rawContent: string[], buffer: string[]): void {
   // prompt; a fill frame (no prompt row at all) must not inherit it
   promptPainted = false;
 
+  // what the screen shows RIGHT NOW versus what this frame will leave:
+  // the early-return shortcuts below repaint only the bottom line, so
+  // the hand-off has to happen before them
+  shownBottomEcho = prevBottomEcho;
+  prevBottomEcho = !!option.pending || cmd.active || !!config.keyPrefix;
+
+  // the armed repaint waits for a frame back at the true prompt, like
+  // og's toggle_option resuming after error() returns
+  const forceFull = fullRepaintPending && !search.message &&
+    !option.pending && !search.input && !examine.pending &&
+    !miscInput.pending && !brackets.pending && !marks.pending &&
+    !mode.BUFFERING && !config.keyPrefix;
+
+  if (forceFull) fullRepaintPending = false;
+
   let rows = screenRows(rawContent, buffer, filling);
+
+  // that squish_check repaint OUTRANKS the freeze: og paints the
+  // whole screen (marker, tildes and all) and only then writes the
+  // message over the bottom line, so the stale squished rows the
+  // freeze would restore must not come back
+  if (frozenFrame && squishMessage) {
+    frozenFrame = false;
+    frozenHome = false;
+  }
 
   if (frozenFrame) {
     // og's prompt() returns early on ungot input and MCA_MORE loops
@@ -662,10 +739,14 @@ export function render(rawContent: string[], buffer: string[]): void {
   // og (v618+) starts at the lower left of the alt screen and lets
   // the first paint scroll upward: a short first screen sits just
   // above the bottom prompt, its blank rows on top; -X never homes,
-  // so a short first screen prints in place (og's squished screen)
+  // so a short first screen prints in place (og's squished screen).
+  // Rows a NUL will collapse take no space, so the fill counts the
+  // PHYSICAL rows og's scroll-up actually produces
   if (mode.INIT && !mode.DUMB && !optNoInit() &&
       rows.length < config.window) {
-    rows.unshift(...Array(config.window - rows.length).fill(''));
+    rows.unshift(
+      ...Array(config.window - collapseNulRows(rows).length).fill('')
+    );
   }
 
   // og's G repaints through its pos_clear even when nothing moved
@@ -673,10 +754,11 @@ export function render(rawContent: string[], buffer: string[]): void {
   const posClear = posClearPending;
   posClearPending = false;
 
+
   // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
   // and the parked cursor untouched, like less — but arrow movement
   // inside the command buffer must still move the cursor
-  if (!posClear && prevRows && sameRows(prevRows, rows)) {
+  if (!forceFull && !posClear && prevRows && sameRows(prevRows, rows)) {
     // og reprints clear_bot + the prompt after every command — an
     // identical reprint we normally compress away. A configured
     // --end-prompt makes it matter: the marker precedes the reprint
@@ -686,7 +768,8 @@ export function render(rawContent: string[], buffer: string[]): void {
       const bot = rows[rows.length - 1];
       process.stdout.write(eprPrefix() + (scrollMode()
         ? clearBot() + bot + CLEAR_LINE + scrollPark(rows)
-        : CURSOR_TO(rows.length, 1) + CLEAR_LINE + bot + parkCursor(rows)));
+        : CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE + bot +
+          parkCursor(rows)));
       prompting = promptPainted;
     promptedInHelp = mode.HELP;
       return;
@@ -710,13 +793,15 @@ export function render(rawContent: string[], buffer: string[]): void {
       // and backspace to the editing position, like og's cmdbuf
       process.stdout.write(eprPrefix() + (scrollMode()
         ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
-        : CURSOR_TO(rows.length, col)));
+        : CURSOR_TO(promptRow(rows), col)));
     }
 
     return;
   }
 
   if (mode.DUMB) {
+    // the collapse is implemented for the addressable paints only
+    nulCollapsed = 0;
     const frame = dumbFrame(prevRows, rows);
     prevRows = rows;
     process.stdout.write(eprPrefix() + frame);
@@ -727,6 +812,7 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // -X stays on the main screen, where og's real paint model shows
   if (scrollMode()) {
+    nulCollapsed = 0;
     const frame = scrollFrame(prevRows, rows, filling, rawContent, posClear);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
@@ -741,7 +827,8 @@ export function render(rawContent: string[], buffer: string[]): void {
   // clear_bot + the command line ALONE (cmdbuf.c), never touching
   // the content rows (whose painted colors survive, visibly so
   // under a leaked --end-prompt SGR)
-  if (prevRows && prevRows.length === rows.length && rows.length >= 2 &&
+  if (!forceFull &&
+      prevRows && prevRows.length === rows.length && rows.length >= 2 &&
       prevRows[rows.length - 1] !== rows[rows.length - 1] &&
       prefixEqual(prevRows.slice(0, -1), rows)) {
     prevInitAlt = mode.INIT;
@@ -749,7 +836,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
 
     process.stdout.write(eprPrefix() +
-      CURSOR_TO(rows.length, 1) + CLEAR_LINE +
+      CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE +
       rows[rows.length - 1] + parkCursor(rows));
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
@@ -764,15 +851,23 @@ export function render(rawContent: string[], buffer: string[]): void {
   const unsquished = prevInitAlt && !mode.INIT;
   prevInitAlt = mode.INIT;
 
+  // an addressed repaint re-places the prompt absolutely, clearing a
+  // drift an earlier NUL collapse left (og's lower_left); the two
+  // sequential painters set it again when they lose a row. The
+  // bottom-line shortcuts above return before this, keeping the
+  // drift, like og writing the prompt with a bare \r
+  nulCollapsed = 0;
+
   // -c repaints instead of scrolling (og's top_scroll homes; the
   // skipping scroll paint is the !top_scroll default)
-  const frame = (optClearRepaint()
+  const frame = (optClearRepaint() || forceFull
     ? null
     : (posClear || unsquished ? null : scrolledFrame(rows, rawContent)) ??
       skippedFrame(rows, rawContent, posClear || unsquished)) ??
     fullFrame(rows);
 
   prevTopRow = config.row - config.blankTop;
+  prevTopKnown = true;
   prevTopSub = config.subRow;
   prevRows = rows;
   prevCursorCol = cmd.active ? cursorCol(rows) : -1;
@@ -910,6 +1005,26 @@ function scrollPark(rows: string[]): string {
 // the top of the last scroll-mode frame, so far paints know their
 // direction like og's jump_loc comparing pos against position(TOP)
 let prevTopRow = -1;
+
+// whether prevTopRow holds a real paint (it may be NEGATIVE when a
+// forced back padded rows above BOF, so its sign says nothing)
+let prevTopKnown = false;
+
+// whether the last frame's bottom line was a command-buffer echo (an
+// open option or search prompt) rather than the ordinary prompt: og's
+// repaint marker is a bare putstr at the cursor, so such an echo stays
+// on the line and the marker appends to it
+let prevBottomEcho = false;
+
+// the same, for the frame being built now (the bottom line the screen
+// still shows while this frame is painted)
+let shownBottomEcho = false;
+
+// og's O_REPAINT options call repaint() when the toggle finishes -
+// AFTER error()'s get_return, so the toggle's message shows over the
+// old screen first and the fresh paint lands when it is dismissed
+let fullRepaintPending = false;
+
 let prevTopSub = 0;
 
 // og's trashed-screen repaints print from wherever the cursor sits:
@@ -1285,13 +1400,20 @@ const drawRow = (rows: string[], row: number): string =>
 // command-line position at the lower left; an open command buffer
 // places it at the editing position instead
 function parkCursor(rows: string[]): string {
-  return CURSOR_TO(rows.length, cursorCol(rows));
+  return CURSOR_TO(promptRow(rows), cursorCol(rows));
+}
+
+/** The prompt's PHYSICAL row, one up per row a NUL collapse ate. */
+function promptRow(rows: string[]): number {
+  return rows.length - nulCollapsed;
 }
 
 /** The parked cursor's 1-based column for the current frame. */
 function cursorCol(rows: string[]): number {
   if (cmd.active) return Math.min(cmdCol() + 1, config.screenWidth);
 
+  // a NUL collapse moves the prompt's ROW, never which row it is:
+  // the prompt is the last row here whether or not one collapsed
   const last = rows[rows.length - 1];
   return Math.min(visualWidth(last) + 1, config.screenWidth);
 }
@@ -1312,7 +1434,13 @@ const syncOn = (): string => TERMINAL_SUSPEND;
 const syncOff = (): string => TERMINAL_RESUME;
 
 function fullFrame(rows: string[]): string {
-  const body = rows.map(row => CLEAR_LINE + row).join('\n');
+  const physical = collapseNulRows(rows);
+  nulCollapsed = rows.length - physical.length;
+
+  const body = physical.map(row => CLEAR_LINE + row).join('\n');
+
+  // CLEAR_BELOW blanks the rows the collapse freed, like og's paint
+  // ending early and clear_eos wiping what the screen still showed
   return syncOn() + CURSOR_HOME + body + CLEAR_BELOW + parkCursor(rows) +
     syncOff();
 }
@@ -1325,7 +1453,7 @@ function fullFrame(rows: string[]): string {
  *          than a screenful.
  */
 function topDelta(src: string[], cap: number): number | null {
-  if (prevTopRow < 0 || config.blankTop) return null;
+  if (!prevTopKnown) return null;
 
   const effRow = config.row - config.blankTop;
   const sign = effRow > prevTopRow ||
@@ -1426,8 +1554,11 @@ function skippedFrame(
   const effRow = config.row - config.blankTop;
 
   // og guards: !first_time, full_screen, !is_filtering
+  // the squished first paint stores one row per collapse MORE than
+  // the window (its loss is absorbed at the top), so require a full
+  // screen on both sides rather than an exact match
   if (!prev || session.lastFilter ||
-      prev.length !== rows.length || rows.length < config.window) {
+      prev.length < config.window || rows.length < config.window) {
     return null;
   }
 
@@ -1462,11 +1593,23 @@ function skippedFrame(
     if (dist === screenful) marker = '';
   }
 
-  const last = rows.length - 1;
-  const body = rows.slice(0, last).map(r => r + rowEnd(r)).join('');
+  // a bottom-anchored paint scrolls its rows up from the last line,
+  // so a collapsed row costs a scroll, not the prompt's row: the
+  // prompt still lands on the bottom and nothing drifts
+  const physical = collapseNulRows(rows);
+  nulCollapsed = 0;
 
-  return syncOn() + '\r' + CLEAR_LINE + marker + body +
-    rows[last] + CLEAR_LINE + parkCursor(rows) + syncOff();
+  const last = physical.length - 1;
+  const body = physical.slice(0, last).map(r => r + rowEnd(r)).join('');
+
+  // og prints the marker with a bare putstr at the cursor
+  // (forwback.c:274). A normal command has already cleared the
+  // bottom line by then, but an option prompt's echo has not, so the
+  // marker lands after it: "-...skipping..."
+  const head = marker && shownBottomEcho ? '' : '\r' + CLEAR_LINE;
+
+  return syncOn() + head + marker + body +
+    physical[last] + CLEAR_LINE + parkCursor(rows) + syncOff();
 }
 
 /**
@@ -1750,9 +1893,17 @@ function padToEOF(lines: string[]): void {
   if (!mode.INIT && config.window - lines.length > 1) {
     const rows = config.window - lines.length - 1;
 
-    lines.push(optTildes()
-      ? colored('tilde', '~\n'.repeat(rows - 1) + '~', BOLD_ON, BOLD_OFF)
-      : '\n'.repeat(rows - 1));
+    // one self-contained row per tilde, like the blankTop pad above
+    // and like og attributing every null line it draws. A single
+    // wrapped block would leave the attribute on the first row and
+    // the reset on the last, so identical rows would carry DIFFERENT
+    // strings depending on where they sat — and the scroll paints,
+    // which recognize a shift by row text, could never match one
+    const tilde = optTildes()
+      ? colored('tilde', '~', BOLD_ON, BOLD_OFF)
+      : '';
+
+    for (let i = 0; i < rows; i++) lines.push(tilde);
   }
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;
