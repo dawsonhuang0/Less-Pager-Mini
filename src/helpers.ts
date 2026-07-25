@@ -1169,7 +1169,8 @@ function scrollFrame(
       const base = wasOpen ? prev : prev.slice(0, -1);
 
       if (rows.length >= base.length && prefixEqual(base, rows)) {
-        const appended = rows.slice(base.length).map(r => r + rowEnd(r)).join('');
+        const appended = rows.slice(base.length)
+          .map(r => r + rowEnd(r)).join('');
         return (wasOpen ? '' : clearBot()) + appended;
       }
     }

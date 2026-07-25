@@ -115,7 +115,6 @@ function buildLayout(line: string): LineLayout {
   const pushChars = (segment: string): void => {
     if (!segment) return;
 
-    // eslint-disable-next-line no-control-regex
     if (isAscii(segment) && !segment.includes('\x08')) {
       for (const char of segment) {
         chars.push(char);

@@ -428,7 +428,6 @@ export async function contentPager(
   mode.DUMB = dumbTerminal();
 
   // messages set after the scan (a forced open's read error) still
-  /* eslint-disable-next-line no-inner-declarations */
   async function logQuery(prompt: string): Promise<string> {
     process.stdout.write(prompt);
     const answer = await warnReturn();
@@ -641,7 +640,8 @@ const acts: Record<Actions, () => void> = {
   HELP: () => prepareHelp(),
   ADD_BUFFER: () => addBufferChar(session.buffer, session.key),
   DEL_BUFFER: () => delBufferChar(session.buffer),
-  LINE_FORWARD: () => lineForward(session.content, bufferToNum(session.buffer) || 1),
+  LINE_FORWARD: () =>
+    lineForward(session.content, bufferToNum(session.buffer) || 1),
   FORCE_LINE_FORWARD: () =>
     lineForward(session.content, bufferToNum(session.buffer) || 1, true),
   FORCE_LINE_BACKWARD: () =>
@@ -651,7 +651,8 @@ const acts: Record<Actions, () => void> = {
     bufferToNum(session.buffer) || getSwindow(),
     true
   ),
-  NEWLINE_FORWARD: () => newlineForward(session.content, bufferToNum(session.buffer) || 1),
+  NEWLINE_FORWARD: () =>
+    newlineForward(session.content, bufferToNum(session.buffer) || 1),
   NEWLINE_BACKWARD: () =>
     newlineBackward(session.content, bufferToNum(session.buffer) || 1),
   GO_POS: () => goPos(session.content, bufferToNum(session.buffer)),
@@ -685,14 +686,18 @@ const acts: Record<Actions, () => void> = {
     const open = osc8OpenCommand();
     if (open) runShell(open.command, open.done);
   },
-  LINE_BACKWARD: () => lineBackward(session.content, bufferToNum(session.buffer) || 1),
+  LINE_BACKWARD: () =>
+    lineBackward(session.content, bufferToNum(session.buffer) || 1),
   WINDOW_FORWARD: () => windowForward(session.content, session.buffer),
   WINDOW_BACKWARD: () => windowBackward(session.content, session.buffer),
   SET_WINDOW_FORWARD: () => setWindowForward(session.content, session.buffer),
   SET_WINDOW_BACKWARD: () => setWindowBackward(session.content, session.buffer),
-  NO_EOF_WINDOW_FORWARD: () => windowForward(session.content, session.buffer, true),
-  SET_HALF_WINDOW_FORWARD: () => setHalfWindowForward(session.content, session.buffer),
-  SET_HALF_WINDOW_BACKWARD: () => setHalfWindowBackward(session.content, session.buffer),
+  NO_EOF_WINDOW_FORWARD: () =>
+    windowForward(session.content, session.buffer, true),
+  SET_HALF_WINDOW_FORWARD: () =>
+    setHalfWindowForward(session.content, session.buffer),
+  SET_HALF_WINDOW_BACKWARD: () =>
+    setHalfWindowBackward(session.content, session.buffer),
   SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(session.buffer),
   SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(session.buffer),
   LAST_COL: () => lastCol(session.content),
@@ -762,19 +767,39 @@ const acts: Record<Actions, () => void> = {
     }
   },
   CURLY_BRACKET_RIGHT: () =>
-    matchBracket(session.content, '{', '}', true, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '{', '}', true,
+      bufferToNum(session.buffer) || 1
+    ),
   ROUND_BRACKET_RIGHT: () =>
-    matchBracket(session.content, '(', ')', true, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '(', ')', true,
+      bufferToNum(session.buffer) || 1
+    ),
   SQUARE_BRACKET_RIGHT: () =>
-    matchBracket(session.content, '[', ']', true, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '[', ']', true,
+      bufferToNum(session.buffer) || 1
+    ),
   CURLY_BRACKET_LEFT: () =>
-    matchBracket(session.content, '{', '}', false, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '{', '}', false,
+      bufferToNum(session.buffer) || 1
+    ),
   ROUND_BRACKET_LEFT: () =>
-    matchBracket(session.content, '(', ')', false, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '(', ')', false,
+      bufferToNum(session.buffer) || 1
+    ),
   SQUARE_BRACKET_LEFT: () =>
-    matchBracket(session.content, '[', ']', false, bufferToNum(session.buffer) || 1),
-  CUSTOM_BRACKET_RIGHT: () => startBrackets(true, bufferToNum(session.buffer) || 1),
-  CUSTOM_BRACKET_LEFT: () => startBrackets(false, bufferToNum(session.buffer) || 1),
+    matchBracket(
+      session.content, '[', ']', false,
+      bufferToNum(session.buffer) || 1
+    ),
+  CUSTOM_BRACKET_RIGHT: () =>
+    startBrackets(true, bufferToNum(session.buffer) || 1),
+  CUSTOM_BRACKET_LEFT: () =>
+    startBrackets(false, bufferToNum(session.buffer) || 1),
   SET_MARK: () => startSetMark(false, bufferToNum(session.buffer)),
   SET_MARK_BOTTOM: () => startSetMark(true, bufferToNum(session.buffer)),
   GO_MARK: () => startGoMark(bufferToNum(session.buffer)),
@@ -995,7 +1020,9 @@ function keyHandler(data: Buffer): void {
     return;
   }
 
-  if (optNoPaste() || session.pasting || session.ignoringPaste) text = filterPaste(text);
+  if (optNoPaste() || session.pasting || session.ignoringPaste) {
+    text = filterPaste(text);
+  }
 
   for (const sequence of splitKeys(text)) handleKey(sequence);
 
@@ -1117,7 +1144,8 @@ function dispatchKey(sequence: string): void {
   // EOI), so G jumps to the buffered end and paints — only % still
   // fails its ch_length check and errors ("Don't know length of
   // file"); ^C's u_interrupt handler rings the bell either way
-  if (session.pipeDrainTo && (session.key === '\x03' || session.key === optIntrChar())) {
+  if (session.pipeDrainTo &&
+      (session.key === '\x03' || session.key === optIntrChar())) {
     const jump = session.pipeDrainTo;
     session.pipeDrainTo = null;
     pipeDraining.active = false;
@@ -1145,7 +1173,8 @@ function dispatchKey(sequence: string): void {
 
     session.shellPause = false;
 
-    if (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ') {
+    if (session.key === '\x0D' || session.key === '\x0A' ||
+        session.key === ' ') {
       render(session.content, session.buffer);
       return;
     }
@@ -1434,7 +1463,8 @@ function dispatchKey(sequence: string): void {
 
     // erase and newline cancel a prefix silently (CF_QUIT_ON_ERASE)
     if (
-      session.key === '\x03' || session.key === '\x08' || session.key === '\x7F' ||
+      session.key === '\x03' || session.key === '\x08' ||
+      session.key === '\x7F' ||
       session.key === '\x0D' || session.key === '\x0A'
     ) {
       config.keyPrefix = '';
@@ -1523,7 +1553,8 @@ function dispatchKey(sequence: string): void {
   // a horizontal wheel shifts --wheel-lines columns when the
   // hscroll --emouse feature is on (og's A_L_MOUSE/A_R_MOUSE)
   if (!session.escCount &&
-      (session.key.startsWith('\x1b[<66;') || session.key.startsWith('\x1b[<67;'))) {
+      (session.key.startsWith('\x1b[<66;') ||
+        session.key.startsWith('\x1b[<67;'))) {
     if (!(opt.emouse & EMOUSE_HSCROLL)) return;
 
     const left = session.key.startsWith('\x1b[<66;') !== (optMouseReverse());
@@ -1638,7 +1669,8 @@ function dispatchKey(sequence: string): void {
       }
     }
 
-    config.keyPrefix = '\x1B'.repeat(Math.max(session.escCount - absorb, 0) + 1);
+    config.keyPrefix =
+      '\x1B'.repeat(Math.max(session.escCount - absorb, 0) + 1);
     render(session.content, session.buffer);
   } else {
     // og-dumb echoes the terminating key into the pending ESC line
@@ -1650,7 +1682,8 @@ function dispatchKey(sequence: string): void {
         : session.key);
     }
 
-    const seq = session.userSeq + (session.escCount ? '\x1B' + session.key : session.key);
+    const seq = session.userSeq +
+      (session.escCount ? '\x1B' + session.key : session.key);
 
     // lesskey #command bindings run before the built-in table; the
     // canonical key serves the key-sensitive actions and the extra

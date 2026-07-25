@@ -249,7 +249,9 @@ export function attachPipe(): void {
 
     session.pipeWaiting = false;
 
-    if (!session.exited && !session.shellPause) render(session.content, session.buffer);
+    if (!session.exited && !session.shellPause) {
+      render(session.content, session.buffer);
+    }
 
     // end-of-input completes og's blocked read: queued keys process
     finishFill();
@@ -572,7 +574,8 @@ function growPipe(raw: string[]): void {
   // A shown wait message stays through arriving lines until the
   // fill completes (og reprints it at every keypress, which on a
   // live keyboard reads as continuous)
-  if (session.pipeFirstFill && !session.pipeProbing && !session.exited && !session.shellPause &&
+  if (session.pipeFirstFill && !session.pipeProbing && !session.exited &&
+      !session.shellPause &&
       !session.pipeDrainTo) {
     // og's forw counts screen rows (forw_line per row, so wrapped
     // lines fill faster), not input lines

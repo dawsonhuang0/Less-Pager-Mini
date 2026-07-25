@@ -1320,7 +1320,8 @@ export class FileInput implements PagerInput {
       } else {
         const prev = backLine(this.bf, this.view.top.pos);
         if (!prev || prev.start < this.headerPos) break;
-        this.view.top = { pos: prev.start, subRow: this.rowsAt(prev.start) - 1 };
+        this.view.top =
+          { pos: prev.start, subRow: this.rowsAt(prev.start) - 1 };
       }
       moved++;
     }
