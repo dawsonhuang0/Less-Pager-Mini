@@ -244,6 +244,15 @@ describe('pager(input, options, envVars) API', () => {
     expect(known.has('LESS') && known.has('MORE')).toBe(true);
   });
 
+  it('pages input with no lines as an empty file', async () => {
+    // a symbol is the one input inputToString has no line for: it
+    // opens an empty session like og, rather than refusing to run
+    const nothing = await drive(() => pager(Symbol('nothing')));
+    const empty = await drive(() => pager(''));
+
+    expect(nothing).toBe(empty);
+  });
+
   it('leaves objects flat without tab-object', async () => {
     const flat = await drive(() => pager({ a: 1, b: 2 }));
 

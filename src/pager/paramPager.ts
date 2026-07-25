@@ -23,7 +23,6 @@ export default async function paramPager(
   }
 
   const content = inputToString(input, tabObject);
-  if (!content.length) return;
 
   initContent(content);
   await contentPager(content);
