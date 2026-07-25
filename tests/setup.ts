@@ -27,3 +27,30 @@ fs.writeSync = ((fd: number, ...args: unknown[]): number => {
   if (typeof data === 'string') return Buffer.byteLength(data);
   return data instanceof Uint8Array ? data.length : 0;
 }) as typeof fs.writeSync;
+
+/**
+ * Pins the terminal size to whatever a test stubs.
+ *
+ * freshWindowSize() asks the kernel through `stty size` on /dev/tty,
+ * like og's scrsize ioctl, and falls back to node's cached window.
+ * Neither route sees a test's stubbed process.stdout.columns/rows, so
+ * a suite run FROM a terminal measured the developer's real window
+ * and every screen assertion drifted with it — a chopped line stopped
+ * being chopped on a wide screen, a squished screen came back the
+ * wrong height. Piping the run hid it, because /dev/tty then failed.
+ *
+ * Opening /dev/tty is refused here so the probe falls through, and
+ * the cached-window fallback reports the stubbed values.
+ */
+const realOpenSync = fs.openSync.bind(fs);
+
+fs.openSync = ((path: unknown, ...args: unknown[]): number => {
+  if (path === '/dev/tty') throw new Error('no tty in tests');
+
+  return (realOpenSync as unknown as
+    (...a: unknown[]) => number)(path, ...args);
+}) as typeof fs.openSync;
+
+process.stdout.getWindowSize = ((): [number, number] =>
+  [process.stdout.columns, process.stdout.rows]) as
+  typeof process.stdout.getWindowSize;
