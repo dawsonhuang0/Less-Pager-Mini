@@ -168,6 +168,20 @@ export class LtScreen {
     // ESC = / ESC > keypad modes
     if (next === '=' || next === '>') return at + 2;
 
+    // ESC M reverse index: up one row, scrolling the screen DOWN when
+    // already at the top — how both pagers expose a backward scroll's
+    // newly uncovered line
+    if (next === 'M') {
+      if (this.cy === 0) this.scrollDown(1);
+      else this.cy--;
+
+      this.pendingWrap = false;
+      return at + 2;
+    }
+
+    // ESC ( x designates a character set and prints nothing
+    if (next === '(' || next === ')') return at + 3;
+
     if (next !== '[') return at + 2;
 
     // eslint-disable-next-line no-control-regex
