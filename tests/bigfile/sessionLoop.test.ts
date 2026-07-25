@@ -4,7 +4,7 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { config } from '../../src/state/config';
+import { config, mode } from '../../src/state/config';
 
 import { search, chgCaseless } from '../../src/features/searching';
 
@@ -13,6 +13,8 @@ import { opt, initUnsupport, setCliOptions } from '../../src/options';
 import { Readable, PassThrough } from 'stream';
 
 import streamPager, { pagerPipe } from '../../src/pager/streamPager';
+
+import { LtScreen } from '../lesstest/ltScreen';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-big-loop-'));
 const file = path.join(dir, 'large-path-small-fixture.txt');
@@ -41,6 +43,10 @@ fs.writeFileSync(oscFile, Array.from({ length: 12000 }, (_, i) =>
 ).join('\n') + '\n');
 
 fs.writeFileSync(followFile, 'follow start\n');
+
+// shorter than the window: its first paint is og's squished screen
+const shortFile = path.join(dir, 'short-fixture.txt');
+fs.writeFileSync(shortFile, 'one\ntwo\nthree\n');
 
 fs.writeFileSync(bracketFile, Array.from({ length: 12000 }, (_, i) => {
   if (i === 0) return '{ DISTANT BRACKET START';
@@ -230,7 +236,51 @@ async function drive(
   }
 }
 
+/** The screen the driven session's output actually produces. */
+function screenOf(output: string): string[] {
+  const screen = new LtScreen(50, 12);
+  screen.feed(output);
+
+  return screen.snapshot().cells.map(row =>
+    row.map(cell => cell.ch === '_' ? ' ' : cell.ch).join('').trimEnd());
+}
+
 describe('unified file command loop', () => {
+  it('repaints the squished first screen on a backward command',
+    async () => {
+      // og's back() runs squish_check before it can know whether the
+      // scroll is possible (forwback.c:394), so k at BOF fills the
+      // blank rows above the text with tildes and only then bells.
+      // Captured from og: one/two/three at the top, ~ below.
+      // a session does not reset mode between pager() calls in one
+      // process, so an earlier test's screen would leave INIT off
+      mode.INIT = true;
+
+      const out = await drive(['k'], '', shortFile);
+      const rows = screenOf(out);
+
+      expect(rows[0]).toBe('one');
+      expect(rows[1]).toBe('two');
+      expect(rows[2]).toBe('three');
+      expect(rows[3]).toBe('~');
+      expect(rows[10]).toBe('~');
+    });
+
+  it('leaves the squished first screen alone on a forward command',
+    async () => {
+      // og's forward() bells and returns BEFORE reaching forw(), so
+      // no squish_check runs and the short screen stays bottom-anchored
+      mode.INIT = true;
+
+      const out = await drive(['j'], '', shortFile);
+      const rows = screenOf(out);
+
+      expect(rows[0]).toBe('');
+      expect(rows[8]).toBe('one');
+      expect(rows[9]).toBe('two');
+      expect(rows[10]).toBe('three');
+    });
+
   it('uses byte-position G/g on a sparse 1TB file', async () => {
     // -n: og's only line-number-scan suppressor — without it, G's
     // og-faithful currline(BOTTOM) walks the whole sparse terabyte

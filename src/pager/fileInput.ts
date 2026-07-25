@@ -1094,6 +1094,14 @@ export class FileInput implements PagerInput {
   }
 
   private backward(rows: number, force: boolean = false): void {
+    // og's back() opens with squish_check (forwback.c:394), BEFORE it
+    // knows whether anything can scroll: a backward command repaints
+    // the squished short first screen — filling the blank rows above
+    // with tildes — and only then bells at BOF. forward() is not
+    // symmetric: it bells and returns before ever reaching forw(),
+    // so a clamped forward leaves the squish alone
+    if (mode.INIT) mode.INIT = false;
+
     // --past-eof forces every backward scroll, like og's back()
     if (optPastEof()) force = true;
 
@@ -1113,7 +1121,6 @@ export class FileInput implements PagerInput {
       ringBell('eof');
     }
 
-    if ((moved || this.padTop) && mode.INIT) mode.INIT = false;
     this.keepPad = true;
     this.sync();
   }
