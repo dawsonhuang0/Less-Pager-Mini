@@ -42,6 +42,9 @@
   ],
   "author": "Dawson Huang",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "bugs": {
     "url": "https://github.com/dawsonhuang0/Less-Pager-Mini/issues"
   },

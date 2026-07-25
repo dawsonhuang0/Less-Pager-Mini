@@ -56,7 +56,7 @@ Follow these simple steps to install Less-Pager-Mini.
 
 Make sure you have the following installed:
 
-- [Node.js](https://nodejs.org/) (v16 or higher)
+- [Node.js](https://nodejs.org/) (v18 or higher)
 - [npm](https://www.npmjs.com/) (comes with Node.js)
 
 ### Installation
@@ -102,16 +102,20 @@ is started with `--no-shell`.
 
 ### Function Parameters:
 
-<code>input</code>: Any unknown input (except <code>symbol</code>) to page.
+<code>input</code>: Any unknown input to page.
 
-<code>preserveFormat</code>: If <code>true</code>, preserves JavaScript default formatting.
+<code>config</code>: Any options and environment variables configurations for pager in a map.
+
+#### config examples
+
+<code>tab-object</code>: If <code>true</code>, JSON.stringifies the input object indented with `\t`. You can adjust tab stops using `tabs` option.
 
 ```bash
-Format preserved:
+false:
 ["a","b",["c","d"]]
 {"a":1,"b":2,"c":{"d":3}}
 
-Formatted:
+true:
 [
   "a",
   "b",
@@ -129,7 +133,7 @@ Formatted:
 }
 ```
 
-<code>examineFile</code>: if <code>true</code>, attempts to treat input as file path(s) and page content, invalid files will be ignored.
+<code>examine-file</code>: If <code>true</code>, attempts to treat input as file path(s) and page content, invalid files will be ignored.
 
 Example input:
 
@@ -169,7 +173,7 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [x] JUMPING
 - [x] CHANGING FILES
 - [x] MISCELLANEOUS COMMANDS
-- [-] OPTIONS
+- [x] OPTIONS
 - [x] LINE EDITING
 - [ ] Custom Key-Bindings
 - [x] Start up via `lmn` command directly from terminal
