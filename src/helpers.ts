@@ -138,12 +138,12 @@ export function inputToFilePaths(input: unknown): string[] {
  * - Objects are stringified with optional formatting.
  * 
  * @param input - Value to convert.
- * @param preserveFormat - Whether to keep original formatting.
+ * @param tabObject - Whether objects indent, one tab per level.
  * @returns - Array of strings representing the input.
  */
 export function inputToString(
   input: unknown,
-  preserveFormat: boolean
+  tabObject: boolean
 ): string[] {
   switch (typeof input) {
     case 'string':
@@ -162,8 +162,10 @@ export function inputToString(
       return input.toString().split('\n');
     
     case 'object':
+      // the indent is a tab, so the rendered nesting is whatever the
+      // -x tab stops say — no option scan needed here
       return JSON
-        .stringify(input, null, preserveFormat ? 0 : config.indentation)
+        .stringify(input, null, tabObject ? config.tabObjectIndent : 0)
         .split('\n');
   }
 

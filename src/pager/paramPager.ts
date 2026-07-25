@@ -14,7 +14,7 @@ import { contentPager } from './core';
  */
 export default async function paramPager(
   input: unknown,
-  preserveFormat: boolean = false
+  tabObject: boolean = false
 ): Promise<void> {
   initInvocationOptions();
 
@@ -22,7 +22,7 @@ export default async function paramPager(
     throw new Error('Less-pager-mini requires interactive terminal (TTY).');
   }
 
-  const content = inputToString(input, preserveFormat);
+  const content = inputToString(input, tabObject);
   if (!content.length) return;
 
   initContent(content);

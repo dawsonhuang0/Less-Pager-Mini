@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     }
 
     markTerminalInvocation();
-    await pager(files, false, true);
+    await pager(files, { 'examine-file': true });
     return;
   }
 
@@ -190,7 +190,7 @@ async function main(): Promise<void> {
     }
 
     markTerminalInvocation();
-    await pager(help.join('\n'), true, false);
+    await pager(help.join('\n'));
     return;
   }
 
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
     }
 
     markTerminalInvocation();
-    await pager('', true, false);
+    await pager('');
     return;
   }
 

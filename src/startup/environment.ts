@@ -10,6 +10,18 @@
 const userVars = new Map<string, string>();
 const systemVars = new Map<string, string>();
 
+// environment passed by a library caller: a synthetic process env for
+// one pager() call, sitting at the real-env tier of the og layering
+// (lesskey #env values still override it, like og over a real env)
+let sessionVars: Record<string, string | undefined> | null = null;
+
+/** Installs (or clears) a library call's environment overlay. */
+export function setSessionEnv(
+  vars: Record<string, string | undefined> | null
+): void {
+  sessionVars = vars;
+}
+
 function seedSystemDefaults(): void {
   // decode.c's compiled dflt_vartable. A real environment value still
   // wins because system tables are the final lgetenv tier. The unix
@@ -81,6 +93,13 @@ function ignored(name: string): boolean {
  * remains a winning table entry just like cmd_decode(EV_OK).
  */
 export function lgetenv(name: string): string | undefined {
+  // a library caller's envVars are the application's own explicit
+  // configuration: they outrank every ambient tier and LESSNOCONFIG
+  // filters only the user's environment, never the caller's
+  // (og's isnullenv: an empty value reads as unset)
+  const session = sessionVars?.[name];
+  if (session !== undefined && session !== '') return session;
+
   if (ignored(name)) return undefined;
 
   if (userVars.has(name)) return userVars.get(name);

@@ -180,7 +180,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   };
 
   try {
-    const session = pager(fileArgs, false, true);
+    const session = pager(fileArgs, { 'examine-file': true });
 
     // the pager registers its key handler synchronously after boot
     await new Promise(resolve => setImmediate(resolve));

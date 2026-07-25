@@ -268,8 +268,8 @@ let pagerInput: PagerInput | null = null;
  * - Otherwise, converts arbitrary input into displayable string content.
  *
  * @param input - The input to render, which can be a string, object, or array.
- * @param preserveFormat - Whether to preserve original formatting
- *                         (no indentation).
+ * @param tabObject - Whether objects indent, one tab per level
+ *                    (flat on one line otherwise).
  * @param examineFile - If true, treats input as file path(s) and reads from
  *                      disk.
  */

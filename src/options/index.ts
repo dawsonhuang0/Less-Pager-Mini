@@ -1151,6 +1151,9 @@ export function flushPendopt(): void {
 /** Prints an option's name for messages (option.c's opt_desc). */
 export const optionDesc = (spec: OptionSpec): string => optDesc(spec);
 
+/** The full option table, for the API type generator and its guard. */
+export const optionSpecs = (): OptionSpec[] => OPTIONS;
+
 /**
  * Walks one command line argument the way scan_option consumes it and
  * returns the option left waiting for a value, like og's isoptpending

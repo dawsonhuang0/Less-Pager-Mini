@@ -25,7 +25,7 @@ beforeEach(() => {
   config.col = 0;
   config.screenWidth = 80;
   config.window = 24;
-  config.indentation = 2;
+  config.tabObjectIndent = '\t';
   config.bufferOffset = 0;
   config.chopLongLines = false;
 
@@ -82,12 +82,12 @@ describe('inputToString', () => {
     expect(inputToString(() => 42, false)).toEqual(['() => 42']);
   });
 
-  it('pretty-prints objects using configured indentation', () => {
-    expect(inputToString({ a: 1 }, false)).toEqual(['{', '  "a": 1', '}']);
+  it('indents objects a tab per nesting level under tab-object', () => {
+    expect(inputToString({ a: 1 }, true)).toEqual(['{', '\t"a": 1', '}']);
   });
 
-  it('keeps objects on one line when preserving format', () => {
-    expect(inputToString({ a: 1 }, true)).toEqual(['{"a":1}']);
+  it('keeps objects on one line by default', () => {
+    expect(inputToString({ a: 1 }, false)).toEqual(['{"a":1}']);
   });
 });
 

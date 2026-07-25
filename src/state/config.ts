@@ -71,7 +71,7 @@ function getDefaultConfig(): Config {
     screenWidth: columns,
     halfScreenWidth: Math.floor(columns / 2),
     chopLongLines: false,
-    indentation: 2,
+    tabObjectIndent: '\t',
     bufferOffset: 0,
     keyPrefix: '',
     attnRow: -1,

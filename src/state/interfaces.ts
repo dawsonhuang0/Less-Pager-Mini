@@ -30,7 +30,10 @@ export interface Config {
 
   chopLongLines: boolean;
 
-  indentation: number;
+  // JSON.stringify's indent for object input: a tab by default, so the
+  // nesting follows the -x tab stops the same way a tab-indented file's
+  // does, live across an -x change
+  tabObjectIndent: string | number;
   bufferOffset: number;
 
   // Pending multi-key command prefix (^X, ESC), echoed at the prompt like
