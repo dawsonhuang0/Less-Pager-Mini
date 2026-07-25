@@ -530,7 +530,12 @@ describe('unified file command loop', () => {
 
       expect(output).toContain('No next file');
       expect(output).toContain('No previous file');
-      expect(output).toContain('less-pager-mini 1.11.0');
+      // the running package's own version, so a release bump does
+      // not fail a test about the V command
+      const { version } = require('../../package.json') as
+        { version: string };
+
+      expect(output).toContain(`less-pager-mini ${version}`);
     }, 20000);
 
   it('ages a ^O prefix out over an unbound sequence, like cmd_decode',
