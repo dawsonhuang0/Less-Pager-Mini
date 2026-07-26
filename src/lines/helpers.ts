@@ -358,14 +358,71 @@ function transformLine(line: string): string {
  * is a single bold span with a single exit — one full reset, which
  * is also where a leaked --end-prompt SGR dies.
  */
-function coalesceAttr(text: string, attr: 'bold' | 'underline'): string {
+function ownAttr(attr: 'bold' | 'underline'): { on: string, off: string } {
   const [on, off] = attrText(attr, '\x00')
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b/g, OWN_STYLE)
     .split('\x00');
-  if (!on || !off) return text;
 
-  return text.split(off + on).join('');
+  return { on: on ?? '', off: off ?? '' };
+}
+
+/**
+ * Joins the per-character overstrike styling into runs.
+ *
+ * Both attributes close with the same reset, so deleting every
+ * "close immediately followed by an open" would also delete the pair
+ * at a bold-to-underline boundary — the underline run would lose its
+ * opener and print bold, which is how `|X\bX_\bc...` in the help came
+ * out bold instead of "X bold, command underlined". A run therefore
+ * only continues while the attribute is the SAME one.
+ */
+function coalesceOwnRuns(text: string): string {
+  const bold = ownAttr('bold');
+  const under = ownAttr('underline');
+
+  if (!bold.on || !bold.off || !under.on || !under.off) return text;
+
+  const attrs = { bold, underline: under };
+  let open: 'bold' | 'underline' | null = null;
+  let out = '';
+  let i = 0;
+
+  const close = (): void => {
+    if (open) out += attrs[open].off;
+    open = null;
+  };
+
+  while (i < text.length) {
+    const kind = text.startsWith(bold.on, i) ? 'bold' as const
+      : text.startsWith(under.on, i) ? 'underline' as const
+        : null;
+
+    if (kind) {
+      const { on, off } = attrs[kind];
+      const end = text.indexOf(off, i + on.length);
+
+      if (end >= 0) {
+        if (open !== kind) {
+          close();
+          out += on;
+          open = kind;
+        }
+
+        out += text.slice(i + on.length, end);
+        i = end + off.length;
+        continue;
+      }
+    }
+
+    close();
+    out += text[i];
+    i++;
+  }
+
+  close();
+
+  return out;
 }
 
 /**
@@ -396,7 +453,7 @@ function procBackspaces(line: string): string {
     .replace(/.\x08(.)/g, '$1');
   /* eslint-enable no-control-regex */
 
-  return coalesceAttr(coalesceAttr(out, 'bold'), 'underline');
+  return coalesceOwnRuns(out);
 }
 
 /**
