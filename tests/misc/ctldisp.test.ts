@@ -78,6 +78,29 @@ describe('-R sequence acceptance', () => {
   });
 });
 
+describe('astral characters on a line with control characters', () => {
+  it('renders emoji, not <U+XXXX>', () => {
+    // an emoji is a surrogate PAIR: walking the line by code unit sees
+    // its lead surrogate alone, which is_ubin_char calls unprintable.
+    // A line with no control character never reaches the walk, so this
+    // only ever broke lines that also carried colour or a tab.
+    expect(shown(`${ESC}[35m😀${ESC}[0m`)).toBe(`${ESC}[35m😀${ESC}[0m`);
+    expect(shown(`a\t😀`)).toContain('😀');
+    expect(shown(`${ESC}[31m🧠🫀🦷${ESC}[0m`))
+      .toBe(`${ESC}[31m🧠🫀🦷${ESC}[0m`);
+  });
+
+  it('keeps the rest of the line intact around them', () => {
+    expect(shown(`Hello ${ESC}[36mこんにちは${ESC}[0m 😀😃😄 tail`))
+      .toBe(`Hello ${ESC}[36mこんにちは${ESC}[0m 😀😃😄 tail`);
+  });
+
+  it('still renders a genuinely unprintable char as <U+XXXX>', () => {
+    // U+FFFD marks bytes that failed to decode
+    expect(shown(`${ESC}[31m\uFFFD${ESC}[0m`)).toContain('<U+FFFD>');
+  });
+});
+
 describe('-r passes every control character raw', () => {
   beforeEach(() => {
     opt.ctldisp = 1;

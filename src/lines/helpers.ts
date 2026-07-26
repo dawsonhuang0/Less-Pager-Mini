@@ -227,7 +227,13 @@ function transformLine(line: string): string {
   const rawBs = optProcBackspace() === 0 && optBsMode() === 1;
 
   while (i < line.length) {
-    const char = line[i];
+    // a whole code point, not a code unit: an astral character (every
+    // emoji) is a surrogate PAIR, and its lead surrogate alone reads
+    // as unassigned — is_ubin_char then renders it <U+XXXX>. Only
+    // lines carrying a control character reach here, which is why
+    // plain emoji lines looked right and every colored one did not
+    const point = line.codePointAt(i) ?? 0;
+    const char = point > 0xFFFF ? line.slice(i, i + 2) : line[i];
 
     if (char === '\x08' && rawBs) {
       out += char;
@@ -400,7 +406,7 @@ function transformLine(line: string): string {
 
     out += char;
     col += char >= '\x80' ? strWidth(char) : 1;
-    i++;
+    i += char.length;
   }
 
   return out;
