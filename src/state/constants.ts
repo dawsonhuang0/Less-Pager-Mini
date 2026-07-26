@@ -51,6 +51,21 @@ function styleRegex(
   return new RegExp(`(?:${csi}|${osc.join('|')})`, flags);
 }
 
+// the live sets behind the regexes, for the character-at-a-time walk
+// og's ansi_step does when a sequence turns out to be invalid
+let midChars = DEFAULT_MID_CHARS;
+let endChars = DEFAULT_END_CHARS;
+let oscIntroChars = '';
+
+/** og's is_ansi_middle set ($LESSANSIMIDCHARS). */
+export const ansiMidChars = (): string => midChars;
+
+/** og's is_ansi_end set ($LESSANSIENDCHARS). */
+export const ansiEndChars = (): string => endChars;
+
+/** og's osc_ansi_chars ($LESSANSIOSCCHARS): extra OSC intro chars. */
+export const ansiOscChars = (): string => oscIntroChars;
+
 export let STYLE_REGEX = styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, '');
 export let STYLE_REGEX_G =
   styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, 'g');
@@ -64,6 +79,10 @@ export function initAnsiChars(): void {
   const end = lgetenv('LESSANSIENDCHARS') || DEFAULT_END_CHARS;
   const oscAllow = lgetenv('LESSANSIOSCALLOW') || '';
   const oscChars = lgetenv('LESSANSIOSCCHARS') || '';
+
+  midChars = mid;
+  endChars = end;
+  oscIntroChars = oscChars;
 
   STYLE_REGEX = styleRegex(mid, end, '', oscAllow, oscChars);
   STYLE_REGEX_G = styleRegex(mid, end, 'g', oscAllow, oscChars);

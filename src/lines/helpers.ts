@@ -22,6 +22,9 @@ import { rawByteOf, binByteText, utfBinText, ubinChar }
   from '../features/charset';
 
 import {
+  ansiEndChars,
+  ansiMidChars,
+  ansiOscChars,
   ASCII_REGEX,
   STYLE_REGEX,
   STYLE_REGEX_G,
@@ -183,6 +186,11 @@ export function transformContent(lines: string[]): string[] {
  * do_append: caret notation in standout unless -r passes them raw; -R
  * (the default here) lets ANSI style sequences through.
  */
+/** og's is_ansi_middle: a $LESSANSIMIDCHARS char that is not an end. */
+function ansiMiddle(char: string): boolean {
+  return ansiMidChars().includes(char) && !ansiEndChars().includes(char);
+}
+
 function transformLine(line: string): string {
   const ctldisp = optCtldisp();
   let out = '';
@@ -275,6 +283,52 @@ function transformLine(line: string): string {
         i += osc8[0].length;
         continue;
       }
+
+      // An OSC intro (ESC ] or a $LESSANSIOSCCHARS char) runs its own
+      // state machine to the terminator; the allowed types matched
+      // above, so reaching here means the type is not allowed and
+      // og's ANSI_ERR removes the WHOLE sequence, terminator included
+      const intro = line[i + 1];
+
+      if (intro === ']' ||
+          (intro !== undefined && ansiOscChars().includes(intro))) {
+        const bel = line.indexOf('\x07', i + 2);
+        const st = line.indexOf('\x1b\\', i + 2);
+        const end = bel < 0 ? st
+          : st < 0 ? bel
+            : Math.min(bel, st);
+
+        if (end < 0) {
+          out += line.slice(i);
+          i = line.length;
+          continue;
+        }
+
+        i = end + (end === st ? 2 : 1);
+        continue;
+      }
+
+      // Neither: og's ansi_step walks the middle characters and the
+      // first one that is neither middle nor end returns ANSI_ERR,
+      // whose remove_ansi() deletes everything the sequence stored —
+      // the aborting character with it (line.c:1252). So ESC[K and
+      // ESC(B VANISH under -R; they are not caret-rendered. A line
+      // that simply ENDS mid-sequence keeps what was stored.
+      let scan = i + 1;
+      while (scan < line.length && ansiMiddle(line[scan])) scan++;
+
+      if (scan >= line.length) {
+        // og emits what the unfinished sequence stored (ESC[31 goes
+        // out raw), but a LONE trailing ESC never reaches the screen:
+        // pdone's attribute exit takes its place. Passing it through
+        // would swallow the newline after it and merge two rows
+        if (scan > i + 1) out += line.slice(i);
+        i = line.length;
+        continue;
+      }
+
+      i = scan + 1;
+      continue;
     }
 
     // a raw undecodable byte displays with $LESSBINFMT, like og's
