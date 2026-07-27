@@ -4,7 +4,8 @@ import { search } from '../../src/features/searching';
 
 import { initSecure, secureAllow } from '../../src/features/secure';
 
-import { setSessionEnv } from '../../src/startup/environment';
+import { initEnvironment, setSessionEnv }
+  from '../../src/startup/environment';
 
 beforeEach(() => {
   search.message = '';
@@ -100,6 +101,48 @@ describe('LESSSECURE', () => {
 
     expect(secureAllow('shell')).toBe(false);
     expect(secureAllow('edit')).toBe(false);
+  });
+
+  describe('$LESSNOCONFIG', () => {
+    afterEach(() => {
+      delete process.env.LESSNOCONFIG;
+      setSessionEnv(null);
+      initEnvironment();
+    });
+
+    it('hides LESSSECURE from the allowlist, like og', () => {
+      // main.c reads no_config BEFORE init_secure, and ignore_env then
+      // blanks every name the list omits - so in og this really does
+      // turn the whole policy off
+      process.env.LESSSECURE = '1';
+      process.env.LESSNOCONFIG = 'LESSCHARSET';
+      initEnvironment();
+      initSecure();
+
+      expect(secureAllow('shell')).toBe(true);
+      expect(secureAllow('lessopen')).toBe(true);
+    });
+
+    it('keeps the policy when the list names it', () => {
+      process.env.LESSSECURE = '1';
+      process.env.LESSNOCONFIG = 'LESSSECURE';
+      initEnvironment();
+      initSecure();
+
+      expect(secureAllow('shell')).toBe(false);
+    });
+
+    it('is out of a caller\'s reach', () => {
+      // the one escape hatch that could wipe an ambient policy is read
+      // from the real environment only (environment.ts initEnvironment),
+      // so an overlay cannot reach for it
+      process.env.LESSSECURE = '1';
+      setSessionEnv({ LESSNOCONFIG: 'LESSCHARSET' });
+      initEnvironment();
+      initSecure();
+
+      expect(secureAllow('shell')).toBe(false);
+    });
   });
 
   it('reports invalid and ambiguous names', () => {

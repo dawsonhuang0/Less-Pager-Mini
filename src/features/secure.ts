@@ -1,6 +1,6 @@
 import { search } from "./searching";
 
-import { actualEnv, lgetenv } from '../startup/environment';
+import { ambientEnv, lgetenv } from '../startup/environment';
 
 /**
  * The $LESSSECURE feature gate, like main.c's init_secure: with
@@ -90,9 +90,17 @@ function allowedBy(
  * embedding the pager. Taking what BOTH permit means the application
  * can still restrict itself, and cannot hand back a feature the
  * environment took away.
+ *
+ * The ambient view is og's ladder, so $LESSNOCONFIG blanks LESSSECURE
+ * exactly as it does in og (main.c reads no_config before init_secure,
+ * and ignore_env then hides every name the list omits). Only the real
+ * environment can set $LESSNOCONFIG, so a caller cannot reach for it
+ * to wipe a policy it is not allowed to relax directly. Lesskey #env
+ * lines cannot carry LESSSECURE in either program: og's init_secure
+ * runs before init_cmds loads the tables, and so does ours.
  */
 export function initSecure(): void {
-  const ambient = allowedBy(actualEnv, false);
+  const ambient = allowedBy(ambientEnv, false);
   const merged = allowedBy(lgetenv, true);
 
   allowed = new Set([...merged].filter(feature => ambient.has(feature)));
