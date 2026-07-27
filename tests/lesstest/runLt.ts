@@ -15,6 +15,9 @@ export interface LtMismatch {
   key: string;
   expected: string[];
   actual: string[];
+  /** The same rows as attribute masks, for attribute-only diffs. */
+  expectedAttrs: string[];
+  actualAttrs: string[];
   /** Cells whose characters differ (after blank normalization). */
   charDiffs: number;
   /** Cells whose attributes differ. */
@@ -26,6 +29,11 @@ export interface LtResult {
   compared: number;
   mismatches: LtMismatch[];
 }
+
+/** Renders a cell row's attributes for reports, "." for none. */
+const attrText = (row: Cell[]): string =>
+  row.map(cell => (cell.attr ? String(cell.attr) : '.')).join('')
+    .replace(/\.+$/, '');
 
 /** Renders a cell row as text for reports, blanks as spaces. */
 const rowText = (row: Cell[]): string =>
@@ -214,6 +222,8 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
         key: printable(key),
         expected: expected.map(rowText),
         actual: screen.cells.map(rowText),
+        expectedAttrs: expected.map(attrText),
+        actualAttrs: screen.cells.map(attrText),
         charDiffs,
         attrDiffs,
       });
