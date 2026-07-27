@@ -116,11 +116,28 @@ export class LtScreen {
     cell.bg = this.bg;
 
     // lt_screen writes a WIDESHADOW_CHAR in the second column a wide
-    // character covers (lt_screen.c:372); the recorded dumps carry it
+    // character covers, with attribute 0 and no colours - NOT the
+    // current ones (lt_screen.c:372). The recorded dumps carry that,
+    // so a wide character under standout marks ONE cell, not two.
     if (strWidth(ch) > 1 && this.cx + 1 < this.width) {
       const pad = this.cells[this.cy][this.cx + 1];
       pad.ch = '\0';
-      pad.attr = this.attr;
+      pad.attr = 0;
+      pad.fg = NULL_COLOR;
+      pad.bg = NULL_COLOR;
+      return;
+    }
+
+    // writing over the FIRST half of a wide character orphans its
+    // shadow; lt_screen turns that into an error char - a space -
+    // carrying the attribute in force at the time (lt_screen.c:378)
+    const next = this.cells[this.cy]?.[this.cx + 1];
+
+    if (next && next.ch === '\0') {
+      next.ch = ' ';
+      next.attr = this.attr;
+      next.fg = NULL_COLOR;
+      next.bg = NULL_COLOR;
     }
   }
 
