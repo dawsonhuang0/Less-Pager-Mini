@@ -2,7 +2,7 @@ import fs from 'fs';
 
 import { spawnSync } from 'child_process';
 
-import { optTagsFile, resetTagsFile } from "../options";
+import { optNoShell, optTagsFile, resetTagsFile } from "../options";
 
 import { shellQuote } from "./prompt";
 
@@ -243,6 +243,9 @@ function findCtag(tag: string, tagsFile: string): string | null {
  * the output parses like ctags -x (name [type] linenum file ...).
  */
 function findGtag(tag: string, flag: string): string | null {
+  // global(1) is another process to launch
+  if (optNoShell()) return null;
+
   const cmd = lgetenv('LESSGLOBALTAGS');
   if (!cmd) return 'No tags file';
 

@@ -1,6 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it }
+  from 'vitest';
+
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { search } from '../../src/features/searching';
+
+import { openAltFile } from '../../src/features/lessopen';
+
+import { initEnvironment } from '../../src/startup/environment';
 
 import {
   option,
@@ -81,6 +90,47 @@ describe('the library shell lock', () => {
     // and the executable's own --no-shell still applies
     startSession('--no-shell', true);
     expect(opt.noShell).toBe(1);
+  });
+});
+
+describe('--no-shell blocks every process launch, not just commands', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-noshell-'));
+  const file = path.join(dir, 'plain.txt');
+  const proof = path.join(dir, 'ran');
+  const script = path.join(dir, 'pre.sh');
+
+  fs.writeFileSync(file, 'real content\n');
+  fs.writeFileSync(script,
+    `#!/bin/sh\necho ran > ${proof}\necho preprocessed\n`);
+  fs.chmodSync(script, 0o755);
+
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  beforeEach(() => {
+    fs.rmSync(proof, { force: true });
+    process.env.LESSOPEN = `|${script} %s`;
+    initEnvironment();
+  });
+
+  afterEach(() => {
+    delete process.env.LESSOPEN;
+  });
+
+  it('refuses $LESSOPEN, which the caller never asked to run', () => {
+    // the environment belongs to whoever launched the program, not to
+    // the application that chose the safe API: a preprocessor is a
+    // process, so --no-shell means it does not run
+    opt.noShell = 1;
+
+    expect(openAltFile(file)).toBe(null);
+    expect(fs.existsSync(proof)).toBe(false);
+  });
+
+  it('still preprocesses when shell access is allowed', () => {
+    opt.noShell = 0;
+
+    expect(openAltFile(file)).not.toBe(null);
+    expect(fs.existsSync(proof)).toBe(true);
   });
 });
 

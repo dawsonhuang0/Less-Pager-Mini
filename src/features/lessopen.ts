@@ -2,6 +2,8 @@ import fs from 'fs';
 
 import { secureAllow } from "./secure";
 
+import { optNoShell } from '../options/shared';
+
 import { spawnSync, SpawnSyncReturns } from 'child_process';
 
 import { shellArgv } from '../tty/platform';
@@ -114,6 +116,12 @@ export function openAltFile(
   input?: string
 ): AltFile | null {
   if (!secureAllow('lessopen')) return null;
+
+  // --no-shell means this session launches no processes at all, and a
+  // preprocessor is a process: $LESSOPEN comes from the environment,
+  // which a library call's embedding application does not own
+  if (optNoShell()) return null;
+
   if (!optUseLessopen()) return null;
 
   let lessopen = lgetenv('LESSOPEN');
@@ -212,6 +220,8 @@ export function closeAltFile(
     report('LESSCLOSE ignored; must contain no more than 2 %s');
     return;
   }
+
+  if (optNoShell()) return;
 
   const cmd = lessclose
     .replace('%s', shellQuote(filename))

@@ -24,7 +24,8 @@ import {
 
 import { search } from "./searching";
 
-import { opt, optNoHistDups, optQuotes, resetHeaderStart, checkModelines,
+import { opt, optNoHistDups, optNoShell, optQuotes, resetHeaderStart,
+  checkModelines,
   chopLine } from "../options";
 
 import { decodeContent, rawByteOf, binaryByte, ubinChar }
@@ -663,8 +664,11 @@ export function glob(pattern: string): string[] {
       `-e${shellQuote(escape || '-')}`,
       ...[...metas].map(char => `-n0x${char.charCodeAt(0).toString(16)}`),
     ].join(' ');
+    // $LESSECHO names a program: a --no-shell session runs none
     const [shell, args] = shellArgv(`${lessecho} ${flags} -- ${pattern}`);
-    const result = spawnSync(shell, args, { encoding: 'utf8' });
+    const result = optNoShell()
+      ? { stdout: '' } as ReturnType<typeof spawnSync>
+      : spawnSync(shell, args, { encoding: 'utf8' });
     const text = typeof result.stdout === 'string' ? result.stdout.trim() : '';
     if (text) return splitWords(text);
   }
