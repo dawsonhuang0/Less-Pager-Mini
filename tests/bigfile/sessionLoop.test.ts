@@ -4,7 +4,7 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { config, mode } from '../../src/state/config';
+import { config } from '../../src/state/config';
 
 import { search, chgCaseless } from '../../src/features/searching';
 
@@ -252,10 +252,6 @@ describe('unified file command loop', () => {
       // scroll is possible (forwback.c:394), so k at BOF fills the
       // blank rows above the text with tildes and only then bells.
       // Captured from og: one/two/three at the top, ~ below.
-      // a session does not reset mode between pager() calls in one
-      // process, so an earlier test's screen would leave INIT off
-      mode.INIT = true;
-
       const out = await drive(['k'], '', shortFile);
       const rows = screenOf(out);
 
@@ -270,8 +266,6 @@ describe('unified file command loop', () => {
     async () => {
       // og's forward() bells and returns BEFORE reaching forw(), so
       // no squish_check runs and the short screen stays bottom-anchored
-      mode.INIT = true;
-
       const out = await drive(['j'], '', shortFile);
       const rows = screenOf(out);
 

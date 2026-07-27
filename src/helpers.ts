@@ -529,11 +529,25 @@ export function resetRender(): void {
   prevTopRow = -1;
   prevTopKnown = false;
   prevBottomEcho = false;
+  shownBottomEcho = false;
   fullRepaintPending = false;
   prevTopSub = 0;
   scrollOpen = false;
+  scrollPrefix = null;
   promptAtBottom = false;
   posClearPending = false;
+
+  // the frame's own carried state: a freeze, a collapse drift or a
+  // stale prevInit left behind by the PREVIOUS session would decide
+  // this one's first paint
+  frozenFrame = false;
+  frozenHome = false;
+  dumbHomePending = false;
+  nulCollapsed = 0;
+  prevInit = false;
+  prevInitAlt = false;
+  promptPainted = false;
+  lastEofBell = 0;
 }
 
 /** Forgets an owed --end-prompt marker: a NEW session only — og's

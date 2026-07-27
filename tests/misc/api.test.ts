@@ -167,14 +167,23 @@ describe('pager(input, options, envVars) API', () => {
   it('clears the env overlay after the call', async () => {
     await drive(() => pager(content, { LESS: '-S' }));
 
-    // option STATE persists across calls (og's one-shot process
-    // model); reset it so a leaked overlay would re-chop via the
-    // second call's own $LESS scan
-    config.chopLongLines = false;
     const output = await drive(() => pager(content));
 
     // without the overlay the long line wraps: the tail displays
     expect(output).toContain('CHOPTAIL');
+  });
+
+  it('starts every call from a clean option table', async () => {
+    // og gets this by being one process per session; freshSession()
+    // gives a library call the same slate, so a -S or -x from one
+    // call cannot decide the next one's screen
+    await drive(() => pager(content, { 'chop-long-lines': true, tabs: 4 }));
+
+    const plain = await drive(() => pager(content));
+    expect(plain).toContain('CHOPTAIL');
+
+    const indented = await drive(() => pager({ a: 1 }, { 'tab-object': true }));
+    expect(indented).toContain('        "a": 1');
   });
 
   it('keeps the generated option type in sync with the table', () => {

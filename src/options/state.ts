@@ -85,3 +85,19 @@ export const opt = {
   // $LESS_IS_MORE: POSIX more compatibility, like og's less_is_more
   lessIsMore: 0,
 };
+
+// og gets a clean option table by being one process per session; a
+// library call has to ask for it. Snapshotted at load, before any
+// scan touches the table.
+const DEFAULTS = JSON.parse(JSON.stringify(opt)) as typeof opt;
+
+/**
+ * Restores every option to its table default, like a fresh less.
+ *
+ * Without this a second pager() call in the same process inherits the
+ * first call's -x, -S and friends: og's opttbl.c globals are
+ * process-lifetime, and ours outlive a session the same way.
+ */
+export function resetOptions(): void {
+  Object.assign(opt, JSON.parse(JSON.stringify(DEFAULTS)) as typeof opt);
+}

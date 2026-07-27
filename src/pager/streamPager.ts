@@ -7,6 +7,8 @@ import { keyboard } from '../tty/keyboard';
 
 import { initInvocationOptions } from '../startup/invocation';
 
+import { freshSession } from '../startup/freshSession';
+
 import { search } from '../features/searching';
 
 import {
@@ -44,6 +46,7 @@ import { PipeSpool } from './spool';
  * here; the interactive behavior is the completed shared pager core.
  */
 export async function pagerPipe(stream: Readable): Promise<void> {
+  freshSession();
   initInvocationOptions();
 
   if (!keyboard().isTTY) {
@@ -126,6 +129,7 @@ function spooledNewlines(path: string, cap: number): number {
  * here while options, commands, rendering and session lifecycle stay in core.
  */
 export default async function streamPager(input: unknown): Promise<void> {
+  freshSession();
   initInvocationOptions();
 
   if (!keyboard().isTTY) {

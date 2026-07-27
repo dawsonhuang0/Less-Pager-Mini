@@ -4,6 +4,8 @@ import { initContent } from '../features/files';
 
 import { initInvocationOptions } from '../startup/invocation';
 
+import { freshSession } from '../startup/freshSession';
+
 import { keyboard } from '../tty/keyboard';
 
 import { contentPager } from './core';
@@ -16,6 +18,7 @@ export default async function paramPager(
   input: unknown,
   tabObject: boolean = false
 ): Promise<void> {
+  freshSession();
   initInvocationOptions();
 
   if (!keyboard().isTTY) {
