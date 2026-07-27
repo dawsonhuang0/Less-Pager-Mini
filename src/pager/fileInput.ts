@@ -277,10 +277,6 @@ export class FileInput implements PagerInput {
         this.bf.refreshSize();
 
         if (jump.kind === 'end') {
-          // back_line takes &soft_eof and sets it walking back from
-          // the file end (jump.c:62), so G counts as the end even
-          // when the filter hides what follows
-          if (session.lastFilter) { session.softEofSeen = true; }
           if (session.lastFilter) this.gotoFilteredEnd();
           else this.view.gotoEnd(config.window);
         } else if (jump.kind === 'position') {
@@ -326,10 +322,6 @@ export class FileInput implements PagerInput {
         this.pendingJump = null;
         this.endDrain();
         if (jump.kind === 'end') {
-          // back_line takes &soft_eof and sets it walking back from
-          // the file end (jump.c:62), so G counts as the end even
-          // when the filter hides what follows
-          if (session.lastFilter) { session.softEofSeen = true; }
           if (session.lastFilter) this.gotoFilteredEnd();
           else this.view.gotoEnd(config.window);
         } else if (jump.kind === 'percent') {
@@ -1355,6 +1347,11 @@ export class FileInput implements PagerInput {
   }
 
   private gotoFilteredEnd(): void {
+    // jump_forw hands &soft_eof to back_line and walks back from the
+    // file's end (jump.c:62), so reaching the end THROUGH a filter
+    // still counts as the end - the prompt says (END), not ":"
+    session.softEofSeen = true;
+
     const end = this.filteredEndTop();
     if (end) this.view.top = end;
   }
