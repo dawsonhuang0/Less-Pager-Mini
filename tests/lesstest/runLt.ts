@@ -150,11 +150,19 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
     setEnv('LESS', [lt.env.LESS ?? '', ...options].filter(Boolean).join(' '));
   }
 
-  // LESSNOCONFIG ignores every variable NOT named (decode.c:1129) and
-  // skips lesskey files (decode.c:1357): the developer's own config
-  // stays out while the recorded variables still reach the session
-  setEnv('LESSNOCONFIG',
-    [...recorded.map(([name]) => name), 'LESSHISTFILE'].join(','));
+  // The developer's own lesskey files must stay out of the replay,
+  // but LESSNOCONFIG is the wrong tool: it skips lesskey ENTIRELY
+  // (decode.c:1357), including the $LESSKEY_CONTENT a recording may
+  // carry - og had that content, so the replay must too. Point every
+  // lesskey lookup at a path that cannot exist instead, and leave the
+  // recorded content alone.
+  const nowhere = path.join(dir, 'no-such-lesskey');
+
+  for (const name of ['LESSKEYIN', 'LESSKEY', 'LESSKEYIN_SYSTEM',
+    'LESSKEY_SYSTEM']) {
+    if (!(name in lt.env)) setEnv(name, nowhere);
+  }
+
   setEnv('LESSHISTFILE', '-');
 
   // intercept output into the emulator
