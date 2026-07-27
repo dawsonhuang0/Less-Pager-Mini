@@ -24,6 +24,10 @@ export interface AltFile {
   size: number;
   /** `-` for pipe preprocessors, the temp file name otherwise. */
   alt: string;
+  /** The preprocessor's output as it arrived, for the byte copy a
+   *  non-terminal session makes (og's cat_file reads the altpipe
+   *  through ch_forw_get, doing no line processing at all). */
+  raw: string;
   /** The pipe preprocessor's failure message, reported when the
    *  file is LEFT (og's close_altfile, edit.c:288), not at open. */
   preprocError?: string;
@@ -56,14 +60,15 @@ function pctS(text: string): number {
  *  ($SHELL -c on unix, %COMSPEC% /c on Windows like og's popen); the
  *  pseudo-file's content feeds the child's stdin, like og letting
  *  the preprocessor inherit the input pipe. */
-function shellCmd(cmd: string, input?: string): SpawnSyncReturns<string> {
+function shellCmd(cmd: string, input?: string): SpawnSyncReturns<Buffer> {
   const argv = shellArgv(cmd);
 
   // og's popen child inherits stderr: a failing preprocessor's own
   // complaint ("cat: b: No such file or directory") reaches the
-  // terminal before og's open error
+  // terminal before og's open error. The output stays BYTES: og's
+  // cat_file copies the altpipe verbatim, so a decode here would
+  // destroy every byte that is not valid UTF-8
   return spawnSync(argv[0], argv[1], {
-    encoding: 'utf8',
     input,
     stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'inherit'],
   });
@@ -74,7 +79,7 @@ function shellCmd(cmd: string, input?: string): SpawnSyncReturns<string> {
  * close_pipe decoding the pclose status - null on clean exit.
  */
 function preprocStatusMessage(
-  result: SpawnSyncReturns<string>
+  result: SpawnSyncReturns<Buffer>
 ): string | null {
   if (result.signal) {
     return `Input preprocessor terminated: ${result.signal}`;
@@ -150,7 +155,12 @@ export function openAltFile(
 
   const cmd = lessopen.replace('%s', shellQuote(filename));
   const result = shellCmd(cmd, filename === '-' ? input : undefined);
-  const output = result.stdout ?? '';
+  const bytes = result.stdout ?? Buffer.alloc(0);
+  const output = bytes.toString('utf8');
+
+  // latin1 round-trips every byte, so a cat can write it back out
+  // exactly as the preprocessor produced it
+  const raw = bytes.toString('latin1');
 
   if (pipes > 0) {
     if (!output) {
@@ -164,7 +174,7 @@ export function openAltFile(
       // with "||" a clean exit means the file really is empty, like
       // og's FAKE_EMPTYFILE; with "|" it means no replacement
       if (pipes > 1 && result.status === 0) {
-        return { lines: [''], size: 0, alt: '-' };
+        return { lines: [''], size: 0, alt: '-', raw };
       }
 
       return null;
@@ -176,6 +186,7 @@ export function openAltFile(
       lines: toLines(output),
       size: Buffer.byteLength(output),
       alt: '-',
+      raw,
       preprocError: preprocStatusMessage(result) ?? undefined,
     };
   }
@@ -187,7 +198,12 @@ export function openAltFile(
   try {
     const data = fs.readFileSync(name, 'utf8');
 
-    return { lines: toLines(data), size: fs.statSync(name).size, alt: name };
+    return {
+      lines: toLines(data),
+      size: fs.statSync(name).size,
+      alt: name,
+      raw: data,
+    };
   } catch {
     report(`${name}: cannot open the LESSOPEN replacement`);
     return null;

@@ -123,6 +123,8 @@ describe('$LESSOPEN "-" forms feed the pseudo-file, like og', () => {
       lines: ['ONE', 'TWO'],
       size: 8,
       alt: '-',
+      raw: 'ONE\nTWO\n',
+      preprocError: undefined,
     });
   });
 
