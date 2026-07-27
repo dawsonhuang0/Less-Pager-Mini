@@ -1780,6 +1780,10 @@ export class FileInput implements PagerInput {
 
     let bodyStart = positions.indexOf(this.view.top.pos);
     let atEof = false;
+    // where the bottom line ENDS in the file, for og's eof_displayed:
+    // -1 when no filter hid anything, so atEof answers on its own
+    let bottomNext = -1;
+    let softEof = false;
 
     if (session.lastFilter) {
       const start = this.nextAccepted(this.view.top.pos);
@@ -1822,6 +1826,7 @@ export class FileInput implements PagerInput {
               positions.push(line.pos);
               seen.add(line.pos);
             }
+            bottomNext = line.next;
             accepted++;
             if (accepted >= limit) pos = line.next;
           }
@@ -1830,8 +1835,17 @@ export class FileInput implements PagerInput {
         // same screen-vs-batch distinction as the seekable branch:
         // accepted lines beyond one screenful keep (END) unlit even
         // when the batch consumed the whole file
-        atEof = accepted <= Math.max(config.window - 1 - this.padTop, 1) &&
-          this.nextAccepted(pos) === null;
+        const screenful = Math.max(config.window - 1 - this.padTop, 1);
+        atEof = accepted <= screenful && this.nextAccepted(pos) === null;
+
+        // og's soft_eof (forwback.c:310, and its comment: it "can
+        // differ from actual EOF if & filtering is in effect"): forw
+        // sets it where a read attempt RETURNED EOF, which only
+        // happens when the filter leaves forw short of the lines it
+        // wanted. A screen the filter fills exactly never attempts
+        // that read, so the bottom line is not the end of anything
+        // and og prompts ":" with the hidden tail still behind it.
+        softEof = accepted < screenful;
       }
     } else {
       const visible = this.view.visible(Math.max(config.window * 3, 64));
@@ -1882,6 +1896,12 @@ export class FileInput implements PagerInput {
 
     calculateEOF(session.content);
     mode.EOF = atEof;
+
+    // og's eof_displayed wants the bottom line to END the file, so a
+    // & filter hiding the tail leaves real lines behind it and the
+    // prompt stays ":" (forwback.c:76)
+    session.filterHidesTail = !!session.lastFilter && bottomNext >= 0 &&
+      bottomNext < this.bf.size && !softEof;
 
     // keep the upstream pipe flowing 8MB past the materialized window,
     // paused otherwise, so `yes | lmn` holds bounded spool growth

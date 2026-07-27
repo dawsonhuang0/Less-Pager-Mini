@@ -73,6 +73,11 @@ export const session = {
 
   /** The active & display filter over fullContent. */
   lastFilter: null as ((line: string) => boolean) | null,
+  /** True when a & filter is hiding lines BELOW the bottom line.
+   *  og's eof_displayed asks where the bottom line ends in the FILE
+   *  (forwback.c:76), which is not the same question as mode.EOF -
+   *  "is anything left to display". They differ only here. */
+  filterHidesTail: false,
 
   /** The process title to restore at exit. */
   processTitle: '',
@@ -146,6 +151,7 @@ export function resetSession(content: string[]): void {
   session.lastDragY = -1;
 
   session.lastFilter = null;
+  session.filterHidesTail = false;
   session.processTitle = process.title;
 
   session.pipeStream = null;

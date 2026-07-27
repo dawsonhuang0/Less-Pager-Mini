@@ -17,6 +17,8 @@ import { ntags, currTag } from "./tags";
 
 import { lgetenv } from '../startup/environment';
 
+import { session } from '../state/session';
+
 // screen positions selected by the where char, like less's position.h
 type Where = 't' | 'm' | 'b' | 'B' | 'j';
 
@@ -211,8 +213,12 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'c': return config.col !== 0;
 
     // og's eof_displayed: with a pipe's length unknown, the bottom
-    // line at the end is not yet (END) — the help file always knows
-    case 'e': return mode.EOF && (mode.HELP || sizeIsKnown());
+    // line at the end is not yet (END) — the help file always knows.
+    // It asks where the bottom line ends in the FILE, so a tail
+    // hidden by a & filter keeps it short of the end
+    case 'e':
+      return mode.EOF && !session.filterHidesTail &&
+        (mode.HELP || sizeIsKnown());
 
     case 'f': case 'g':
       return entry !== undefined && entry.path !== '-';

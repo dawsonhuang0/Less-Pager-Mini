@@ -1685,7 +1685,6 @@ export function calculateEOF(content: string[]): void {
   config.endRow = lastRow;
   config.endSubRow = lastSubRow;
   mode.EOF = lastRow === 0 && (chopLine() || lastSubRow === 0);
-
 }
 
 /**
@@ -1841,9 +1840,15 @@ function getPrompt(content: string[]): string {
 
   promptPainted = true;
 
-  if (!text) return colored('prompt', ':');
+  // og marks a filtered session on the prompt line: prompt() writes
+  // "& " plain and loads the prompt itself two columns in
+  // (command.c:1019), so the marker never takes the standout
+  const amp = search.filters.length ? '& ' : '';
 
-  return colored('prompt', clipPrompt(text), INVERSE_ON, INVERSE_OFF);
+  if (!text) return amp + colored('prompt', ':');
+
+  return amp +
+    colored('prompt', clipPrompt(text, amp.length), INVERSE_ON, INVERSE_OFF);
 }
 
 /**
@@ -1852,8 +1857,8 @@ function getPrompt(content: string[]): string {
  * head off (line.c:1924). Error messages are never clipped - og
  * prints those full and lets them trash the screen.
  */
-function clipPrompt(text: string): string {
-  const max = config.screenWidth - 1;
+function clipPrompt(text: string, indent: number = 0): string {
+  const max = config.screenWidth - 1 - indent;
   if (text.length <= max && !isStyled(text)) return text;
   if (visualWidth(text) <= max) return text;
 
