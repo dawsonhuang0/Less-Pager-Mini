@@ -50,6 +50,8 @@ import { colored, ColorKind } from "./color";
 import {
   INVERSE_ON,
   INVERSE_OFF,
+  UNDERLINE_ON,
+  UNDERLINE_OFF,
   CLEAR_LINE
 } from "../state/constants";
 
@@ -873,10 +875,17 @@ export function highlightLine(line: string, row: number = -1): string {
   // resets everything - so the state goes back in behind it.
   let active = '';
 
+  // og's store_char computes link_attr = hl_attr | AT_UNDERLINE for a
+  // hilited character inside an OSC 8 link, then takes the hl_attr
+  // branch and never applies it (line.c:883 and :888) - so a search
+  // match inside a link takes standout WITHOUT the link's underline.
+  let inLink = false;
+
   for (const token of tokens) {
     if (token.code) {
       out.push(token.code);
       active += token.code;
+      if (token.code.startsWith('\x1b]8;')) inLink = !isOsc8Close(token.code);
       continue;
     }
 
@@ -902,9 +911,15 @@ export function highlightLine(line: string, row: number = -1): string {
       }
 
       const end = Math.min(rangeEnd - start, text.length);
+
+      // the link's underline gives way to the match's standout
+      if (inLink) out.push(UNDERLINE_OFF);
+
       out.push(colored(
         ranges[r][2], text.slice(pos, end), INVERSE_ON, INVERSE_OFF
       ));
+
+      if (inLink) out.push(UNDERLINE_ON);
 
       // only when styled text actually follows: a hilite that runs to
       // the end of its run is followed by the file's own next code
@@ -957,6 +972,12 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
  * inside the text a search runs against - github265's bug, where
  * "y he" fails to find "Why <ESC>[01;31m<ESC>[Khello".
  */
+/** True for the OSC 8 sequence that CLOSES a link: an empty URI. */
+/* eslint-disable-next-line no-control-regex */
+const OSC8_CLOSE = /^\x1b\]8;[^;]*;(?:\x07|\x1b\\)/;
+
+const isOsc8Close = (code: string): boolean => OSC8_CLOSE.test(code);
+
 export function stripStyles(line: string): string {
   if (!line.includes('\x1b')) return line;
 
