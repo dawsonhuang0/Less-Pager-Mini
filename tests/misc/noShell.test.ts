@@ -132,6 +132,27 @@ describe('the library shell lock', () => {
     startSession('--no-shell', true);
     expect(opt.noShell).toBe(1);
   });
+
+  it('reads the lock from a lesskey #env too', () => {
+    // og scans $LESS after init_cmds, so a #env line is one of the
+    // tiers the option string can come from (decode.c lgetenv). The
+    // file belongs to whoever RUNS the application, so it is ambient
+    // policy, and the caller's overlay must not lift it
+    const keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-lockkey-'));
+    const key = path.join(keyDir, 'ambient.lesskey');
+    fs.writeFileSync(key, '#env\nLESS = --no-shell\n');
+    process.env.LESSKEYIN = key;
+
+    try {
+      setSessionEnv({ LESS: '--+no-shell' });
+      startSession(undefined);
+    } finally {
+      setSessionEnv(null);
+      delete process.env.LESSKEYIN;
+    }
+
+    expect(opt.noShell).toBe(1);
+  });
 });
 
 describe('--no-shell blocks every process launch, not just commands', () => {

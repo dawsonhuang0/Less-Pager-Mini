@@ -20,7 +20,7 @@ import { initAnsiChars, initTerminalCapabilities } from '../state/constants';
 
 import { resetProtos } from '../features/prompt';
 
-import { actualEnv, initEnvironment, lgetenv, fromSessionEnv }
+import { ambientEnv, initEnvironment, lgetenv, fromSessionEnv }
   from './environment';
 
 import { lockLibraryShell } from './invocation';
@@ -83,8 +83,11 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // an environment may TIGHTEN but never relax: a deployment that
   // hardens every invocation with LESS=--no-shell keeps that hold
   // even when the caller's own overlay replaces the string, so an
-  // application cannot configure its way around the policy
-  const ambientLock = requestsNoShell(actualEnv(optionsEnv) ?? '');
+  // application cannot configure its way around the policy. The whole
+  // ladder counts, not just the process environment: a lesskey #env
+  // line is loaded by now (og scans $LESS after init_cmds, like us)
+  // and belongs to whoever runs the application, not to the caller
+  const ambientLock = requestsNoShell(ambientEnv(optionsEnv) ?? '');
 
   const startup = scanOptions(lgetenv(optionsEnv) ?? '', content);
 
