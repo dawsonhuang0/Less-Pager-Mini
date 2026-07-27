@@ -30,6 +30,7 @@ import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
 
 import {
   config,
+  fullScreen,
   mode,
   applyConfig,
   applyMode,
@@ -2051,7 +2052,8 @@ function prepareHelp(): void {
   if (helpEntry?.alt && helpEntry.preprocError &&
       optShowPreprocError() && process.stdout.isTTY &&
       mode.INIT && !optOldBot()) {
-    let frame = '\r' + CLEAR_LINE + '...skipping...\n';
+    let frame = '\r' + CLEAR_LINE +
+      (fullScreen() ? '...skipping...\n' : '');
 
     for (let i = 0; i < config.window - 1; i++) {
       frame += optTildes() ? BOLD_ON + '~' + BOLD_OFF + '\n' : '\n';

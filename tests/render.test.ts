@@ -8,6 +8,8 @@ import { search } from '../src/features/searching';
 
 import { files, initFiles } from '../src/features/files';
 
+import { detectedDimensions } from '../src/tty/screen';
+
 const content = Array.from({ length: 60 }, (_, i) => `line ${i}`);
 
 let writes: string[] = [];
@@ -209,5 +211,63 @@ describe('render', () => {
     render(content, []);
 
     expect(writes[1]).toContain('\x1b[24;2H');
+  });
+});
+
+describe('$LESS_LINES gives up og full_screen', () => {
+  // the rows below the window belong to whoever launched us, so
+  // scrolling into them is not allowed: og repaints where it would
+  // have scrolled and drops the marker (screen.c:966 and its readers)
+  afterEach(() => {
+    delete process.env.LESS_LINES;
+    detectedDimensions();
+  });
+
+  const shrink = (): void => {
+    process.env.LESS_LINES = String(config.window);
+    detectedDimensions();
+  };
+
+  it('repaints instead of scrolling one line forward', () => {
+    config.row = 10;
+    render(content, []);
+    shrink();
+
+    config.row = 11;
+    render(content, []);
+
+    expect(writes[1]).not.toContain('\x1b[1S');
+    expect(writes[1]).toContain('\x1b[H');
+    // the whole window reprints, top row included, not just the
+    // newly exposed bottom one a scroll would have added
+    expect(writes[1]).toContain('line 11');
+    expect(writes[1]).toContain('line 33');
+  });
+
+  it('drops the skipping marker on a far forward jump', () => {
+    config.row = 10;
+    render(content, []);
+    shrink();
+
+    config.row = 36;
+    render(content, []);
+
+    expect(writes[1]).not.toContain('...skipping...');
+    expect(writes[1]).toContain('\x1b[H');
+    expect(writes[1]).toContain('line 36');
+  });
+
+  it('scrolls again once the variable is gone', () => {
+    shrink();
+    config.row = 10;
+    render(content, []);
+
+    delete process.env.LESS_LINES;
+    detectedDimensions();
+
+    config.row = 11;
+    render(content, []);
+
+    expect(writes[1]).toContain('\x1b[1S');
   });
 });

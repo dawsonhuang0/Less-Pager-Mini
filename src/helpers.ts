@@ -2,7 +2,7 @@ import fs from 'fs';
 
 import { hasUngot } from './tty/keyboard';
 
-import { config, mode } from './state/config';
+import { config, fullScreen, mode } from './state/config';
 
 import { chopLongLines } from './lines/chopLongLines';
 import { wrapLongLines } from './lines/wrapLongLines';
@@ -711,8 +711,12 @@ export function render(rawContent: string[], buffer: string[]): void {
   prevBottomEcho = !!option.pending || cmd.active || !!config.keyPrefix;
 
   // the armed repaint waits for a frame back at the true prompt, like
-  // og's toggle_option resuming after error() returns
-  const forceFull = fullRepaintPending && !search.message &&
+  // og's toggle_option resuming after error() returns. Without a full
+  // screen EVERY prompt repaints: og's make_display takes the same
+  // branch as a trashed screen (command.c:863), because a scroll would
+  // print into the rows below the window that are not ours
+  const forceFull = (fullRepaintPending || !fullScreen()) &&
+    !search.message &&
     !option.pending && !search.input && !examine.pending &&
     !miscInput.pending && !brackets.pending && !marks.pending &&
     !mode.BUFFERING && !config.keyPrefix;
@@ -943,7 +947,9 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
   dumbPainted = true;
 
   return '\r' +
-    (repaint ? (clearHome ? '\n\n|\b^' : '...skipping...\n') : '') +
+    (repaint && (clearHome || fullScreen())
+      ? (clearHome ? '\n\n|\b^' : '...skipping...\n')
+      : '') +
     joinDumb(plain);
 }
 
@@ -1317,8 +1323,10 @@ function scrollFrame(
   // forward far jumps and repaints print og's skipping marker over
   // the cleared prompt row and scroll (repaint() without top_scroll);
   // trashed-screen repaints carry their own prefix instead of a
-  // command's clear_bot
-  return (prefix ?? clearBot()) + '...skipping...\n' + body + bot;
+  // command's clear_bot. The rows still print without a full screen,
+  // only the marker goes (forwback.c:272)
+  return (prefix ?? clearBot()) +
+    (fullScreen() ? '...skipping...\n' : '') + body + bot;
 }
 
 /**
@@ -1572,7 +1580,7 @@ function skippedFrame(
   // the squished first paint stores one row per collapse MORE than
   // the window (its loss is absorbed at the top), so require a full
   // screen on both sides rather than an exact match
-  if (!prev || session.lastFilter ||
+  if (!prev || session.lastFilter || !fullScreen() ||
       prev.length < config.window || rows.length < config.window) {
     return null;
   }

@@ -15,6 +15,28 @@ export let config: Config = getDefaultConfig();
  */
 export let mode: Record<Mode, boolean> = getDefaultMode();
 
+// og's full_screen (screen.c:300). Lives here rather than in the
+// screen module so both the size probe that clears it and the
+// painters that read it can reach it without importing each other.
+let wholeTerminal = true;
+
+/**
+ * True while the pager owns every line of the terminal.
+ *
+ * $LESS_LINES says otherwise: the rows below the window belong to
+ * whoever launched us, so og stops scrolling into them. It repaints
+ * where it would have scrolled (make_display, command.c:863; jump_loc,
+ * jump.c:244) and drops the "...skipping..." marker (forwback.c:272).
+ * og also refuses the "ll" capability then (screen.c:1685); we always
+ * address the cursor absolutely, so that one needs nothing.
+ */
+export const fullScreen = (): boolean => wholeTerminal;
+
+/** Records what scrsize found, like og assigning full_screen. */
+export function setFullScreen(value: boolean): void {
+  wholeTerminal = value;
+}
+
 /**
  * Overwrites all pager configuration with a new one.
  *
@@ -38,6 +60,9 @@ export function applyMode(newMode: Record<Mode, boolean>): void {
  */
 export function resetConfig(): void {
   config = getDefaultConfig();
+  // og starts every process owning the whole terminal; scrsize takes
+  // it away again if this session's $LESS_LINES asks
+  wholeTerminal = true;
 }
 
 /**

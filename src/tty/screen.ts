@@ -1,6 +1,6 @@
 import { keyboard } from './keyboard';
 
-import { config, mode } from '../state/config';
+import { config, mode, setFullScreen } from '../state/config';
 
 import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
   reserveGutter, hook } from '../options';
@@ -50,7 +50,12 @@ export function detectedDimensions(): [number, number] {
       ? atoi(lgetenv('COLUMNS') ?? '')
       : terminalNumber('cols', 'co') ?? 0;
 
+  // og's full_screen goes FALSE here and never back (screen.c:966);
+  // the variable cannot change inside one process, so recomputing it
+  // on every scrsize - resize included - is the same thing
   const lessRows = lgetenv('LESS_LINES');
+  setFullScreen(lessRows === undefined);
+
   if (lessRows !== undefined) {
     const value = atoi(lessRows);
     rows = value < 0 ? rows + value : value;
