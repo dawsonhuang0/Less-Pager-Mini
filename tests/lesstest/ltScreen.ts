@@ -194,7 +194,14 @@ export class LtScreen {
     if (!match) return at + 2;
 
     const [full, priv, paramText, final] = match;
-    this.pendingWrap = false;
+
+    // xterm's last-column flag survives a sequence that does not
+    // touch the cursor: SGR sets attributes only, so a style change
+    // between the last column and the deferred-wrap nudge (og's
+    // " \b", line.c:1527) must leave the wrap pending. Clearing it
+    // made the nudge overwrite the last column instead
+    if (final !== 'm') this.pendingWrap = false;
+
     const params = paramText.split(';').map(p => parseInt(p, 10) || 0);
 
     if (priv === '?') {
