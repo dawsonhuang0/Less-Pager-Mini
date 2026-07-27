@@ -20,7 +20,7 @@ import { initAnsiChars, initTerminalCapabilities } from '../state/constants';
 
 import { resetProtos } from '../features/prompt';
 
-import { initEnvironment, lgetenv } from './environment';
+import { initEnvironment, lgetenv, fromSessionEnv } from './environment';
 
 import { lockLibraryShell } from './invocation';
 
@@ -74,8 +74,12 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
   initUnsupport(lgetenv('LESS_UNSUPPORT') ?? '');
 
-  const startup = scanOptions(
-    lgetenv(opt.lessIsMore ? 'MORE' : 'LESS') ?? '', content);
+  // whether the option string the scan is about to read belongs to
+  // the CALLER (its config map) or to the ambient environment
+  const optionsEnv = opt.lessIsMore ? 'MORE' : 'LESS';
+  const callerOptions = fromSessionEnv(optionsEnv);
+
+  const startup = scanOptions(lgetenv(optionsEnv) ?? '', content);
 
   // command line options follow the env, one scan per argument like
   // og's main; -r keeps its command line meaning there
@@ -89,9 +93,10 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // a still-dangling string/number option reports now (og nopendopt)
   flushPendopt();
 
-  // the scan is over: nothing it read - $LESS, $MORE, a lesskey #env
-  // line - may hand shell escapes back to a library call
-  lockLibraryShell();
+  // the scan is over: nothing the AMBIENT environment supplied may
+  // hand shell escapes back to a library call, though the caller's
+  // own overlay may ask for them
+  lockLibraryShell(callerOptions);
 
   // og's pre-screen error() prints scan errors right away, ahead of
   // any binary-file question edit_first may ask

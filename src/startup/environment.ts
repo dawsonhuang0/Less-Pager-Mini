@@ -15,6 +15,17 @@ const systemVars = new Map<string, string>();
 // (lesskey #env values still override it, like og over a real env)
 let sessionVars: Record<string, string | undefined> | null = null;
 
+/**
+ * True when the CALLER supplied this variable, rather than it coming
+ * from the ambient process environment. The overlay is the embedding
+ * application's own configuration, so it can be trusted with choices
+ * the surrounding shell cannot be.
+ */
+export function fromSessionEnv(name: string): boolean {
+  const value = sessionVars?.[name];
+  return value !== undefined && value !== '';
+}
+
 /** Installs (or clears) a library call's environment overlay. */
 export function setSessionEnv(
   vars: Record<string, string | undefined> | null

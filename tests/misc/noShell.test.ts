@@ -26,6 +26,8 @@ import {
 
 import { startupInit } from '../../src/startup/startup';
 
+import { setSessionEnv } from '../../src/startup/environment';
+
 const enterOption = (keys: string): void => {
   startOption(keys[0] as '-' | '_');
   for (const key of keys.slice(1)) optionKey([], key);
@@ -73,6 +75,26 @@ describe('the library shell lock', () => {
     initInvocationOptions();
     startupInit([]);
   };
+
+  it('lets the CALLER ask for shell access in its own config map', () => {
+    // pager(x, { LESS: '--+no-shell' }): the overlay is the embedding
+    // application's own configuration, not the shell it was launched
+    // from, so this one is deliberate and allowed
+    setSessionEnv({ LESS: '--+no-shell' });
+    startSession(undefined);
+    setSessionEnv(null);
+
+    expect(opt.noShell).toBe(0);
+  });
+
+  it('ignores an ambient $LESS even when the caller sets other options',
+    () => {
+      setSessionEnv({ LESS: '-S' });
+      startSession('--+no-shell');
+      setSessionEnv(null);
+
+      expect(opt.noShell).toBe(1);
+    });
 
   it('survives $LESS trying to reset it', () => {
     // the scan reads an environment the embedding application does

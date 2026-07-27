@@ -94,11 +94,14 @@ function splitConfig(config: PagerConfig): {
  *   Else it still stringifies, flat on one line, losing no content.
  * - `examine-file`: If true, treats input as file path(s) and reads from disk.
  *
- * Safeguard flag `no-shell` prevents shell command execution. By default:
- * - True from library calls, `pagerPipe` included, and LOCKED there:
- *   the option scan reads `$LESS`, `$MORE` and a lesskey's `#env`
- *   lines, none of which the embedding application necessarily
- *   controls, so none of them can hand `!`, `|` and `v` back.
+ * Safeguard flag `no-shell` prevents shell command execution — and
+ * with it `$LESSOPEN`, `$LESSCLOSE` and every other process launch.
+ * By default:
+ * - True from library calls, `pagerPipe` included. The ambient
+ *   environment cannot lift it: the scan reads `$LESS`, `$MORE` and a
+ *   lesskey's `#env` lines, none of which the embedding application
+ *   necessarily controls. THIS map can, since it is that
+ *   application's own configuration: `{ LESS: '--+no-shell' }`.
  * - False from the `lmn` terminal command, file or pipe alike, where
  *   its own `--no-shell` still applies.
  *
