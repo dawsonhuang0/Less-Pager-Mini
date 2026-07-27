@@ -4,6 +4,8 @@ import { search } from '../../src/features/searching';
 
 import { initSecure, secureAllow } from '../../src/features/secure';
 
+import { setSessionEnv } from '../../src/startup/environment';
+
 beforeEach(() => {
   search.message = '';
 });
@@ -13,6 +15,45 @@ afterEach(() => {
   delete process.env.LESSSECURE_ALLOW;
   delete process.env.LESSSECURE_DISALLOW;
   initSecure();
+});
+
+describe('a caller may tighten LESSSECURE, never loosen it', () => {
+  afterEach(() => setSessionEnv(null));
+
+  it('refuses to re-allow what the environment took away', () => {
+    // og is a program its user ran, so whoever writes
+    // LESSSECURE_ALLOW also wrote LESSSECURE. A library call has two
+    // parties, and a deployment's hardening outranks the application
+    process.env.LESSSECURE = '1';
+    setSessionEnv({ LESSSECURE_ALLOW: 'shell,lessopen,edit' });
+    initSecure();
+
+    expect(secureAllow('shell')).toBe(false);
+    expect(secureAllow('lessopen')).toBe(false);
+    expect(secureAllow('edit')).toBe(false);
+  });
+
+  it('still lets a caller harden itself', () => {
+    setSessionEnv({ LESSSECURE: '1' });
+    initSecure();
+
+    expect(secureAllow('shell')).toBe(false);
+
+    // and pick what it hands back, since nothing above forbade it
+    setSessionEnv({ LESSSECURE: '1', LESSSECURE_ALLOW: 'lessopen' });
+    initSecure();
+
+    expect(secureAllow('lessopen')).toBe(true);
+    expect(secureAllow('shell')).toBe(false);
+  });
+
+  it('keeps a caller\'s DISALLOW, which only subtracts', () => {
+    setSessionEnv({ LESSSECURE_DISALLOW: 'shell' });
+    initSecure();
+
+    expect(secureAllow('shell')).toBe(false);
+    expect(secureAllow('tags')).toBe(true);
+  });
 });
 
 describe('LESSSECURE', () => {

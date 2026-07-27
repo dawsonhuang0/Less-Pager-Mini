@@ -105,6 +105,9 @@ function splitConfig(config: PagerConfig): {
  *   An environment may still TIGHTEN what the map asks for — a
  *   deployment-wide `LESS=--no-shell` outranks that unlock, so an
  *   application cannot configure its way around a hardening policy.
+ *   `$LESSSECURE` works the same way: this map can restrict a
+ *   session further, never hand back a feature the environment
+ *   withheld.
  * - False from the `lmn` terminal command, file or pipe alike, where
  *   its own `--no-shell` still applies.
  *
