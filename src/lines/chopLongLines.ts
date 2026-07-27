@@ -12,10 +12,27 @@ import { optRscroll, optRscrollAttr, optHeader } from "../options";
 
 import { colored } from "../features/color";
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from "../state/constants";
+import { STYLE_RESET } from "../state/constants";
 
-const getFillingSpace = (length: number): string =>
-  length > 0 ? INVERSE_ON + ' '.repeat(length) + INVERSE_OFF : '';
+/**
+ * The "half char" og leaves at the left edge when the shift cuts a
+ * wide character: add_linebuf(' ', rscroll_attr|AT_PLACEHOLDER)
+ * (line.c:1002), so it wears the --rscroll attribute, standout by
+ * default - the same attribute as the > marker at the other edge.
+ *
+ * @param placeholder - False at a seam that is not the screen's left
+ *   edge. og paints the body shifted and then OVERLAYS the --header
+ *   columns (forwback.c:184), so a wide char straddling that seam is
+ *   simply half overwritten and its orphaned cell carries no
+ *   attribute at all.
+ */
+const getFillingSpace = (length: number, placeholder = true): string => {
+  if (length <= 0) return '';
+  if (!placeholder) return ' '.repeat(length);
+
+  const attr = optRscrollAttr();
+  return colored('rscroll', ' '.repeat(length), attr.on, attr.off);
+};
 
 // og pads with normal spaces and attributes only the rscroll char
 // (standout by default, or the --rscroll "*x" attribute)
@@ -77,7 +94,8 @@ function chopWithPrefix(line: string, pfxCols: number): string {
   const parts: string[] = [];
 
   chop(parts, line, 0, pfxCols, false);
-  chop(parts, line, config.col + pfxCols, config.screenWidth - pfxCols);
+  chop(parts, line, config.col + pfxCols, config.screenWidth - pfxCols,
+    true, false);
 
   const pad = pfxCols - visualWidth(parts[0]);
   return parts[0] + (pad > 0 ? ' '.repeat(pad) : '') + parts[1];
@@ -102,7 +120,8 @@ function chop(
   longLine: string,
   col: number = config.col,
   width: number = config.screenWidth,
-  marker: boolean = true
+  marker: boolean = true,
+  placeholder: boolean = true
 ): void {
   // --rscroll=- disables the marker: the text keeps the last column
   marker = marker && optRscroll() !== '';
@@ -134,7 +153,9 @@ function chop(
     k++;
   }
 
-  const parts: string[] = [getFillingSpace(prefix[start] - col)];
+  const parts: string[] = [
+    getFillingSpace(prefix[start] - col, placeholder),
+  ];
   parts.push(...active);
 
   let pos = prefix[start];
