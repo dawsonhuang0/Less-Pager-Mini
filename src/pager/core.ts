@@ -50,6 +50,8 @@ import {
   freezeFrame,
   unfreezeFrame,
   markFullRepaint,
+  markHiliteRepaint,
+  hiliteRepaintPending,
   seedFrameRows,
   seedBlankFrame,
   resetRender,
@@ -334,6 +336,8 @@ export async function contentPager(
   session.content = deriveContent();
 
   // -s, -x and -r reshape the displayed content when toggled
+  hook.hiliteRepaint = markHiliteRepaint;
+
   onRebuild(() => {
     // inside the help screen the help itself repaints (og's -D and
     // friends carry O_REPAINT on the current file); the main content
@@ -1411,8 +1415,12 @@ function dispatchKey(sequence: string): void {
     // a completed toggle reports like og's error(): the message
     // draws over the old screen and any repaint waits for the
     // dismissing keystroke (toggle_option's screen_trashed, whose
-    // make_display repaint homes a dumb terminal)
-    if (search.message) freezeFrame(true);
+    // make_display repaint homes a dumb terminal).
+    //
+    // Except for an O_HL_REPAINT option: chg_hilite runs BEFORE the
+    // message (option.c:463) and repaint_hilite redraws every row
+    // (search.c:1119), so that one is already on screen underneath
+    if (search.message && !hiliteRepaintPending()) freezeFrame(true);
 
     render(session.content, session.buffer);
     return;

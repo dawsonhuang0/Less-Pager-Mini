@@ -532,6 +532,7 @@ export function resetRender(): void {
   prevBottomEcho = false;
   shownBottomEcho = false;
   fullRepaintPending = false;
+  hiliteRepaintPending_ = false;
   prevTopSub = 0;
   scrollOpen = false;
   scrollPrefix = null;
@@ -598,6 +599,21 @@ let dumbHomePending = false;
 export function markFullRepaint(): void {
   fullRepaintPending = true;
 }
+
+/**
+ * og's O_HL_REPAINT: toggle_option calls chg_hilite BEFORE it prints
+ * the option's message (option.c:463), and chg_hilite re-highlights
+ * the screen through repaint_hilite, which redraws every row
+ * (search.c:1119). So the new rendering is on screen UNDER the
+ * message, not after it - unlike plain O_REPAINT, whose screen_trashed
+ * waits for the next make_display.
+ */
+export function markHiliteRepaint(): void {
+  hiliteRepaintPending_ = true;
+}
+
+/** True while such a repaint is still owed. */
+export const hiliteRepaintPending = (): boolean => hiliteRepaintPending_;
 
 export function freezeFrame(homeOnUnfreeze: boolean = false): void {
   frozenFrame = true;
@@ -716,13 +732,17 @@ export function render(rawContent: string[], buffer: string[]): void {
   // screen EVERY prompt repaints: og's make_display takes the same
   // branch as a trashed screen (command.c:863), because a scroll would
   // print into the rows below the window that are not ours
-  const forceFull = (fullRepaintPending || !fullScreen()) &&
+  const forceFull = hiliteRepaintPending_ ||
+    ((fullRepaintPending || !fullScreen()) &&
     !search.message &&
     !option.pending && !search.input && !examine.pending &&
     !miscInput.pending && !brackets.pending && !marks.pending &&
-    !mode.BUFFERING && !config.keyPrefix;
+    !mode.BUFFERING && !config.keyPrefix);
 
-  if (forceFull) fullRepaintPending = false;
+  if (forceFull) {
+    fullRepaintPending = false;
+    hiliteRepaintPending_ = false;
+  }
 
   let rows = screenRows(rawContent, buffer, filling);
 
@@ -1050,6 +1070,7 @@ let shownBottomEcho = false;
 // AFTER error()'s get_return, so the toggle's message shows over the
 // old screen first and the fresh paint lands when it is dismissed
 let fullRepaintPending = false;
+let hiliteRepaintPending_ = false;
 
 let prevTopSub = 0;
 

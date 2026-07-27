@@ -18,5 +18,10 @@ export const procBackspace: OptionSpec = {
     set: value => {
       opt.procBackspace = value as number;
       hook.rebuildContent();
+
+      // og's O_HL_REPAINT (opttbl.c): chg_hilite runs before the
+      // option's message and repaints the screen through
+      // repaint_hilite, so the new shape shows UNDER the message
+      hook.hiliteRepaint();
     },
   };

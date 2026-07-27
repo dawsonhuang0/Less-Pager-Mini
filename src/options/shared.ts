@@ -41,6 +41,8 @@ import {
  *  init and TOGGLE handlers, never during the option scan. */
 export const hook = {
   rebuildContent: (() => {}) as () => void,
+  /** og's O_HL_REPAINT: re-highlight NOW, under the option's message. */
+  hiliteRepaint: (() => {}) as () => void,
   trimBufSpace: (() => {}) as () => void,
   screenActive: false,
   /** --file-size draining a still-unknown pipe (og's opt_filesize). */
