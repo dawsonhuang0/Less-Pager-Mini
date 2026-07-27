@@ -213,6 +213,11 @@ export function closeAltFile(
   // and the interrupted action (help, quit, :n) continues after
   if (preprocError && optShowPreprocError()) gateReturn(preprocError);
 
+  // the error report above is close_altpipe's, which og runs
+  // unguarded; SF_LESSOPEN gates only LESSCLOSE, ahead of reading it
+  // so a secure session stays silent about a malformed one
+  if (!secureAllow('lessopen')) return;
+
   const lessclose = lgetenv('LESSCLOSE');
   if (!lessclose) return;
 

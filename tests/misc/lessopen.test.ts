@@ -9,7 +9,9 @@ import { search } from '../../src/features/searching';
 import { files, initFiles, loadFile, closeAlt }
   from '../../src/features/files';
 
-import { openAltFile } from '../../src/features/lessopen';
+import { closeAltFile, openAltFile } from '../../src/features/lessopen';
+
+import { initSecure } from '../../src/features/secure';
 
 import { scanOptions } from '../../src/options';
 
@@ -171,6 +173,25 @@ describe('$LESSCLOSE', () => {
     expect(search.message).toBe(
       'LESSCLOSE ignored; must contain no more than 2 %s'
     );
+  });
+
+  it('is disallowed by LESSSECURE, ahead of the %s check', () => {
+    const log = path.join(dir, 'close3.log');
+    process.env.LESSCLOSE = `echo %s %s %s > ${log}`;
+    process.env.LESSSECURE = '1';
+
+    try {
+      initSecure();
+      // og's close_altfile returns on SF_LESSOPEN before it even
+      // reads $LESSCLOSE, so the malformed value goes unreported
+      closeAltFile('-', orig);
+    } finally {
+      delete process.env.LESSSECURE;
+      initSecure();
+    }
+
+    expect(fs.existsSync(log)).toBe(false);
+    expect(search.message).toBe('');
   });
 
   it('does nothing without a $LESSOPEN product', () => {
