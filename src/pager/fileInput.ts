@@ -890,6 +890,11 @@ export class FileInput implements PagerInput {
       return false;
     }
 
+    // og's pos_rehead moves table[TOP] back to the line's beginning
+    // (position.c:325); here the top's POSITION already is one, so
+    // re-anchoring means dropping the sub-row the caller cleared
+    if (config.subRow === 0) this.view.top.subRow = 0;
+
     this.sync();
     return true;
   }
