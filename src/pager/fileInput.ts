@@ -1113,6 +1113,18 @@ export class FileInput implements PagerInput {
   }
 
   private backward(rows: number, force: boolean = false): void {
+    // og's back_line lands on the greatest row start BELOW the
+    // current position (input.c:358), so from a shifted top that is
+    // the boundary the shift sits inside: undoing the shift IS the
+    // first row of the move (measured against og).
+    if (config.subShift > 0) {
+      config.subShift = 0;
+      if (--rows <= 0) {
+        this.sync();
+        return;
+      }
+    }
+
     // og's back() opens with squish_check (forwback.c:394), BEFORE it
     // knows whether anything can scroll: a backward command repaints
     // the squished short first screen — filling the blank rows above

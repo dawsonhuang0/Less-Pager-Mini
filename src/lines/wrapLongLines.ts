@@ -2,7 +2,9 @@ import { config } from '../state/config';
 
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from '../helpers';
-import { isStyled, isAscii, withReset } from './helpers';
+import { isStyled, isAscii, withReset, openStyleAt } from './helpers';
+
+import { subRowStart } from '../features/jumping';
 
 import { getLayout, emitRow } from './lineLayout';
 
@@ -54,8 +56,20 @@ export function wrapLongLines(content: string[], lines: string[]): void {
  * @param lines - Array to append wrapped rows to.
  * @param longLine - Text line to wrap (may contain ANSI/Unicode).
  */
-function wrap(lines: string[], longLine: string): void {
-  const startRow = lines.length ? 0 : config.subRow;
+function wrap(lines: string[], longLine: string, shifted = false): void {
+  const first = lines.length === 0 && !shifted;
+  const startRow = first ? config.subRow : 0;
+
+  // og reads the top row from wherever table[TOP] points, so after a
+  // width change it starts mid-boundary and every row of that line
+  // wraps from there. Emitting the remainder as its own line is the
+  // same thing: the grid is anchored at the top, not at column 0.
+  if (first && config.subShift > 0) {
+    const from = subRowStart(longLine, config.subRow) + config.subShift;
+
+    wrap(lines, openStyleAt(longLine, from) + longLine.slice(from), true);
+    return;
+  }
 
   // --wordwrap boundaries live in the layout, even for plain lines
   if (!optWordwrap() && !isStyled(longLine) && isAscii(longLine) &&

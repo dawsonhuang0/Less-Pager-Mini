@@ -10,6 +10,10 @@ import { files, initFiles } from '../src/features/files';
 
 import { detectedDimensions } from '../src/tty/screen';
 
+import { subRowStart } from '../src/features/jumping';
+
+import { screenRows } from '../src/helpers';
+
 const content = Array.from({ length: 60 }, (_, i) => `line ${i}`);
 
 let writes: string[] = [];
@@ -21,6 +25,7 @@ beforeEach(() => {
   config.col = 0;
   config.bufferOffset = 0;
   config.keyPrefix = '';
+  config.subShift = 0;
   config.screenWidth = 80;
   config.window = 24;
   config.chopLongLines = true;
@@ -271,5 +276,41 @@ describe('$LESS_LINES gives up og full_screen', () => {
     render(content, []);
 
     expect(writes[1]).toContain('\x1b[1S');
+  });
+});
+
+describe('a width change keeps the top on the same text', () => {
+  // og's table[TOP] is a byte position: a width change re-wraps from
+  // the same byte, a forward move keeps that shifted grid, and a
+  // backward move re-anchors to the absolute one (back_line lands on
+  // the greatest row start below the position, input.c:358). All
+  // three measured against a live og at 79 columns with -N taking 8.
+  const long = Array.from({ length: 300 }, (_, i) => `w${i}`).join('-');
+
+  beforeEach(() => {
+    config.row = 0;
+    config.chopLongLines = false;
+  });
+
+  it('starts the top row AT the shift, not at the boundary', () => {
+    config.subRow = 2;
+    config.subShift = 5;
+
+    const at = subRowStart(long, 2);
+    const rows = screenRows([long], []);
+
+    expect(rows[0]).toBe(long.slice(at + 5, at + 5 + config.screenWidth));
+    expect(rows[0]).not.toBe(long.slice(at, at + config.screenWidth));
+  });
+
+  it('wraps the rest of that line from the shifted start', () => {
+    config.subRow = 0;
+    config.subShift = 7;
+
+    const w = config.screenWidth;
+    const rows = screenRows([long], []);
+
+    // the next row continues the shifted grid, not the absolute one
+    expect(rows[1]).toBe(long.slice(7 + w, 7 + 2 * w));
   });
 });

@@ -281,6 +281,21 @@ export function lineBackward(
   offset: number,
   attn: boolean = true
 ): number {
+  // og's back_line reads back to the LINE's start and re-wraps
+  // forward from there (input.c:358), so it lands on the greatest row
+  // start BELOW the current position - the absolute grid. From a
+  // shifted top that boundary is the one the shift sits inside, so
+  // undoing the shift IS the first row of the move. Measured: a top
+  // shifted to 308 goes to 284 (4 x width), not to 308 - width.
+  if (config.subShift > 0) {
+    config.subShift = 0;
+    if (--offset <= 0) {
+      if (mode.INIT) mode.INIT = false;
+      mode.EOF = false;
+      return 0;
+    }
+  }
+
   if (config.row === 0 && config.subRow === 0) {
     if (mode.INIT) mode.INIT = false;
 

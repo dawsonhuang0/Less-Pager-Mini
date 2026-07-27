@@ -125,7 +125,9 @@ import {
   onMarkSwitch,
   jumpToMark,
   jumpToUserMark,
-  adoptFileMarks
+  adoptFileMarks,
+  subRowStart,
+  subRowOfIndex
 } from "../features/jumping";
 
 import {
@@ -338,6 +340,23 @@ export async function contentPager(
 
   // -s, -x and -r reshape the displayed content when toggled
   hook.hiliteRepaint = markHiliteRepaint;
+
+  // og's table[TOP] survives a width change untouched; ours indexes
+  // wrap boundaries, so the offset is captured before and restored
+  // after (options/ cannot reach the layout directly)
+  hook.topOffset = (content: string[]) => {
+    const top = content[config.row];
+
+    if (top === undefined) return () => {};
+
+    const offset = subRowStart(top, config.subRow) + config.subShift;
+
+    return () => {
+      if (offset <= 0) return;
+      config.subRow = subRowOfIndex(top, offset);
+      config.subShift = offset - subRowStart(top, config.subRow);
+    };
+  };
 
   onRebuild(() => {
     // inside the help screen the help itself repaints (og's -D and
@@ -1938,7 +1957,25 @@ function onResize(): void {
   unfreezeFrame();
 
   resetRender();
+
+  // og keeps table[TOP] across a resize - screen_size_changed and
+  // screen_trashed touch neither (signal.c:288) - so the top stays on
+  // the same byte and only the wrapping changes. Ours indexes wrap
+  // boundaries, so carry the OFFSET across and keep the remainder as
+  // the shift.
+  const top = session.content[config.row];
+  const before = config.screenWidth;
+  const offset = top === undefined
+    ? -1
+    : subRowStart(top, config.subRow) + config.subShift;
+
   calculateDimensions();
+
+  if (offset > 0 && top !== undefined && config.screenWidth !== before) {
+    config.subRow = subRowOfIndex(top, offset);
+    config.subShift = offset - subRowStart(top, config.subRow);
+  }
+
   pagerInput?.rebuild();
   calculateEOF(session.content);
 

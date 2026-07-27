@@ -1329,6 +1329,9 @@ function setTop(row: number, subRow: number): void {
 
   config.row = row;
   config.subRow = subRow;
+  // a jump lands on a real row start, like og's jump_loc taking a
+  // position from the position table rather than a shifted one
+  config.subShift = 0;
   config.blankTop = 0;
 
   mode.EOF = row > config.endRow || (

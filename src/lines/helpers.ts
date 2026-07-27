@@ -227,6 +227,32 @@ export function sourceIndexAt(raw: string, shown: number): number {
   return raw.length;
 }
 
+/**
+ * The style codes still in force at a character index, so a line can
+ * be resumed part-way and still look right - og carries the same
+ * state forward in shifted_ansi (line.c:282) when it shifts a line.
+ */
+export function openStyleAt(line: string, index: number): string {
+  if (index <= 0 || !line.includes('\x1b')) return '';
+
+  let out = '';
+
+  for (let i = 0; i < index && i < line.length; ) {
+    if (line[i] !== '\x1b') {
+      i++;
+      continue;
+    }
+
+    const end = ansiRunEnd(line, i);
+    const code = line.slice(i, end);
+
+    out = code === STYLE_RESET ? '' : out + code;
+    i = end;
+  }
+
+  return out;
+}
+
 export function transformContent(lines: string[]): string[] {
   charCache = new Map();
 

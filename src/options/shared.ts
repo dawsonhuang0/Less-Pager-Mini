@@ -43,6 +43,9 @@ export const hook = {
   rebuildContent: (() => {}) as () => void,
   /** og's O_HL_REPAINT: re-highlight NOW, under the option's message. */
   hiliteRepaint: (() => {}) as () => void,
+  /** Reads the top row's character offset, returning a function that
+   *  restores it once the width has changed (og's table[TOP]). */
+  topOffset: ((() => () => {}) as (content: string[]) => () => void),
   trimBufSpace: (() => {}) as () => void,
   screenActive: false,
   /** --file-size draining a still-unknown pipe (og's opt_filesize). */
@@ -576,11 +579,19 @@ export function applyGutter(content: string[]): void {
   const gutter = gutterWidth();
   if (gutter === opt.appliedGutter) return;
 
+  // og's table[TOP] is a byte position, so a width change moves
+  // nothing - it just re-wraps from the same byte. Ours is a boundary
+  // index, so the OFFSET is what has to be carried across, and the
+  // remainder past the new boundary becomes the shift. The layout
+  // lives on the other side of an import cycle, hence the hook.
+  const carry = hook.topOffset(content);
+
   const width = fullScreenWidth();
   config.screenWidth = width - gutter;
   config.halfScreenWidth = Math.floor(width / 2);
   opt.appliedGutter = gutter;
 
+  carry();
   recalculateEOF(content);
 }
 

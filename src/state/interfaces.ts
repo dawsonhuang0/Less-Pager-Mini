@@ -7,6 +7,18 @@ export interface Config {
 
   row: number;
   subRow: number;
+  /**
+   * Characters PAST the sub-row boundary where the top row starts.
+   *
+   * og's screen top is a byte position, so a width change re-wraps
+   * from the same byte and the top keeps showing the same words. Ours
+   * is a boundary index, which cannot say "start mid-boundary" - this
+   * carries the remainder. Measured against og (3000-char line, 79
+   * columns, -N taking 8): the top stays put, a forward move keeps
+   * the shifted grid, and a backward move re-anchors to the absolute
+   * one - which is why this is an overlay and not a replacement.
+   */
+  subShift: number;
 
   // Blank rows displayed above the beginning of the content, like less
   // padding the top when a jump target lands near BOF (jump_loc/forw)
