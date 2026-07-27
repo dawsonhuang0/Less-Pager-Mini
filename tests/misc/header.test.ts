@@ -99,10 +99,13 @@ describe('--header option', () => {
     expect(optHeader().lines).toBe(0);
     expect(optHeader().cols).toBe(0);
 
-    // og reports find_linenum(header_start_pos) even with no header
+    // set_header keeps NO start position without header LINES
+    // (search.c:572) and find_linenum answers 0 for one the caller
+    // does not know - confirmed by og's own hdr-unicode1 recording,
+    // where --header=0,5 queries back as "0,5,0"
     toggle('__header\x0D');
     expect(search.message)
-      .toBe('Header (lines,columns,line-number) is 0,0,1');
+      .toBe('Header (lines,columns,line-number) is 0,0,0');
   });
 
   it('rejects a non-numeric field like next_cnum', () => {
