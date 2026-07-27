@@ -1275,6 +1275,47 @@ export function takeCliOptions(): string[] {
  * @param isEnv - False for a command line argument.
  * @returns Commands and flags the pager applies at startup.
  */
+/**
+ * Does this option string ASK for --no-shell?
+ *
+ * A read-only walk over the same name matching scan_option uses, for
+ * deciding whether an environment demands the safety flag. It must
+ * not be the real scan: running that twice would re-apply handlers
+ * with side effects of their own (a --lesskey-content would load its
+ * bindings again), and this string may never be scanned at all.
+ *
+ * A `+` reset (`--+no-shell`) is not a request, it is the opposite.
+ *
+ * @param text - An option string, like a $LESS value.
+ */
+export function requestsNoShell(text: string): boolean {
+  let i = 0;
+
+  while (i < text.length) {
+    const ch = text[i++];
+
+    if (ch !== '-') continue;
+    if (text[i] !== '-') continue;
+
+    i++;
+
+    // "--+name" resets to the default: the opposite of a request
+    if (text[i] === '+') {
+      i++;
+      continue;
+    }
+
+    const found = findScanName(text.slice(i));
+
+    if (found.spec !== null && !found.ambig) {
+      if (found.spec.names.includes('no-shell')) return true;
+      i += found.len;
+    }
+  }
+
+  return false;
+}
+
 export function scanOptions(
   env: string,
   content: string[],

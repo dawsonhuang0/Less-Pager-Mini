@@ -102,6 +102,9 @@ function splitConfig(config: PagerConfig): {
  *   lesskey's `#env` lines, none of which the embedding application
  *   necessarily controls. THIS map can, since it is that
  *   application's own configuration: `{ LESS: '--+no-shell' }`.
+ *   An environment may still TIGHTEN what the map asks for — a
+ *   deployment-wide `LESS=--no-shell` outranks that unlock, so an
+ *   application cannot configure its way around a hardening policy.
  * - False from the `lmn` terminal command, file or pipe alike, where
  *   its own `--no-shell` still applies.
  *

@@ -96,6 +96,25 @@ describe('the library shell lock', () => {
       expect(opt.noShell).toBe(1);
     });
 
+  it('lets a hardened environment outrank the caller', () => {
+    // a deployment that sets LESS=--no-shell everywhere keeps the
+    // hold: an application must not configure its way around it,
+    // even though its overlay otherwise replaces the string
+    setSessionEnv({ LESS: '--+no-shell' });
+    startSession('--no-shell');
+    setSessionEnv(null);
+
+    expect(opt.noShell).toBe(1);
+  });
+
+  it('reads that policy through option abbreviations too', () => {
+    setSessionEnv({ LESS: '--+no-shell' });
+    startSession('--no-sh');
+    setSessionEnv(null);
+
+    expect(opt.noShell).toBe(1);
+  });
+
   it('survives $LESS trying to reset it', () => {
     // the scan reads an environment the embedding application does
     // not necessarily control, so --+no-shell there must not lift a
