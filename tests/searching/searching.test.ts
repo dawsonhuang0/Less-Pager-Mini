@@ -18,6 +18,8 @@ import {
 
 import { screenRows } from '../../src/helpers';
 
+import { transformContent } from '../../src/lines/helpers';
+
 import { opt } from '../../src/options';
 
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/state/constants';
@@ -599,5 +601,41 @@ describe('execFilter', () => {
 
     expect(execFilter()).toBeUndefined();
     expect(search.message).toBe('Invalid pattern');
+  });
+});
+
+describe('a search runs against the raw line', () => {
+  // og reads the line with forw_raw_line and folds only what cvt_text
+  // folds (search.c:1680), then turns the match's offsets into file
+  // positions through chpos. Every displayed character carries the
+  // position of the character it came from - a tab's expansion spaces
+  // all carry the tab's (store_tab, line.c:1056), a caret pair the
+  // control character's (store_prchar, line.c:1069) - so a match
+  // spanning one lights up all of its columns.
+  const source = 'and some\ttabs';
+
+  beforeEach(() => {
+    config.screenWidth = 40;
+    transformContent([source]);
+  });
+
+  it('matches a pattern spanning a tab and hilites its columns', () => {
+    doSearch('/', 'me.t');
+
+    const display = transformContent([source])[0];
+    const out = highlightLine(display, 0);
+
+    // "me" + the tab's eight columns + "t", one run
+    expect(out).toBe(
+      'and so' + INVERSE_ON + 'me        t' + INVERSE_OFF + 'abs'
+    );
+  });
+
+  it('leaves a line the transform did not touch alone', () => {
+    doSearch('/', 'alpha');
+
+    expect(highlightLine('alpha one', 0)).toBe(
+      INVERSE_ON + 'alpha' + INVERSE_OFF + ' one'
+    );
   });
 });

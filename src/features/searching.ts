@@ -18,7 +18,8 @@ import {
   cmdPrompt
 } from "./cmdbuf";
 
-import { ansiRunEnd, maxSubRow } from "../lines/helpers";
+import { ansiRunEnd, displayPrefixLength, maxSubRow, sourceIndexAt,
+  sourceLine } from "../lines/helpers";
 
 import { jumpLoc, subRowStart, subRowOfIndex } from "./jumping";
 
@@ -834,10 +835,24 @@ export function highlightLine(line: string, row: number = -1): string {
   }
 
   const ranges: [number, number, ColorKind][] = [];
+
+  // og searches the RAW line - forw_raw_line then cvt_text, which
+  // only folds backspaces, CR and ANSI (search.c:1680) - and turns
+  // the match's offsets into file positions through chpos. Every
+  // display character carries the position of the character it came
+  // from, so a tab's expansion spaces all belong to the tab and all
+  // light up. Matching the DISPLAY text instead would look for the
+  // pattern in text the file never contained.
+  const source = sourceLine(line);
+
+  if (source) {
+    for (const range of sourceRanges(source)) ranges.push(range);
+  }
+
   globalRegex.lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = globalRegex.exec(matchable)) !== null) {
+  while (!source && (match = globalRegex.exec(matchable)) !== null) {
     if (search.subs.size && match.indices) {
       for (const n of search.subs) {
         const span = match.indices[n];
@@ -1104,6 +1119,56 @@ function matchEnd(
   // tpos = linepos and never bottom-jumps
   const conv = m.index + m[0].length;
   return { conv, raw: map[conv] ?? 0 };
+}
+
+/**
+ * The hilite ranges a transformed line gets, in DISPLAYED-character
+ * coordinates, from a search run against its RAW text.
+ *
+ * convertWithMap is og's cvt_text plus chpos: it folds what cvt folds
+ * and remembers where each surviving character came from. The match's
+ * ends become raw offsets through that map, and each one becomes a
+ * displayed offset by transforming the prefix - the same relation
+ * store_tab and store_prchar record one character at a time.
+ */
+function sourceRanges(source: string): [number, number, ColorKind][] {
+  const out: [number, number, ColorKind][] = [];
+  if (!globalRegex) return out;
+
+  // the CONVERTED text, not the raw: cvt has already folded the
+  // overstrikes and dropped the ANSI, so what remains differs from
+  // the display only by tab expansion and control rendering - and a
+  // prefix of it can be cut anywhere, where a raw prefix could land
+  // inside an overstrike pair and lose the character it belonged to
+  const { text } = convertWithMap(source);
+  const seen: [number, number, ColorKind][] = [];
+  globalRegex.lastIndex = 0;
+
+  for (let m = globalRegex.exec(text); m; m = globalRegex.exec(text)) {
+    if (search.subs.size && m.indices) {
+      for (const n of search.subs) {
+        const span = m.indices[n];
+        if (span && span[1] > span[0]) {
+          seen.push([span[0], span[1], subColorKind(n)]);
+        }
+      }
+    } else if (m[0]) {
+      pushMatchRanges(seen, m);
+    }
+
+    if (m.index === globalRegex.lastIndex) globalRegex.lastIndex++;
+    if (search.invert) break;
+  }
+
+  for (const [start, end, kind] of seen) {
+    out.push([
+      displayPrefixLength(text, start),
+      displayPrefixLength(text, end),
+      kind,
+    ]);
+  }
+
+  return out;
 }
 
 function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
@@ -1393,11 +1458,16 @@ function scanRange(
     let steps = 0;
 
     while (row >= 0 && row < content.length && row !== until) {
+      // og searches the RAW line, not the displayed one (search.c:1680
+      // reads it with forw_raw_line and folds only what cvt_text
+      // folds), so a pattern may span a tab or a control character
+      const raw = sourceLine(content[row]) ?? content[row];
+
       const line = row === from && fromOffset > 0
         ? (dir > 0
-          ? content[row].slice(fromOffset)
-          : content[row].slice(0, fromOffset))
-        : content[row];
+          ? raw.slice(sourceIndexAt(raw, fromOffset))
+          : raw.slice(0, sourceIndexAt(raw, fromOffset)))
+        : raw;
 
       if (matchesSearchLine(line) && --state.remaining === 0) {
         hit = row;

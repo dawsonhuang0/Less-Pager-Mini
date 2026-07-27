@@ -178,6 +178,55 @@ function styleOsc8Line(
   return out;
 }
 
+// the raw line behind each DISPLAY line, kept because a search runs
+// against the raw text (og's forw_raw_line + cvt_text, search.c:1680)
+// while the hilite lands on displayed columns.
+//
+// Keyed by the displayed text, not by row: callers hand rows from
+// several arrays (the file, the help screen, a parked copy) and an
+// index would go stale between them. Only lines the transform
+// actually changed are stored, so a plain file adds nothing.
+let sourceLines = new Map<string, string>();
+const SOURCE_MAP_LIMIT = 8192;
+
+/** The raw line a display line was derived from, if it still differs. */
+export const sourceLine = (display: string): string | undefined =>
+  sourceLines.get(display);
+
+/**
+ * How many DISPLAYED characters the first `count` raw characters
+ * produce, style codes excluded.
+ *
+ * og needs no such function: it stores one display char at a time and
+ * tags each with its source position - a tab's spaces all carry the
+ * tab's (store_tab, line.c:1056), a caret pair the control char's
+ * (store_prchar, line.c:1069). Transforming the prefix answers the
+ * same question, and only match boundaries ever ask.
+ */
+export function displayPrefixLength(raw: string, count: number): number {
+  if (count <= 0) return 0;
+
+  const prefix = raw.slice(0, count);
+  const shown = CONTROL_REGEX.test(prefix) ? transformLine(prefix) : prefix;
+
+  return shown.replace(STYLE_REGEX_G, '').length;
+}
+
+/**
+ * The raw index whose displayed prefix is `shown` characters long -
+ * the inverse of displayPrefixLength, for turning a display position
+ * back into the source position og would have used.
+ */
+export function sourceIndexAt(raw: string, shown: number): number {
+  if (shown <= 0) return 0;
+
+  for (let i = 1; i <= raw.length; i++) {
+    if (displayPrefixLength(raw, i) >= shown) return i;
+  }
+
+  return raw.length;
+}
+
 export function transformContent(lines: string[]): string[] {
   charCache = new Map();
 
@@ -185,6 +234,13 @@ export function transformContent(lines: string[]): string[] {
   const ctldisp = optCtldisp();
   const out: string[] = [];
   let blank = false;
+
+  // the map accumulates rather than being replaced: displayText
+  // transforms ONE line at a time for the stream engine's own
+  // measurements (fileView.ts:28), and a screen's entries must
+  // survive that. The display text is the key, so an entry can only
+  // be replaced by an identical rendering
+  if (sourceLines.size > SOURCE_MAP_LIMIT) sourceLines = new Map();
   let row = -1;
 
   for (const raw of lines) {
@@ -206,7 +262,12 @@ export function transformContent(lines: string[]): string[] {
       line = styleOsc8Line(line, row, ctldisp === 2);
     }
 
-    out.push(CONTROL_REGEX.test(line) ? transformLine(line) : line);
+    const shown = CONTROL_REGEX.test(line) ? transformLine(line) : line;
+
+    // only when the transform actually moved something: an untouched
+    // line needs no map, and the search can run on the display text
+    if (shown !== raw) sourceLines.set(shown, raw);
+    out.push(shown);
   }
 
   return out;
