@@ -761,7 +761,12 @@ function pushMatchRanges(
 }
 
 export function highlightLine(line: string, row: number = -1): string {
-  if (!globalRegex || !search.regex || !search.highlight || search.invert) {
+  // og hilites through prep_hilite, which searches with SRCH_FORW |
+  // SRCH_FIND_ALL and carries over only SRCH_NO_REGEX from the user's
+  // search (search.c:2319). SRCH_NO_MATCH is NOT carried, so a
+  // ^N/! search still marks the text that really matches - the
+  // inversion decides where it JUMPS, not what it paints.
+  if (!globalRegex || !search.regex || !search.highlight) {
     return line;
   }
 
@@ -1745,7 +1750,9 @@ export function lineMatches(line: string): boolean {
  * @param row - The content row, for the -g current-match gate.
  */
 export function statusColChar(line: string, row: number): string {
-  if (!search.regex || !globalRegex || search.invert) return '';
+  // the status column reads the same hilite list, built without
+  // SRCH_NO_MATCH (search.c:2319)
+  if (!search.regex || !globalRegex) return '';
   if (optHiliteSearch() === 1 && row !== lastMatchRow) return '';
 
   let text = stripStyles(line);
