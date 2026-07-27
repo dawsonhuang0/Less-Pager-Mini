@@ -32,7 +32,7 @@ export const setSelectedOsc8 = (link: Osc8Link | null): void => {
 export const resetOsc8 = (): void => { setSelectedOsc8(null); };
 
 /** Extracts complete OSC 8 open/text/close pairs from materialized lines. */
-export function osc8Links(lines: string[]): Osc8Link[] {
+export function osc8Links(lines: string[], param?: string): Osc8Link[] {
   const links: Osc8Link[] = [];
   // eslint-disable-next-line no-control-regex
   const sequence = /\x1b\]8;([^;\x07]*);([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
@@ -60,14 +60,19 @@ export function osc8Links(lines: string[]): Osc8Link[] {
         // from man pages are full of them: an anchor like
         // "ESC]8;:id=1;# ESC\ ESC]8;; ESC\" marks a position and
         // shows nothing
-        if (match.index > opened.after) {
-          links.push({
-            row,
-            start: opened.after,
-            end: match.index,
-            params: opened.params,
-            uri: opened.uri,
-          });
+        // searching for a PARAMETER lifts the rule: og's two guards
+        // both end in "|| param != NULL" (search.c:1412 and :1417),
+        // because an id= anchor is exactly an empty link
+        if (match.index > opened.after || param !== undefined) {
+          if (param === undefined || opened.params.split(':').includes(param)) {
+            links.push({
+              row,
+              start: opened.after,
+              end: match.index,
+              params: opened.params,
+              uri: opened.uri,
+            });
+          }
         }
 
         opened = null;
@@ -168,6 +173,44 @@ export function osc8CommandForUri(
   }
 
   return { command: `${handler} ${shellQuote(uri)}`, done };
+}
+
+/**
+ * True when the selected link points INSIDE the file: og treats a URI
+ * with no scheme that starts with "#" as a link to an "id=" anchor
+ * and searches for it forward with wrap, running no handler at all
+ * (search.c:1942).
+ */
+export function osc8Internal(): string | null {
+  if (!selected) return null;
+
+  const uri = selected.uri;
+  const colon = uri.indexOf(':');
+
+  return colon < 0 && uri.startsWith('#') ? `id=${uri.slice(1)}` : null;
+}
+
+/** Selects the anchor an internal link names, wrapping like og. */
+export function osc8SearchParam(lines: string[], param: string): boolean {
+  const links = osc8Links(lines, param);
+
+  if (!links.length) {
+    search.message = 'OSC 8 link not found';
+    return false;
+  }
+
+  const from = selected ? selected.row : config.row;
+  const next = links.find(link => link.row > from) ?? links[0];
+
+  // SRCH_WRAP: reaching the end and continuing at the top reports,
+  // like any wrapped search (search.c:1949 passes SRCH_FORW|SRCH_WRAP)
+  if (next.row <= from) {
+    search.message = 'Search hit bottom; continuing at top';
+  }
+
+  selected = next;
+  setOsc8Display({ row: next.row, start: next.start });
+  return true;
 }
 
 export function osc8OpenCommand(): { command: string; done: string | null } |

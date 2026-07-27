@@ -239,7 +239,13 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   };
 
   try {
-    const session = pager(fileArgs, { 'examine-file': true });
+    // og ran with ordinary shell access; a library call defaults to
+    // --no-shell, and the caller's own config map is exactly how that
+    // default is meant to be lifted (see the invocation lock)
+    const session = pager(fileArgs, {
+      'examine-file': true,
+      LESS: `${lt.env.LESS ?? ''} --+no-shell`.trim(),
+    });
 
     // the pager registers its key handler synchronously after boot
     await new Promise(resolve => setImmediate(resolve));

@@ -2,7 +2,8 @@ import fs from 'fs';
 
 import { lgetenv, screenFillGrace } from '../startup/environment';
 
-import { jumpOsc8, osc8OpenCommand, osc8Visible, searchOsc8 }
+import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
+  osc8Visible, searchOsc8 }
   from '../features/osc8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
@@ -690,6 +691,17 @@ const acts: Record<Actions, () => void> = {
   OSC8_JUMP: () => { jumpOsc8(session.content); },
   OSC8_OPEN: () => {
     if (!secureAllow('osc8')) return;
+
+    // a link into the same file runs nothing: og searches for the
+    // "id=" anchor it names, forward with wrap (search.c:1942)
+    const param = osc8Internal();
+
+    if (param !== null) {
+      if (osc8SearchParam(session.fullContent, param) &&
+        !osc8Visible(session.content)) jumpOsc8(session.content);
+      return;
+    }
+
     const open = osc8OpenCommand();
     if (open) runShell(open.command, open.done);
   },

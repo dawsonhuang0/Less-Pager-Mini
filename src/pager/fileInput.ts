@@ -22,7 +22,10 @@ import {
   pipeDraining,
 } from '../features/files';
 
-import { osc8Links, setSelectedOsc8 } from '../features/osc8';
+import { osc8Internal, osc8Links, setSelectedOsc8 }
+  from '../features/osc8';
+
+import { secureAllow } from '../features/secure';
 
 import { onSourceFollow } from '../features/follow';
 
@@ -479,6 +482,17 @@ export class FileInput implements PagerInput {
       case 'OSC8_BACKWARD':
         this.findOsc8(-1, count || 1);
         return true;
+      case 'OSC8_OPEN': {
+        if (!secureAllow('osc8')) return true;
+
+        // a link into the same file runs no handler: og searches for
+        // the "id=" anchor it names, forward with wrap (search.c:1942)
+        const param = osc8Internal();
+        if (param === null) return false;
+
+        this.openInternalOsc8(param);
+        return true;
+      }
       case 'OSC8_JUMP':
         if (this.selectedOscPos === null) {
           search.message = 'No OSC8 link selected';
@@ -1723,6 +1737,60 @@ export class FileInput implements PagerInput {
     }
 
     // og errors and RETURNS: osc8_linepos keeps the old selection
+    search.message = 'OSC 8 link not found';
+  }
+
+  /**
+   * Selects the anchor an internal link names, scanning forward from
+   * the current selection and wrapping once - og's osc8_search with
+   * SRCH_FORW|SRCH_WRAP and a param (search.c:1949). The param mode
+   * is also what re-admits an empty link: an id= anchor is one.
+   */
+  private openInternalOsc8(param: string): void {
+    const from = this.selectedOscPos ?? this.view.top.pos;
+    let pos = from;
+    let wrapped = false;
+
+    for (;;) {
+      const line = forwLine(this.bf, pos);
+
+      if (!line) {
+        if (wrapped) break;
+        wrapped = true;
+        pos = 0;
+        continue;
+      }
+
+      const [link] = osc8Links([line.text], param);
+
+      if (link && !(pos === from && !wrapped)) {
+        if (wrapped) {
+          search.message = 'Search hit bottom; continuing at top';
+        }
+
+        // a param search sets NO globals - "Don't set osc8 globals if
+        // we're just searching for a parameter" (search.c:1445) - so
+        // the selection and its "Link:" message stay as they were and
+        // only the view moves, and only when the target is off screen
+        if (!this.onscreen(pos)) {
+          this.view.top = { pos, subRow: 0 };
+          this.view.lineBackward(jumpSindex());
+          this.sync();
+          markPosClear();
+        }
+
+        return;
+      }
+
+      pos = line.next;
+
+      if (pos >= this.bf.size) {
+        if (wrapped) break;
+        wrapped = true;
+        pos = 0;
+      }
+    }
+
     search.message = 'OSC 8 link not found';
   }
 
