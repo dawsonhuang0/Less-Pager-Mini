@@ -99,6 +99,37 @@ export function setOsc8Display(
  *  CD_ANSI in_osc8_link attr (ANSI mode only — probed, -r emits no
  *  \e[4m), while the SELECTION standout is og's hilite machinery and
  *  paints over caret and raw renderings alike (line.c:880). */
+/**
+ * Re-opens the run's own attribute after every escape sequence the
+ * FILE contributed, so a reset inside a link does not end it.
+ *
+ * og never has this problem: store_char ORs link_attr into each
+ * CHARACTER's attribute (line.c:885) and put_line emits whatever
+ * transitions that implies, while the file's own sequences ride
+ * along as AT_ANSI. Wrapping the run once cannot express that.
+ */
+function armAttr(text: string): string {
+  if (!text.includes('\x1b')) return text;
+
+  let out = '';
+  let i = 0;
+  let run = 0;
+
+  while (i < text.length) {
+    if (text[i] !== '\x1b') {
+      i++;
+      continue;
+    }
+
+    const end = ansiRunEnd(text, i);
+    out += text.slice(run, end) + OWN_STYLE + UNDERLINE_ON.slice(1);
+    i = end;
+    run = end;
+  }
+
+  return out + text.slice(run);
+}
+
 function styleOsc8Line(
   line: string,
   row: number,
@@ -128,7 +159,7 @@ function styleOsc8Line(
         out += own(UNDERLINE_ON) + own(INVERSE_ON) + text +
           own(INVERSE_OFF) + own(UNDERLINE_OFF);
       } else if (underline) {
-        out += own(colored('osc8', text, UNDERLINE_ON, UNDERLINE_OFF));
+        out += own(colored('osc8', armAttr(text), UNDERLINE_ON, UNDERLINE_OFF));
       } else {
         out += text;
       }
