@@ -954,10 +954,33 @@ export const searchCaseFlags = (pattern: string): string =>
     ? 'i'
     : '';
 
+/**
+ * "u" when the pattern still compiles with it.
+ *
+ * og matches whole CHARACTERS: cvt_text hands the regex a UTF-8
+ * string and its "." spans one character, so "E...." covers E and the
+ * four characters after it however many bytes they take. A JS regex
+ * without "u" counts UTF-16 units instead, so an emoji eats two dots
+ * and the match comes up short.
+ *
+ * Not unconditional: "u" also rejects patterns JS otherwise tolerates
+ * (a stray "\\d" inside a class, an unescaped brace), and og would
+ * accept those, so the stricter mode only applies when it costs
+ * nothing.
+ */
+function unicodeFlag(source: string): string {
+  try {
+    void new RegExp(source, 'u');
+    return 'u';
+  } catch {
+    return '';
+  }
+}
+
 function compile(pattern: string, literal: boolean, invert: boolean): boolean {
   try {
     const source = literal ? escapeRegExp(pattern) : pattern;
-    const flags = searchCaseFlags(pattern);
+    const flags = searchCaseFlags(pattern) + unicodeFlag(source);
     search.regex = new RegExp(source, flags);
     globalRegex = new RegExp(source, flags + 'dg');
   } catch {
