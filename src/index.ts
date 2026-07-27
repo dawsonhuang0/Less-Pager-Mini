@@ -95,9 +95,12 @@ function splitConfig(config: PagerConfig): {
  * - `examine-file`: If true, treats input as file path(s) and reads from disk.
  *
  * Safeguard flag `no-shell` prevents shell command execution. By default:
- * - True from library calls, `pagerPipe` included. `{ LESS: "--+no-shell" }`
- *   forces `no-shell` to be false.
- * - False from the `lmn` terminal command, file or pipe alike.
+ * - True from library calls, `pagerPipe` included, and LOCKED there:
+ *   the option scan reads `$LESS`, `$MORE` and a lesskey's `#env`
+ *   lines, none of which the embedding application necessarily
+ *   controls, so none of them can hand `!`, `|` and `v` back.
+ * - False from the `lmn` terminal command, file or pipe alike, where
+ *   its own `--no-shell` still applies.
  *
  * @example
  * await pager(lines);

@@ -15,6 +15,8 @@ import {
   markTerminalInvocation,
 } from '../../src/startup/invocation';
 
+import { startupInit } from '../../src/startup/startup';
+
 const enterOption = (keys: string): void => {
   startOption(keys[0] as '-' | '_');
   for (const key of keys.slice(1)) optionKey([], key);
@@ -47,6 +49,37 @@ describe('--no-shell invocation defaults', () => {
 
     // The marker applies to one call only; a later package call is safe.
     initInvocationOptions();
+    expect(opt.noShell).toBe(1);
+  });
+});
+
+describe('the library shell lock', () => {
+  // through the session's own startup, so the guard fails if the lock
+  // is ever left unwired rather than merely uncalled
+  const startSession = (less: string | undefined, terminal = false): void => {
+    if (less === undefined) delete process.env.LESS;
+    else process.env.LESS = less;
+
+    if (terminal) markTerminalInvocation();
+    initInvocationOptions();
+    startupInit([]);
+  };
+
+  it('survives $LESS trying to reset it', () => {
+    // the scan reads an environment the embedding application does
+    // not necessarily control, so --+no-shell there must not lift a
+    // library call's safe default
+    startSession('--+no-shell');
+
+    expect(opt.noShell).toBe(1);
+  });
+
+  it('leaves the terminal command alone', () => {
+    startSession('--+no-shell', true);
+    expect(opt.noShell).toBe(0);
+
+    // and the executable's own --no-shell still applies
+    startSession('--no-shell', true);
     expect(opt.noShell).toBe(1);
   });
 });

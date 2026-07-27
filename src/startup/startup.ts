@@ -22,6 +22,8 @@ import { resetProtos } from '../features/prompt';
 
 import { initEnvironment, lgetenv } from './environment';
 
+import { lockLibraryShell } from './invocation';
+
 import { resetOsc8 } from '../features/osc8';
 
 // error() calls before the screen initializes, counted for og's
@@ -86,6 +88,10 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
 
   // a still-dangling string/number option reports now (og nopendopt)
   flushPendopt();
+
+  // the scan is over: nothing it read - $LESS, $MORE, a lesskey #env
+  // line - may hand shell escapes back to a library call
+  lockLibraryShell();
 
   // og's pre-screen error() prints scan errors right away, ahead of
   // any binary-file question edit_first may ask
