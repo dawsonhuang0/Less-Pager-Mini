@@ -51,7 +51,11 @@ export class LtScreen {
     let i = 0;
 
     while (i < data.length) {
-      const ch = data[i];
+      // a whole code point: an astral character is a surrogate PAIR,
+      // and taking one unit puts half of it in a cell and measures it
+      // as narrow, so no shadow cell follows it (lt_screen.c:372)
+      const point = data.codePointAt(i) ?? 0;
+      const ch = point > 0xFFFF ? data.slice(i, i + 2) : data[i];
 
       if (ch === '\x1B') {
         i = this.escape(data, i);
@@ -82,7 +86,7 @@ export class LtScreen {
           this.lineFeed();
         }
 
-        this.putChar(data, i);
+        this.putChar(ch);
 
         const width = Math.max(strWidth(ch), 1);
         this.cx += width;
@@ -93,7 +97,7 @@ export class LtScreen {
         }
       }
 
-      i++;
+      i += ch.length;
     }
   }
 
@@ -102,17 +106,18 @@ export class LtScreen {
     return { cells: this.cells, cx: this.cx, cy: this.cy };
   }
 
-  private putChar(data: string, i: number): void {
+  private putChar(ch: string): void {
     const cell = this.cells[this.cy]?.[this.cx];
     if (!cell) return;
 
-    cell.ch = data[i];
+    cell.ch = ch;
     cell.attr = this.attr;
     cell.fg = this.fg;
     cell.bg = this.bg;
 
-    // a wide char blanks its second cell, like lt_screen padding
-    if (strWidth(data[i]) > 1 && this.cx + 1 < this.width) {
+    // lt_screen writes a WIDESHADOW_CHAR in the second column a wide
+    // character covers (lt_screen.c:372); the recorded dumps carry it
+    if (strWidth(ch) > 1 && this.cx + 1 < this.width) {
       const pad = this.cells[this.cy][this.cx + 1];
       pad.ch = '\0';
       pad.attr = this.attr;

@@ -100,13 +100,37 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   };
 
   setEnv('TERM', 'xterm');
-  setEnv('LESSNOCONFIG', '1');
+
+  // anything a developer's own environment might contribute goes
+  // first; the recording then puts back exactly what og had
+  for (const name of ['LESS', 'LESSOPEN', 'LESSCLOSE', 'LESSKEYIN',
+    'LESSKEY', 'LESSKEY_CONTENT', 'LESSCHARSET', 'LESSBINFMT',
+    'LESSUTFBINFMT', 'LESSUTFCHARDEF', 'LESSANSIENDCHARS',
+    'LESSANSIMIDCHARS', 'MORE', 'LANG', 'LC_CTYPE', 'LC_ALL']) {
+    setEnv(name, undefined);
+  }
+
+  // og's lesstest hands less exactly LESS*, COLUMNS, LINES, LANG,
+  // LC_CTYPE and MORE (env.c is_less_env) and logs that set as the E
+  // lines, so the recording IS the environment less saw. Replay it,
+  // minus the synthetic LESS_TERMCAP_* values: those only decide
+  // which escape bytes og wrote, and .lt compares screens, not bytes.
+  const recorded = Object.entries(lt.env)
+    .filter(([name]) => !name.startsWith('LESS_TERMCAP_'));
+
+  for (const [name, value] of recorded) setEnv(name, value || undefined);
+
+  // the args line adds to whatever $LESS the recording carried
+  if (options.length) {
+    setEnv('LESS', [lt.env.LESS ?? '', ...options].filter(Boolean).join(' '));
+  }
+
+  // LESSNOCONFIG ignores every variable NOT named (decode.c:1129) and
+  // skips lesskey files (decode.c:1357): the developer's own config
+  // stays out while the recorded variables still reach the session
+  setEnv('LESSNOCONFIG',
+    [...recorded.map(([name]) => name), 'LESSHISTFILE'].join(','));
   setEnv('LESSHISTFILE', '-');
-  setEnv('LESS', options.join(' ') || undefined);
-  setEnv('LESSOPEN', undefined);
-  setEnv('LESSCLOSE', undefined);
-  setEnv('LESSKEYIN', undefined);
-  setEnv('LESSKEY_CONTENT', undefined);
 
   // intercept output into the emulator
   const stdout = process.stdout as unknown as Record<string, unknown>;
