@@ -116,8 +116,11 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   }
 
   // og's missing_cap warning follows the scan (main.c), still before
-  // edit_first's binary question; -d (know_dumb) suppresses it
-  if (dumbTerminal() && keyboard().isTTY && !optKnowDumb()) {
+  // edit_first's binary question; -d (know_dumb) suppresses it. It
+  // sits AFTER the !is_tty branch that cats and quits, so a session
+  // writing to a pipe never reaches it however dumb the terminal is
+  if (dumbTerminal() && keyboard().isTTY && process.stdout.isTTY &&
+      !optKnowDumb()) {
     printStartupError('WARNING: terminal is not fully functional');
   }
 

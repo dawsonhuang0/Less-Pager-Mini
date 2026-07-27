@@ -129,7 +129,14 @@ describe('startup option orchestration', () => {
 
   it('prints the dumb-terminal warning only for an interactive tty', () => {
     const descriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    const outDescriptor =
+      Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+
     Object.defineProperty(process.stdin, 'isTTY', {
+      value: true,
+      configurable: true,
+    });
+    Object.defineProperty(process.stdout, 'isTTY', {
       value: true,
       configurable: true,
     });
@@ -146,11 +153,28 @@ describe('startup option orchestration', () => {
       process.env.LESS = '-d';
       startupInit([]);
       expect(stdoutWrite).not.toHaveBeenCalled();
+
+      // og's warning sits after the !is_tty branch that cats and
+      // quits (main.c:395), so a piped session never reaches it
+      stdoutWrite.mockClear();
+      opt.knowDumb = 0;
+      delete process.env.LESS;
+      Object.defineProperty(process.stdout, 'isTTY', {
+        value: false,
+        configurable: true,
+      });
+      startupInit([]);
+      expect(stdoutWrite).not.toHaveBeenCalled();
     } finally {
       if (descriptor) {
         Object.defineProperty(process.stdin, 'isTTY', descriptor);
       } else {
         delete (process.stdin as { isTTY?: boolean }).isTTY;
+      }
+      if (outDescriptor) {
+        Object.defineProperty(process.stdout, 'isTTY', outDescriptor);
+      } else {
+        delete (process.stdout as { isTTY?: boolean }).isTTY;
       }
     }
   });
