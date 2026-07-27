@@ -4,6 +4,8 @@ import { resetOptions } from '../options/state';
 
 import { resetRender, resetDumbPaint } from '../helpers';
 
+import { resetSearch } from '../features/searching';
+
 /**
  * Hands a session the clean slate og gets for free.
  *
@@ -31,4 +33,5 @@ export function freshSession(): void {
   resetMode();
   resetRender();
   resetDumbPaint();
+  resetSearch();
 }

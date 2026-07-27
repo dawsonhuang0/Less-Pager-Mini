@@ -123,6 +123,25 @@ export const search: SearchState = {
   messageQueue: [],
 };
 
+/**
+ * Drops the search a session leaves behind, like a fresh less: the
+ * compiled pattern, the & filters, the sub-pattern set and the
+ * caseless state. The HISTORY stays — og persists that across
+ * invocations through its history file.
+ */
+export function resetSearch(): void {
+  search.input = null;
+  search.regex = null;
+  search.invert = false;
+  search.lastDir = 1;
+  search.highlight = true;
+  search.subs = new Set();
+  search.filters = [];
+  search.caseless = 0;
+  search.message = '';
+  search.messageQueue = [];
+}
+
 const HISTORY_LIMIT = 100;
 
 /**
