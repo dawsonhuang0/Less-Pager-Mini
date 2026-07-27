@@ -18,7 +18,7 @@ import {
   cmdPrompt
 } from "./cmdbuf";
 
-import { maxSubRow } from "../lines/helpers";
+import { ansiRunEnd, maxSubRow } from "../lines/helpers";
 
 import { jumpLoc, subRowStart, subRowOfIndex } from "./jumping";
 
@@ -32,6 +32,7 @@ import {
   optProcReturn,
   optCtldisp,
   optHiliteSearch,
+  optStatusCol,
   optNoHistDups,
   optHeader,
   optNoSearchHeaders,
@@ -47,8 +48,6 @@ import {
 import { colored, ColorKind } from "./color";
 
 import {
-  STYLE_REGEX,
-  STYLE_REGEX_G,
   INVERSE_ON,
   INVERSE_OFF,
   CLEAR_LINE
@@ -540,9 +539,21 @@ export function execSearch(
     if (pattern) {
       if (!compile(pattern, input.noRegex, input.invert)) return;
       search.subs = new Set(input.subs);
+
+      // og erases the highlights on screen and then, under -G's
+      // default, highlights what already matches BEFORE it searches
+      // (search.c:2137 and :2147). Both go through repaint_hilite,
+      // whose first act is "if (squished) repaint()" - which is how a
+      // short first screen fills with tildes the moment a search
+      // runs, whether or not the match moves the view
+      if (optHiliteSearch() || optStatusCol()) unsquish();
     } else if (!search.regex) {
       search.message = 'No previous regular expression';
       return;
+    } else if (optHiliteSearch() === 1 || optStatusCol()) {
+      // the previous-pattern branch only erases (search.c:2115), so
+      // it un-squishes under the narrower -g gate
+      unsquish();
     }
 
     // every search unhides highlighting, like less resetting
@@ -779,17 +790,27 @@ export function highlightLine(line: string, row: number = -1): string {
     strippedLength += text.length;
   };
 
-  STYLE_REGEX_G.lastIndex = 0;
+  // the split has to agree with cvt_text, or the offsets a match
+  // reports would not be the offsets this line hilites: an ABORTED
+  // sequence is one og drops whole, so it cannot be left sitting
+  // inside a text run (github265's "y he" spans ESC[01;31m ESC[K)
   let i = 0;
-  let ansi: RegExpExecArray | null;
+  let run = 0;
 
-  while ((ansi = STYLE_REGEX_G.exec(line)) !== null) {
-    pushText(line.slice(i, ansi.index));
-    tokens.push({ code: ansi[0], text: '', start: strippedLength });
-    i = STYLE_REGEX_G.lastIndex;
+  while (i < line.length) {
+    if (line[i] !== '\x1b') {
+      i++;
+      continue;
+    }
+
+    const end = ansiRunEnd(line, i);
+    pushText(line.slice(run, i));
+    tokens.push({ code: line.slice(i, end), text: '', start: strippedLength });
+    i = end;
+    run = i;
   }
 
-  pushText(line.slice(i));
+  pushText(line.slice(run));
 
   const stripped = tokens.map(token => token.text).join('');
 
@@ -840,9 +861,17 @@ export function highlightLine(line: string, row: number = -1): string {
   const out: string[] = [];
   let r = 0;
 
+  // the sequences in force at this point in the line: og carries an
+  // attribute per CHARACTER, so a hilite that ends mid-colour leaves
+  // the file's own bold or colour still running underneath. Splicing
+  // standout into the byte stream loses that, because ending it
+  // resets everything - so the state goes back in behind it.
+  let active = '';
+
   for (const token of tokens) {
     if (token.code) {
       out.push(token.code);
+      active += token.code;
       continue;
     }
 
@@ -871,6 +900,11 @@ export function highlightLine(line: string, row: number = -1): string {
       out.push(colored(
         ranges[r][2], text.slice(pos, end), INVERSE_ON, INVERSE_OFF
       ));
+
+      // only when styled text actually follows: a hilite that runs to
+      // the end of its run is followed by the file's own next code
+      // anyway, and og emits no transition it does not need
+      if (active && end < text.length) out.push(active);
       pos = end;
     }
   }
@@ -910,9 +944,29 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
   return true;
 }
 
+/**
+ * Removes escape sequences the way cvt_text's CVT_ANSI does: og walks
+ * ansi_step and drops everything the run consumed, so a sequence that
+ * ABORTS (ESC[K, ESC(B) goes too, not just its valid prefix. Matching
+ * a valid-sequence pattern instead would leave those bytes sitting
+ * inside the text a search runs against - github265's bug, where
+ * "y he" fails to find "Why <ESC>[01;31m<ESC>[Khello".
+ */
 export function stripStyles(line: string): string {
-  if (!STYLE_REGEX.test(line)) return line;
-  return line.replace(STYLE_REGEX_G, '');
+  if (!line.includes('\x1b')) return line;
+
+  let out = '';
+
+  for (let i = 0; i < line.length; ) {
+    if (line[i] === '\x1b') {
+      i = ansiRunEnd(line, i);
+      continue;
+    }
+
+    out += line[i++];
+  }
+
+  return out;
 }
 
 /**
@@ -924,8 +978,11 @@ function convertWithMap(raw: string): { text: string; map: number[] } {
   const spans: Array<[number, number]> = [];
 
   if (ops.ansi) {
-    for (const m of raw.matchAll(STYLE_REGEX_G)) {
-      spans.push([m.index, m.index + m[0].length]);
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] !== '\x1b') continue;
+      const end = ansiRunEnd(raw, i);
+      spans.push([i, end]);
+      i = end - 1;
     }
   }
 
@@ -1547,8 +1604,15 @@ function searchStartPos(
   return p;
 }
 
-function jumpTo(content: string[], row: number, sub: number = 0): void {
+/** og's repaint_hilite: a squished short first screen repaints in
+ *  full - tildes past EOF included - before anything is highlighted
+ *  (search.c:281). */
+function unsquish(): void {
   if (mode.INIT) mode.INIT = false;
+}
+
+function jumpTo(content: string[], row: number, sub: number = 0): void {
+  unsquish();
 
   lastMatchRow = row;
 
@@ -1614,7 +1678,7 @@ function lastLineSub(
  * like jump_loc(lastlinepos, BOTTOM).
  */
 function jumpBottom(content: string[], row: number, sub: number): void {
-  if (mode.INIT) mode.INIT = false;
+  unsquish();
 
   lastMatchRow = row;
 

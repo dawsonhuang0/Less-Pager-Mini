@@ -191,6 +191,40 @@ function ansiMiddle(char: string): boolean {
   return ansiMidChars().includes(char) && !ansiEndChars().includes(char);
 }
 
+/**
+ * The end of the escape run starting at `start`, like cvt_text
+ * consuming an ansi_start sequence (cvt.c:79): characters go while
+ * ansi_step answers ANSI_MID, and the one that ends the run is taken
+ * too - whether it ended it properly (ANSI_END) or aborted it
+ * (ANSI_ERR). That is why ESC[K and ESC(B vanish entirely and not
+ * just their valid prefix.
+ *
+ * @param line - The raw line.
+ * @param start - Index of the ESC.
+ * @returns The index after the run, or `start` when none begins here.
+ */
+export function ansiRunEnd(line: string, start: number): number {
+  if (line[start] !== '\x1b') return start;
+
+  const intro = line[start + 1];
+
+  // an OSC intro runs to its String Terminator instead
+  if (intro === ']' ||
+      (intro !== undefined && ansiOscChars().includes(intro))) {
+    const bel = line.indexOf('\x07', start + 2);
+    const st = line.indexOf('\x1b\\', start + 2);
+    const end = bel < 0 ? st : st < 0 ? bel : Math.min(bel, st);
+
+    return end < 0 ? line.length : end + (end === st ? 2 : 1);
+  }
+
+  let scan = start + 1;
+  while (scan < line.length && ansiMiddle(line[scan])) scan++;
+
+  // a line that simply ENDS mid-sequence has nothing left to take
+  return scan >= line.length ? line.length : scan + 1;
+}
+
 function transformLine(line: string): string {
   const ctldisp = optCtldisp();
   let out = '';

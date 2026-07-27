@@ -12,10 +12,13 @@ import {
   repeatSearch,
   toggleHighlight,
   clearHighlight,
-  highlightLine
+  highlightLine,
+  matchesSearchLine
 } from '../../src/features/searching';
 
 import { screenRows } from '../../src/helpers';
+
+import { opt } from '../../src/options';
 
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/state/constants';
 
@@ -431,6 +434,37 @@ describe('highlightLine', () => {
       RED +
       INVERSE_ON + 'pha' + INVERSE_OFF +
       RESET + ' z'
+    );
+  });
+
+  it('matches across a sequence og ABORTS, like cvt_text', () => {
+    // github265: cvt_text drops what ansi_step consumed, and an
+    // ESC[K aborts (K is neither middle nor end), so the whole thing
+    // goes - leaving "Why hello there" for the pattern to match
+    doSearch('/', 'y he');
+
+    const saved = opt.ctldisp;
+    opt.ctldisp = 2; // -R, og's only CVT_ANSI gate
+
+    try {
+      const line = 'Why \x1b[01;31m\x1b[Khello\x1b[m\x1b[K there';
+      expect(matchesSearchLine(line)).toBe(true);
+    } finally {
+      opt.ctldisp = saved;
+    }
+  });
+
+  it('carries the file\'s own colour through a hilite', () => {
+    // og attributes each CHARACTER, so standout ending inside a
+    // coloured run leaves the colour running underneath: "llo" stays
+    // red after the hilite over "he" ends
+    doSearch('/', 'y he');
+
+    const out = highlightLine('Why ' + RED + 'hello' + RESET + ' there');
+
+    expect(out).toBe(
+      'Wh' + INVERSE_ON + 'y ' + INVERSE_OFF + RED +
+      INVERSE_ON + 'he' + INVERSE_OFF + RED + 'llo' + RESET + ' there'
     );
   });
 
