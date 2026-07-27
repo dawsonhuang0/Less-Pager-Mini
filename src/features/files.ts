@@ -1,6 +1,8 @@
 import fs from 'fs';
 import os from 'os';
 
+import { Writable } from 'stream';
+
 import { spawnSync } from 'child_process';
 
 import { config, mode } from "../state/config";
@@ -40,7 +42,7 @@ import { DEF_METACHARS, DEF_METAESCAPE, isWindows, shellArgv }
 
 import { prExpand, eqProto, shellQuote } from "./prompt";
 
-import { openAltFile, closeAltFile } from "./lessopen";
+import { openAltFile, closeAltFile, streamAltFile } from "./lessopen";
 
 import { lgetenv } from '../startup/environment';
 
@@ -265,32 +267,32 @@ function statGuard(path: string): boolean {
  * $LESSOPEN applies with output on a pipe exactly as it does on a
  * screen (main.c:376 runs edit_first before the cat loop), but the
  * copy that follows is byte for byte - ch_forw_get, no line
- * processing - so this hands back a path to stream rather than the
- * decoded lines loadFile builds. og's binary-file question is gated
- * on is_tty and never asked here.
+ * processing - so a pipe preprocessor writes straight to `out` and
+ * anything else hands back a path to stream. og's binary-file
+ * question is gated on is_tty and never asked here.
  *
  * @param index - Entry index in the file list.
- * @returns A file to stream, preprocessor output to write, or null
- *   with a message set.
+ * @param out - Where a pipe preprocessor's bytes go.
+ * @returns A file left to stream, or null with a message set.
  */
-export function openForCat(
-  index: number
-): { path?: string, text?: string } | null {
+export async function openForCat(
+  index: number,
+  out: Writable
+): Promise<{ path?: string } | null> {
   const entry = files.list[index];
   if (!entry) return null;
 
-  const alt = openAltFile(entry.path);
+  const alt = await streamAltFile(entry.path, out);
 
   if (alt) {
-    entry.size = alt.size;
     entry.alt = alt.alt;
     entry.preprocError = alt.preprocError;
     entry.sizeKnown = alt.alt !== '-';
     entry.everOpened = true;
 
-    // a replacement FILE is copied from disk like any other; only a
-    // pipe's output exists nowhere else
-    return alt.alt === '-' ? { text: alt.raw } : { path: alt.alt };
+    // a replacement FILE is copied from disk like any other; a pipe's
+    // bytes have already gone out, and the "||" empty file has none
+    return { path: alt.path };
   }
 
   try {

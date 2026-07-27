@@ -4,7 +4,9 @@ import { secureAllow } from "./secure";
 
 import { optNoShell } from '../options/shared';
 
-import { spawnSync, SpawnSyncReturns } from 'child_process';
+import { spawn, spawnSync, SpawnSyncReturns } from 'child_process';
+
+import { Readable, Writable } from 'stream';
 
 import { shellArgv } from '../tty/platform';
 
@@ -30,6 +32,16 @@ export interface AltFile {
   raw: string;
   /** The pipe preprocessor's failure message, reported when the
    *  file is LEFT (og's close_altfile, edit.c:288), not at open. */
+  preprocError?: string;
+}
+
+/** What a cat session gets back: the alt name for $LESSCLOSE, plus a
+ *  file to copy when the replacement is one. Nothing to copy means
+ *  the bytes already went out (or the "||" form found it empty). */
+export interface AltStream {
+  alt: string;
+  path?: string;
+  empty?: boolean;
   preprocError?: string;
 }
 
@@ -81,11 +93,19 @@ function shellCmd(cmd: string, input?: string): SpawnSyncReturns<Buffer> {
 function preprocStatusMessage(
   result: SpawnSyncReturns<Buffer>
 ): string | null {
-  if (result.signal) {
-    return `Input preprocessor terminated: ${result.signal}`;
+  return exitMessage(result.status, result.signal);
+}
+
+/** The same decoding from a raw wait status. */
+function exitMessage(
+  code: number | null,
+  signal: string | null
+): string | null {
+  if (signal) {
+    return `Input preprocessor terminated: ${signal}`;
   }
 
-  const status = result.status ?? 0;
+  const status = code ?? 0;
   if (status === 0) return null;
 
   if (status <= 128) {
@@ -116,10 +136,11 @@ const toLines = (data: string): string[] =>
  *                stdin for the `-` forms, like og's inherited pipe.
  * @returns The replacement, or null to open the file itself.
  */
-export function openAltFile(
-  filename: string,
-  input?: string
-): AltFile | null {
+/** The command $LESSOPEN wants run for this file, and how many pipe
+ *  characters selected the form, like the head of open_altfile. */
+function resolveLessopen(
+  filename: string
+): { cmd: string, pipes: number } | null {
   if (!secureAllow('lessopen')) return null;
 
   // --no-shell means this session launches no processes at all, and a
@@ -153,7 +174,17 @@ export function openAltFile(
     return null;
   }
 
-  const cmd = lessopen.replace('%s', shellQuote(filename));
+  return { cmd: lessopen.replace('%s', shellQuote(filename)), pipes };
+}
+
+export function openAltFile(
+  filename: string,
+  input?: string
+): AltFile | null {
+  const resolved = resolveLessopen(filename);
+  if (!resolved) return null;
+
+  const { cmd, pipes } = resolved;
   const result = shellCmd(cmd, filename === '-' ? input : undefined);
   const bytes = result.stdout ?? Buffer.alloc(0);
   const output = bytes.toString('utf8');
@@ -208,6 +239,94 @@ export function openAltFile(
     report(`${name}: cannot open the LESSOPEN replacement`);
     return null;
   }
+}
+
+/** The first data the pipe produces, or null when it produces none -
+ *  og reads a single byte for this decision and ungets it. */
+function firstChunk(stream: Readable): Promise<Buffer | null> {
+  return new Promise(resolve => {
+    const onData = (chunk: Buffer): void => {
+      stream.pause();
+      stream.off('end', onEnd);
+      resolve(chunk);
+    };
+
+    const onEnd = (): void => {
+      stream.off('data', onData);
+      resolve(null);
+    };
+
+    stream.once('data', onData);
+    stream.once('end', onEnd);
+  });
+}
+
+/**
+ * The $LESSOPEN pipe forms for a session that CATS its input.
+ *
+ * og keeps the popen stream open and reads through it as it copies
+ * (open_altfile's returnfd branch hands edit_ifile the live FILE),
+ * so the preprocessor is still running while its output is written -
+ * which is why its own stderr lands interleaved rather than all in
+ * front. Collecting the output first, as the display path must, gets
+ * the bytes right and the order wrong, so this streams instead.
+ *
+ * The one-byte peek is og's: an empty pipe means no replacement, and
+ * only then does the exit status decide between an EMPTY file (the
+ * "||" form) and no alt file at all.
+ *
+ * @param filename - The file being opened.
+ * @param out - Where the preprocessor's bytes go, verbatim.
+ * @returns The replacement, or null to open the file itself.
+ */
+export async function streamAltFile(
+  filename: string,
+  out: Writable
+): Promise<AltStream | null> {
+  const resolved = resolveLessopen(filename);
+  if (!resolved) return null;
+
+  // only the pipe forms stream; "cmd %s" just names a file to open,
+  // which the caller copies from disk like any other
+  if (resolved.pipes === 0) {
+    const alt = openAltFile(filename);
+    return alt && { alt: alt.alt, path: alt.alt };
+  }
+
+  const argv = shellArgv(resolved.cmd);
+  const child = spawn(argv[0], argv[1],
+    { stdio: ['inherit', 'pipe', 'inherit'] });
+
+  const first = await firstChunk(child.stdout);
+
+  if (first !== null) out.write(first);
+  if (first !== null) child.stdout.pipe(out, { end: false });
+
+  const [status, signal] = await new Promise<[number | null, string | null]>(
+    resolve => child.once('close', (code, sig) => resolve([code, sig]))
+  );
+
+  if (first === null) {
+    // an abandoned pipe reports its status right here, like og's
+    // close_pipe from the open path
+    if (optShowPreprocError()) {
+      const message = exitMessage(status, signal);
+      if (message) report(message);
+    }
+
+    // with "||" a clean exit means the file really is empty, like
+    // og's FAKE_EMPTYFILE; with "|" it means no replacement
+    if (resolved.pipes > 1 && status === 0) return { alt: '-', empty: true };
+
+    return null;
+  }
+
+  // a USED replacement keeps its altpipe: og reports the exit status
+  // only when the file is left (close_altfile, edit.c:288)
+  return {
+    alt: '-',
+    preprocError: exitMessage(status, signal) ?? undefined,
+  };
 }
 
 /**

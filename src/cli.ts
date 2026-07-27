@@ -161,7 +161,7 @@ async function main(): Promise<void> {
       let opened = 0;
 
       for (let i = 0; i < files.length; i++) {
-        const source = openForCat(i);
+        const source = await openForCat(i, process.stdout);
 
         if (!source) {
           // og's edit_ifile error()s and edit_istep moves on to the
@@ -173,12 +173,11 @@ async function main(): Promise<void> {
 
         opened++;
 
-        if (source.text !== undefined) {
-          // the preprocessor's bytes, kept whole through latin1
-          process.stdout.write(Buffer.from(source.text, 'latin1'));
-        } else {
+        // a pipe preprocessor has already written its own bytes
+        if (source.path !== undefined) {
+          const from = source.path;
           await new Promise<void>((res, rej) => {
-            const rs = fs.createReadStream(source.path as string);
+            const rs = fs.createReadStream(from);
             rs.on('error', rej);
             rs.on('end', res);
             rs.pipe(process.stdout, { end: false });

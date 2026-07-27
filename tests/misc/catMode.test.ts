@@ -117,6 +117,26 @@ describe('a non-terminal session cats through the normal open path', () => {
     expect(result.stdout.equals(bytes)).toBe(true);
   });
 
+  it('interleaves the preprocessor\'s own stderr, like a live pipe', () => {
+    // og keeps the popen stream open and reads through it as it
+    // copies (open_altfile's returnfd branch), so the child is still
+    // running while its output is written and its stderr lands
+    // BETWEEN its stdout. Collecting the output first would put every
+    // byte of stderr in front. The sleep makes the order a fact
+    // rather than a race.
+    const noisy = path.join(dir, 'noisy.sh');
+    fs.writeFileSync(noisy,
+      '#!/bin/sh\necho before\nsleep 0.3\necho oops >&2\necho after\n');
+    fs.chmodSync(noisy, 0o755);
+
+    const merged = spawnSync('sh', ['-c', `npx tsx ${cli} ${real} 2>&1`], {
+      encoding: 'utf8',
+      env: { ...process.env, LESSHISTFILE: '-', LESSOPEN: `|${noisy} %s` },
+    });
+
+    expect(merged.stdout).toBe('before\noops\nafter\n');
+  });
+
   it('copies bytes, not lines', () => {
     // no trailing newline, and cat_file adds none
     const raw = path.join(dir, 'raw.txt');
