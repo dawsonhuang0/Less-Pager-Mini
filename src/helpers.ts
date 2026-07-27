@@ -811,7 +811,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     if (promptPainted && !mode.HELP && optEndPrompt() !== null) {
       const bot = rows[rows.length - 1];
       process.stdout.write(eprPrefix() + (scrollMode()
-        ? clearBot() + bot + CLEAR_LINE + scrollPark(rows)
+        ? clearBot() + bot + tailClear(bot) + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE + bot +
           parkCursor(rows)));
       prompting = promptPainted;
@@ -824,7 +824,8 @@ export function render(rawContent: string[], buffer: string[]): void {
     // jumps it from mid-screen to the bottom row, stale copy behind
     if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
       process.stdout.write(eprPrefix() +
-        clearBot() + rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows)
+        clearBot() + rows[rows.length - 1] +
+          tailClear(rows[rows.length - 1]) + scrollPark(rows)
       );
       return;
     }
@@ -1020,6 +1021,21 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
  * backspace instead (line.c), so the terminal's auto-wrap carries
  * to the next row without doubling.
  */
+/**
+ * The clear-to-end that follows a painted bottom line - EMPTY when
+ * the line already fills the width.
+ *
+ * og clears before it writes (prompt's clear_bot, error's leading
+ * \r + clear_eol), never after. Clearing after is harmless while the
+ * cursor still sits mid-row, but a full-width line leaves it parked
+ * on the last column with the wrap deferred, and erasing from there
+ * takes the character just written with it.
+ */
+function tailClear(row: string): string {
+  const plain = row.replace(STYLE_REGEX_G, '');
+  return visualWidth(plain) >= config.screenWidth ? '' : CLEAR_LINE;
+}
+
 function rowEnd(row: string): string {
   const plain = row.replace(STYLE_REGEX_G, '');
   return visualWidth(plain) >= config.screenWidth ? ' \b' : '\n';
@@ -1236,14 +1252,15 @@ function scrollFrame(
     if (grown.length >= prev.length && prefixEqual(prev, grown)) {
       const tail = session.pipeWaiting
         ? clearBot() + rows[rows.length - 1]
-        : rows[rows.length - 1] + CLEAR_LINE + scrollPark(rows);
+        : rows[rows.length - 1] + tailClear(rows[rows.length - 1]) +
+          scrollPark(rows);
 
       return grown.slice(prev.length).map(r => r + rowEnd(r)).join('') + tail;
     }
   }
 
   const last = rows.length - 1;
-  const bot = rows[last] + CLEAR_LINE + scrollPark(rows);
+  const bot = rows[last] + tailClear(rows[last]) + scrollPark(rows);
 
   // a -h-capped backward scroll repaints forward, like og's back()
   let capped = false;
@@ -1657,7 +1674,8 @@ function skippedFrame(
   const head = marker && shownBottomEcho ? '' : '\r' + CLEAR_LINE;
 
   return syncOn() + head + marker + body +
-    physical[last] + CLEAR_LINE + parkCursor(rows) + syncOff();
+    physical[last] + tailClear(physical[last]) + parkCursor(rows) +
+    syncOff();
 }
 
 /**
