@@ -107,3 +107,17 @@ describe('OSC 8 selection and handler variables', () => {
     });
   });
 });
+
+describe('an empty link is not a link', () => {
+  it('skips a sequence pair with no text between them', () => {
+    // og requires op2.osc8_start > op1.osc8_end (search.c:1417): the
+    // anchors a man-page converter emits - "ESC]8;:id=1;# ESC\" then
+    // an immediate close - mark a position and display nothing, so
+    // ^O^N walks past them to the next real link
+    const anchor = '\x1b]8;:id=1;#\x1b\\\x1b]8;;\x1b\\';
+    const real = 'see \x1b]8;;#1\x1b\\1\x1b]8;;\x1b\\ here';
+
+    expect(osc8Links([anchor])).toEqual([]);
+    expect(osc8Links([anchor + real]).map(l => l.uri)).toEqual(['#1']);
+  });
+});

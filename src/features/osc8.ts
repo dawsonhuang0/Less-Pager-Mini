@@ -53,13 +53,23 @@ export function osc8Links(lines: string[]): Osc8Link[] {
           uri: match[2],
         };
       } else if (opened) {
-        links.push({
-          row,
-          start: opened.after,
-          end: match.index,
-          params: opened.params,
-          uri: opened.uri,
-        });
+        // og requires the closing sequence to start strictly AFTER
+        // the opening ends - op2.osc8_start > op1.osc8_end
+        // (search.c:1417) - so a link with no TEXT between the two is
+        // not a link at all and the scan moves on. Files generated
+        // from man pages are full of them: an anchor like
+        // "ESC]8;:id=1;# ESC\ ESC]8;; ESC\" marks a position and
+        // shows nothing
+        if (match.index > opened.after) {
+          links.push({
+            row,
+            start: opened.after,
+            end: match.index,
+            params: opened.params,
+            uri: opened.uri,
+          });
+        }
+
         opened = null;
       }
     }
