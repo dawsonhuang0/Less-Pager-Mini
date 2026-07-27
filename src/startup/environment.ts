@@ -17,6 +17,12 @@ const systemVars = new Map<string, string>();
 // outranks a real environment value in og.
 let sessionVars: Record<string, string | undefined> | null = null;
 
+/** A library caller's own value for a variable, if it set one. */
+export function sessionEnv(name: string): string | undefined {
+  const value = sessionVars?.[name];
+  return value === undefined || value === '' ? undefined : value;
+}
+
 /**
  * True when the CALLER supplied this variable, rather than it coming
  * from the ambient process environment. The overlay is the embedding
@@ -24,8 +30,7 @@ let sessionVars: Record<string, string | undefined> | null = null;
  * the surrounding shell cannot be.
  */
 export function fromSessionEnv(name: string): boolean {
-  const value = sessionVars?.[name];
-  return value !== undefined && value !== '';
+  return sessionEnv(name) !== undefined;
 }
 
 /** Installs (or clears) a library call's environment overlay. */
@@ -131,10 +136,7 @@ export function lgetenv(name: string): string | undefined {
   // configuration: they outrank every ambient tier and LESSNOCONFIG
   // filters only the user's environment, never the caller's
   // (og's isnullenv: an empty value reads as unset)
-  const session = sessionVars?.[name];
-  if (session !== undefined && session !== '') return session;
-
-  return ambientEnv(name);
+  return sessionEnv(name) ?? ambientEnv(name);
 }
 
 /** TERM uniquely falls back to real getenv even under LESSNOCONFIG. */

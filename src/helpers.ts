@@ -77,7 +77,8 @@ import {
   VISUAL_BELL,
   SCROLL_UP,
   SCROLL_DOWN,
-  CURSOR_TO
+  CURSOR_TO,
+  ON_ALTERNATE_SCREEN
 } from './state/constants';
 
 /**
@@ -759,8 +760,13 @@ export function render(rawContent: string[], buffer: string[]): void {
   // above the bottom prompt, its blank rows on top; -X never homes,
   // so a short first screen prints in place (og's squished screen).
   // Rows a NUL will collapse take no space, so the fill counts the
-  // PHYSICAL rows og's scroll-up actually produces
-  if (mode.INIT && !mode.DUMB && !optNoInit() &&
+  // PHYSICAL rows og's scroll-up actually produces.
+  //
+  // The lower_left that causes it is og's alt-screen guard, not the
+  // -X one: term_init homes only when BOTH "ti" and "te" exist and
+  // "NR" does not deny the switch (screen.c:2061), so on a terminal
+  // that cannot switch, a short first screen prints at the top.
+  if (mode.INIT && !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN &&
       rows.length < config.window) {
     rows.unshift(
       ...Array(config.window - collapseNulRows(rows).length).fill('')

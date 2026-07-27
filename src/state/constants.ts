@@ -2,7 +2,8 @@
 
 import { lgetenv } from '../startup/environment';
 
-import { formatTerminalCapability, terminalCapability } from '../tty/terminal';
+import { formatTerminalCapability, terminalCapability, terminalFlag }
+  from '../tty/terminal';
 
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
 
@@ -114,6 +115,10 @@ export const CURSOR_TO = (row: number, col: number): string =>
 export const SYNC_ON = '\x1b[?2026h';
 export const SYNC_OFF = '\x1b[?2026l';
 
+/** True while the pager owns a switchable alternate screen, like og
+ *  testing sc_init and sc_deinit before it homes to the lower left. */
+export let ON_ALTERNATE_SCREEN = true;
+
 export let ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
@@ -168,6 +173,14 @@ export let END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
 export function initTerminalCapabilities(): void {
   ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ?? '\x1b[?1049h';
   ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ?? '\x1b[?1049l';
+
+  // og's term_init only treats the screen as an ALTERNATE one when
+  // both strings exist and "NR" does not deny it (screen.c:2061); a
+  // terminal that cannot switch keeps its scrollback, so og neither
+  // homes to the lower left nor expects the switch to undo itself
+  ON_ALTERNATE_SCREEN = ALTERNATE_CONSOLE_ON !== '' &&
+    ALTERNATE_CONSOLE_OFF !== '' &&
+    !(terminalFlag('nrrmc', 'NR') ?? false);
   KEYPAD_ON = terminalCapability('smkx', 'ks') ?? '\x1b[?1h\x1b=';
   KEYPAD_OFF = terminalCapability('rmkx', 'ke') ?? '\x1b[?1l\x1b>';
 

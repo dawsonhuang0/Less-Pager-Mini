@@ -1,6 +1,7 @@
 import fs from 'fs';
 
-import { lgetenv, terminalEnv } from '../startup/environment';
+import { actualEnv, lgetenv, sessionEnv, terminalEnv }
+  from '../startup/environment';
 
 /** Decodes the string syntax used by an inline TERMCAP entry. */
 function decodeTermcap(text: string): string {
@@ -45,7 +46,13 @@ function decodeTermcap(text: string): string {
 
 /** Resolves a literal TERMCAP entry or the TERM entry in a named file. */
 function termcapEntry(): string | undefined {
-  const source = lgetenv('TERMCAP');
+  // $TERMCAP is the DATABASE, and og reads it through tgetent inside
+  // the termcap library - never through lgetenv, which is why
+  // $LESSNOCONFIG hides every LESS_TERMCAP_* override from og while
+  // leaving the database itself in place. A library caller's own
+  // overlay still counts: that is the application's configuration,
+  // not the environment it was launched in.
+  const source = sessionEnv('TERMCAP') ?? actualEnv('TERMCAP');
   if (!source) return undefined;
   if (!source.startsWith('/')) return source;
 

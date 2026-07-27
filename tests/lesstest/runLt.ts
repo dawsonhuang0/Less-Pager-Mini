@@ -113,12 +113,27 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   // og's lesstest hands less exactly LESS*, COLUMNS, LINES, LANG,
   // LC_CTYPE and MORE (env.c is_less_env) and logs that set as the E
   // lines, so the recording IS the environment less saw. Replay it,
-  // minus the synthetic LESS_TERMCAP_* values: those only decide
+  // minus the synthetic LESS_TERMCAP_* VALUES: those only decide
   // which escape bytes og wrote, and .lt compares screens, not bytes.
   const recorded = Object.entries(lt.env)
     .filter(([name]) => !name.startsWith('LESS_TERMCAP_'));
 
   for (const [name, value] of recorded) setEnv(name, value || undefined);
+
+  // Which capabilities the recording NAMES is a different matter: og
+  // ran with no $TERM at all (env.c never passes it), so every
+  // capability it had came from that list and everything else was
+  // absent. "ti"/"te" are not on it, and og's term_init homes to the
+  // lower left only when both exist (screen.c:2061) - which is why a
+  // short first screen sits at the TOP of a recorded screen and at
+  // the bottom of a real terminal's. Cancel them the way a termcap
+  // entry does, so the replay starts where og started.
+  const canceled = ['ti', 'te']
+    .filter(name => !(`LESS_TERMCAP_${name}` in lt.env));
+
+  if (canceled.length) {
+    setEnv('TERMCAP', `lesstest:${canceled.map(n => `${n}@`).join(':')}:`);
+  }
 
   // the args line adds to whatever $LESS the recording carried
   if (options.length) {

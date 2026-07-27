@@ -11,6 +11,8 @@ import { opt, option } from '../../src/options';
 import { render, resetRender, resetDumbPaint, calculateEOF }
   from '../../src/helpers';
 
+import { initTerminalCapabilities } from '../../src/state/constants';
+
 const written: string[] = [];
 
 vi.spyOn(process.stdout, 'write').mockImplementation(data => {
@@ -154,5 +156,49 @@ describe('-X main-screen rendering', () => {
     render(content, []);
 
     expect(written.join('')).toContain('\x1B[?2026h');
+  });
+});
+
+describe('a terminal that cannot switch screens', () => {
+  // og's term_init homes to the lower left only when BOTH "ti" and
+  // "te" exist and "NR" does not deny the switch (screen.c:2061),
+  // because a terminal that stays on one screen would be scrolling
+  // the user's own scrollback away. A short first screen therefore
+  // prints at the TOP there, and just above the prompt on an xterm.
+  const short = ['a', 'b'];
+
+  beforeEach(() => {
+    opt.noInit = 0;
+    initContent(short);
+    calculateEOF(short);
+    mode.INIT = true;
+    resetRender();
+    written.length = 0;
+  });
+
+  const paint = (termcap: string | undefined): string => {
+    if (termcap === undefined) delete process.env.TERMCAP;
+    else process.env.TERMCAP = termcap;
+
+    initTerminalCapabilities();
+    render(short, []);
+    delete process.env.TERMCAP;
+    initTerminalCapabilities();
+
+    return written.join('');
+  };
+
+  /** Rows painted before the first content line. */
+  const blanksAbove = (frame: string): number =>
+    (frame.slice(0, frame.indexOf('a')).match(/\n/g) ?? []).length;
+
+  it('leaves a short first screen at the top without "ti"', () => {
+    expect(blanksAbove(paint('lesstest:ti@:te@:'))).toBe(0);
+  });
+
+  it('still sinks it to the bottom on a switchable terminal', () => {
+    // a 6-row window holding 2 lines and a prompt: og's lower_left
+    // leaves the other 3 above
+    expect(blanksAbove(paint(undefined))).toBe(3);
   });
 });
