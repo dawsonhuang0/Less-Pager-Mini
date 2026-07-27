@@ -851,6 +851,14 @@ export function highlightLine(line: string, row: number = -1): string {
     }
 
     if (match.index === globalRegex.lastIndex) globalRegex.lastIndex++;
+
+    // og's hilite_line loops on match_pattern with the USER's search
+    // type (search.c), and SRCH_NO_MATCH inverts its verdict
+    // (pattern.c:444): once a line's first match is hilited, the
+    // continuation asks "is there NO match in the rest", which is
+    // false precisely when another one exists. So an inverted search
+    // marks the first match on each line and no more.
+    if (search.invert) break;
   }
 
   if (!ranges.length) return line;
