@@ -10,9 +10,11 @@
 const userVars = new Map<string, string>();
 const systemVars = new Map<string, string>();
 
-// environment passed by a library caller: a synthetic process env for
-// one pager() call, sitting at the real-env tier of the og layering
-// (lesskey #env values still override it, like og over a real env)
+// environment passed by a library caller: the embedding application's
+// own configuration, so it sits ABOVE og's whole ladder. A lesskey
+// #env belongs to whoever runs the application, not to the
+// application, which is why it does not outrank this the way it
+// outranks a real environment value in og.
 let sessionVars: Record<string, string | undefined> | null = null;
 
 /**
@@ -99,6 +101,27 @@ function ignored(name: string): boolean {
 }
 
 /**
+ * Reads og's ladder alone: user lesskey #env, then the real process
+ * environment, then system lesskey #env, then the compiled defaults.
+ *
+ * This is what the ENVIRONMENT says with the caller's overlay taken
+ * away, so it is the view policy must be read through. A deployment
+ * hardens a session through any of these tiers - $LESS in the parent
+ * shell, or a #env line in ~/.lesskey - and a library caller may
+ * tighten what it finds here but never relax it.
+ */
+export function ambientEnv(name: string): string | undefined {
+  if (ignored(name)) return undefined;
+
+  if (userVars.has(name)) return userVars.get(name);
+
+  const real = process.env[name];
+  if (real !== undefined && real !== '') return real;
+
+  return systemVars.get(name);
+}
+
+/**
  * Reads a less environment value with user > process > system precedence.
  * Empty real-environment values are absent, while an empty lesskey value
  * remains a winning table entry just like cmd_decode(EV_OK).
@@ -111,14 +134,7 @@ export function lgetenv(name: string): string | undefined {
   const session = sessionVars?.[name];
   if (session !== undefined && session !== '') return session;
 
-  if (ignored(name)) return undefined;
-
-  if (userVars.has(name)) return userVars.get(name);
-
-  const real = process.env[name];
-  if (real !== undefined && real !== '') return real;
-
-  return systemVars.get(name);
+  return ambientEnv(name);
 }
 
 /** TERM uniquely falls back to real getenv even under LESSNOCONFIG. */

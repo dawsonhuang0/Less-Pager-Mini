@@ -6,7 +6,8 @@ import path from 'path';
 
 import { search } from '../../src/features/searching';
 
-import { initEnvironment, lgetenv } from '../../src/startup/environment';
+import { ambientEnv, initEnvironment, lgetenv, setSessionEnv }
+  from '../../src/startup/environment';
 
 import {
   userBinding,
@@ -152,6 +153,22 @@ describe('#env section', () => {
   it('sets session environment variables', () => {
     parse('#env\nLPM_TEST_VAR = hello world');
     expect(lgetenv('LPM_TEST_VAR')).toBe('hello world');
+  });
+
+  it('loses to a library caller\'s overlay', () => {
+    // og's lgetenv puts a #env line above the real environment, but
+    // the file belongs to whoever RUNS the application while the
+    // overlay is the application's own configuration, so the overlay
+    // sits above og's whole ladder
+    parse('#env\nLPM_TEST_VAR = from lesskey');
+    setSessionEnv({ LPM_TEST_VAR: 'from caller' });
+
+    try {
+      expect(lgetenv('LPM_TEST_VAR')).toBe('from caller');
+      expect(ambientEnv('LPM_TEST_VAR')).toBe('from lesskey');
+    } finally {
+      setSessionEnv(null);
+    }
   });
 
   it('appends with +=, like og', () => {
