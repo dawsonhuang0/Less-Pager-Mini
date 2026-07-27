@@ -591,6 +591,9 @@ export function applyFilter(): void {
 
   session.lastFilter = filter;
 
+  // og clears soft_eof when the filter changes (command.c:282)
+  session.softEofSeen = false;
+
   // og's is_filtering() is FALSE on the helpfile (search.c:2409):
   // the & pattern stores, the help view stays unfiltered, and the
   // filtered file waits behind the help exit

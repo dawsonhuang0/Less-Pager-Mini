@@ -78,6 +78,12 @@ export const session = {
    *  (forwback.c:76), which is not the same question as mode.EOF -
    *  "is anything left to display". They differ only here. */
   filterHidesTail: false,
+  /** og's soft_eof, as a flag: a forward read has RETURNED EOF since
+   *  the filter was set (forwback.c:310), or a jump to the end walked
+   *  back through it (jump.c:62). Either makes the bottom line count
+   *  as the end even with a filtered tail behind it. Cleared when a
+   *  new filter is set, like command.c:282. */
+  softEofSeen: false,
 
   /** The process title to restore at exit. */
   processTitle: '',
@@ -152,6 +158,7 @@ export function resetSession(content: string[]): void {
 
   session.lastFilter = null;
   session.filterHidesTail = false;
+  session.softEofSeen = false;
   session.processTitle = process.title;
 
   session.pipeStream = null;
