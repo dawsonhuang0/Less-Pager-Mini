@@ -167,7 +167,10 @@ describe('terminal dimensions', () => {
 
     expect(config.window).toBe(41);
     expect(config.screenWidth).toBe(101);
-    expect(config.halfWindow).toBe(20);
+    // og rounds the vertical half UP - wscroll = (sc_height + 1) / 2
+    // (screen.c:998) - and the horizontal one DOWN, sc_width / 2
+    // (command.c:2456)
+    expect(config.halfWindow).toBe(21);
     expect(config.halfScreenWidth).toBe(50);
   });
 

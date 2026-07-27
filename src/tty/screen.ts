@@ -132,5 +132,7 @@ export function calculateDimensions(): void {
   // -N and -J reserve gutter columns inside the screen width
   reserveGutter();
 
-  config.halfWindow = Math.floor(config.window / 2);
+  // og rounds UP: wscroll = (sc_height + 1) / 2 in C integer division
+  // (screen.c:998), so a 45-row screen scrolls 23 lines, not 22
+  config.halfWindow = Math.floor((config.window + 1) / 2);
 }

@@ -92,7 +92,8 @@ function getDefaultConfig(): Config {
     setWindow: -1,
     setHalfWindow: 0,
     window: rows,
-    halfWindow: Math.floor(rows / 2),
+    // og's wscroll = (sc_height + 1) / 2, rounded up (screen.c:998)
+    halfWindow: Math.floor((rows + 1) / 2),
     screenWidth: columns,
     halfScreenWidth: Math.floor(columns / 2),
     chopLongLines: false,
