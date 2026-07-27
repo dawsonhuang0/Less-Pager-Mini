@@ -10,7 +10,8 @@ import { openTtyKeyboard } from './tty/keyboard';
 
 import { printVersion } from './features/misc';
 
-import { errorText } from './features/files';
+import { closeAlt, files as fileList, initFiles, openForCat }
+  from './features/files';
 
 import {
   OptionSpec,
@@ -22,13 +23,18 @@ import {
 
 import { help } from './startup/lessHelp';
 
-import { markTerminalInvocation } from './startup/invocation';
+import { initInvocationOptions, markTerminalInvocation }
+  from './startup/invocation';
 
 import { actualEnv, initEnvironment, lgetenv } from './startup/environment';
 
 import { initSecure, secureAllow } from './features/secure';
 
 import { loadLesskey } from './features/lesskey';
+
+import { startupInit } from './startup/startup';
+
+import { search } from './features/searching';
 
 /**
  * The `lmn` command, mirroring og main.c's startup: $LESS scans
@@ -143,19 +149,50 @@ async function main(): Promise<void> {
     if (wantsHelp) process.stdout.write(help.join('\n') + '\n');
 
     if (files.length) {
-      for (const f of files) {
-        try {
+      // og reaches the cat loop through its ordinary startup: the
+      // option scan, the lesskey files and $LESSOPEN all still apply
+      // with output on a pipe, because main.c:376 runs edit_first()
+      // before it starts copying (edit.c:936)
+      markTerminalInvocation();
+      initInvocationOptions();
+      startupInit([]);
+
+      initFiles(files);
+      let opened = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const source = openForCat(i);
+
+        if (!source) {
+          // og's edit_ifile error()s and edit_istep moves on to the
+          // next name; only a list where NOTHING opens is an error
+          process.stderr.write((search.message || files[i]) + '\n');
+          search.message = '';
+          continue;
+        }
+
+        opened++;
+
+        if (source.text !== undefined) {
+          // the preprocessor's bytes, kept whole through latin1
+          process.stdout.write(Buffer.from(source.text, 'latin1'));
+        } else {
           await new Promise<void>((res, rej) => {
-            const rs = fs.createReadStream(f);
+            const rs = fs.createReadStream(source.path as string);
             rs.on('error', rej);
             rs.on('end', res);
             rs.pipe(process.stdout, { end: false });
           });
-        } catch (error) {
-          process.stderr.write(`${f}: ${errorText(error)}\n`);
-          process.exitCode = 1;
         }
+
+        // leaving the file runs $LESSCLOSE, like close_file; quit()
+        // does the same for the last one through edit(NULL)
+        closeAlt(fileList.list[i]);
       }
+
+      // og's main quits QUIT_ERROR only when edit_first found no file
+      // it could open at all
+      if (!opened) process.exitCode = 1;
     } else if (wantsHelp) {
       // the help file was the only input
     } else if (!stdinTty) {

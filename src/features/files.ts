@@ -234,6 +234,77 @@ export function binFile(bytes: Buffer): boolean {
 }
 
 /**
+ * og's bad_file and isatty checks, ahead of the open itself.
+ *
+ * @returns True when the file may be opened, false with a message
+ *   set; a stat failure throws for the caller's errno report.
+ */
+function statGuard(path: string): boolean {
+  const stat = fs.statSync(path);
+
+  // -f skips the directory guard and lets the read report the OS
+  // error, like og's force_open bypassing bad_file's is_dir check
+  if (stat.isDirectory() && !opt.forceOpen) {
+    search.message = `${path} is a directory`;
+    return false;
+  }
+
+  // og refuses terminal devices without -f (edit.c's isatty check)
+  if (stat.isCharacterDevice() && !opt.forceOpen) {
+    search.message = `${path} is a terminal (use -f to open it)`;
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Opens an entry the way a NON-terminal session needs it, like og
+ * reaching cat_file through the same edit_ifile every session uses.
+ *
+ * $LESSOPEN applies with output on a pipe exactly as it does on a
+ * screen (main.c:376 runs edit_first before the cat loop), but the
+ * copy that follows is byte for byte - ch_forw_get, no line
+ * processing - so this hands back a path to stream rather than the
+ * decoded lines loadFile builds. og's binary-file question is gated
+ * on is_tty and never asked here.
+ *
+ * @param index - Entry index in the file list.
+ * @returns A file to stream, preprocessor output to write, or null
+ *   with a message set.
+ */
+export function openForCat(
+  index: number
+): { path?: string, text?: string } | null {
+  const entry = files.list[index];
+  if (!entry) return null;
+
+  const alt = openAltFile(entry.path);
+
+  if (alt) {
+    entry.size = alt.size;
+    entry.alt = alt.alt;
+    entry.preprocError = alt.preprocError;
+    entry.sizeKnown = alt.alt !== '-';
+    entry.everOpened = true;
+
+    // a replacement FILE is copied from disk like any other; only a
+    // pipe's output exists nowhere else
+    return alt.alt === '-' ? { text: alt.raw } : { path: alt.alt };
+  }
+
+  try {
+    if (!statGuard(entry.path)) return null;
+  } catch (error) {
+    search.message = `${entry.path}: ${errorText(error)}`;
+    return null;
+  }
+
+  entry.everOpened = true;
+  return { path: entry.path };
+}
+
+/**
  * Reads a file entry's lines, reporting errors like less's edit.
  *
  * - A binary-looking file sets binaryConfirm.request instead of
@@ -276,21 +347,8 @@ export function loadFile(index: number): string[] | null {
   let stated = false;
 
   try {
-    const stat = fs.statSync(entry.path);
-    stated = true;
-
-    // -f skips the directory guard and lets the read report the OS
-    // error, like og's force_open bypassing bad_file's is_dir check
-    if (stat.isDirectory() && !opt.forceOpen) {
-      search.message = `${entry.path} is a directory`;
-      return null;
-    }
-
-    // og refuses terminal devices without -f (edit.c's isatty check)
-    if (stat.isCharacterDevice() && !opt.forceOpen) {
-      search.message = `${entry.path} is a terminal (use -f to open it)`;
-      return null;
-    }
+    stated = statGuard(entry.path);
+    if (!stated) return null;
 
     const bytes = fs.readFileSync(entry.path);
 
