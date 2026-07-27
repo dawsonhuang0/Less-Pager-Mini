@@ -147,27 +147,29 @@ describe('render', () => {
     expect(writes[0]).toContain(' ^X');
     expect(writes[0]).not.toContain('^X1');
 
-    // a lone pending ESC leaves the prompt untouched
+    // og spells the escape character "ESC" (prchar, charset.c:533),
+    // so a half-read arrow echoes " ESC" and then " ESCO". Whether it
+    // is echoed AT ALL is the input layer's call - getcc_repl
+    // swallows a bare ESC on any terminal whose kent starts with one.
+    writes = [];
+    resetRender();
+    config.keyPrefix = '\x1B';
+    render(content, []);
+    expect(writes.join('')).toContain(' ESC');
+
+    writes = [];
+    resetRender();
+    config.keyPrefix = '\x1BO';
+    render(content, []);
+    expect(writes.join('')).toContain(' ESCO');
+
+    // the prefix owns the command line: cmd_reset clears the digits
     writes = [];
     resetRender();
     config.keyPrefix = '\x1B';
     render(content, ['1']);
-    expect(writes.join('')).not.toContain('ESC');
-    expect(writes.join('')).toContain(':1');
-
-    // further ESCs echo as literal "ESC" and replace the number echo
-    writes = [];
-    resetRender();
-    config.keyPrefix = '\x1B\x1B';
-    render(content, ['1']);
     expect(writes.join('')).toContain(' ESC');
     expect(writes.join('')).not.toContain('ESC1');
-
-    writes = [];
-    resetRender();
-    config.keyPrefix = '\x1B\x1B\x1B';
-    render(content, []);
-    expect(writes.join('')).toContain(' ESCESC');
   });
 
   it('replaces the END marker with an echoed key prefix', () => {

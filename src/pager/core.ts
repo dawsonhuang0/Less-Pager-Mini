@@ -40,7 +40,7 @@ import {
 
 import { help } from "../startup/lessHelp";
 
-import { getAction, splitKeys, kentToNewline, tailCascade }
+import { getAction, splitKeys, kentSequence, kentToNewline, tailCascade }
   from "../keys";
 
 import {
@@ -572,6 +572,8 @@ export async function contentPager(
     return true;
   });
 
+  // a half-read escape sequence never outlives its session
+  heldKeyBytes = '';
   keyboard().on('data', keyHandler);
   // deferred fill keys replay through the same handler
   session.feedKeys = data => keyHandler(Buffer.from(data));
@@ -952,8 +954,50 @@ function endFirstCmd(): void {
   }
 }
 
+// og reads ONE character at a time and, when what it has so far is
+// only a prefix of some binding, waits for the next one (A_PREFIX,
+// command.c:2499). A terminal is free to split an escape sequence
+// across reads - a slow link does it, and lesstest feeds byte by
+// byte - so an incomplete tail has to wait here too rather than
+// being dispatched as separate keys.
+// eslint-disable-next-line no-control-regex
+const PARTIAL_SEQUENCE = /\x1b(?:\[[\x20-\x3f]*|O)?$/;
+
+let heldKeyBytes = '';
+
 function keyHandler(data: Buffer): void {
-  let text = data.toString();
+  let text = heldKeyBytes + data.toString();
+  heldKeyBytes = '';
+
+  const partial = PARTIAL_SEQUENCE.exec(text);
+
+  if (partial) {
+    heldKeyBytes = partial[0];
+    text = text.slice(0, partial.index);
+
+    // og echoes what it is holding through the A_PREFIX mca: a " "
+    // prompt and the char through prchar (command.c:2506). But it
+    // only gets that far if getcc RETURNED the char, and getcc_repl
+    // swallows anything that is still a partial match of kent (the
+    // keypad-Enter sequence) - it loops on its own read, never
+    // reaching the command loop. On an xterm kent is ESC O M, so a
+    // bare ESC produces no output at all; captured in a pty, exactly
+    // zero bytes. lesstest's terminal defines no kent, which is why
+    // its recordings do show " ESC".
+    const kent = kentSequence();
+    const swallowed = kent !== '' && kent.startsWith(heldKeyBytes);
+
+    if (!swallowed && !session.buffer.length && !cmd.active &&
+        !option.pending && !search.input && !examine.pending &&
+        !miscInput.pending && !brackets.pending && !marks.pending) {
+      config.keyPrefix = heldKeyBytes;
+    }
+
+    if (!text) {
+      if (!swallowed) render(session.content, session.buffer);
+      return;
+    }
+  }
 
   // og's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
   // foreground group, killing a pipe's writer along the way — the

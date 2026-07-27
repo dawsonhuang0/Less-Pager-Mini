@@ -1407,14 +1407,12 @@ export function screenRows(
   const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;
-  // a single pending ESC changes nothing; a pipe drain's blank
-  // command line still owns the bottom row, cursor at og's lower left
+  // a pending prefix owns the command line (og's A_PREFIX mca resets
+  // cmdbuf first), so counted digits do not show behind it; a pipe
+  // drain's blank line still owns the bottom row, cursor at og's
+  // lower left
   if (prompt) {
-    content.push(
-      config.keyPrefix && config.keyPrefix !== '\x1B'
-        ? prompt
-        : prompt + getBuffer(buffer)
-    );
+    content.push(config.keyPrefix ? prompt : prompt + getBuffer(buffer));
   } else if (pipeDraining.active || pendingScroll.rows) {
     content.push('');
   }
@@ -1780,15 +1778,12 @@ function getPrompt(content: string[]): string {
 
   if (examine.pending) return 'Examine: ' + cmdDisplay();
 
-  // pending multi-key prefix, echoed like less's A_PREFIX (" ^X"); a
-  // single pending ESC leaves the prompt untouched, and each further
-  // ESC echoes as a literal "ESC"
-  if (config.keyPrefix && config.keyPrefix !== '\x1B') {
-    const echoed = config.keyPrefix[0] === '\x1B'
-      ? 'ESC'.repeat(config.keyPrefix.length - 1)
-      : Array.from(config.keyPrefix, prChar).join('');
-
-    return ' ' + echoed;
+  // pending multi-key prefix, echoed like og's A_PREFIX: the mca
+  // opens with a " " prompt and every held char goes through prchar
+  // (command.c:2506), which spells the escape character "ESC"
+  // (charset.c:533) - so a half-read arrow shows " ESC", then " ESCO"
+  if (config.keyPrefix) {
+    return ' ' + Array.from(config.keyPrefix, prChar).join('');
   }
 
   if (search.message) {

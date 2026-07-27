@@ -128,7 +128,9 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   // short first screen sits at the TOP of a recorded screen and at
   // the bottom of a real terminal's. Cancel them the way a termcap
   // entry does, so the replay starts where og started.
-  const canceled = ['ti', 'te']
+  // @8 is kent: without it og's getcc_repl returns a bare ESC to
+  // the command loop instead of swallowing it as a partial match
+  const canceled = ['ti', 'te', '@8']
     .filter(name => !(`LESS_TERMCAP_${name}` in lt.env));
 
   if (canceled.length) {

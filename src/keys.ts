@@ -32,8 +32,12 @@ export function splitKeys(data: string): string[] {
  * becomes the NEXT command's newline: dismiss AND move.
  */
 export function kentToNewline(key: string): string {
-  return key === (terminalCapability('kent', '@8') ?? '\x1bOM') ? '\n' : key;
+  return key === kentSequence() ? '\n' : key;
 }
+
+/** The terminal's keypad-Enter sequence, empty when it has none. */
+export const kentSequence = (): string =>
+  terminalCapability('kent', '@8') ?? '\x1bOM';
 
 /**
  * Maps a key press to a corresponding pager action.
