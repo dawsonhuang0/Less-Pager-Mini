@@ -83,6 +83,7 @@ function getDefaultConfig(): Config {
     row: 0,
     subRow: 0,
     subShift: 0,
+    subAnchor: 0,
     blankTop: 0,
     endRow: 0,
     endSubRow: 0,

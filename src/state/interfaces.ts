@@ -19,6 +19,18 @@ export interface Config {
    * one - which is why this is an overlay and not a replacement.
    */
   subShift: number;
+  /**
+   * Character offset in the top line where the regenerated grid
+   * resumes, or <= the top's own offset for none.
+   *
+   * og's back_line re-wraps from the LINE's start and stops appending
+   * the moment it reaches the old top - "if (new_pos >= curr_pos)
+   * break" (input.c) - so the row it exposes is bounded by where the
+   * screen used to start, and the rows below keep their old grid.
+   * og can express that because its screen IS a list of positions;
+   * this is the one number that reproduces it.
+   */
+  subAnchor: number;
 
   // Blank rows displayed above the beginning of the content, like less
   // padding the top when a jump target lands near BOF (jump_loc/forw)

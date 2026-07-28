@@ -1118,6 +1118,22 @@ export class FileInput implements PagerInput {
   }
 
   private backward(rows: number, force: boolean = false): void {
+    // og's back_line bounds the exposed row at the OLD top (input.c),
+    // and the rows below keep the grid they had; a move that leaves
+    // this line has no such bound
+    const wasPos = this.view.top.pos;
+    const wasLine = forwLine(this.bf, wasPos);
+    const wasOffset = wasLine
+      ? subRowStart(displayText(wasLine.text), this.view.top.subRow) +
+        config.subShift
+      : 0;
+
+    this.backwardFrom(rows, force);
+
+    config.subAnchor = this.view.top.pos === wasPos ? wasOffset : 0;
+  }
+
+  private backwardFrom(rows: number, force: boolean = false): void {
     // og's back_line lands on the greatest row start BELOW the
     // current position (input.c:358), so from a shifted top that is
     // the boundary the shift sits inside: undoing the shift IS the

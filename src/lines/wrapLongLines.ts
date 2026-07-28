@@ -64,8 +64,21 @@ function wrap(lines: string[], longLine: string, shifted = false): void {
   // width change it starts mid-boundary and every row of that line
   // wraps from there. Emitting the remainder as its own line is the
   // same thing: the grid is anchored at the top, not at column 0.
-  if (first && config.subShift > 0) {
+  if (first && (config.subShift > 0 || config.subAnchor > 0)) {
     const from = subRowStart(longLine, config.subRow) + config.subShift;
+
+    // og's back_line stops the exposed row at the old top (input.c),
+    // and the rows below keep the grid they already had. So the line
+    // splits in two at that anchor: what the backward moves uncovered
+    // wraps on its own - its last row ending short - and the rest
+    // resumes the grid the anchor sits on.
+    if (config.subAnchor > from) {
+      wrap(lines, openStyleAt(longLine, from) +
+        longLine.slice(from, config.subAnchor), true);
+      wrap(lines, openStyleAt(longLine, config.subAnchor) +
+        longLine.slice(config.subAnchor), true);
+      return;
+    }
 
     wrap(lines, openStyleAt(longLine, from) + longLine.slice(from), true);
     return;

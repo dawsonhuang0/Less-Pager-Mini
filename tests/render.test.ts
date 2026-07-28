@@ -26,6 +26,7 @@ beforeEach(() => {
   config.bufferOffset = 0;
   config.keyPrefix = '';
   config.subShift = 0;
+  config.subAnchor = 0;
   config.screenWidth = 80;
   config.window = 24;
   config.chopLongLines = true;
@@ -312,5 +313,22 @@ describe('a width change keeps the top on the same text', () => {
 
     // the next row continues the shifted grid, not the absolute one
     expect(rows[1]).toBe(long.slice(7 + w, 7 + 2 * w));
+  });
+  it('bounds the row a backward move exposes at the old top', () => {
+    // og's back_line stops appending once it reaches the old top -
+    // "if (new_pos >= curr_pos) break" (input.c) - so the exposed row
+    // is partial and the rows below keep the grid they had. Measured
+    // against og after a 80 -> 70 resize: a 30-column row, then the
+    // shifted grid resuming.
+    const w = config.screenWidth;
+
+    config.subRow = 1;
+    config.subShift = 0;
+    config.subAnchor = w + 30;
+
+    const rows = screenRows([long], []);
+
+    expect(rows[0]).toBe(long.slice(w, w + 30));
+    expect(rows[1]).toBe(long.slice(w + 30, w + 30 + w));
   });
 });

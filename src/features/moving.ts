@@ -17,6 +17,8 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
+import { subRowStart } from "./jumping";
+
 import { INVERSE_ON } from "../state/constants";
 
 /**
@@ -226,6 +228,10 @@ export function lineForward(
   const fromRow = config.row;
   const fromSub = config.subRow;
 
+  // forw scrolls the rows a backward move exposed off the top, and
+  // og's table loses them with it
+  config.subAnchor = 0;
+
   while (offset > 0 && config.row < maxRow) {
     const currMaxSubRow = maxSubRow(content[config.row]);
 
@@ -277,6 +283,28 @@ export function lineForward(
  * @param offset - Lines or sub-rows to scroll backward.
  */
 export function lineBackward(
+  content: string[],
+  offset: number,
+  attn: boolean = true
+): number {
+  // og's back_line bounds the row it exposes at the OLD top - it
+  // stops appending once new_pos reaches curr_pos (input.c) - and the
+  // rows below keep the grid they had. Remembering where the screen
+  // used to start is what lets the paint reproduce that; a move that
+  // leaves this line has no such bound, its rows being whole ones.
+  const from = content[config.row];
+  const wasRow = config.row;
+  const wasOffset = from === undefined
+    ? 0
+    : subRowStart(from, config.subRow) + config.subShift;
+
+  const moved = lineBackwardFrom(content, offset, attn);
+
+  config.subAnchor = config.row === wasRow ? wasOffset : 0;
+  return moved;
+}
+
+function lineBackwardFrom(
   content: string[],
   offset: number,
   attn: boolean = true
