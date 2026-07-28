@@ -45,6 +45,23 @@ export class BigView {
   }
 
   /**
+   * The same, for the line the top's shift belongs to: its rows sit at
+   * boundary + shift, so the last one can fall past the line's end and
+   * the line paints one row fewer than the boundary grid counts. og
+   * reads its table instead of counting, so it never sees this.
+   */
+  shiftedRowsOf(text: string, subRow: number): number {
+    const total = this.rowsOf(text);
+    if (config.subShift <= 0 || chopLine() || config.col) return total;
+
+    const disp = displayText(text);
+    const from = (getLayout(disp).rowStart[subRow] ?? 0) + config.subShift;
+    if (from >= disp.length) return total;
+
+    return subRow + getLayout(disp.slice(from)).rowStart.length;
+  }
+
+  /**
    * Materializes the visible screen, like og filling the position
    * table: returns the raw line texts with their positions/sub-rows,
    * exactly `count` display rows unless the file ends first.
@@ -59,11 +76,17 @@ export class BigView {
     let endPos = pos;
     let more = false;
 
+    // the shift belongs to the line the top sits on, and nothing below
+    const shiftPos = this.top.pos;
+    const shiftSub = this.top.subRow;
+
     while (true) {
       const line = forwLine(this.bf, pos);
       if (!line) break;
 
-      const total = this.rowsOf(line.text);
+      const total = pos === shiftPos
+        ? this.shiftedRowsOf(line.text, shiftSub)
+        : this.rowsOf(line.text);
       let s = sub;
 
       for (; s < total && rows.length < count; s++) {
@@ -133,6 +156,11 @@ export class BigView {
     const end = window !== undefined ? this.endTop(window) : null;
     let moved = 0;
 
+    // the shift belongs to the line the top starts on; walking off it
+    // leaves the boundary grid
+    const shiftPos = this.top.pos;
+    const shiftSub = this.top.subRow;
+
     while (moved < n) {
       if (end && (this.top.pos > end.pos ||
           (this.top.pos === end.pos && this.top.subRow >= end.subRow))) {
@@ -142,7 +170,9 @@ export class BigView {
       const line = forwLine(this.bf, this.top.pos);
       if (!line) break;
 
-      const total = this.rowsOf(line.text);
+      const total = this.top.pos === shiftPos
+        ? this.shiftedRowsOf(line.text, shiftSub)
+        : this.rowsOf(line.text);
 
       if (this.top.subRow + 1 < total) {
         this.top.subRow++;

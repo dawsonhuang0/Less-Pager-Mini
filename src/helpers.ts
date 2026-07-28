@@ -46,7 +46,7 @@ import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
 
 import { follow } from './features/follow';
 
-import { brackets, marks, markAtRow } from './features/jumping';
+import { brackets, marks, markAtRow, shiftRowLoss } from './features/jumping';
 
 import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
   sizeIsKnown }
@@ -1713,7 +1713,13 @@ export function getLastRow(content: string[]): {
 
   while (lastRow >= 0) {
     const remaining = config.window - rows - 1;
-    const currSubRows = maxSubRow(content[lastRow]) + 1;
+
+    // the shifted top paints one row fewer than the boundary grid
+    // counts, and the last screenful has to end that row earlier
+    const currSubRows = maxSubRow(content[lastRow]) + 1 -
+      (lastRow === config.row
+        ? shiftRowLoss(content[lastRow], config.subRow)
+        : 0);
 
     if (currSubRows >= remaining) {
       return { lastRow, lastSubRow: currSubRows - remaining };

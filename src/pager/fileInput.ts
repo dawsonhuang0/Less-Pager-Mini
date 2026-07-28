@@ -39,6 +39,7 @@ import {
   subRowStart,
   advanceOverAnchor,
   dropAnchorPastBottom,
+  shiftRowLoss,
 } from '../features/jumping';
 
 import {
@@ -1075,6 +1076,23 @@ export class FileInput implements PagerInput {
     return true;
   }
 
+  /**
+   * Rows the shift costs the last screenful, for the clamp's window.
+   *
+   * gotoEnd walks back window-2 rows from the file's last row on the
+   * boundary grid; one row more lands on the shifted grid's own last
+   * row. It can only matter while the top's line is the one that ends
+   * the file - the shift belongs to that line alone.
+   */
+  private shiftLoss(): number {
+    if (config.subShift <= 0) return 0;
+
+    const line = forwLine(this.bf, this.view.top.pos);
+    if (!line || line.next < this.bf.size) return 0;
+
+    return shiftRowLoss(displayText(line.text), this.view.top.subRow);
+  }
+
   private forward(rows: number, clampAtLastScreen: boolean): void {
     // scrolling forward consumes blank rows padded above BOF first,
     // like the array session's lineForward blankTop branch
@@ -1113,7 +1131,7 @@ export class FileInput implements PagerInput {
       ? this.filteredForward(want, clampAtLastScreen)
       : this.view.lineForward(
         want,
-        clampAtLastScreen ? config.window : undefined
+        clampAtLastScreen ? config.window + this.shiftLoss() : undefined
       );
 
     // a short forward move read the end: og's forw discovers the
