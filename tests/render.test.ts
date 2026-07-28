@@ -405,4 +405,38 @@ describe('a width change keeps the top on the same text', () => {
     expect(rows[0]).toBe(long.slice(w, w + 30));
     expect(rows[1]).toBe(long.slice(w + 30, w + 30 + w));
   });
+
+  it('drops the partial row once it passes the last line', () => {
+    // og's position table holds exactly sc_height entries, so the
+    // junction rides down as add_back_pos prepends more rows and is
+    // gone the moment it falls off the bottom. Ours is an offset:
+    // left standing it rose back INTO view the next time the screen
+    // moved forward, putting a short row far below a top og had long
+    // since regenerated whole (measured, 80 -> 70 at 25 rows).
+    const w = config.screenWidth;
+    const huge = 'x'.repeat(w * 200);
+    const start = 50 * w;
+
+    config.subRow = 50;
+    config.subShift = 30;
+
+    lineBackward([huge], 1);
+    expect(config.subAnchor).toBe(start + 30);
+
+    // the span may fill the screen exactly - the short row ending at
+    // the anchor is itself the last line - and still show
+    lineBackward([huge], config.window - 2);
+    expect(config.subAnchor).toBe(start + 30);
+    expect(screenRows([huge], [])[config.window - 2])
+      .toBe(huge.slice(start, start + 30));
+
+    // one row more and it has scrolled off, for good
+    lineBackward([huge], 1);
+    expect(config.subAnchor).toBe(0);
+
+    lineForward([huge], 4);
+    expect(config.subAnchor).toBe(0);
+    expect(screenRows([huge], []).slice(0, config.window - 1)
+      .every(r => r.length === w)).toBe(true);
+  });
 });

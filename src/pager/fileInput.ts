@@ -38,6 +38,7 @@ import {
   subRowOfIndex,
   subRowStart,
   advanceOverAnchor,
+  dropAnchorPastBottom,
 } from '../features/jumping';
 
 import {
@@ -1152,6 +1153,9 @@ export class FileInput implements PagerInput {
     config.subAnchor = this.view.top.pos !== wasPos
       ? 0
       : config.subAnchor > 0 ? config.subAnchor : wasOffset;
+
+    // ...until the rows piling up above push it off the bottom
+    if (wasLine) dropAnchorPastBottom(displayText(wasLine.text));
   }
 
   private backwardFrom(rows: number, force: boolean = false): void {

@@ -17,7 +17,8 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { subRowStart, advanceOverAnchor, posRehead } from "./jumping";
+import { subRowStart, advanceOverAnchor, posRehead,
+  dropAnchorPastBottom } from "./jumping";
 
 import { INVERSE_ON } from "../state/constants";
 
@@ -310,6 +311,9 @@ export function lineBackward(
   config.subAnchor = config.row !== wasRow
     ? 0
     : config.subAnchor > 0 ? config.subAnchor : wasOffset;
+
+  // ...until the rows piling up above push it off the bottom
+  dropAnchorPastBottom(content[config.row]);
   return moved;
 }
 

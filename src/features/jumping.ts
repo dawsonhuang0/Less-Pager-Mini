@@ -379,6 +379,38 @@ export function advanceOverAnchor(line: string, rows: number): number {
   return used;
 }
 
+/**
+ * Drops the anchor once the grid below it no longer fits on screen.
+ *
+ * og's position table IS the screen, so the junction a backward move
+ * left behind - the short row and the old grid under it - rides down
+ * as add_back_pos prepends more entries and is gone the moment it
+ * passes the last row (position.c:83, the table only holds sc_height
+ * entries). Ours is an offset that would otherwise sit below the
+ * bottom and rise back into view the next time the screen moved
+ * forward, which og cannot do: it has no entries past the bottom.
+ */
+export function dropAnchorPastBottom(line: string | undefined): void {
+  if (config.subAnchor <= 0 || line === undefined) return;
+
+  const limit = Math.max(config.window - 1, 1);
+  let offset = subRowStart(line, config.subRow) + config.subShift;
+  let rows = 0;
+
+  // the short row ending AT the anchor is itself on the screen, so the
+  // span may fill it exactly and still show; one row more and the
+  // junction has dropped off the last line
+  while (offset < config.subAnchor && rows <= limit) {
+    const boundary = subRowStart(line, subRowOfIndex(line, offset) + 1);
+    offset = boundary > offset && boundary < config.subAnchor
+      ? boundary
+      : config.subAnchor;
+    rows++;
+  }
+
+  if (rows > limit) config.subAnchor = 0;
+}
+
 export function subRowStart(line: string, subRow: number): number {
   if (subRow === 0) return 0;
 
