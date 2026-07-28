@@ -99,6 +99,24 @@ export let CURSOR_HOME = '\x1b[H';
 export let CLEAR_LINE = '\x1b[K';
 export let CLEAR_BELOW = '\x1b[J';
 
+/**
+ * og's auto_wrap and defer_wrap (screen.c:1531): termcap "am" and "xn".
+ *
+ * auto_wrap - the terminal moves to the next line by itself once a
+ * character lands past the right margin. defer_wrap - it holds that
+ * move until the NEXT character arrives (xterm's magic margin), so a
+ * full-width row leaves the cursor parked on the last column.
+ *
+ * The pair decides how a full row ends (line.c:1523), and the three
+ * answers really differ: without xenl a full row must be followed by
+ * NOTHING, because the terminal has already wrapped - a newline there
+ * costs a whole blank line, and the deferred-wrap nudge costs one too.
+ * Both default to true when the terminal says nothing, which is xterm,
+ * the same assumption every escape string above makes.
+ */
+export let AUTO_WRAP = true;
+export let DEFER_WRAP = true;
+
 // og's terminfo clear (home + erase) and scroll-reverse strings,
 // used by the -X main-screen paint model
 export let CLEAR_SCREEN = '\x1b[H\x1b[2J';
@@ -181,6 +199,8 @@ export function initTerminalCapabilities(): void {
   ON_ALTERNATE_SCREEN = ALTERNATE_CONSOLE_ON !== '' &&
     ALTERNATE_CONSOLE_OFF !== '' &&
     !(terminalFlag('nrrmc', 'NR') ?? false);
+  AUTO_WRAP = terminalFlag('am', 'am') ?? true;
+  DEFER_WRAP = terminalFlag('xenl', 'xn') ?? true;
   KEYPAD_ON = terminalCapability('smkx', 'ks') ?? '\x1b[?1h\x1b=';
   KEYPAD_OFF = terminalCapability('rmkx', 'ke') ?? '\x1b[?1l\x1b>';
 

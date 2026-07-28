@@ -71,6 +71,8 @@ import {
   UNDERLINE_OFF,
   CURSOR_HOME,
   CLEAR_LINE,
+  AUTO_WRAP,
+  DEFER_WRAP,
   CLEAR_BELOW,
   CLEAR_SCREEN,
   REVERSE_INDEX,
@@ -1097,8 +1099,39 @@ function tailClear(row: string): string {
   return filledRow(row) ? '' : CLEAR_LINE;
 }
 
+/**
+ * How a row ends, like pdone (line.c:1523).
+ *
+ * og answers three ways for a row that reached the right edge, and
+ * only the first is xterm's:
+ *
+ * - defer_wrap: the cursor is parked on the last column with the wrap
+ *   held, so nudge it over with a space and take the column back.
+ * - no auto_wrap: the terminal will not wrap at all, so end the line.
+ * - auto_wrap without defer_wrap: it has ALREADY wrapped, so send
+ *   nothing. Anything at all costs a whole blank line here.
+ *
+ * (og also ends a full row with a newline when the LINE ends there and
+ * defer_wrap is set. On xterm the nudge lands the cursor in the same
+ * place, which is why our output has always matched.)
+ */
 function rowEnd(row: string): string {
-  return filledRow(row) ? ' \b' : '\n';
+  if (!filledRow(row)) return '\n';
+  if (!AUTO_WRAP) return '\n';
+  return DEFER_WRAP ? ' \b' : '';
+}
+
+/**
+ * The same, between the rows of a whole-screen repaint.
+ *
+ * The paint addresses no row absolutely: it homes once and lets the
+ * separators walk down. A deferring terminal leaves a full row's
+ * cursor parked, so the newline moves down exactly one and this is
+ * the '\n' it has always been; a terminal that wrapped on its own has
+ * already moved, and the newline would move it again.
+ */
+function frameRowEnd(row: string): string {
+  return !DEFER_WRAP && AUTO_WRAP && filledRow(row) ? '' : '\n';
 }
 
 /**
@@ -1569,7 +1602,10 @@ function fullFrame(rows: string[]): string {
   const physical = collapseNulRows(rows);
   nulCollapsed = rows.length - physical.length;
 
-  const body = physical.map(row => CLEAR_LINE + row).join('\n');
+  const body = physical
+    .map((row, i) => CLEAR_LINE + row +
+      (i === physical.length - 1 ? '' : frameRowEnd(CLEAR_LINE + row)))
+    .join('');
 
   // CLEAR_BELOW blanks the rows the collapse freed, like og's paint
   // ending early and clear_eos wiping what the screen still showed
