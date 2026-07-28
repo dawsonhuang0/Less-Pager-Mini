@@ -35,6 +35,7 @@ import {
   optIntrChar,
   optEndPrompt,
   gutterWidth,
+  fullScreenWidth,
   chopLine,
   hook
 } from './options';
@@ -1070,14 +1071,34 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
  * on the last column with the wrap deferred, and erasing from there
  * takes the character just written with it.
  */
-function tailClear(row: string): string {
+/**
+ * Whether a rendered row reached the right edge, leaving the cursor
+ * parked there with the wrap deferred.
+ *
+ * og compares end_column against sc_width (line.c:1523), and
+ * end_column STARTS at linebuf.pfx_end - plinestart sets it there
+ * (line.c:452), so the -N/-J gutter counts and sc_width is the whole
+ * terminal. Ours is the same row, gutter and all, but
+ * config.screenWidth has had the gutter taken out of it by
+ * reserveGutter, so it has to be added back.
+ *
+ * Comparing against the text width called every row of gutter + 64
+ * columns "full" on a 79-column screen, so the nudge went out where a
+ * newline was needed and the rows ran together. Only --wordwrap makes
+ * it visible: without it a wrapped row fills the text width exactly,
+ * and both widths then answer the same.
+ */
+function filledRow(row: string): boolean {
   const plain = row.replace(STYLE_REGEX_G, '');
-  return visualWidth(plain) >= config.screenWidth ? '' : CLEAR_LINE;
+  return visualWidth(plain) >= fullScreenWidth();
+}
+
+function tailClear(row: string): string {
+  return filledRow(row) ? '' : CLEAR_LINE;
 }
 
 function rowEnd(row: string): string {
-  const plain = row.replace(STYLE_REGEX_G, '');
-  return visualWidth(plain) >= config.screenWidth ? ' \b' : '\n';
+  return filledRow(row) ? ' \b' : '\n';
 }
 
 /**

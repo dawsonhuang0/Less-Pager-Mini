@@ -8,6 +8,7 @@ import { BlockFile } from '../../src/pager/blockFile';
 import { BigView } from '../../src/pager/fileView';
 
 import { config } from '../../src/state/config';
+import { getLayout } from '../../src/lines/lineLayout';
 import { opt } from '../../src/options/state';
 import { initCharset } from '../../src/features/charset';
 
@@ -34,6 +35,13 @@ function view(name: string, data: string): BigView {
 
 const texts = (v: BigView, n: number): string[] =>
   v.visible(n).rows.map(r => r.text);
+
+/** The top line's display text. */
+const forwLineText = (v: BigView): string => v.visible(1).rows[0].text;
+
+/** The top's absolute character offset in its line. */
+const rowStartOf = (v: BigView, text: string): number =>
+  (getLayout(text).rowStart[v.top.subRow] ?? 0) + config.subShift;
 
 describe('BigView movement', () => {
   const data = Array.from({ length: 50 }, (_, i) => `line-${i + 1}`)
@@ -100,6 +108,38 @@ describe('BigView movement', () => {
 
     expect(v.lineForward(10)).toBe(2);
     expect(texts(v, 1)).toEqual(['three']);
+  });
+
+  it('re-wraps a shifted top rather than translating it (wordwrap)', () => {
+    // og's table[TOP] is a byte and forw_line wraps from THERE. Under a
+    // fixed width that equals adding the shift to the next boundary -
+    // offset + width == (boundary + width) + shift - but --wordwrap
+    // breaks at spaces, so rows are unequal and the two answers part
+    // company. Translating landed the next row mid-word.
+    config.chopLongLines = false;
+    opt.wordwrap = 1;
+
+    try {
+      const words = 'aaa bbbb cc ddddddd ee fff gggggggg hh iii jjjj kk ';
+      const v = view('w.txt', words.repeat(12) + '\n');
+      const text = forwLineText(v);
+
+      // shift one character into the second row
+      v.lineForward(1);
+      config.subShift = 1;
+
+      const before = rowStartOf(v, text);
+      v.lineForward(1);
+      const after = rowStartOf(v, text);
+
+      // the new top must be a wrap point of the text starting at the
+      // OLD top, i.e. it lands just after a space, never inside a word
+      expect(text[after - 1]).toBe(' ');
+      expect(after).toBeGreaterThan(before);
+    } finally {
+      opt.wordwrap = 0;
+      config.subShift = 0;
+    }
   });
 
   it('a jump re-homes the top, a scroll keeps its shift', () => {

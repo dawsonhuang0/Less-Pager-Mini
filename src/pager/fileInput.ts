@@ -605,6 +605,23 @@ export class FileInput implements PagerInput {
   private landMatch(found: number): void {
     const bSub = this.bottomSub(found);
 
+    // og's "pos != opos" (search.c:2211). Its default how_search is
+    // OPT_ONPLUS (opttbl.c:222), so a forward search starts at
+    // position(TOP) - a SCREEN row start, which on a wrapped line is a
+    // byte in the middle of it - and search_range hands that same byte
+    // back as linepos when the match is in that first segment. Equal to
+    // opos, the -j target's position, it jumps nowhere: the screen
+    // repaints in place rather than snapping to the line's beginning.
+    const target = this.view.screenPos(jumpSindex());
+
+    if (bSub === null && target && target.pos === found) {
+      this.shiftMatch(found);
+      this.sync();
+      recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
+      markPosClear();
+      return;
+    }
+
     if (bSub !== null) {
       this.view.top = { pos: found, subRow: bSub };
       this.view.lineBackward(config.window - 2);

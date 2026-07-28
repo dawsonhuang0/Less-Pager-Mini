@@ -85,6 +85,40 @@ export class BigView {
   }
 
   /**
+   * Advances a shifted top by one row, re-wrapping from its own byte.
+   *
+   * og's table[TOP] is a byte and forw_line wraps from THERE, so the
+   * row it produces is whatever fits starting at that byte. Under a
+   * fixed width that is the same as adding the shift to the next
+   * boundary - offset + width == (boundary + width) + shift - but
+   * --wordwrap breaks at spaces, so the rows are unequal and the two
+   * answers part company: the shifted grid has to be re-wrapped, not
+   * translated. Doing it by offset is right for both.
+   *
+   * Returns false when the line has no row left, so the caller moves
+   * on to the next line.
+   */
+  private advanceShifted(text: string): boolean {
+    const disp = displayText(text);
+    const starts = getLayout(disp).rowStart;
+    const from = (starts[this.current.subRow] ?? 0) + config.subShift;
+
+    if (from >= disp.length) return false;
+
+    const len = getLayout(disp.slice(from)).rowStart[1];
+    if (len === undefined) return false;
+
+    const next = from + len;
+
+    let sub = 0;
+    while (sub + 1 < starts.length && starts[sub + 1] <= next) sub++;
+
+    this.current.subRow = sub;
+    config.subShift = next - (starts[sub] ?? 0);
+    return true;
+  }
+
+  /**
    * Materializes the visible screen, like og filling the position
    * table: returns the raw line texts with their positions/sub-rows,
    * exactly `count` display rows unless the file ends first.
@@ -197,9 +231,22 @@ export class BigView {
       const line = forwLine(this.bf, this.top.pos);
       if (!line) break;
 
+      const shifted = config.subShift > 0 && this.top.pos === shiftPos;
       const total = this.top.pos === shiftPos
         ? this.shiftedRowsOf(line.text, shiftSub)
         : this.rowsOf(line.text);
+
+      if (shifted) {
+        if (this.advanceShifted(line.text)) {
+          moved++;
+          continue;
+        }
+
+        if (line.next >= this.bf.size) break;
+        this.top = { pos: line.next, subRow: 0 };
+        moved++;
+        continue;
+      }
 
       if (this.top.subRow + 1 < total) {
         this.top.subRow++;

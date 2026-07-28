@@ -2,7 +2,8 @@ import { config } from '../state/config';
 
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from '../helpers';
-import { isStyled, isAscii, withReset, openStyleAt } from './helpers';
+import { isStyled, isAscii, withReset, openStyleAt, ansiRunEnd }
+  from './helpers';
 
 import { subRowStart } from '../features/jumping';
 
@@ -47,6 +48,33 @@ export function wrapLongLines(content: string[], lines: string[]): void {
 }
 
 /**
+ * Walks `chars` content characters from `at`, stepping over whole ANSI
+ * runs.
+ *
+ * config.subShift and config.subAnchor are offsets into the CONTENT
+ * line, but every row is wrapped after highlightLine has spliced the
+ * search escapes in, so the same number counts different characters in
+ * the two strings. Skipping the runs converts one to the other; adding
+ * the raw offset landed inside an escape and printed its tail.
+ */
+function styledIndex(line: string, at: number, chars: number): number {
+  let i = at;
+  let left = chars;
+
+  while (left > 0 && i < line.length) {
+    if (line[i] === '\x1b') {
+      i = ansiRunEnd(line, i);
+      continue;
+    }
+
+    i++;
+    left--;
+  }
+
+  return i;
+}
+
+/**
  * Wraps a single line into rows.
  *
  * - Plain ASCII lines take a slicing fast path.
@@ -65,23 +93,30 @@ function wrap(lines: string[], longLine: string, shifted = false): void {
   // wraps from there. Emitting the remainder as its own line is the
   // same thing: the grid is anchored at the top, not at column 0.
   if (first && (config.subShift > 0 || config.subAnchor > 0)) {
-    const from = subRowStart(longLine, config.subRow) + config.subShift;
+    // both are counted in the CONTENT line's characters, and this line
+    // has had the search highlight's escapes spliced into it since -
+    // adding them raw landed inside an escape and printed its tail
+    const from = styledIndex(
+      longLine, subRowStart(longLine, config.subRow), config.subShift);
+    const anchor = config.subAnchor > 0
+      ? styledIndex(longLine, 0, config.subAnchor)
+      : 0;
 
     // og's back_line stops the exposed row at the old top (input.c),
     // and the rows below keep the grid they already had. So the line
     // splits in two at that anchor: what the backward moves uncovered
     // wraps on its own - its last row ending short - and the rest
     // resumes the grid the anchor sits on.
-    if (config.subAnchor > from) {
+    if (anchor > from) {
       wrap(lines, openStyleAt(longLine, from) +
-        longLine.slice(from, config.subAnchor), true);
+        longLine.slice(from, anchor), true);
 
       // the uncovered span can fill the screen on its own once enough
       // backward moves have piled up; the grid below it is simply not
       // reached, exactly as og stops filling the position table
       if (lines.length < config.window - 1) {
-        wrap(lines, openStyleAt(longLine, config.subAnchor) +
-          longLine.slice(config.subAnchor), true);
+        wrap(lines, openStyleAt(longLine, anchor) +
+          longLine.slice(anchor), true);
       }
 
       return;
