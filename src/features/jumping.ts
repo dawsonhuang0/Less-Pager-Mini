@@ -321,6 +321,44 @@ export function matchBracket(
  * @param line - The raw content line.
  * @param subRow - Wrapped sub-row index.
  */
+/**
+ * Advances the top over the rows a backward move uncovered, treating
+ * the anchor as a row boundary.
+ *
+ * og's forw() generates each row from the current bottom and
+ * add_forw_pos drops table[0] (position.c:63), so moving forward
+ * walks the entries the backward moves prepended - the last of which
+ * ends AT the anchor - before the grid below resumes. Returns the
+ * rows it consumed.
+ */
+export function advanceOverAnchor(line: string, rows: number): number {
+  if (config.subAnchor <= 0 || line === undefined) return 0;
+
+  let offset = subRowStart(line, config.subRow) + config.subShift;
+  if (offset >= config.subAnchor) {
+    config.subAnchor = 0;
+    return 0;
+  }
+
+  let used = 0;
+
+  while (used < rows && offset < config.subAnchor) {
+    const boundary = subRowStart(line, subRowOfIndex(line, offset) + 1);
+    const next = boundary > offset && boundary < config.subAnchor
+      ? boundary
+      : config.subAnchor;
+
+    offset = next;
+    used++;
+  }
+
+  config.subRow = subRowOfIndex(line, offset);
+  config.subShift = offset - subRowStart(line, config.subRow);
+  if (offset >= config.subAnchor) config.subAnchor = 0;
+
+  return used;
+}
+
 export function subRowStart(line: string, subRow: number): number {
   if (subRow === 0) return 0;
 

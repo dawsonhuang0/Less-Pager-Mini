@@ -14,6 +14,8 @@ import { subRowStart } from '../src/features/jumping';
 
 import { screenRows } from '../src/helpers';
 
+import { lineForward, lineBackward } from '../src/features/moving';
+
 const content = Array.from({ length: 60 }, (_, i) => `line ${i}`);
 
 let writes: string[] = [];
@@ -314,6 +316,37 @@ describe('a width change keeps the top on the same text', () => {
     // the next row continues the shifted grid, not the absolute one
     expect(rows[1]).toBe(long.slice(7 + w, 7 + 2 * w));
   });
+  it('pushes the partial row down, then scrolls it off', () => {
+    // og's add_back_pos prepends an entry per backward move and
+    // add_forw_pos drops table[0] per forward one (position.c:63-90),
+    // so the short row walks down the screen and then away
+    const w = config.screenWidth;
+
+    config.subRow = 4;
+    config.subShift = 30;
+
+    lineBackward([long], 1);
+    expect(config.subAnchor).toBe(4 * w + 30);
+    expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
+
+    // a second backward move keeps the SAME anchor: the whole
+    // uncovered span still wraps up to where the screen first started
+    lineBackward([long], 1);
+    expect(config.subAnchor).toBe(4 * w + 30);
+    const rows = screenRows([long], []);
+    expect(rows[0]).toBe(long.slice(3 * w, 4 * w));
+    expect(rows[1]).toBe(long.slice(4 * w, 4 * w + 30));
+
+    // forward walks those entries back off
+    lineForward([long], 1);
+    expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
+
+    lineForward([long], 1);
+    expect(config.subAnchor).toBe(0);
+    expect(screenRows([long], [])[0])
+      .toBe(long.slice(4 * w + 30, 5 * w + 30));
+  });
+
   it('bounds the row a backward move exposes at the old top', () => {
     // og's back_line stops appending once it reaches the old top -
     // "if (new_pos >= curr_pos) break" (input.c) - so the exposed row

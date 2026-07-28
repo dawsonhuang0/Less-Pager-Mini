@@ -37,6 +37,7 @@ import {
   recordLastPosition,
   subRowOfIndex,
   subRowStart,
+  advanceOverAnchor,
 } from '../features/jumping';
 
 import {
@@ -1078,6 +1079,23 @@ export class FileInput implements PagerInput {
     // like the array session's lineForward blankTop branch
     let want = rows;
 
+    // then the rows a backward move uncovered: og's forw() walks the
+    // entries add_back_pos prepended, dropping table[0] each time
+    // (position.c:63), before the grid below resumes
+    if (config.subAnchor > 0) {
+      const line = forwLine(this.bf, this.view.top.pos);
+
+      if (line) {
+        want -= advanceOverAnchor(displayText(line.text), want);
+        this.view.top.subRow = config.subRow;
+
+        if (want <= 0) {
+          this.sync();
+          return;
+        }
+      }
+    }
+
     if (this.padTop > 0) {
       const consumed = Math.min(this.padTop, want);
       this.padTop -= consumed;
@@ -1130,7 +1148,10 @@ export class FileInput implements PagerInput {
 
     this.backwardFrom(rows, force);
 
-    config.subAnchor = this.view.top.pos === wasPos ? wasOffset : 0;
+    // set ONCE and kept (see the array session's lineBackward)
+    config.subAnchor = this.view.top.pos !== wasPos
+      ? 0
+      : config.subAnchor > 0 ? config.subAnchor : wasOffset;
   }
 
   private backwardFrom(rows: number, force: boolean = false): void {

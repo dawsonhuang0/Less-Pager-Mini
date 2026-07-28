@@ -17,7 +17,7 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { subRowStart } from "./jumping";
+import { subRowStart, advanceOverAnchor } from "./jumping";
 
 import { INVERSE_ON } from "../state/constants";
 
@@ -228,9 +228,13 @@ export function lineForward(
   const fromRow = config.row;
   const fromSub = config.subRow;
 
-  // forw scrolls the rows a backward move exposed off the top, and
-  // og's table loses them with it
-  config.subAnchor = 0;
+  // forw walks the entries a backward move prepended before the grid
+  // below resumes: add_forw_pos drops table[0] each row (position.c)
+  offset -= advanceOverAnchor(content[config.row], offset);
+  if (offset <= 0) {
+    if (mode.INIT) mode.INIT = false;
+    return;
+  }
 
   while (offset > 0 && config.row < maxRow) {
     const currMaxSubRow = maxSubRow(content[config.row]);
@@ -300,7 +304,12 @@ export function lineBackward(
 
   const moved = lineBackwardFrom(content, offset, attn);
 
-  config.subAnchor = config.row === wasRow ? wasOffset : 0;
+  // set ONCE and kept: og's add_back_pos prepends another entry each
+  // time, and the whole uncovered span still wraps up to where the
+  // screen first started - so later backward moves must not move it
+  config.subAnchor = config.row !== wasRow
+    ? 0
+    : config.subAnchor > 0 ? config.subAnchor : wasOffset;
   return moved;
 }
 
