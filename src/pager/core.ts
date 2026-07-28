@@ -358,6 +358,13 @@ export async function contentPager(
       config.subRow = subRowOfIndex(top, offset);
       config.subShift = offset - subRowStart(top, config.subRow);
       config.subAnchor = 0;
+
+      // a source engine owns the top's sub-row and writes config.subRow
+      // back from it, so the carry has to land on both - exactly as the
+      // resize path does. Left to itself the engine kept the boundary
+      // it had before the gutter moved, and the next forward move
+      // stepped by the OLD row width.
+      pagerInput?.retopSubRow(config.subRow);
     };
   };
 

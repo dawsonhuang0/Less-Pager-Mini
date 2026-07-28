@@ -3,7 +3,7 @@ import { opt } from './state';
 
 import { config, mode } from "../state/config";
 
-import { calculateEOF } from "../helpers";
+import { calculateEOF, markFullRepaint } from "../helpers";
 
 
 
@@ -596,6 +596,12 @@ export function applyGutter(content: string[]): void {
 
   carry();
   recalculateEOF(content);
+
+  // every option that moves this gutter is O_REPAINT - -N and -J,
+  // --line-num-width and --status-col-width (opttbl.c:325, :373,
+  // :605, :613) - so og trashes the screen and the next make_display
+  // repaints it, pos_clear and all
+  markFullRepaint();
 }
 
 // re-derives displayed content after -s/-x/-r change its shape

@@ -732,17 +732,28 @@ export function render(rawContent: string[], buffer: string[]): void {
   // screen EVERY prompt repaints: og's make_display takes the same
   // branch as a trashed screen (command.c:863), because a scroll would
   // print into the rows below the window that are not ours
-  const forceFull = hiliteRepaintPending_ ||
-    ((fullRepaintPending || !fullScreen()) &&
+  const trashedRepaint = (fullRepaintPending || !fullScreen()) &&
     !search.message &&
     !option.pending && !search.input && !examine.pending &&
     !miscInput.pending && !brackets.pending && !marks.pending &&
-    !mode.BUFFERING && !config.keyPrefix);
+    !mode.BUFFERING && !config.keyPrefix;
+
+  const forceFull = hiliteRepaintPending_ || trashedRepaint;
 
   if (forceFull) {
     fullRepaintPending = false;
     hiliteRepaintPending_ = false;
   }
+
+  // og answers a trashed screen with repaint(), and repaint pos_clears
+  // (jump.c) - so the rows a backward move exposed go with it. The
+  // command runs FIRST, because error()'s get_return ungets the key
+  // that dismissed the toggle's message (output.c:687) and only the
+  // NEXT make_display repaints: a k typed at "(press RETURN)" moves
+  // the top and has its short row wiped in the same frame. The hilite
+  // repaint is not this - chg_hilite redraws every row through the
+  // position table it already has (search.c), touching no entries.
+  if (trashedRepaint) config.subAnchor = 0;
 
   let rows = screenRows(rawContent, buffer, filling);
 
