@@ -22,6 +22,11 @@ export interface PagerInput {
   /** Restores a seekable source after a cancelled/retyped incsearch. */
   restoreSearchOrigin(): void;
 
+  /** Re-anchors the top's sub-row after a width change, since the
+   *  source's own view owns it and a rebuild would restore the old
+   *  one (og keeps table[TOP] across screen_size_changed). */
+  retopSubRow(subRow: number): void;
+
   /** Matches brackets across the input's complete address space. */
   bracket(open: string, close: string, forward: boolean, n: number): boolean;
 

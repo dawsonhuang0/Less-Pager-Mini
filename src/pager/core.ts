@@ -1970,13 +1970,19 @@ function onResize(): void {
     : subRowStart(top, config.subRow) + config.subShift;
 
   calculateDimensions();
+  pagerInput?.rebuild();
 
+  // after the rebuild: a source engine owns the top's sub-row and its
+  // materialization writes config.subRow back from it, so the carry
+  // has to land on both or the rebuild undoes it
   if (offset > 0 && top !== undefined && config.screenWidth !== before) {
-    config.subRow = subRowOfIndex(top, offset);
-    config.subShift = offset - subRowStart(top, config.subRow);
+    const sub = subRowOfIndex(top, offset);
+
+    config.subRow = sub;
+    config.subShift = offset - subRowStart(top, sub);
+    pagerInput?.retopSubRow(sub);
   }
 
-  pagerInput?.rebuild();
   calculateEOF(session.content);
 
   if (config.windowContent.length !== config.window) {

@@ -891,6 +891,11 @@ export class FileInput implements PagerInput {
     return true;
   }
 
+  retopSubRow(subRow: number): void {
+    this.view.top.subRow = subRow;
+    this.sync();
+  }
+
   rebuild(): boolean {
     if (mode.HELP || files.index !== this.fileIndex) {
       return false;
