@@ -127,7 +127,8 @@ import {
   jumpToUserMark,
   adoptFileMarks,
   subRowStart,
-  subRowOfIndex
+  subRowOfIndex,
+  posRehead
 } from "../features/jumping";
 
 import {
@@ -340,6 +341,7 @@ export async function contentPager(
 
   // -s, -x and -r reshape the displayed content when toggled
   hook.hiliteRepaint = markHiliteRepaint;
+  hook.reheadSource = () => pagerInput?.retopSubRow(0);
 
   // og's table[TOP] survives a width change untouched; ours indexes
   // wrap boundaries, so the offset is captured before and restored
@@ -1644,6 +1646,10 @@ function dispatchKey(sequence: string): void {
     const left = session.key.startsWith('\x1b[<66;') !== (optMouseReverse());
 
     if (mode.INIT) mode.INIT = false;
+
+    // og's A_L_MOUSE/A_R_MOUSE call pos_rehead first, like the
+    // keyboard shifts (command.c:1740 and :1754)
+    posRehead();
 
     if (left) {
       config.col = Math.max(config.col - optWheelLines(), 0);

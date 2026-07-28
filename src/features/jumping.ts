@@ -12,7 +12,7 @@ import { search } from "./searching";
 import { files, lineBase, byteBase } from "./files";
 
 import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
-  optPermaMarks, optAutosaveAction } from "../options";
+  optPermaMarks, optAutosaveAction, hook } from "../options";
 
 import { saveHistory, touchMarks } from "../startup/histfile";
 
@@ -331,6 +331,26 @@ export function matchBracket(
  * ends AT the anchor - before the grid below resumes. Returns the
  * rows it consumed.
  */
+/**
+ * og's pos_rehead (position.c): every horizontal shift command moves
+ * table[TOP] back to the BEGINNING of its line first - LSHIFT,
+ * RSHIFT, LLSHIFT, RRSHIFT and the horizontal wheel all call it
+ * (command.c:1740, :1754, :2459, :2473, :2483, :2493) - and trashes
+ * the screen, so the repaint regenerates from there. A top already on
+ * a line start is left alone ("if (linepos == tpos) return").
+ *
+ * The move is permanent: shifting right and back left again leaves
+ * the screen at the line's start, not where it was.
+ */
+export function posRehead(): void {
+  if (config.subRow === 0 && config.subShift === 0) return;
+
+  config.subRow = 0;
+  config.subShift = 0;
+  config.subAnchor = 0;
+  hook.reheadSource?.();
+}
+
 export function advanceOverAnchor(line: string, rows: number): number {
   if (config.subAnchor <= 0 || line === undefined) return 0;
 

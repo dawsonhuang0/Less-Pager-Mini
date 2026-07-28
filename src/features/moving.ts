@@ -17,7 +17,7 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { subRowStart, advanceOverAnchor } from "./jumping";
+import { subRowStart, advanceOverAnchor, posRehead } from "./jumping";
 
 import { INVERSE_ON } from "../state/constants";
 
@@ -754,6 +754,9 @@ export function setHalfWindowBackward(
 export function setHalfScreenRight(buffer: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
+  // og shifts only whole lines: pos_rehead first (command.c)
+  posRehead();
+
   const count = bufferToNum(buffer);
   if (count) setShiftCount(count);
 
@@ -767,6 +770,9 @@ export function setHalfScreenRight(buffer: string[]): void {
  */
 export function setHalfScreenLeft(buffer: string[]): void {
   if (mode.INIT) mode.INIT = false;
+
+  // og shifts only whole lines: pos_rehead first (command.c)
+  posRehead();
 
   const count = bufferToNum(buffer);
   if (count) setShiftCount(count);
@@ -786,6 +792,9 @@ export function setHalfScreenLeft(buffer: string[]): void {
 export function lastCol(content: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
+  // og's A_RRSHIFT calls pos_rehead too (command.c:2493)
+  posRehead();
+
   let maxWidth = 0;
 
   const end = Math.min(config.row + config.window - 1, content.length);
@@ -800,5 +809,6 @@ export function lastCol(content: string[]): void {
  * Scrolls left to the first column.
  */
 export function firstCol(): void {
+  posRehead();
   config.col = 0;
 }

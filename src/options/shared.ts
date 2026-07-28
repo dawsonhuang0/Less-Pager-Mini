@@ -46,6 +46,9 @@ export const hook = {
   /** Reads the top row's character offset, returning a function that
    *  restores it once the width has changed (og's table[TOP]). */
   topOffset: ((() => () => {}) as (content: string[]) => () => void),
+  /** Moves a source engine's own top back to its line start, for
+   *  og's pos_rehead. */
+  reheadSource: null as null | (() => void),
   trimBufSpace: (() => {}) as () => void,
   screenActive: false,
   /** --file-size draining a still-unknown pipe (og's opt_filesize). */

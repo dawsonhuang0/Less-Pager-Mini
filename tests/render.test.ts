@@ -14,7 +14,8 @@ import { subRowStart } from '../src/features/jumping';
 
 import { screenRows } from '../src/helpers';
 
-import { lineForward, lineBackward } from '../src/features/moving';
+import { lineForward, lineBackward, setHalfScreenRight,
+  setHalfScreenLeft } from '../src/features/moving';
 
 const content = Array.from({ length: 60 }, (_, i) => `line ${i}`);
 
@@ -316,6 +317,24 @@ describe('a width change keeps the top on the same text', () => {
     // the next row continues the shifted grid, not the absolute one
     expect(rows[1]).toBe(long.slice(7 + w, 7 + 2 * w));
   });
+  it('sends a horizontal shift back to the line start, for good', () => {
+    // og's pos_rehead: every shift command moves table[TOP] back to
+    // the beginning of its line first (command.c:2459 and friends)
+    // and trashes the screen. Shifting right and back left therefore
+    // leaves the screen at the line's start, not where it began -
+    // confirmed against og.
+    config.subRow = 3;
+    config.subShift = 0;
+
+    setHalfScreenRight([]);
+    expect(config.subRow).toBe(0);
+
+    setHalfScreenLeft([]);
+    expect(config.col).toBe(0);
+    expect(config.subRow).toBe(0);
+    expect(screenRows([long], [])[0]).toBe(long.slice(0, config.screenWidth));
+  });
+
   it('pushes the partial row down, then scrolls it off', () => {
     // og's add_back_pos prepends an entry per backward move and
     // add_forw_pos drops table[0] per forward one (position.c:63-90),
