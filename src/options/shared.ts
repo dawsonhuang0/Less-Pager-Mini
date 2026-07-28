@@ -42,7 +42,8 @@ import {
 export const hook = {
   rebuildContent: (() => {}) as () => void,
   /** og's O_HL_REPAINT: re-highlight NOW, under the option's message. */
-  hiliteRepaint: (() => {}) as () => void,
+  hiliteRepaint: ((() => {}) as () => void),
+  hiliteErase: ((() => {}) as () => void),
   /** Reads the top row's character offset, returning a function that
    *  restores it once the width has changed (og's table[TOP]). */
   topOffset: ((() => () => {}) as (content: string[]) => () => void),
@@ -809,6 +810,11 @@ export const CASELESS_MESSAGES = [
 export function setNoSearchHeaders(lines: number, cols: number): void {
   opt.nosearchHeaderLines = lines;
   opt.nosearchHeaderCols = cols;
+
+  // all three --no-search-header* options are O_HL_REPAINT
+  // (opttbl.c:697, :703, :709), so the toggle erases the highlights
+  // and the next command recomputes them under the new setting
+  hook.hiliteErase();
 }
 
 export function noSearchHeadersMessage(): void {

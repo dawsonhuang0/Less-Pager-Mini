@@ -52,6 +52,7 @@ import {
   unfreezeFrame,
   markFullRepaint,
   markHiliteRepaint,
+  markHiliteErase,
   hiliteRepaintPending,
   seedFrameRows,
   seedBlankFrame,
@@ -341,6 +342,7 @@ export async function contentPager(
 
   // -s, -x and -r reshape the displayed content when toggled
   hook.hiliteRepaint = markHiliteRepaint;
+  hook.hiliteErase = markHiliteErase;
   hook.reheadSource = () => pagerInput?.retopSubRow(0);
 
   // og's table[TOP] survives a width change untouched; ours indexes

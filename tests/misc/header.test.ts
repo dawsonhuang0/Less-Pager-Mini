@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config, mode } from '../../src/state/config';
 
-import { search, startSearch, searchInputKey, execSearch }
-  from '../../src/features/searching';
+import { search, startSearch, searchInputKey, execSearch,
+  highlightLine, setHiliteHidden } from '../../src/features/searching';
 
 import { initContent } from '../../src/features/files';
 
@@ -16,7 +16,8 @@ import {
   setNoSearchHeaders,
   jumpSindex,
   vlinenum,
-  opt
+  opt,
+  hook
 } from '../../src/options';
 
 import { firstLine } from '../../src/features/jumping';
@@ -337,5 +338,46 @@ describe('--no-search-headers family', () => {
 
     expect(config.row).toBe(1);
     expect(search.message).not.toBe('Pattern not found');
+  });
+
+  it('erases the highlights on the toggle frame, not after', () => {
+    // These three are the ONLY O_HL_REPAINT options with a NULL ovar
+    // (opttbl.c:697, :703, :709), so their ofunc prints the message
+    // itself and its error() blocks in get_return BEFORE chg_hilite
+    // (option.c:365 erases, :464 restores). The message therefore
+    // lands over a screen with no highlights at all, and the next
+    // command paints them again. Measured on the live binary: that
+    // frame carries exactly one SGR 7, the message's own.
+    const wide = ['ABCDEF', 'XYABCD'];
+    initContent(wide);
+    toggle('--header=0,2\x0D');
+
+    doSearch('AB');
+    expect(highlightLine(wide[1], 1)).not.toBe(wide[1]);
+
+    // the toggle asks for the erase, not the plain re-highlight
+    const erase = vi.fn();
+    const repaint = vi.fn();
+    const savedErase = hook.hiliteErase;
+    const savedRepaint = hook.hiliteRepaint;
+    hook.hiliteErase = erase;
+    hook.hiliteRepaint = repaint;
+
+    try {
+      setNoSearchHeaders(0, 1);
+      expect(erase).toHaveBeenCalled();
+      expect(repaint).not.toHaveBeenCalled();
+    } finally {
+      hook.hiliteErase = savedErase;
+      hook.hiliteRepaint = savedRepaint;
+    }
+
+    // the toggle's own frame renders with them hidden...
+    setHiliteHidden(true);
+    expect(highlightLine(wide[1], 1)).toBe(wide[1]);
+
+    // ...and only that frame
+    setHiliteHidden(false);
+    expect(highlightLine(wide[1], 1)).not.toBe(wide[1]);
   });
 });

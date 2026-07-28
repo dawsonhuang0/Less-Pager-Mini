@@ -2,7 +2,8 @@ import { config } from "../state/config";
 
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from "../helpers";
-import { isStyled, isAscii, withReset, visualWidth } from "./helpers";
+import { isStyled, isAscii, withReset, visualWidth, ansiRunEnd,
+  openStyleAt } from "./helpers";
 
 import { getLayout } from "./lineLayout";
 
@@ -20,19 +21,50 @@ import { STYLE_RESET } from "../state/constants";
  * (line.c:1002), so it wears the --rscroll attribute, standout by
  * default - the same attribute as the > marker at the other edge.
  *
- * @param placeholder - False at a seam that is not the screen's left
- *   edge. og paints the body shifted and then OVERLAYS the --header
- *   columns (forwback.c:184), so a wide char straddling that seam is
- *   simply half overwritten and its orphaned cell carries no
- *   attribute at all.
+ * @param seam - The style the orphaned cell inherits at a seam that is
+ *   not the screen's left edge, where og adds no placeholder at all.
+ *   There it paints the body shifted and then OVERLAYS the --header
+ *   columns (forwback.c:184), so the wide char straddling the seam is
+ *   half overwritten by the header's last cell - and the cell the
+ *   terminal orphans keeps the attribute that write was made under,
+ *   which is the header's own last attribute, not nothing. Measured:
+ *   a match ending the header columns leaves the orphan standing out.
  */
-const getFillingSpace = (length: number, placeholder = true): string => {
+const getFillingSpace = (
+  length: number,
+  placeholder = true,
+  seam = ''
+): string => {
   if (length <= 0) return '';
-  if (!placeholder) return ' '.repeat(length);
+
+  if (!placeholder) {
+    return seam ? seam + ' '.repeat(length) + STYLE_RESET
+      : ' '.repeat(length);
+  }
 
   const attr = optRscrollAttr();
   return colored('rscroll', ' '.repeat(length), attr.on, attr.off);
 };
+
+/**
+ * The style the last visible cell of a rendered row was written under,
+ * which is what og's overlay leaves on the cell it orphans.
+ */
+function trailingCellStyle(row: string): string {
+  let last = -1;
+
+  for (let i = 0; i < row.length; ) {
+    if (row[i] === '\x1b') {
+      i = ansiRunEnd(row, i);
+      continue;
+    }
+
+    last = i;
+    i++;
+  }
+
+  return last < 0 ? '' : openStyleAt(row, last);
+}
 
 // og pads with normal spaces and attributes only the rscroll char
 // (standout by default, or the --rscroll "*x" attribute)
@@ -95,7 +127,7 @@ function chopWithPrefix(line: string, pfxCols: number): string {
 
   chop(parts, line, 0, pfxCols, false);
   chop(parts, line, config.col + pfxCols, config.screenWidth - pfxCols,
-    true, false);
+    true, false, trailingCellStyle(parts[0]));
 
   const pad = pfxCols - visualWidth(parts[0]);
   return parts[0] + (pad > 0 ? ' '.repeat(pad) : '') + parts[1];
@@ -121,7 +153,8 @@ function chop(
   col: number = config.col,
   width: number = config.screenWidth,
   marker: boolean = true,
-  placeholder: boolean = true
+  placeholder: boolean = true,
+  seam: string = ''
 ): void {
   // --rscroll=- disables the marker: the text keeps the last column
   marker = marker && optRscroll() !== '';
@@ -154,7 +187,7 @@ function chop(
   }
 
   const parts: string[] = [
-    getFillingSpace(prefix[start] - col, placeholder),
+    getFillingSpace(prefix[start] - col, placeholder, seam),
   ];
   parts.push(...active);
 

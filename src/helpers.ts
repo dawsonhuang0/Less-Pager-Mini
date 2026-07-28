@@ -9,7 +9,8 @@ import { wrapLongLines } from './lines/wrapLongLines';
 
 import { maxSubRow, visualWidth, isStyled } from './lines/helpers';
 
-import { search, searchPrompt, statusColChar } from './features/searching';
+import { search, searchPrompt, statusColChar, setHiliteHidden }
+  from './features/searching';
 
 import {
   option,
@@ -533,6 +534,7 @@ export function resetRender(): void {
   shownBottomEcho = false;
   fullRepaintPending = false;
   hiliteRepaintPending_ = false;
+  hiliteErasePending_ = false;
   prevTopSub = 0;
   scrollOpen = false;
   scrollPrefix = null;
@@ -610,6 +612,27 @@ export function markFullRepaint(): void {
  */
 export function markHiliteRepaint(): void {
   hiliteRepaintPending_ = true;
+}
+
+/**
+ * The same, for the O_HL_REPAINT options whose message the ofunc
+ * prints ITSELF - the three --no-search-header* ones, the only
+ * O_HL_REPAINT entries with a NULL ovar (opttbl.c:697, :703, :709).
+ *
+ * toggle_option erases the highlights first (repaint_hilite(FALSE),
+ * option.c:365) and calls chg_hilite only at :464, AFTER the ofunc.
+ * For these three the ofunc's own error() blocks in get_return before
+ * that, so the message lands over the erased screen and the
+ * highlights come back on the next command, recomputed under the new
+ * setting. Every other O_HL_REPAINT option has toggle_option print
+ * the message at :480 - after chg_hilite - so its frame keeps them.
+ *
+ * Measured on the live binary: --no-search-headers emits one SGR 7,
+ * the message's own; --proc-backspace emits the highlights too.
+ */
+export function markHiliteErase(): void {
+  hiliteRepaintPending_ = true;
+  hiliteErasePending_ = true;
 }
 
 /** True while such a repaint is still owed. */
@@ -740,9 +763,12 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   const forceFull = hiliteRepaintPending_ || trashedRepaint;
 
+  const hideHilite = hiliteErasePending_;
+
   if (forceFull) {
     fullRepaintPending = false;
     hiliteRepaintPending_ = false;
+    hiliteErasePending_ = false;
   }
 
   // og answers a trashed screen with repaint(), and repaint pos_clears
@@ -755,7 +781,9 @@ export function render(rawContent: string[], buffer: string[]): void {
   // position table it already has (search.c), touching no entries.
   if (trashedRepaint) config.subAnchor = 0;
 
+  if (hideHilite) setHiliteHidden(true);
   let rows = screenRows(rawContent, buffer, filling);
+  if (hideHilite) setHiliteHidden(false);
 
   // that squish_check repaint OUTRANKS the freeze: og paints the
   // whole screen (marker, tildes and all) and only then writes the
@@ -1098,6 +1126,7 @@ let shownBottomEcho = false;
 // old screen first and the fresh paint lands when it is dismissed
 let fullRepaintPending = false;
 let hiliteRepaintPending_ = false;
+let hiliteErasePending_ = false;
 
 let prevTopSub = 0;
 

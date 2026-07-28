@@ -676,6 +676,25 @@ export function repeatSearch(
  *
  * - Reports an error when there is no pattern to highlight, like less.
  */
+/**
+ * og's hide_hilite while an O_HL_REPAINT toggle redraws the screen.
+ *
+ * toggle_option erases the highlights BEFORE it changes anything -
+ * repaint_hilite(FALSE) redraws every row with hide_hilite on
+ * (option.c:365) - and the chg_hilite that follows only repaints them
+ * when hilite_screen finds a screen position to prep from
+ * (search.c:1097). It does not on the toggle's own frame, so the
+ * message lands over a screen with no highlights at all; the next
+ * command paints them again, recomputed under the new setting.
+ * Measured on the live binary: that frame carries exactly one SGR 7,
+ * the message's own.
+ */
+let hiliteHidden = false;
+
+export function setHiliteHidden(hidden: boolean): void {
+  hiliteHidden = hidden;
+}
+
 export function toggleHighlight(): void {
   if (!search.regex) {
     search.message = 'No previous regular expression';
@@ -769,7 +788,7 @@ export function highlightLine(line: string, row: number = -1): string {
   // search (search.c:2319). SRCH_NO_MATCH is NOT carried, so a
   // ^N/! search still marks the text that really matches - the
   // inversion decides where it JUMPS, not what it paints.
-  if (!globalRegex || !search.regex || !search.highlight) {
+  if (!globalRegex || !search.regex || !search.highlight || hiliteHidden) {
     return line;
   }
 
