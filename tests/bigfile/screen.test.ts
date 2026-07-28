@@ -101,4 +101,43 @@ describe('BigView movement', () => {
     expect(v.lineForward(10)).toBe(2);
     expect(texts(v, 1)).toEqual(['three']);
   });
+
+  it('a jump re-homes the top, a scroll keeps its shift', () => {
+    // og's jumps walk the file for a fresh position, and back_line /
+    // find_pos only ever land on a row start of the ABSOLUTE grid -
+    // jump_forw says so outright (jump.c:62). Scrolling instead nudges
+    // the row in place and keeps the shift. Left set, the stale shift
+    // moved G's landing a row down and put p's top mid-grid.
+    config.chopLongLines = false;
+    const v = view('f.txt', 'x'.repeat(400) + '\n');
+
+    v.lineForward(2);
+    config.subShift = 7;
+
+    // a scroll keeps it: the top stays on the same line, shift and all
+    v.lineForward(1);
+    expect(config.subShift).toBe(7);
+    v.lineBackward(1);
+    expect(config.subShift).toBe(7);
+
+    // ...and the probe behind the last-screenful clamp must not eat it
+    v.endTop(10);
+    expect(config.subShift).toBe(7);
+
+    // every jump drops it
+    v.gotoEnd(10);
+    expect(config.subShift).toBe(0);
+
+    config.subShift = 7;
+    v.gotoStart();
+    expect(config.subShift).toBe(0);
+
+    config.subShift = 7;
+    v.gotoPercent(50);
+    expect(config.subShift).toBe(0);
+
+    config.subShift = 7;
+    v.gotoPos(120);
+    expect(config.subShift).toBe(0);
+  });
 });

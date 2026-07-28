@@ -30,12 +30,35 @@ export function displayText(raw: string): string {
 
 export class BigView {
   readonly bf: BlockFile;
-  top: ViewTop = { pos: 0, subRow: 0 };
+  private current: ViewTop = { pos: 0, subRow: 0 };
   /** True once the view shows the last line's end, like mode.EOF. */
   atEof = false;
 
   constructor(bf: BlockFile) {
     this.bf = bf;
+  }
+
+  get top(): ViewTop {
+    return this.current;
+  }
+
+  /**
+   * Re-homes the screen, dropping the top's shift.
+   *
+   * Replacing the whole top is a JUMP: every one of them walks the
+   * file for a fresh position, and those walks - back_line, find_pos -
+   * only ever land on a row start of the ABSOLUTE grid. jump_forw is
+   * explicit: back_line from the end, then jump_loc (jump.c:62).
+   * Scrolling instead nudges subRow in place and keeps the shift,
+   * which is exactly the asymmetry og shows.
+   *
+   * A repaint is NOT a jump: it re-jumps to the byte the screen
+   * already starts at (jump.c:131), shift and all - which is why
+   * markPosClear leaves the shift alone and only this drops it.
+   */
+  set top(next: ViewTop) {
+    config.subShift = 0;
+    this.current = next;
   }
 
   /** Display sub-rows a line occupies under the current mode. */
@@ -142,9 +165,13 @@ export class BigView {
    */
   endTop(window: number): { pos: number, subRow: number } {
     const saved = this.top;
+    const savedShift = config.subShift;
     this.gotoEnd(window);
     const end = this.top;
     this.top = saved;
+    // a probe, not a move: gotoEnd re-homes the top like og's
+    // jump_forw, and the caller's own shift must outlive that
+    config.subShift = savedShift;
     return end;
   }
 

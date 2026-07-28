@@ -107,7 +107,8 @@ export class FileInput implements PagerInput {
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
   private selectedOscStart = -1;
-  private incrementalOrigin: { pos: number, subRow: number } | null = null;
+  private incrementalOrigin:
+    { pos: number, subRow: number, shift: number } | null = null;
   private headerRow = 0;
   private headerPos = 0;
   private pending: {
@@ -534,7 +535,8 @@ export class FileInput implements PagerInput {
     this.lineScanAborted = false;
 
     if (request.incremental) {
-      this.incrementalOrigin ??= { ...this.view.top };
+      this.incrementalOrigin ??=
+        { ...this.view.top, shift: config.subShift };
     } else {
       this.incrementalOrigin = null;
     }
@@ -688,7 +690,11 @@ export class FileInput implements PagerInput {
 
   restoreSearchOrigin(): void {
     if (!this.incrementalOrigin || !this.sourceActive()) return;
-    this.view.top = { ...this.incrementalOrigin };
+    const { pos, subRow, shift } = this.incrementalOrigin;
+    // a restore, not a jump: og's abandoned incremental search returns
+    // to the byte the screen started at, so its shift comes back too
+    this.view.top = { pos, subRow };
+    config.subShift = shift;
     this.incrementalOrigin = null;
     this.sync();
   }
