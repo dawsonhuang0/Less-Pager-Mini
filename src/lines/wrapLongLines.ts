@@ -75,8 +75,15 @@ function wrap(lines: string[], longLine: string, shifted = false): void {
     if (config.subAnchor > from) {
       wrap(lines, openStyleAt(longLine, from) +
         longLine.slice(from, config.subAnchor), true);
-      wrap(lines, openStyleAt(longLine, config.subAnchor) +
-        longLine.slice(config.subAnchor), true);
+
+      // the uncovered span can fill the screen on its own once enough
+      // backward moves have piled up; the grid below it is simply not
+      // reached, exactly as og stops filling the position table
+      if (lines.length < config.window - 1) {
+        wrap(lines, openStyleAt(longLine, config.subAnchor) +
+          longLine.slice(config.subAnchor), true);
+      }
+
       return;
     }
 

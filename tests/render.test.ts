@@ -317,6 +317,28 @@ describe('a width change keeps the top on the same text', () => {
     // the next row continues the shifted grid, not the absolute one
     expect(rows[1]).toBe(long.slice(7 + w, 7 + 2 * w));
   });
+  it('does not spill past the window when the span fills it', () => {
+    // enough backward moves and the uncovered span alone is taller
+    // than the screen; the grid below must simply not be reached, as
+    // og stops filling the position table. Emitting it anyway overran
+    // the row list and the screen jumped to the file's end.
+    const w = config.screenWidth;
+    const huge = 'x'.repeat(w * 60);
+
+    config.subRow = 2;
+    config.subShift = 0;
+    config.subAnchor = 40 * w;
+
+    const rows = screenRows([huge], []);
+    const last = config.window - 2;
+
+    // every visible row comes from the span, the last one included
+    expect(rows[0]).toBe(huge.slice(2 * w, 3 * w));
+    expect(rows.slice(0, last + 1).every(r => r === 'x'.repeat(w)))
+      .toBe(true);
+    expect(rows.length).toBe(config.window);
+  });
+
   it('sends a horizontal shift back to the line start, for good', () => {
     // og's pos_rehead: every shift command moves table[TOP] back to
     // the beginning of its line first (command.c:2459 and friends)
