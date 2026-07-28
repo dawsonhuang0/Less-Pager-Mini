@@ -1162,6 +1162,12 @@ let prevInitAlt = false;
 /** Marks the next paint as og's pos_clear'd jump (G). */
 export function markPosClear(): void {
   posClearPending = true;
+
+  // og's pos_clear wipes the whole position table, so the entries a
+  // backward move prepended go with it and every row is regenerated
+  // whole. Everything that reaches this - jump_loc, a search landing,
+  // a repaint - has already cleared them in og.
+  config.subAnchor = 0;
 }
 
 /**
