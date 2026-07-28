@@ -76,7 +76,10 @@ function compare(
  * compared, like lesstest's runtest against og.
  */
 export async function runLt(lt: LtFile): Promise<LtResult> {
-  const screen = new LtScreen(lt.width, lt.height);
+  // og had no "xn" unless the recording names it, so its screen wraps
+  // as soon as the last column is written - see LtScreen.deferWrap
+  const screen = new LtScreen(lt.width, lt.height,
+    'LESS_TERMCAP_xn' in lt.env);
   const result: LtResult = { steps: lt.steps.length, compared: 0,
     mismatches: [] };
 
@@ -138,7 +141,10 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   // entry does, so the replay starts where og started.
   // @8 is kent: without it og's getcc_repl returns a bare ESC to
   // the command loop instead of swallowing it as a partial match
-  const canceled = ['ti', 'te', '@8']
+  // "xn" is the same story: og's defer_wrap comes from it
+  // (screen.c:1532), the recordings never name it, and a full-width
+  // row must then be followed by nothing at all
+  const canceled = ['ti', 'te', '@8', 'xn']
     .filter(name => !(`LESS_TERMCAP_${name}` in lt.env));
 
   if (canceled.length) {

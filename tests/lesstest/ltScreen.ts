@@ -36,9 +36,22 @@ export class LtScreen {
   private fg = NULL_COLOR;
   private bg = NULL_COLOR;
 
-  constructor(width: number, height: number) {
+  /**
+   * The terminal's "xn" (og's defer_wrap, screen.c:1532).
+   *
+   * og's lt_screen has no magic margin - it wraps the moment the last
+   * column is written (screen_incr, lt_screen.c:133), which is right
+   * for the terminal the recordings were made on: lesstest hands less
+   * "am" and no "xn", and passes no $TERM (env.c is_less_env), so
+   * setupterm fails, hardcopy is set and ltgetflag answers 0 for every
+   * capability the environment does not name (screen.c:798).
+   */
+  private deferWrap: boolean;
+
+  constructor(width: number, height: number, deferWrap = true) {
     this.width = width;
     this.height = height;
+    this.deferWrap = deferWrap;
     this.cells = [];
 
     for (let y = 0; y < height; y++) {
@@ -86,14 +99,26 @@ export class LtScreen {
           this.lineFeed();
         }
 
-        this.putChar(ch);
+        if (!this.deferWrap) {
+          // no magic margin: the wrap happens now, and on the last
+          // row that scrolls the screen
+          this.putChar(ch);
+          this.cx += Math.max(strWidth(ch), 1);
 
-        const width = Math.max(strWidth(ch), 1);
-        this.cx += width;
+          if (this.cx >= this.width) {
+            this.cx = 0;
+            this.lineFeed();
+          }
+        } else {
+          this.putChar(ch);
 
-        if (this.cx >= this.width) {
-          this.cx = this.width - 1;
-          this.pendingWrap = true;
+          const width = Math.max(strWidth(ch), 1);
+          this.cx += width;
+
+          if (this.cx >= this.width) {
+            this.cx = this.width - 1;
+            this.pendingWrap = true;
+          }
         }
       }
 

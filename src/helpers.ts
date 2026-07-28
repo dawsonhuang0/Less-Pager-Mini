@@ -1604,7 +1604,7 @@ function fullFrame(rows: string[]): string {
 
   const body = physical
     .map((row, i) => CLEAR_LINE + row +
-      (i === physical.length - 1 ? '' : frameRowEnd(CLEAR_LINE + row)))
+      (i === physical.length - 1 ? '' : frameRowEnd(row)))
     .join('');
 
   // CLEAR_BELOW blanks the rows the collapse freed, like og's paint
