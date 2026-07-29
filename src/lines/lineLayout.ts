@@ -38,6 +38,7 @@ const CACHE_LIMIT = 5000;
 let cache = new Map<string, LineLayout>();
 let cacheWidth = 0;
 let cacheWordwrap = false;
+let cacheCtldisp = -1;
 
 /**
  * Returns the cached layout for a line, building it on first access.
@@ -48,10 +49,16 @@ let cacheWordwrap = false;
  * @returns The line's layout for the current screen width.
  */
 export function getLayout(line: string): LineLayout {
-  if (cacheWidth !== config.screenWidth || cacheWordwrap !== optWordwrap()) {
+  // -r/-R change what a line DISPLAYS (control chars raw, as ANSI, or
+  // as ^X) and therefore how it wraps, so a layout cached under one
+  // ctldisp cannot be reused under another - handing back the stale
+  // one made the carry recompute the SAME sub-row it was correcting.
+  if (cacheWidth !== config.screenWidth || cacheWordwrap !== optWordwrap() ||
+      cacheCtldisp !== optCtldisp()) {
     cache = new Map();
     cacheWidth = config.screenWidth;
     cacheWordwrap = optWordwrap();
+    cacheCtldisp = optCtldisp();
   }
 
   let layout = cache.get(line);
