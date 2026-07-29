@@ -69,7 +69,14 @@ import {
   eprPrefix
 } from "../helpers";
 
-import { maxSubRow, transformContent, visualWidth } from "../lines/helpers";
+import {
+  maxSubRow,
+  transformContent,
+  visualWidth,
+  sourceLine,
+  sourceIndexAt,
+  displayPrefixLength,
+} from "../lines/helpers";
 
 import {
   lineForward,
@@ -353,14 +360,27 @@ export async function contentPager(
 
     if (top === undefined) return () => {};
 
-    // DISPLAY-CHARACTER space, the space the layout's rowStart indexes
-    // and the only one config.subShift is ever read in. subRowStart()
-    // answers in STRING indices, which differ on any styled line.
+    // og's table[TOP] is a byte into the FILE, so an option that
+    // changes what a line DISPLAYS cannot move it. A display-character
+    // offset can: -r turns the escape codes into visible characters
+    // and -x re-expands tabs, so the same offset names a different
+    // place in the new display line. Carry the SOURCE index across,
+    // which is what og's byte is, and re-derive the display offset
+    // from it afterwards.
     const offset = topOffsetOf(content);
+    const raw = sourceLine(top);
+    const at = raw === undefined ? offset : sourceIndexAt(raw, offset);
 
     return () => {
       if (offset <= 0) return;
-      setTopOffset(top, config.row, offset);
+
+      const line = session.content[config.row] ?? top;
+      const after = sourceLine(line);
+      const carried = after === undefined
+        ? offset
+        : displayPrefixLength(after, at);
+
+      setTopOffset(line, config.row, carried);
       config.screen = [];
     pagerInput?.posClear?.();
 
@@ -368,7 +388,7 @@ export async function contentPager(
       // it, so the carry has to reach the engine or the next sync puts
       // the old boundary straight back - and the next forward move
       // steps by the OLD row width.
-      pagerInput?.retopOffset(offset);
+      pagerInput?.retopOffset(carried);
     };
   };
 
