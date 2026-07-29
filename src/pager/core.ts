@@ -140,6 +140,12 @@ import {
 import { topOffsetOf, setTopOffset } from "../lines/screenOps";
 
 import {
+  getLayout,
+  stringIndexAt,
+  charIndexAt,
+} from "../lines/lineLayout";
+
+import {
   files,
   examine,
   loadFile,
@@ -367,17 +373,29 @@ export async function contentPager(
     // place in the new display line. Carry the SOURCE index across,
     // which is what og's byte is, and re-derive the display offset
     // from it afterwards.
+    // Three spaces meet here and only one is stable across an option:
+    // the layout's CHARACTER offset (what the top is kept in), the
+    // display STRING index, and the RAW string index - og's byte. A
+    // line the transform left alone has no source mapping, and then
+    // the display string IS the raw one, so the conversion is
+    // stringIndexAt rather than the identity: on a styled line under
+    // -R those differ by every escape sequence before the top.
     const offset = topOffsetOf(content);
     const raw = sourceLine(top);
-    const at = raw === undefined ? offset : sourceIndexAt(raw, offset);
+    const at = raw === undefined
+      ? stringIndexAt(getLayout(top), offset)
+      : sourceIndexAt(raw, offset);
 
     return () => {
       if (offset <= 0) return;
 
       const line = session.content[config.row] ?? top;
       const after = sourceLine(line);
+      // and back the same way: no mapping means the new display line
+      // IS the raw one, so the raw index converts through the layout,
+      // not straight across
       const carried = after === undefined
-        ? offset
+        ? charIndexAt(getLayout(line), at)
         : displayPrefixLength(after, at);
 
       setTopOffset(line, config.row, carried);

@@ -4,6 +4,8 @@ import { config } from '../state/config';
 
 import { isAscii, splitChars } from './helpers';
 
+import { controlByte } from '../features/charset';
+
 import { optWordwrap, optCtldisp } from '../options';
 
 import { STYLE_REGEX_G, STYLE_RESET } from '../state/constants';
@@ -119,13 +121,39 @@ function buildLayout(line: string): LineLayout {
   const codeIdx: number[] = [];
   const codes: string[] = [];
 
+  // og's pwidth: a control character under -r moves the cursor by an
+  // unpredictable amount, "so we don't even try to guess; say it
+  // doesn't move ... this can only happen if the -r flag is in
+  // effect" (line.c:545). It is still a CHARACTER in the line buffer.
+  const rawCtl = optCtldisp() === 1;
+  const ctlWidth = (char: string): number | null =>
+    rawCtl && char.length === 1 && controlByte(char.charCodeAt(0)) &&
+      char !== '\b' && char !== '\t'
+      ? 0
+      : null;
+
   const pushChars = (segment: string): void => {
     if (!segment) return;
 
-    if (isAscii(segment) && !segment.includes('\x08')) {
+    if (isAscii(segment) && !segment.includes('\x08') && !rawCtl) {
       for (const char of segment) {
         chars.push(char);
         widths.push(1);
+      }
+    } else if (rawCtl) {
+      for (const cluster of splitChars(segment)) {
+        chars.push(cluster);
+
+        const ctl = ctlWidth(cluster);
+
+        if (ctl !== null) {
+          widths.push(ctl);
+        } else if (cluster === '\b') {
+          const prev = widths.length ? widths[widths.length - 1] : 0;
+          widths.push(prev === 2 ? -2 : -1);
+        } else {
+          widths.push(isAscii(cluster) ? 1 : strWidth(cluster));
+        }
       }
     } else {
       for (const cluster of splitChars(segment)) {
@@ -143,18 +171,29 @@ function buildLayout(line: string): LineLayout {
     }
   };
 
-  STYLE_REGEX_G.lastIndex = 0;
-  let i = 0;
-  let ansi: RegExpExecArray | null;
+  // og's do_append only starts the ANSI state machine when ctldisp is
+  // OPT_ONPLUS (line.c:1300); under -r an ESC is not the beginning of
+  // a sequence at all - store_control_char stores it as an ordinary
+  // AT_NORMAL character (line.c:1193) and the "[31m" after it is
+  // PLAIN VISIBLE TEXT, four columns wide. Splitting the sequence off
+  // as a zero-width code made every styled line lay out as if -R were
+  // still in force.
+  if (rawCtl) {
+    pushChars(line);
+  } else {
+    STYLE_REGEX_G.lastIndex = 0;
+    let i = 0;
+    let ansi: RegExpExecArray | null;
 
-  while ((ansi = STYLE_REGEX_G.exec(line)) !== null) {
-    pushChars(line.slice(i, ansi.index));
-    codeIdx.push(chars.length);
-    codes.push(ansi[0]);
-    i = STYLE_REGEX_G.lastIndex;
+    while ((ansi = STYLE_REGEX_G.exec(line)) !== null) {
+      pushChars(line.slice(i, ansi.index));
+      codeIdx.push(chars.length);
+      codes.push(ansi[0]);
+      i = STYLE_REGEX_G.lastIndex;
+    }
+
+    pushChars(line.slice(i));
   }
-
-  pushChars(line.slice(i));
 
   const prefix = new Array<number>(chars.length + 1);
   prefix[0] = 0;
@@ -315,6 +354,31 @@ export function stringIndexAt(layout: LineLayout, at: number): number {
   }
 
   return index;
+}
+
+/**
+ * The display-CHARACTER offset naming a raw string index - the
+ * inverse of stringIndexAt, for coming back from a position measured
+ * in the line's own bytes.
+ */
+export function charIndexAt(layout: LineLayout, at: number): number {
+  const { chars, codeIdx, codes } = layout;
+  if (at <= 0) return 0;
+
+  let index = 0;
+  let k = 0;
+
+  for (let c = 0; c < chars.length; c++) {
+    while (k < codeIdx.length && codeIdx[k] <= c) {
+      index += codes[k].length;
+      k++;
+    }
+
+    if (index >= at) return c;
+    index += chars[c].length;
+  }
+
+  return chars.length;
 }
 
 /**
