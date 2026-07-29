@@ -783,7 +783,10 @@ export function render(rawContent: string[], buffer: string[]): void {
   // the top and has its short row wiped in the same frame. The hilite
   // repaint is not this - chg_hilite redraws every row through the
   // position table it already has (search.c), touching no entries.
-  if (trashedRepaint) config.subAnchor = 0;
+  if (trashedRepaint) {
+    config.subAnchor = 0;
+    config.screen = [];
+  }
 
   if (hideHilite) setHiliteHidden(true);
   let rows = screenRows(rawContent, buffer, filling);

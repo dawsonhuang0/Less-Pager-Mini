@@ -75,6 +75,45 @@ export function screenForward(content: string[], rows: number): number {
   return used;
 }
 
+/** The top's character offset in its line, in the layout's own space. */
+export function topOffsetOf(content: string[]): number {
+  const starts = getLayout(content[config.row] ?? '').rowStart;
+  return (starts[config.subRow] ?? 0) + config.subShift;
+}
+
+/**
+ * The entries from `top` forward until the row that reaches `bound`,
+ * which is where the screen used to start.
+ *
+ * A source engine re-materializes its window on every paint, so the
+ * indices a backward move would have recorded beforehand are gone by
+ * the time the entries are needed. Walking forward from the new top
+ * rebuilds exactly the same rows - back_line landed it on the absolute
+ * grid, so the walk retraces its steps - and the last one is cut at
+ * the bound, which is the seam.
+ */
+export function screenAhead(
+  content: string[],
+  top: { row: number, offset: number },
+  bound: number
+): ScreenRow[] {
+  const rows: ScreenRow[] = [];
+  const layout = getLayout(content[top.row] ?? '');
+
+  let offset = top.offset;
+
+  while (offset < bound && rows.length < 1000) {
+    let end = rowEndFrom(layout, offset);
+    if (end <= offset) break;
+
+    if (end > bound) end = bound;
+    rows.push({ row: top.row, offset, end });
+    offset = end;
+  }
+
+  return rows;
+}
+
 /** The rows a backward step exposes, newest first, like back_line. */
 export function screenBack(
   content: string[],
