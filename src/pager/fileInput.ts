@@ -31,14 +31,16 @@ import { onSourceFollow } from '../features/follow';
 
 import { onSourceTagJump, Tag } from '../features/tags';
 
+import { screenAhead, topOffsetOf } from '../lines/screenOps';
+
+import { getLayout } from '../lines/lineLayout';
+
 import {
   Mark,
   onSourceMarks,
   recordLastPosition,
   subRowOfIndex,
   subRowStart,
-  advanceOverAnchor,
-  dropAnchorPastBottom,
   shiftRowLoss,
 } from '../features/jumping';
 
@@ -144,6 +146,11 @@ export class FileInput implements PagerInput {
   // the view position of the previous resolveBottom, so only real
   // moves re-enter the walk (og's find_linenum caches resolve this)
   private lastResolved = '';
+
+  // the rows a backward move exposed, as offsets into the top's own
+  // line: og's add_back_pos entries, minus the row index the window
+  // would invalidate on the next sync
+  private seam: { offset: number, end: number }[] = [];
 
   // og's forced back (K, ESC-b, --past-eof) pads null rows above
   // BOF; forward moves consume them first, any jump clears them
@@ -292,7 +299,8 @@ export class FileInput implements PagerInput {
 
         this.clampHeader();
         this.sync();
-        markPosClear();
+        this.seam = [];
+    markPosClear();
       }
     }
 
@@ -337,7 +345,8 @@ export class FileInput implements PagerInput {
           this.view.gotoPos(Math.min(jump.value, this.bf.size));
         }
         this.clampHeader();
-        markPosClear();
+        this.seam = [];
+    markPosClear();
         moved = true;
       }
     }
@@ -445,7 +454,8 @@ export class FileInput implements PagerInput {
             this.view.gotoEnd(config.window);
           }
           this.sync();
-          markPosClear();
+          this.seam = [];
+    markPosClear();
         }
         return true;
       case 'PERCENT_LINE':
@@ -465,7 +475,8 @@ export class FileInput implements PagerInput {
         this.view.gotoPercent(Math.min(count, 100));
         this.clampHeader();
         this.sync();
-        markPosClear();
+        this.seam = [];
+    markPosClear();
         return true;
       case 'GO_POS':
         this.discoverEnd();
@@ -478,7 +489,8 @@ export class FileInput implements PagerInput {
         this.view.gotoPos(count);
         this.clampHeader();
         this.sync();
-        markPosClear();
+        this.seam = [];
+    markPosClear();
         return true;
       case 'OSC8_FORWARD':
         this.findOsc8(1, count || 1);
@@ -506,7 +518,8 @@ export class FileInput implements PagerInput {
           this.view.top = { pos: this.selectedOscPos, subRow: 0 };
           this.view.lineBackward(jumpSindex());
           this.sync();
-          markPosClear();
+          this.seam = [];
+    markPosClear();
         }
         return true;
       case 'CURLY_BRACKET_RIGHT':
@@ -618,7 +631,8 @@ export class FileInput implements PagerInput {
       this.shiftMatch(found);
       this.sync();
       recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
-      markPosClear();
+      this.seam = [];
+    markPosClear();
       return;
     }
 
@@ -633,6 +647,7 @@ export class FileInput implements PagerInput {
     this.shiftMatch(found);
     this.sync();
     recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
+    this.seam = [];
     markPosClear();
   }
 
@@ -913,6 +928,7 @@ export class FileInput implements PagerInput {
     }
 
     this.sync();
+    this.seam = [];
     markPosClear();
     return true;
   }
@@ -1095,6 +1111,7 @@ export class FileInput implements PagerInput {
     if (session.lastFilter) this.filteredBackward(up);
     else this.fileBackward(up);
     this.sync();
+    this.seam = [];
     markPosClear();
     return true;
   }
@@ -1124,17 +1141,30 @@ export class FileInput implements PagerInput {
     // then the rows a backward move uncovered: og's forw() walks the
     // entries add_back_pos prepended, dropping table[0] each time
     // (position.c:63), before the grid below resumes
-    if (config.subAnchor > 0) {
-      const line = forwLine(this.bf, this.view.top.pos);
+    if (this.seam.length) {
+      const used = Math.min(want, this.seam.length);
+      const last = this.seam[used - 1];
 
-      if (line) {
-        want -= advanceOverAnchor(displayText(line.text), want);
-        this.view.top.subRow = config.subRow;
+      this.seam = this.seam.slice(used);
+      want -= used;
 
-        if (want <= 0) {
-          this.sync();
-          return;
-        }
+      // the entries land on the absolute grid, but the LAST one ends
+      // at the original top, which may sit mid-boundary - that is the
+      // shift, and dropping it moved the screen a whole row
+      const off = this.seam.length ? this.seam[0].offset : last.end;
+      const cur = forwLine(this.bf, this.view.top.pos);
+      const disp = displayText(cur?.text ?? '');
+      const starts = getLayout(disp).rowStart;
+
+      let sub = 0;
+      while (sub + 1 < starts.length && starts[sub + 1] <= off) sub++;
+
+      this.view.top.subRow = sub;
+      config.subShift = off - (starts[sub] ?? 0);
+
+      if (want <= 0) {
+        this.sync();
+        return;
       }
     }
 
@@ -1178,9 +1208,10 @@ export class FileInput implements PagerInput {
   }
 
   private backward(rows: number, force: boolean = false): void {
-    // og's back_line bounds the exposed row at the OLD top (input.c),
-    // and the rows below keep the grid they had; a move that leaves
-    // this line has no such bound
+    // og's back() calls add_back_pos per row, and back_line bounds the
+    // row it exposes at the one that was on top (input.c) while the
+    // rows below keep the extents they had. The entries say that; a
+    // single anchor could only ever say it once.
     const wasPos = this.view.top.pos;
     const wasLine = forwLine(this.bf, wasPos);
     const wasOffset = wasLine
@@ -1190,13 +1221,33 @@ export class FileInput implements PagerInput {
 
     this.backwardFrom(rows, force);
 
-    // set ONCE and kept (see the array session's lineBackward)
-    config.subAnchor = this.view.top.pos !== wasPos
-      ? 0
-      : config.subAnchor > 0 ? config.subAnchor : wasOffset;
+    // A step that leaves the line has no bound, so every entry always
+    // belongs to the top's OWN line - which is why they are kept as
+    // bare offsets. The materialized window renumbers its rows on each
+    // sync, so an index stored here would be stale by the next paint.
+    if (this.view.top.pos !== wasPos) {
+      this.seam = [];
+    } else {
+      const top = { row: config.row, offset: topOffsetOf(session.content) };
 
-    // ...until the rows piling up above push it off the bottom
-    if (wasLine) dropAnchorPastBottom(displayText(wasLine.text));
+      this.seam = [
+        ...screenAhead(session.content, top, wasOffset)
+          .map(cell => ({ offset: cell.offset, end: cell.end })),
+        ...this.seam,
+      ].slice(0, Math.max(config.window - 1, 1));
+    }
+
+    this.publishSeam();
+  }
+
+  posClear(): void {
+    this.seam = [];
+    config.screen = [];
+  }
+
+  /** Re-expresses the seam in the row indices this paint will use. */
+  private publishSeam(): void {
+    config.screen = this.seam.map(cell => ({ row: config.row, ...cell }));
   }
 
   private backwardFrom(rows: number, force: boolean = false): void {
@@ -1492,6 +1543,7 @@ export class FileInput implements PagerInput {
     const floor = optHeader().lines > 0 ? optHeader().start : 0;
     this.seekLine(Math.max(target, floor), true);
     this.sync();
+    this.seam = [];
     markPosClear();
   }
 
@@ -1631,6 +1683,7 @@ export class FileInput implements PagerInput {
     }
 
     this.sync();
+    this.seam = [];
     markPosClear();
     return true;
   }
@@ -1875,7 +1928,8 @@ export class FileInput implements PagerInput {
           this.view.top = { pos, subRow: 0 };
           this.view.lineBackward(jumpSindex());
           this.sync();
-          markPosClear();
+          this.seam = [];
+    markPosClear();
         }
 
         return;
@@ -1906,7 +1960,8 @@ export class FileInput implements PagerInput {
     if (!this.onscreen(pos)) {
       this.view.top = { pos, subRow: 0 };
       this.view.lineBackward(jumpSindex());
-      markPosClear();
+      this.seam = [];
+    markPosClear();
     }
 
     // sync resolves the selection's current row itself (the og
@@ -2065,6 +2120,10 @@ export class FileInput implements PagerInput {
     this.positions = positions;
     config.row = Math.min(displayBody, Math.max(session.content.length - 1, 0));
     config.subRow = this.view.top.subRow;
+
+    // the window just renumbered its rows; the seam is offsets into
+    // the top's line, so it survives that and is simply re-anchored
+    this.publishSeam();
     // scroll moves carry their over-BOF pad; any jump clears it
     if (!this.keepPad) this.padTop = 0;
     this.keepPad = false;

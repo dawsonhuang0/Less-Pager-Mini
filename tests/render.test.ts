@@ -31,7 +31,7 @@ beforeEach(() => {
   config.bufferOffset = 0;
   config.keyPrefix = '';
   config.subShift = 0;
-  config.subAnchor = 0;
+  config.screen = [];
   config.screenWidth = 80;
   config.window = 24;
   config.chopLongLines = true;
@@ -329,7 +329,6 @@ describe('a width change keeps the top on the same text', () => {
 
     config.subRow = 2;
     config.subShift = 0;
-    config.subAnchor = 40 * w;
 
     const rows = screenRows([huge], []);
     const last = config.window - 2;
@@ -402,7 +401,9 @@ describe('a width change keeps the top on the same text', () => {
 
     config.subRow = 1;
     config.subShift = 0;
-    config.subAnchor = w + 30;
+    // the entry back_line would have prepended: it ends where the
+    // screen used to start, and the next row resumes the grid below
+    config.screen = [{ row: 0, offset: w, end: w + 30 }];
 
     const rows = screenRows([long], []);
 

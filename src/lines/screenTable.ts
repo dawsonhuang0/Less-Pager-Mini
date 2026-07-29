@@ -86,15 +86,8 @@ export function buildScreen(
     // so the extent has to be measured under the width it is drawn with
     const shrink = gutterOverflow(row);
     config.screenWidth -= shrink;
-    let end = rowEndFrom(getLayout(line), offset);
+    const end = rowEndFrom(getLayout(line), offset);
     config.screenWidth += shrink;
-
-    // the seam a backward move left: og's back_line stops the row it
-    // exposes at the old top, so that row simply ends there and the
-    // next entry resumes the grid below it
-    if (config.subAnchor > offset && config.subAnchor < end) {
-      end = config.subAnchor;
-    }
 
     rows.push({ row, offset, end });
 

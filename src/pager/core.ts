@@ -359,8 +359,8 @@ export async function contentPager(
       if (offset <= 0) return;
       config.subRow = subRowOfIndex(top, offset);
       config.subShift = offset - subRowStart(top, config.subRow);
-      config.subAnchor = 0;
       config.screen = [];
+    pagerInput?.posClear?.();
 
       // a source engine owns the top's sub-row and writes config.subRow
       // back from it, so the carry has to land on both - exactly as the
@@ -759,11 +759,16 @@ const acts: Record<Actions, () => void> = {
   // og's repaint() keeps the top's POSITION and pos_clears the table
   // (jump.c:131), so the rows a backward move exposed are regenerated
   // whole - the shifted top survives, the partial row does not
-  REPAINT: () => { mode.INIT = false; config.subAnchor = 0; resetRender(); },
+  REPAINT: () => {
+    mode.INIT = false;
+    config.screen = [];
+    pagerInput?.posClear?.();
+    resetRender();
+  },
   DROP_INPUT_REPAINT: () => {
     mode.INIT = false;
-    config.subAnchor = 0;
     config.screen = [];
+    pagerInput?.posClear?.();
     resetRender();
   },
   SEARCH_FORWARD: () => startSearch('/', bufferToNum(session.buffer) || 1),
@@ -2005,8 +2010,8 @@ function onResize(): void {
 
     config.subRow = sub;
     config.subShift = offset - subRowStart(top, sub);
-    config.subAnchor = 0;
     config.screen = [];
+    pagerInput?.posClear?.();
     pagerInput?.retopSubRow(sub);
   }
 

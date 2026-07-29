@@ -784,7 +784,6 @@ export function render(rawContent: string[], buffer: string[]): void {
   // repaint is not this - chg_hilite redraws every row through the
   // position table it already has (search.c), touching no entries.
   if (trashedRepaint) {
-    config.subAnchor = 0;
     config.screen = [];
   }
 
@@ -1269,7 +1268,6 @@ export function markPosClear(): void {
   // backward move prepended go with it and every row is regenerated
   // whole. Everything that reaches this - jump_loc, a search landing,
   // a repaint - has already cleared them in og.
-  config.subAnchor = 0;
   config.screen = [];
 }
 

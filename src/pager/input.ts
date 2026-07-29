@@ -16,6 +16,14 @@ export interface PagerInput {
   /** Returns true when the input handled the action completely. */
   handle(action: Actions, count: number): boolean;
 
+  /**
+   * og's pos_clear reaching a source engine: it keeps its own copy of
+   * the rows a backward move exposed, because the materialized window
+   * renumbers itself on every paint, so emptying config.screen alone
+   * would let the next sync publish them straight back.
+   */
+  posClear?(): void;
+
   /** Runs a compiled search over the input's complete address space. */
   search(request: SearchRequest): boolean;
 
