@@ -152,6 +152,10 @@ export function setPreviousPath(filePath: string | null): void {
  * @param lines - The content to page.
  */
 export function initContent(lines: string[]): void {
+  // new content, new screen: og's position table describes rows of the
+  // file it was filled from, so it cannot outlive it (pos_clear)
+  config.screen = [];
+
   files.list = [{
     path: '-',
     lines,

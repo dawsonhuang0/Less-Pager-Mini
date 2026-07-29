@@ -84,6 +84,7 @@ function getDefaultConfig(): Config {
     subRow: 0,
     subShift: 0,
     subAnchor: 0,
+    screen: [],
     blankTop: 0,
     endRow: 0,
     endSubRow: 0,

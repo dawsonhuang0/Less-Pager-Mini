@@ -1,3 +1,5 @@
+import { ScreenRow } from '../lines/screenTable';
+
 /**
  * Global configuration options for the pager display and behavior.
  */
@@ -31,6 +33,18 @@ export interface Config {
    * this is the one number that reproduces it.
    */
   subAnchor: number;
+
+  /**
+   * og's position table (position.c): one entry per screen row saying
+   * where that row starts and ends. Empty means pos_clear - the next
+   * paint regenerates it from the top alone.
+   *
+   * It persists across moves because the entries a backward step
+   * prepends cannot be re-derived: back_line bounds the row it exposes
+   * at the row that used to be on top, and the rows below keep the
+   * extents they already had.
+   */
+  screen: ScreenRow[];
 
   // Blank rows displayed above the beginning of the content, like less
   // padding the top when a jump target lands near BOF (jump_loc/forw)

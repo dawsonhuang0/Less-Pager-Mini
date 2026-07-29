@@ -348,6 +348,7 @@ export function posRehead(): void {
   config.subRow = 0;
   config.subShift = 0;
   config.subAnchor = 0;
+  config.screen = [];
   hook.reheadSource?.();
 }
 
@@ -357,6 +358,7 @@ export function advanceOverAnchor(line: string, rows: number): number {
   let offset = subRowStart(line, config.subRow) + config.subShift;
   if (offset >= config.subAnchor) {
     config.subAnchor = 0;
+    config.screen = [];
     return 0;
   }
 
@@ -1448,6 +1450,7 @@ function setTop(row: number, subRow: number): void {
   // shift nor the anchor survives
   config.subShift = 0;
   config.subAnchor = 0;
+  config.screen = [];
   config.blankTop = 0;
 
   mode.EOF = row > config.endRow || (

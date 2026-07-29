@@ -369,13 +369,15 @@ describe('a width change keeps the top on the same text', () => {
     config.subShift = 30;
 
     lineBackward([long], 1);
-    expect(config.subAnchor).toBe(4 * w + 30);
+    // og's add_back_pos prepends an ENTRY, whose end is the row that
+    // used to be on top - that is what makes the exposed row short
+    expect(config.screen[0]).toEqual({ row: 0, offset: 4 * w, end: 4 * w + 30 });
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
 
-    // a second backward move keeps the SAME anchor: the whole
-    // uncovered span still wraps up to where the screen first started
+    // a second backward move prepends another, and the first keeps the
+    // bound it was given
     lineBackward([long], 1);
-    expect(config.subAnchor).toBe(4 * w + 30);
+    expect(config.screen[1].end).toBe(4 * w + 30);
     const rows = screenRows([long], []);
     expect(rows[0]).toBe(long.slice(3 * w, 4 * w));
     expect(rows[1]).toBe(long.slice(4 * w, 4 * w + 30));
@@ -385,7 +387,7 @@ describe('a width change keeps the top on the same text', () => {
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
 
     lineForward([long], 1);
-    expect(config.subAnchor).toBe(0);
+    expect(config.screen.length).toBe(0);
     expect(screenRows([long], [])[0])
       .toBe(long.slice(4 * w + 30, 5 * w + 30));
   });
@@ -450,21 +452,20 @@ describe('a width change keeps the top on the same text', () => {
     config.subShift = 30;
 
     lineBackward([huge], 1);
-    expect(config.subAnchor).toBe(start + 30);
+    expect(config.screen[0].end).toBe(start + 30);
 
     // the span may fill the screen exactly - the short row ending at
-    // the anchor is itself the last line - and still show
+    // the seam is itself the last line - and still show
     lineBackward([huge], config.window - 2);
-    expect(config.subAnchor).toBe(start + 30);
     expect(screenRows([huge], [])[config.window - 2])
       .toBe(huge.slice(start, start + 30));
 
-    // one row more and it has scrolled off, for good
+    // one row more and it has scrolled off the bottom, for good: the
+    // table holds sc_height entries and no more (position.c)
     lineBackward([huge], 1);
-    expect(config.subAnchor).toBe(0);
+    expect(config.screen.every(cell => cell.end !== start + 30)).toBe(true);
 
     lineForward([huge], 4);
-    expect(config.subAnchor).toBe(0);
     expect(screenRows([huge], []).slice(0, config.window - 1)
       .every(r => r.length === w)).toBe(true);
   });

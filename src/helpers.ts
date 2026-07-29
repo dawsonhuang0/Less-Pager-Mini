@@ -1267,6 +1267,7 @@ export function markPosClear(): void {
   // whole. Everything that reaches this - jump_loc, a search landing,
   // a repaint - has already cleared them in og.
   config.subAnchor = 0;
+  config.screen = [];
 }
 
 /**

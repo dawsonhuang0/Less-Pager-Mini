@@ -50,15 +50,36 @@ export function buildScreen(
   count: number,
   cap: number
 ): ScreenRow[] {
-  const rows: ScreenRow[] = [];
-
   let row = config.row;
   let line = row < count ? lineAt(row) : '';
-
-  // the legacy top: a sub-row boundary plus the remainder past it,
-  // both already counted in display characters
   let offset = (getLayout(line).rowStart[config.subRow] ?? 0) +
     config.subShift;
+
+  // og's table survives a scroll: the entries a backward move
+  // prepended describe rows that cannot be re-derived, because
+  // back_line bounded them at the row that used to be on top. It is
+  // only ever valid while its first entry IS the top - anything that
+  // moved the top without going through the table has invalidated it,
+  // which is pos_clear by another name.
+  const kept = config.screen;
+  const valid = kept.length > 0 && kept[0].row === row &&
+    kept[0].offset === offset && kept[kept.length - 1].row < count;
+
+  const rows: ScreenRow[] = valid ? kept.slice(0, cap) : [];
+  if (!valid && kept.length) config.screen = [];
+
+  if (rows.length) {
+    const last = rows[rows.length - 1];
+    row = last.row;
+    line = row < count ? lineAt(row) : '';
+    offset = last.end;
+
+    if (offset >= getLayout(line).chars.length) {
+      row++;
+      offset = 0;
+      line = row < count ? lineAt(row) : '';
+    }
+  }
 
   while (rows.length < cap && row < count) {
     // a number wider than the -N field eats the line's text columns,

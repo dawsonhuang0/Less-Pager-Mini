@@ -17,8 +17,9 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { subRowStart, advanceOverAnchor, posRehead,
-  dropAnchorPastBottom } from "./jumping";
+import { subRowStart, posRehead } from "./jumping";
+
+import { screenBack, screenForward } from "../lines/screenOps";
 
 import { INVERSE_ON } from "../state/constants";
 
@@ -231,7 +232,7 @@ export function lineForward(
 
   // forw walks the entries a backward move prepended before the grid
   // below resumes: add_forw_pos drops table[0] each row (position.c)
-  offset -= advanceOverAnchor(content[config.row], offset);
+  offset -= screenForward(content, offset);
   if (offset <= 0) {
     if (mode.INIT) mode.INIT = false;
     return;
@@ -292,29 +293,34 @@ export function lineBackward(
   offset: number,
   attn: boolean = true
 ): number {
-  // og's back_line bounds the row it exposes at the OLD top - it
-  // stops appending once new_pos reaches curr_pos (input.c) - and the
-  // rows below keep the grid they had. Remembering where the screen
-  // used to start is what lets the paint reproduce that; a move that
-  // leaves this line has no such bound, its rows being whole ones.
+  // og's back() calls add_back_pos per row: back_line re-wraps from
+  // the LINE's start and stops the moment it reaches the row that was
+  // on top ("if (new_pos >= curr_pos) break", input.c), so the row it
+  // exposes is bounded by the old screen while the rows below keep the
+  // extents they already had. Prepending those entries IS that.
   const from = content[config.row];
-  const wasRow = config.row;
-  const wasOffset = from === undefined
-    ? 0
-    : subRowStart(from, config.subRow) + config.subShift;
+  const top = {
+    row: config.row,
+    offset: from === undefined
+      ? 0
+      : subRowStart(from, config.subRow) + config.subShift,
+    end: 0,
+  };
 
-  const moved = lineBackwardFrom(content, offset, attn);
+  // lineBackwardFrom answers with what it could NOT move
+  const left = lineBackwardFrom(content, offset, attn);
+  const stepped = offset - left;
 
-  // set ONCE and kept: og's add_back_pos prepends another entry each
-  // time, and the whole uncovered span still wraps up to where the
-  // screen first started - so later backward moves must not move it
-  config.subAnchor = config.row !== wasRow
-    ? 0
-    : config.subAnchor > 0 ? config.subAnchor : wasOffset;
+  if (stepped > 0) {
+    const added = screenBack(content, stepped, top);
 
-  // ...until the rows piling up above push it off the bottom
-  dropAnchorPastBottom(content[config.row]);
-  return moved;
+    // the table holds sc_height entries; what the prepends push past
+    // the bottom is simply gone (position.c)
+    config.screen = [...added, ...config.screen]
+      .slice(0, Math.max(config.window - 1, 1));
+  }
+
+  return left;
 }
 
 function lineBackwardFrom(

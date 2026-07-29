@@ -360,6 +360,7 @@ export async function contentPager(
       config.subRow = subRowOfIndex(top, offset);
       config.subShift = offset - subRowStart(top, config.subRow);
       config.subAnchor = 0;
+      config.screen = [];
 
       // a source engine owns the top's sub-row and writes config.subRow
       // back from it, so the carry has to land on both - exactly as the
@@ -762,6 +763,7 @@ const acts: Record<Actions, () => void> = {
   DROP_INPUT_REPAINT: () => {
     mode.INIT = false;
     config.subAnchor = 0;
+    config.screen = [];
     resetRender();
   },
   SEARCH_FORWARD: () => startSearch('/', bufferToNum(session.buffer) || 1),
@@ -2004,6 +2006,7 @@ function onResize(): void {
     config.subRow = sub;
     config.subShift = offset - subRowStart(top, sub);
     config.subAnchor = 0;
+    config.screen = [];
     pagerInput?.retopSubRow(sub);
   }
 
