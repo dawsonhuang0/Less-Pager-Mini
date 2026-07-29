@@ -68,6 +68,25 @@ export function lastRowStart(line: string): number {
   }
 }
 
+/**
+ * The next row's offset, or null when this row ends the line - one
+ * forw_line step, taken from wherever the row actually starts.
+ */
+export function nextRowOffset(line: string, offset: number): number | null {
+  if (chopLine() || config.col) return null;
+
+  const layout = getLayout(line);
+  const end = rowEndFrom(layout, offset);
+
+  return end < layout.chars.length && end > offset ? end : null;
+}
+
+/** The offset a given wrap sub-row begins at. */
+export function rowOffsetOf(line: string, subRow: number): number {
+  if (chopLine() || config.col) return 0;
+  return getLayout(line).rowStart[subRow] ?? 0;
+}
+
 /** The wrap sub-row an offset falls in, for the renderer's index. */
 export function subRowAt(line: string, offset: number): number {
   if (chopLine() || config.col) return 0;

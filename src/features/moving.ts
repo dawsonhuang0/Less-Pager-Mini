@@ -26,6 +26,8 @@ import {
   lastRowStart,
   topOffsetOf,
   setTopOffset,
+  nextRowOffset,
+  rowOffsetOf,
 } from "../lines/screenOps";
 
 import { INVERSE_ON } from "../state/constants";
@@ -235,7 +237,6 @@ export function lineForward(
 
   const maxRow = ignoreEOF ? content.length - 1 : config.endRow;
   const fromRow = config.row;
-  const fromSub = config.subRow;
 
   // forw walks the entries a backward move prepended before the grid
   // below resumes: add_forw_pos drops table[0] each row (position.c)
@@ -245,38 +246,60 @@ export function lineForward(
     return;
   }
 
-  while (offset > 0 && config.row < maxRow) {
-    const currMaxSubRow = maxSubRow(content[config.row]);
+  // the same single rule as back(), forward: forw_line reads from
+  // wherever the row starts and the next row begins where it ended.
+  // Adding to a sub-row INDEX instead assumed every row on the line is
+  // the same width, which --wordwrap breaks and a top part-way into a
+  // row breaks again.
+  const fromOffset = topOffsetOf(content);
+  let row = config.row;
+  let at = fromOffset;
 
-    if (config.subRow + offset <= currMaxSubRow) {
-      config.subRow += offset;
-      break;
+  while (offset > 0 && row < maxRow) {
+    const next = nextRowOffset(content[row] ?? '', at);
+
+    if (next !== null) {
+      at = next;
+    } else {
+      row++;
+      at = 0;
     }
 
-    offset -= currMaxSubRow - config.subRow + 1;
-
-    config.row++;
-    config.subRow = 0;
+    offset--;
   }
 
-  if (config.row === maxRow) {
-    const cap = ignoreEOF ? maxSubRow(content[config.row]) : config.endSubRow;
-    const want = config.subRow + offset;
+  if (row === maxRow && offset > 0) {
+    const line = content[row] ?? '';
+    const capAt = ignoreEOF
+      ? lastRowStart(line)
+      : rowOffsetOf(line, config.endSubRow);
 
-    config.subRow = Math.min(want, cap);
+    let moved = 0;
+
+    while (moved < offset && at < capAt) {
+      const next = nextRowOffset(line, at);
+      if (next === null) break;
+      at = next;
+      moved++;
+    }
+
+    // a shifted row can step OVER the anchor; the last screenful is
+    // still where it is
+    if (at > capAt) at = capAt;
 
     // clamped short of the request: the forw read hit EOI — or
     // blocks for the missing lines when the pipe still delivers
-    if (want > cap && !streamingWait(want - cap,
-        config.row !== fromRow || config.subRow !== fromSub)) {
+    if (moved < offset && !streamingWait(offset - moved,
+        row !== fromRow || at !== fromOffset)) {
       revealPipeEnd();
     }
   }
 
+  setTopOffset(content, row, at);
+
   // og's forw unsquishes when it actually paints (a forced advance
   // fills the screen with null-line tildes); clamped bells keep it
-  if (mode.INIT &&
-      (config.row !== fromRow || config.subRow !== fromSub)) {
+  if (mode.INIT && (row !== fromRow || at !== fromOffset)) {
     mode.INIT = false;
   }
 

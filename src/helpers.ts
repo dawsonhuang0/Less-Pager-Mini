@@ -49,7 +49,9 @@ import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
 
 import { follow } from './features/follow';
 
-import { brackets, marks, markAtRow, shiftRowLoss } from './features/jumping';
+import { brackets, marks, markAtRow } from './features/jumping';
+
+import { rowStartBelow, lastRowStart, subRowAt } from './lines/screenOps';
 
 import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
   sizeIsKnown }
@@ -1801,28 +1803,31 @@ export function getLastRow(content: string[]): {
   lastRow: number,
   lastSubRow: number
 } {
-  let lastRow = content.length - 1;
-  let rows = 0;
+  // og's jump_forw puts the file's LAST LINE on the bottom screen line
+  // and lets jump_loc fill upward from there (jump.c:62), so the anchor
+  // is a back_line walk, not a sum. Counting whole-line rows instead
+  // needed a correction whenever the walk reached a top that sits
+  // part-way into a row, since such a line paints fewer rows than its
+  // boundary grid holds; a walk simply steps and never miscounts.
+  let row = Math.max(content.length - 1, 0);
+  let at = lastRowStart(content[row] ?? '');
+  let steps = config.window - 2;
 
-  while (lastRow >= 0) {
-    const remaining = config.window - rows - 1;
-
-    // the shifted top paints one row fewer than the boundary grid
-    // counts, and the last screenful has to end that row earlier
-    const currSubRows = maxSubRow(content[lastRow]) + 1 -
-      (lastRow === config.row
-        ? shiftRowLoss(content[lastRow], config.subRow)
-        : 0);
-
-    if (currSubRows >= remaining) {
-      return { lastRow, lastSubRow: currSubRows - remaining };
+  while (steps > 0) {
+    if (at > 0) {
+      at = rowStartBelow(content[row] ?? '', at);
+      steps--;
+      continue;
     }
 
-    rows += currSubRows;
-    lastRow--;
+    if (row <= 0) break;
+
+    row--;
+    at = lastRowStart(content[row] ?? '');
+    steps--;
   }
 
-  return { lastRow: 0, lastSubRow: 0 };
+  return { lastRow: row, lastSubRow: subRowAt(content[row] ?? '', at) };
 }
 
 /**

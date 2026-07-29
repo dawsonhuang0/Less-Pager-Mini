@@ -351,30 +351,6 @@ export function posRehead(): void {
   hook.reheadSource?.();
 }
 
-/**
- * Rows the top's shift costs its own line: 0 or 1.
- *
- * og's screen is a list of byte positions, so a top left mid-boundary
- * by a width change puts every row of that line at boundary + shift -
- * and the last of them can fall past the line's end, leaving the line
- * one row shorter than the boundary grid says. og never counts this:
- * forward() only asks whether position(BOTTOM_PLUS_ONE) exists
- * (forwback.c:481), and its table already follows the shifted grid.
- * Ours counts rows, so the last screenful came out one row too far
- * and a plain forward move walked straight past og's eof bell into a
- * tilde row.
- */
-export function shiftRowLoss(line: string | undefined, subRow: number): number {
-  if (line === undefined || config.subShift <= 0 || chopLine()) return 0;
-
-  const from = subRowStart(line, subRow) + config.subShift;
-  if (from >= line.length) return 0;
-
-  const painted = maxSubRow(line.slice(from)) + 1;
-
-  return Math.max((maxSubRow(line) + 1 - subRow) - painted, 0);
-}
-
 export function subRowStart(line: string, subRow: number): number {
   if (subRow === 0) return 0;
 

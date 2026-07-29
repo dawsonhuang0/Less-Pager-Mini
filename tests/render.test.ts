@@ -10,7 +10,7 @@ import { files, initFiles } from '../src/features/files';
 
 import { detectedDimensions } from '../src/tty/screen';
 
-import { subRowStart, shiftRowLoss } from '../src/features/jumping';
+import { subRowStart } from '../src/features/jumping';
 
 import { calculateEOF } from '../src/helpers';
 
@@ -411,31 +411,30 @@ describe('a width change keeps the top on the same text', () => {
     expect(rows[1]).toBe(long.slice(w + 30, w + 30 + w));
   });
 
-  it('ends the last screenful a row early when the top is shifted', () => {
-    // a shifted top puts every row of its line at boundary + shift, so
-    // the last one can fall past the line's end and the line paints one
-    // row FEWER than the boundary grid counts. og never counts: forward()
-    // asks whether position(BOTTOM_PLUS_ONE) exists (forwback.c:481) and
-    // its table already follows the shifted grid. Counting the absolute
-    // grid walked one row past og's eof bell, onto a tilde row.
+  it('anchors the last screenful from the file end, not from the top', () => {
+    // og's jump_forw puts the file's LAST LINE on the bottom screen
+    // line and lets jump_loc fill upward (jump.c:62), so the anchor is
+    // a back_line walk from the end - it never consults where the
+    // screen currently starts. We used to COUNT each line's rows and
+    // then correct the count whenever the walk reached a top sitting
+    // part-way into a row; walking steps instead, so there is nothing
+    // to correct and the answer cannot depend on the top at all.
     const w = config.screenWidth;
     const line = 'x'.repeat(w * 40 + 20);   // last row is 20 wide
 
     config.row = 0;
     config.subRow = 0;
 
-    // the shift pushes that 20-wide tail off the end: 40 rows, not 41
-    config.subShift = 30;
-    expect(shiftRowLoss(line, 0)).toBe(1);
-
-    calculateEOF([line]);
-    const shifted = config.endSubRow;
-
     config.subShift = 0;
-    expect(shiftRowLoss(line, 0)).toBe(0);
-
     calculateEOF([line]);
-    expect(shifted).toBe(config.endSubRow - 1);
+    const plain = config.endSubRow;
+
+    config.subShift = 30;
+    calculateEOF([line]);
+
+    expect(config.endSubRow).toBe(plain);
+    // window-2 rows back from the line's last row
+    expect(plain).toBe(40 - (config.window - 2));
   });
 
   it('drops the partial row once it passes the last line', () => {
