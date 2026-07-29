@@ -4,6 +4,8 @@ import { config } from '../state/config';
 
 import { getLayout } from '../lines/lineLayout';
 
+import { sourceLine, sourceIndexAt } from '../lines/helpers';
+
 import { hook, recalculateEOF } from './shared';
 
 export const chopLongLines: OptionSpec = {
@@ -21,14 +23,30 @@ export const chopLongLines: OptionSpec = {
       // screen keeps showing the same text, now scrolled sideways
       // instead of wrapped. A top already at a line start changes
       // nothing - pos_rehead returns early and hshift survives.
-      if (config.subRow > 0) {
+      if (config.subRow > 0 || config.subShift > 0) {
         const line = content[config.row];
 
         if (line !== undefined) {
-          config.col = getLayout(line).rowStart[config.subRow] ?? config.col;
+          // og's pos_rehead(TRUE) sets hshift = pos_shift(linepos,
+          // tpos - linepos), and pos_shift counts the characters
+          // between the line's start and the top AFTER cvt_text
+          // (position.c:271) - which folds backspaces and CR but does
+          // NOT expand tabs. So the shift counts RAW characters, not
+          // the columns they occupy: a tab is one, however wide it
+          // draws. Measuring the display line instead shifted a
+          // tab-indented file far too far.
+          const shown = (getLayout(line).rowStart[config.subRow] ?? 0) +
+            config.subShift;
+          const raw = sourceLine(line);
+
+          config.col = raw === undefined
+            ? shown
+            : sourceIndexAt(raw, shown);
         }
 
         config.subRow = 0;
+        config.subShift = 0;
+        config.screen = [];
       }
 
       config.chopLongLines = Boolean(value);
