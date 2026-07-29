@@ -2002,6 +2002,16 @@ function onResize(): void {
   calculateDimensions();
   pagerInput?.rebuild();
 
+  // og's pos_init keeps exactly ONE entry across a resize - the top,
+  // at its screen line - and pos_clears the rest (position.c:100), so
+  // every other row regenerates at the new width. Ours must drop them
+  // whatever the top's offset: their ends were measured at the OLD
+  // width, and a stale end started the row below in the wrong place.
+  if (config.screenWidth !== before) {
+    config.screen = [];
+    pagerInput?.posClear?.();
+  }
+
   // after the rebuild: a source engine owns the top's sub-row and its
   // materialization writes config.subRow back from it, so the carry
   // has to land on both or the rebuild undoes it
@@ -2010,8 +2020,6 @@ function onResize(): void {
 
     config.subRow = sub;
     config.subShift = offset - subRowStart(top, sub);
-    config.screen = [];
-    pagerInput?.posClear?.();
     pagerInput?.retopSubRow(sub);
   }
 
