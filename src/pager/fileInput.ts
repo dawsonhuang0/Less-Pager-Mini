@@ -1119,6 +1119,14 @@ export class FileInput implements PagerInput {
   }
 
   private forward(rows: number, clampAtLastScreen: boolean): void {
+    // og's forward() opens with `if (past_eof) force = TRUE`
+    // (forwback.c:479), so --past-eof turns EVERY forward move into a
+    // forced one and the last-screenful clamp simply does not apply.
+    // backwardFrom already did this for its own direction; forward
+    // never consulted the option at all, so --past-eof stopped dead
+    // at the last screenful instead of running on past it.
+    if (optPastEof()) clampAtLastScreen = false;
+
     // scrolling forward consumes blank rows padded above BOF first,
     // like the array session's lineForward blankTop branch
     let want = rows;
