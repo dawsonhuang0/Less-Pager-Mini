@@ -4,7 +4,7 @@ import { config } from '../state/config';
 
 import { isAscii, splitChars } from './helpers';
 
-import { optWordwrap } from '../options';
+import { optWordwrap, optCtldisp } from '../options';
 
 import { STYLE_REGEX_G, STYLE_RESET } from '../state/constants';
 
@@ -243,6 +243,13 @@ const isSpace = (char: string): boolean => char === ' ' || char === '\t';
  */
 export function rowEndFrom(layout: LineLayout, from: number): number {
   const { chars, widths } = layout;
+
+  // og's fits_on_screen answers TRUE for everything under -r: "We're
+  // not counting" (line.c:842). The whole line is then ONE screen row,
+  // however wide, and the terminal wraps it - which is exactly what
+  // the manual warns about -r splitting lines in the wrong place.
+  if (optCtldisp() === 1) return chars.length;
+
   const width = config.screenWidth;
   const wordwrap = optWordwrap();
 
@@ -307,7 +314,8 @@ export function emitRange(
       k++;
     }
 
-    if (width + widths[c] > config.screenWidth) break;
+    // the same "not counting" rule: -r draws the whole row
+    if (optCtldisp() !== 1 && width + widths[c] > config.screenWidth) break;
 
     parts.push(chars[c]);
     width += widths[c];

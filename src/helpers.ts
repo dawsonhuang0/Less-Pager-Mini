@@ -22,6 +22,7 @@ import {
   optTildes,
   displayPrType,
   optLinenums,
+  optCtldisp,
   optLinenumWidth,
   optStatusCol,
   optStatusColWidth,
@@ -1116,6 +1117,10 @@ function tailClear(row: string): string {
  * place, which is why our output has always matched.)
  */
 function rowEnd(row: string): string {
+  // og ends every -r row with a newline: pdone's first branch takes
+  // "ctldisp == OPT_ON" (line.c:1523), because nothing was counted and
+  // it cannot know whether the row reached the edge
+  if (optCtldisp() === 1) return '\n';
   if (!filledRow(row)) return '\n';
   if (!AUTO_WRAP) return '\n';
   return DEFER_WRAP ? ' \b' : '';
