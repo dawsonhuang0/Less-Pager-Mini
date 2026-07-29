@@ -231,6 +231,97 @@ function applyStyleCode(active: string[], code: string): boolean {
 const isSpace = (char: string): boolean => char === ' ' || char === '\t';
 
 /**
+ * Where the screen row that begins at `from` ends - one step of
+ * buildRowStarts, taken from an arbitrary character rather than from a
+ * boundary.
+ *
+ * og's forw_line reads from wherever table[TOP] points and stops when
+ * the line no longer fits, so a row's extent depends on where it
+ * STARTS. Under a plain width that is just from + width, but
+ * --wordwrap breaks at spaces, so the answer cannot be translated from
+ * the boundary grid - it has to be walked.
+ */
+export function rowEndFrom(layout: LineLayout, from: number): number {
+  const { chars, widths } = layout;
+  const width = config.screenWidth;
+  const wordwrap = optWordwrap();
+
+  let len = 0;
+  let wrapAt = -1;
+  let seenNonSpace = false;
+  let c = from;
+
+  while (c < chars.length) {
+    if (len > 0 && len + widths[c] > width) {
+      if (wordwrap && isSpace(chars[c])) {
+        // the space itself no longer fits: swallow the run
+        let next = c;
+        while (next < chars.length && isSpace(chars[next])) next++;
+        return next;
+      }
+
+      return wordwrap && wrapAt > from ? wrapAt : c;
+    }
+
+    if (isSpace(chars[c])) {
+      if (seenNonSpace) wrapAt = c + 1;
+    } else {
+      seenNonSpace = true;
+    }
+
+    len += widths[c];
+    c++;
+  }
+
+  return chars.length;
+}
+
+/**
+ * The drawn text of the characters in [from, to), with the style in
+ * force at `from` reopened so the row stands alone like og's (og
+ * re-emits attributes per row through at_switch).
+ *
+ * A space run --wordwrap swallowed at the break is inside the range
+ * but past the screen edge, so the width guard still drops it.
+ */
+export function emitRange(
+  layout: LineLayout,
+  from: number,
+  to: number
+): string {
+  const { chars, widths, codeIdx, codes } = layout;
+  const active: string[] = [];
+  let k = 0;
+
+  while (k < codeIdx.length && codeIdx[k] <= from) {
+    applyStyleCode(active, codes[k]);
+    k++;
+  }
+
+  const parts: string[] = [...active];
+  let width = 0;
+
+  for (let c = from; c < to; c++) {
+    while (k < codeIdx.length && codeIdx[k] <= c) {
+      parts.push(codes[k]);
+      k++;
+    }
+
+    if (width + widths[c] > config.screenWidth) break;
+
+    parts.push(chars[c]);
+    width += widths[c];
+  }
+
+  while (k < codeIdx.length && codeIdx[k] <= to) {
+    parts.push(codes[k]);
+    k++;
+  }
+
+  return parts.join('');
+}
+
+/**
  * Computes the sub-row boundaries: fixed width normally; --wordwrap
  * breaks after the last space run, like less's forw_line_seg, where an
  * overflowing space run is swallowed and a single long word still
