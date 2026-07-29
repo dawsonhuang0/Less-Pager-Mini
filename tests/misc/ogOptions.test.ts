@@ -323,6 +323,35 @@ describe('--wordwrap', () => {
     expect(lines[1]).toBe('cccc dd');
   });
 
+  it('keeps the screen on the same text when toggled', () => {
+    // og's --wordwrap is O_BOOL|O_REPAINT with no ofunc at all
+    // (opttbl.c:754), so it never touches table[TOP]: the screen keeps
+    // its byte and forw_line re-wraps from there. Ours indexes wrap
+    // BOUNDARIES and this option reshapes them, so the offset has to
+    // be carried across. Resetting the sub-row threw the screen back
+    // to the line's start - and left a stale zero behind, so the NEXT
+    // option to carry the offset (-N moving the gutter) captured 0 and
+    // lost the place a second time.
+    const text = ['aaa bbbb cc ddddd ee fff gggg hh iii jj kkkk ll mmm'];
+    initContent(text);
+    config.chopLongLines = false;
+    config.screenWidth = 10;
+    config.row = 0;
+    config.subRow = 2;
+    config.subShift = 0;
+
+    const before = formatContent(text)[0];
+
+    toggle('--wordwrap\x0D');
+
+    // the top still shows the text it showed, re-wrapped at spaces
+    const after = formatContent(text)[0];
+    expect(after.startsWith(before.trimEnd().split(' ')[0])).toBe(true);
+
+    // and the sub-row is a real position again, not a reset to zero
+    expect(config.subRow).toBeGreaterThan(0);
+  });
+
   it('hard-breaks a single long word and swallows space runs', () => {
     const text = ['abcdefghijklmno', 'aaaaaaaaaa   bb'];
     initContent(text);
