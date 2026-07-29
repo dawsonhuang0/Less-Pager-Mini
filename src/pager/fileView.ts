@@ -144,7 +144,16 @@ export class BigView {
       const total = pos === shiftPos
         ? this.shiftedRowsOf(line.text, shiftSub)
         : this.rowsOf(line.text);
-      let s = sub;
+
+      // A sub-row past the line's last one means something reshaped
+      // the wrapping under the top - an option that changes what a
+      // line displays, and so how it breaks. og cannot be in this
+      // state at all: table[TOP] is a BYTE and forw_line reads from
+      // it, so there is no index to go stale. Ours can, and emitting
+      // nothing here handed sync() an empty screen and buried the
+      // real fault; the byte is still inside the line, so read from
+      // its last row.
+      let s = Math.min(sub, Math.max(total - 1, 0));
 
       for (; s < total && rows.length < count; s++) {
         rows.push({ text: line.text, pos, subRow: s });
