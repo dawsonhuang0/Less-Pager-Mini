@@ -17,7 +17,7 @@ import {
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
-import { subRowStart, posRehead } from "./jumping";
+import { posRehead } from "./jumping";
 
 import {
   screenBack,
@@ -295,7 +295,7 @@ export function lineForward(
     }
   }
 
-  setTopOffset(content, row, at);
+  setTopOffset(content[row] ?? '', row, at);
 
   // og's forw unsquishes when it actually paints (a forced advance
   // fills the screen with null-line tildes); clamped bells keep it
@@ -328,12 +328,9 @@ export function lineBackward(
   // on top ("if (new_pos >= curr_pos) break", input.c), so the row it
   // exposes is bounded by the old screen while the rows below keep the
   // extents they already had. Prepending those entries IS that.
-  const from = content[config.row];
   const top = {
     row: config.row,
-    offset: from === undefined
-      ? 0
-      : subRowStart(from, config.subRow) + config.subShift,
+    offset: topOffsetOf(content),
     end: 0,
   };
 
@@ -453,7 +450,7 @@ function lineBackwardFrom(
     }
   }
 
-  setTopOffset(content, row, at);
+  setTopOffset(content[row] ?? '', row, at);
 
   if (
     mode.EOF && (

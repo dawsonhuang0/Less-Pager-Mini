@@ -105,9 +105,7 @@ export function subRowAt(line: string, offset: number): number {
  * this function may set the two halves independently, or they can
  * disagree about where the screen starts.
  */
-export function setTopOffset(content: string[], row: number, at: number): void {
-  const line = content[row] ?? '';
-
+export function setTopOffset(line: string, row: number, at: number): void {
   config.row = row;
   config.subRow = subRowAt(line, at);
   config.subShift = at - (getLayout(line).rowStart[config.subRow] ?? 0);

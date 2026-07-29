@@ -127,12 +127,10 @@ import {
   jumpToMark,
   jumpToUserMark,
   adoptFileMarks,
-  subRowStart,
-  subRowOfIndex,
   posRehead
 } from "../features/jumping";
 
-import { topOffsetOf } from "../lines/screenOps";
+import { topOffsetOf, setTopOffset } from "../lines/screenOps";
 
 import {
   files,
@@ -355,12 +353,14 @@ export async function contentPager(
 
     if (top === undefined) return () => {};
 
-    const offset = subRowStart(top, config.subRow) + config.subShift;
+    // DISPLAY-CHARACTER space, the space the layout's rowStart indexes
+    // and the only one config.subShift is ever read in. subRowStart()
+    // answers in STRING indices, which differ on any styled line.
+    const offset = topOffsetOf(content);
 
     return () => {
       if (offset <= 0) return;
-      config.subRow = subRowOfIndex(top, offset);
-      config.subShift = offset - subRowStart(top, config.subRow);
+      setTopOffset(top, config.row, offset);
       config.screen = [];
     pagerInput?.posClear?.();
 
@@ -368,7 +368,7 @@ export async function contentPager(
       // it, so the carry has to reach the engine or the next sync puts
       // the old boundary straight back - and the next forward move
       // steps by the OLD row width.
-      pagerInput?.retopOffset(topOffsetOf(session.content));
+      pagerInput?.retopOffset(offset);
     };
   };
 
@@ -1996,9 +1996,7 @@ function onResize(): void {
   // the shift.
   const top = session.content[config.row];
   const before = config.screenWidth;
-  const offset = top === undefined
-    ? -1
-    : subRowStart(top, config.subRow) + config.subShift;
+  const offset = top === undefined ? -1 : topOffsetOf(session.content);
 
   calculateDimensions();
   pagerInput?.rebuild();
@@ -2017,11 +2015,8 @@ function onResize(): void {
   // materialization writes config.subRow back from it, so the carry
   // has to land on both or the rebuild undoes it
   if (offset > 0 && top !== undefined && config.screenWidth !== before) {
-    const sub = subRowOfIndex(top, offset);
-
-    config.subRow = sub;
-    config.subShift = offset - subRowStart(top, sub);
-    pagerInput?.retopOffset(topOffsetOf(session.content));
+    setTopOffset(top, config.row, offset);
+    pagerInput?.retopOffset(offset);
   }
 
   calculateEOF(session.content);
