@@ -211,19 +211,31 @@ export class BigView {
     return end;
   }
 
+  /**
+   * og's position(BOTTOM_PLUS_ONE): whether a row exists just past the
+   * screen's bottom. forward() bells when it does not (forwback.c:481)
+   * and forw() stops as soon as a read hits EOF unless the move is
+   * forced (bc798f8 cut that test down to `ABORT_SIGS() || !force`).
+   *
+   * That question is asked on the CURRENT top's own grid. An anchor
+   * walked back from the file's END instead answers on the absolute
+   * grid, and from a top part-way into a row the two disagree by one
+   * row - which is exactly how far past og's eof bell we used to go.
+   */
+  private hasRowPastBottom(window: number): boolean {
+    const at = this.screenPos(window - 1);
+    return at !== null && at.pos < this.bf.size;
+  }
+
   /** Scrolls forward n display rows, like forw(): a plain move
-   *  clamps at the last screenful (og's eof bell spot); a FORCED
-   *  move (J, ESC-SPACE) passes window as undefined and runs on
+   *  stops once the bottom row ends the file (og's eof bell spot); a
+   *  FORCED move (J, ESC-SPACE) passes window as undefined and runs on
    *  until the last line reaches the top, like og's force=TRUE. */
   lineForward(n: number, window?: number): number {
-    const end = window !== undefined ? this.endTop(window) : null;
     let moved = 0;
 
     while (moved < n) {
-      if (end && (this.top.pos > end.pos ||
-          (this.top.pos === end.pos && this.top.offset >= end.offset))) {
-        break;
-      }
+      if (window !== undefined && !this.hasRowPastBottom(window)) break;
 
       const line = forwLine(this.bf, this.top.pos);
       if (!line) break;
