@@ -54,3 +54,31 @@ lesskey program (N/A) · `f168cf1`/`ba58a22`/`b9974c8`/`102e2a2`/`fe404e9`/
 | F28 | `53e13d3` [3025] | Opening an OSC 8 link must NOT clear the selection: lsystem → reedit_ifile → undo_osc8 wipes it, so save and restore around the call. | ? |
 | F29 | `e0d51f0` [3024] | `%O` expands to the shell-escaped URI of the selected link. | **N/A — SUPERSEDED** by `3e11cb4`, which deletes `case 'O'` from protochar when handlers stopped being prompt-expanded. `%O` does NOT exist at HEAD; not having it is correct. |
 | F30 | `e5e52da` [3020] | The numeric argument to `m` and `M` changed meaning: it is now the FILE line number, not the screen line number (#736). | **OK** `jumping.ts:702-725` resolves `lineNum` through `linePosition()` and sets `row: lineNum - 1`, with og's "Cannot find line number N" error when it does not resolve. |
+
+## From commits 2951-3014 (v704..v705 era)
+
+| # | commit | what the message claims | status |
+|---|---|---|---|
+| F31 | `2f65ad0` [3002] | Changing `-i` while `&` filtering must not start highlighting every match of the FILTER pattern (#750). | ? |
+| F32 | `43957b9` [3001] | The long prompt must reserve a column for the `&` indicator, or it wraps onto a second line (#749). | ? |
+| F33 | `033c1f2`+`1f282c3`+`e34a2f4`+`2a1d0f6`+`e650b25` [2963-2993] | `--hilite-target` and its refinements: no highlight while squished; a spurious space carries it on an empty line; underline by default and in BOTH color modes; `-DJ` may drop the underline; with `-N` do not highlight the line-number field. | **PARTIAL** the option exists (`options/hilite-target.ts`, `helpers.ts:273-310`); the five refinements above are each unverified. |
+| F34 | `2dabc11` [2992] | `--status-line` highlighting extends to the RIGHT COLUMN, not one char short. | ? |
+| F35 | `d6204d4` [2989] | OSC 8 opener: `-` prefix suppresses echoing the command, `^P` prefix suppresses the "link done" message. | **OK** ours matches og twice over: `handler === '-'` falls back to `_ANY` exactly like `strcmp(handler,"-")==0` (search.c:1964), `\x10` sets `done = null` like `CONTROL('P')` (search.c:1973), and the "No handler for ... link type" text agrees. |
+| F36 | `a470d32` [2986] | `ESC-m` clrmark must clear the FILE mark table too, or `--save-marks` writes the cleared mark back to the history file. | ? |
+| F37 | `3f07484` [2985] | `restore_marks()` must NOT clip the mark line to screen size — it runs before `sc_height` is known; `gomark`/`jump_loc` clip later. | ? |
+| F38 | `640adf1` [2982] | Forced BACKWARD scrolling stops when the first file line reaches the screen BOTTOM, mirroring forced forward stopping at the top. | ? |
+| F39 | `feb6a00` [2976] | No unintentional file wrap when force-scrolling with `-c`. | ? |
+| F40 | `1a5f5e6` [2975] | Forced forward scrolling must stop when the LAST file line reaches the TOP; the old check was wrong. | ? |
+| F41 | `778e1515` [2973] | `pos_rehead()` takes a flag: adjusting `hshift` is WRONG when the rehead is caused by a horizontal shift, or the shift jumps unexpectedly. | ? |
+| F42 | `a8b1c3b` [2971] | Horizontal DRAG forces `-S`, the same hack as horizontal wheel scrolling, to stop `pos_rehead` jumping the shift. | ? |
+| F43 | `82d1141` [2961] | `less -fM .` (a directory) must not print `lines 1--1/?`: a position of 0 was entered in the table though no line was displayed. | ? |
+| F44 | `23f8672` [2952] | A tags-file line number of 0 is INVALID and the tag is skipped, not dereferenced as a pattern (segfault). | **OK** `tags.ts:206` `if (!linenum) continue;` is og's `if (n == 0) continue;`. |
+| F45 | `6c4a43b` [2951] | Read-error messages are DEFERRED to the next prompt instead of rate-limited by a 4s timer; also fixes the `&` prefix vanishing when such a message shows. | ? |
+
+### Adjudicated without a flag
+`3225c2a` cmd_exec before ESC-u/ESC-U/m/ESC-m (folds into F26's `+`-option
+family) · `d32b563`/`7fc61d9`/`2f228d3`/`f98933b` C portability, N/A ·
+`3008` last-cell-of-last-line avoidance — we never address that cell ·
+`3007` `--end-prompt` present · `2968` `--emouse` present · `2958` cmd.h
+constant numbering, N/A · `2970`/`2969` cursor-addressing and padding
+details of --hilite-target, folded into F33.
