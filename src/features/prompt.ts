@@ -15,6 +15,8 @@ import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
 
 import { ntags, currTag } from "./tags";
 
+import { selectedOsc8 } from "./osc8";
+
 import { lgetenv } from '../startup/environment';
 
 import { session } from '../state/session';
@@ -232,8 +234,12 @@ function cond(content: string[], out: string, char: string): boolean {
       // tag jumps switch files
       return ntags() > 0 || files.newFile;
 
-    // OSC 8 links are not supported
-    case 'O': return false;
+    // og's ?O: "OSC 8 link selected?" - `osc8_linepos != NULL_POSITION`
+    // (prompt.c:246, documented at less.nro.VER:2868). Note the
+    // neighbouring %O EXPANSION does not exist at HEAD: e0d51f0 added
+    // it and 3e11cb4 removed it again when the handler stopped being
+    // prompt-expanded, so only the condition survives.
+    case 'O': return selectedOsc8() !== null;
 
     case 'P': return optLinenums() > 0 && content.length > 0;
 
