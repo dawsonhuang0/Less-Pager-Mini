@@ -7,20 +7,29 @@ import { chopLine } from '../options';
 
 import { transformContent } from '../lines/helpers';
 
-import { getLayout } from '../lines/lineLayout';
+import { getLayout, rowEndFrom, LineLayout } from '../lines/lineLayout';
 
 /**
  * The visible-screen model for file-backed sessions, ported from
- * og's position.c + forwback.c: the view is a byte position at the
- * top of the screen (plus a wrap sub-row), and movement walks lines
- * from there — no global line index exists.
+ * og's position.c + forwback.c: the view is a position INSIDE the
+ * file where the screen starts, and movement walks rows from there —
+ * no global line index exists.
  */
 
 export interface ViewTop {
   /** Line-start byte position of the top line. */
   pos: number;
-  /** Wrap sub-row within that line (0 in chop mode). */
-  subRow: number;
+  /**
+   * Where in that line the screen starts, as a display-character
+   * offset — the same space the layout's rowStart indexes.
+   *
+   * og's table[TOP] is a BYTE and forw_line wraps from THERE, so the
+   * top is a PLACE in the line, never an index into a wrapping that
+   * something else may recompute differently. A sub-row index goes
+   * stale the moment an option reshapes how the line breaks (-r, -S,
+   * --wordwrap, a width change); a place cannot.
+   */
+  offset: number;
 }
 
 /** A line's display text: the normal content transform per line. */
@@ -30,7 +39,12 @@ export function displayText(raw: string): string {
 
 export class BigView {
   readonly bf: BlockFile;
-  private current: ViewTop = { pos: 0, subRow: 0 };
+  /**
+   * Where the screen starts. A jump names its own offset (0, or the
+   * row it means); a scroll walks it. There is no shift to keep or
+   * drop on the side, so the two cannot disagree.
+   */
+  top: ViewTop = { pos: 0, offset: 0 };
   /** True once the view shows the last line's end, like mode.EOF. */
   atEof = false;
 
@@ -38,137 +52,151 @@ export class BigView {
     this.bf = bf;
   }
 
-  get top(): ViewTop {
-    return this.current;
+  private layoutOf(text: string): LineLayout {
+    return getLayout(displayText(text));
+  }
+
+  /** Display-character length of a line, its one past-the-end offset. */
+  lineLength(text: string): number {
+    return this.layoutOf(text).chars.length;
   }
 
   /**
-   * Re-homes the screen, dropping the top's shift.
+   * Where the row starting at `offset` ends, like forw_line reading
+   * from table[TOP]: whatever fits from THAT place. A result at or
+   * past the line's length means the line is finished.
    *
-   * Replacing the whole top is a JUMP: every one of them walks the
-   * file for a fresh position, and those walks - back_line, find_pos -
-   * only ever land on a row start of the ABSOLUTE grid. jump_forw is
-   * explicit: back_line from the end, then jump_loc (jump.c:62).
-   * Scrolling instead nudges subRow in place and keeps the shift,
-   * which is exactly the asymmetry og shows.
-   *
-   * A repaint is NOT a jump: it re-jumps to the byte the screen
-   * already starts at (jump.c:131), shift and all - which is why
-   * markPosClear leaves the shift alone and only this drops it.
+   * Chopped lines are one row however long they are, so the answer is
+   * always the whole line - og's fits_on_screen never gets asked.
    */
-  set top(next: ViewTop) {
-    config.subShift = 0;
-    this.current = next;
+  rowEnd(text: string, offset: number): number {
+    const layout = this.layoutOf(text);
+    if (chopLine() || config.col) return layout.chars.length;
+    return rowEndFrom(layout, offset);
+  }
+
+  /**
+   * The next row's offset, or null when this row ends the line.
+   */
+  nextRowOffset(text: string, offset: number): number | null {
+    const end = this.rowEnd(text, offset);
+    return end < this.lineLength(text) && end > offset ? end : null;
+  }
+
+  /**
+   * og's back_line: it reads back to the LINE's start and re-wraps
+   * forward from there (input.c:358), landing on the greatest row
+   * start BELOW the position it was given. From a top part-way into a
+   * row that is the row's own start, so a top which is not on a
+   * boundary steps to the boundary it sits inside - one row, exactly
+   * like any other.
+   */
+  rowStartBelow(text: string, offset: number): number {
+    if (offset <= 0 || chopLine() || config.col) return 0;
+
+    const layout = this.layoutOf(text);
+    let start = 0;
+    let next = rowEndFrom(layout, 0);
+
+    while (next < offset) {
+      const step = rowEndFrom(layout, next);
+      start = next;
+      if (step <= next) break;
+      next = step;
+    }
+
+    return start;
+  }
+
+  /** The offset of the line's last display row. */
+  lastRowStart(text: string): number {
+    if (chopLine() || config.col) return 0;
+
+    const layout = this.layoutOf(text);
+    const len = layout.chars.length;
+    let start = 0;
+
+    for (;;) {
+      const end = rowEndFrom(layout, start);
+      if (end >= len || end <= start) return start;
+      start = end;
+    }
+  }
+
+  /** The offset a given wrap sub-row begins at. */
+  rowOffset(text: string, subRow: number): number {
+    if (chopLine() || config.col) return 0;
+    return this.layoutOf(text).rowStart[subRow] ?? 0;
+  }
+
+  /** The wrap sub-row an offset falls in, for the renderer's index. */
+  subRowAt(text: string, offset: number): number {
+    if (chopLine() || config.col) return 0;
+
+    const starts = this.layoutOf(text).rowStart;
+    let sub = 0;
+    while (sub + 1 < starts.length && starts[sub + 1] <= offset) sub++;
+    return sub;
   }
 
   /** Display sub-rows a line occupies under the current mode. */
   rowsOf(text: string): number {
     if (chopLine() || config.col) return 1;
-    return getLayout(displayText(text)).rowStart.length;
-  }
-
-  /**
-   * The same, for the line the top's shift belongs to: its rows sit at
-   * boundary + shift, so the last one can fall past the line's end and
-   * the line paints one row fewer than the boundary grid counts. og
-   * reads its table instead of counting, so it never sees this.
-   */
-  shiftedRowsOf(text: string, subRow: number): number {
-    const total = this.rowsOf(text);
-    if (config.subShift <= 0 || chopLine() || config.col) return total;
-
-    const disp = displayText(text);
-    const from = (getLayout(disp).rowStart[subRow] ?? 0) + config.subShift;
-    if (from >= disp.length) return total;
-
-    return subRow + getLayout(disp.slice(from)).rowStart.length;
-  }
-
-  /**
-   * Advances a shifted top by one row, re-wrapping from its own byte.
-   *
-   * og's table[TOP] is a byte and forw_line wraps from THERE, so the
-   * row it produces is whatever fits starting at that byte. Under a
-   * fixed width that is the same as adding the shift to the next
-   * boundary - offset + width == (boundary + width) + shift - but
-   * --wordwrap breaks at spaces, so the rows are unequal and the two
-   * answers part company: the shifted grid has to be re-wrapped, not
-   * translated. Doing it by offset is right for both.
-   *
-   * Returns false when the line has no row left, so the caller moves
-   * on to the next line.
-   */
-  private advanceShifted(text: string): boolean {
-    const disp = displayText(text);
-    const starts = getLayout(disp).rowStart;
-    const from = (starts[this.current.subRow] ?? 0) + config.subShift;
-
-    if (from >= disp.length) return false;
-
-    const len = getLayout(disp.slice(from)).rowStart[1];
-    if (len === undefined) return false;
-
-    const next = from + len;
-
-    let sub = 0;
-    while (sub + 1 < starts.length && starts[sub + 1] <= next) sub++;
-
-    this.current.subRow = sub;
-    config.subShift = next - (starts[sub] ?? 0);
-    return true;
+    return this.layoutOf(text).rowStart.length;
   }
 
   /**
    * Materializes the visible screen, like og filling the position
-   * table: returns the raw line texts with their positions/sub-rows,
+   * table: returns the raw line texts with their positions/offsets,
    * exactly `count` display rows unless the file ends first.
    */
   visible(count: number): {
-    rows: { text: string, pos: number, subRow: number }[],
+    rows: { text: string, pos: number, subRow: number, offset: number }[],
     endPos: number,
   } {
-    const rows: { text: string, pos: number, subRow: number }[] = [];
+    const rows: { text: string, pos: number, subRow: number, offset: number }[]
+      = [];
     let pos = this.top.pos;
-    let sub = this.top.subRow;
+    let offset = this.top.offset;
     let endPos = pos;
     let more = false;
-
-    // the shift belongs to the line the top sits on, and nothing below
-    const shiftPos = this.top.pos;
-    const shiftSub = this.top.subRow;
 
     while (true) {
       const line = forwLine(this.bf, pos);
       if (!line) break;
 
-      const total = pos === shiftPos
-        ? this.shiftedRowsOf(line.text, shiftSub)
-        : this.rowsOf(line.text);
+      const len = this.lineLength(line.text);
+      // the top is a place in the line, so the only way past its end
+      // is content that shrank under it; read the last row instead of
+      // nothing, which used to hand sync() an empty screen
+      if (offset > len) offset = this.lastRowStart(line.text);
 
-      // A sub-row past the line's last one means something reshaped
-      // the wrapping under the top - an option that changes what a
-      // line displays, and so how it breaks. og cannot be in this
-      // state at all: table[TOP] is a BYTE and forw_line reads from
-      // it, so there is no index to go stale. Ours can, and emitting
-      // nothing here handed sync() an empty screen and buried the
-      // real fault; the byte is still inside the line, so read from
-      // its last row.
-      let s = Math.min(sub, Math.max(total - 1, 0));
+      let sub = this.subRowAt(line.text, offset);
+      let ended = false;
 
-      for (; s < total && rows.length < count; s++) {
-        rows.push({ text: line.text, pos, subRow: s });
+      while (rows.length < count) {
+        rows.push({ text: line.text, pos, subRow: sub, offset });
+
+        const end = this.rowEnd(line.text, offset);
+        if (end >= len || end <= offset) {
+          ended = true;
+          break;
+        }
+
+        offset = end;
+        sub++;
       }
 
       if (rows.length >= count) {
         // content past the bottom row means the end is not shown
-        more = s < total || line.next < this.bf.size;
+        more = !ended || line.next < this.bf.size;
         endPos = line.next;
         break;
       }
 
       endPos = line.next;
       pos = line.next;
-      sub = 0;
+      offset = 0;
     }
 
     this.atEof = !more;
@@ -182,7 +210,7 @@ export class BigView {
    */
   screenPos(k: number): ViewTop | null {
     let pos = this.top.pos;
-    let sub = this.top.subRow;
+    let offset = this.top.offset;
 
     for (let i = 0; i < k; i++) {
       if (pos >= this.bf.size) return null;
@@ -190,15 +218,17 @@ export class BigView {
       const line = forwLine(this.bf, pos);
       if (!line) return null;
 
-      if (sub + 1 < this.rowsOf(line.text)) {
-        sub++;
+      const next = this.nextRowOffset(line.text, offset);
+
+      if (next !== null) {
+        offset = next;
       } else {
         pos = line.next;
-        sub = 0;
+        offset = 0;
       }
     }
 
-    return { pos, subRow: sub };
+    return { pos, offset };
   }
 
   /**
@@ -206,15 +236,11 @@ export class BigView {
    * anchor: plain forward moves never pass it (forward() finds
    * nothing to read past the eof and rings the bell instead).
    */
-  endTop(window: number): { pos: number, subRow: number } {
+  endTop(window: number): ViewTop {
     const saved = this.top;
-    const savedShift = config.subShift;
     this.gotoEnd(window);
     const end = this.top;
     this.top = saved;
-    // a probe, not a move: gotoEnd re-homes the top like og's
-    // jump_forw, and the caller's own shift must outlive that
-    config.subShift = savedShift;
     return end;
   }
 
@@ -226,41 +252,21 @@ export class BigView {
     const end = window !== undefined ? this.endTop(window) : null;
     let moved = 0;
 
-    // the shift belongs to the line the top starts on; walking off it
-    // leaves the boundary grid
-    const shiftPos = this.top.pos;
-    const shiftSub = this.top.subRow;
-
     while (moved < n) {
       if (end && (this.top.pos > end.pos ||
-          (this.top.pos === end.pos && this.top.subRow >= end.subRow))) {
+          (this.top.pos === end.pos && this.top.offset >= end.offset))) {
         break;
       }
 
       const line = forwLine(this.bf, this.top.pos);
       if (!line) break;
 
-      const shifted = config.subShift > 0 && this.top.pos === shiftPos;
-      const total = this.top.pos === shiftPos
-        ? this.shiftedRowsOf(line.text, shiftSub)
-        : this.rowsOf(line.text);
+      const next = this.nextRowOffset(line.text, this.top.offset);
 
-      if (shifted) {
-        if (this.advanceShifted(line.text)) {
-          moved++;
-          continue;
-        }
-
-        if (line.next >= this.bf.size) break;
-        this.top = { pos: line.next, subRow: 0 };
-        moved++;
-        continue;
-      }
-
-      if (this.top.subRow + 1 < total) {
-        this.top.subRow++;
+      if (next !== null) {
+        this.top = { pos: this.top.pos, offset: next };
       } else if (line.next < this.bf.size) {
-        this.top = { pos: line.next, subRow: 0 };
+        this.top = { pos: line.next, offset: 0 };
       } else {
         break;
       }
@@ -276,15 +282,20 @@ export class BigView {
     let moved = 0;
 
     while (moved < n) {
-      if (this.top.subRow > 0) {
-        this.top.subRow--;
+      if (this.top.offset > 0) {
+        const line = forwLine(this.bf, this.top.pos);
+        const back = line
+          ? this.rowStartBelow(line.text, this.top.offset)
+          : 0;
+
+        this.top = { pos: this.top.pos, offset: back };
       } else {
         const prev = backLine(this.bf, this.top.pos);
         if (!prev) break;
 
         this.top = {
           pos: prev.start,
-          subRow: this.rowsOf(prev.text) - 1,
+          offset: this.lastRowStart(prev.text),
         };
       }
 
@@ -296,7 +307,7 @@ export class BigView {
 
   /** Jumps to the first line, like jump_back(1). */
   gotoStart(): void {
-    this.top = { pos: 0, subRow: 0 };
+    this.top = { pos: 0, offset: 0 };
   }
 
   /**
@@ -307,7 +318,7 @@ export class BigView {
     const last = lastLineStart(this.bf);
     const text = forwLine(this.bf, last)?.text ?? '';
 
-    this.top = { pos: last, subRow: this.rowsOf(text) - 1 };
+    this.top = { pos: last, offset: this.lastRowStart(text) };
     this.lineBackward(window - 2);
   }
 
@@ -325,13 +336,13 @@ export class BigView {
     );
 
     const nl = this.bf.findNewlineBack(pos, 1 << 16);
-    this.top = { pos: nl < 0 ? 0 : nl + 1, subRow: 0 };
+    this.top = { pos: nl < 0 ? 0 : nl + 1, offset: 0 };
   }
 
   /** Jumps to an absolute byte position's line, like jump_line_loc. */
   gotoPos(pos: number): void {
     const clamped = Math.max(0, Math.min(pos, this.bf.size));
     const nl = this.bf.findNewlineBack(clamped, 1 << 20);
-    this.top = { pos: nl < 0 ? 0 : nl + 1, subRow: 0 };
+    this.top = { pos: nl < 0 ? 0 : nl + 1, offset: 0 };
   }
 }

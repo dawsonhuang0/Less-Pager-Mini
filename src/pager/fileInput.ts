@@ -31,17 +31,15 @@ import { onSourceFollow } from '../features/follow';
 
 import { onSourceTagJump, Tag } from '../features/tags';
 
-import { screenAhead, topOffsetOf } from '../lines/screenOps';
+import { screenAhead } from '../lines/screenOps';
 
-import { getLayout } from '../lines/lineLayout';
+import { getLayout, stringIndexAt } from '../lines/lineLayout';
 
 import {
   Mark,
   onSourceMarks,
   recordLastPosition,
   subRowOfIndex,
-  subRowStart,
-  shiftRowLoss,
 } from '../features/jumping';
 
 import {
@@ -75,7 +73,7 @@ import {
   optRscroll,
 } from '../options';
 
-import { maxSubRow, setOsc8Display, transformContent }
+import { setOsc8Display, transformContent }
   from '../lines/helpers';
 
 import { CLEAR_LINE, INVERSE_OFF, INVERSE_ON } from '../state/constants';
@@ -84,7 +82,7 @@ import { PipeDecoder } from '../features/charset';
 
 import { BlockFile } from './blockFile';
 
-import { BigView, displayText } from './fileView';
+import { BigView, ViewTop, displayText } from './fileView';
 
 import { forwLine, backLine, MAX_LINE } from './fileLines';
 
@@ -109,8 +107,7 @@ export class FileInput implements PagerInput {
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
   private selectedOscStart = -1;
-  private incrementalOrigin:
-    { pos: number, subRow: number, shift: number } | null = null;
+  private incrementalOrigin: ViewTop | null = null;
   private headerRow = 0;
   private headerPos = 0;
   private pending: {
@@ -118,7 +115,7 @@ export class FileInput implements PagerInput {
     bf: BlockFile,
     lines: string[],
   } | null = null;
-  private readonly saved = new Map<string, { pos: number, subRow: number }>();
+  private readonly saved = new Map<string, ViewTop>();
   private activePath: string;
 
   // commands blocked at the provisional end of a still-growing spool,
@@ -515,7 +512,7 @@ export class FileInput implements PagerInput {
         } else {
           // og's osc8_jump is an unconditional jump_loc to the -j
           // line (search.c:2002), on-screen or not
-          this.view.top = { pos: this.selectedOscPos, subRow: 0 };
+          this.view.top = { pos: this.selectedOscPos, offset: 0 };
           this.view.lineBackward(jumpSindex());
           this.sync();
           this.seam = [];
@@ -548,8 +545,7 @@ export class FileInput implements PagerInput {
     this.lineScanAborted = false;
 
     if (request.incremental) {
-      this.incrementalOrigin ??=
-        { ...this.view.top, shift: config.subShift };
+      this.incrementalOrigin ??= { ...this.view.top };
     } else {
       this.incrementalOrigin = null;
     }
@@ -637,10 +633,16 @@ export class FileInput implements PagerInput {
     }
 
     if (bSub !== null) {
-      this.view.top = { pos: found, subRow: bSub };
+      this.view.top = {
+        pos: found,
+        offset: this.view.rowOffset(
+          forwLine(this.bf, found)?.text ?? '',
+          bSub
+        ),
+      };
       this.view.lineBackward(config.window - 2);
     } else {
-      this.view.top = { pos: found, subRow: 0 };
+      this.view.top = { pos: found, offset: 0 };
       this.view.lineBackward(jumpSindex());
     }
 
@@ -722,11 +724,9 @@ export class FileInput implements PagerInput {
 
   restoreSearchOrigin(): void {
     if (!this.incrementalOrigin || !this.sourceActive()) return;
-    const { pos, subRow, shift } = this.incrementalOrigin;
     // a restore, not a jump: og's abandoned incremental search returns
-    // to the byte the screen started at, so its shift comes back too
-    this.view.top = { pos, subRow };
-    config.subShift = shift;
+    // to the byte the screen started at, part-way into a row or not
+    this.view.top = { ...this.incrementalOrigin };
     this.incrementalOrigin = null;
     this.sync();
   }
@@ -736,7 +736,7 @@ export class FileInput implements PagerInput {
   resolveBottom(): void {
     if (opt.linenums === 0 || mode.HELP || !this.sourceActive()) return;
 
-    const at = this.view.top.pos + ':' + this.view.top.subRow;
+    const at = this.view.top.pos + ':' + this.view.top.offset;
     if (at === this.lastResolved) return;
     this.lastResolved = at;
 
@@ -844,7 +844,7 @@ export class FileInput implements PagerInput {
 
     const ref = forward ? open : close;
     const display = transformContent([first.text])[0] ?? '';
-    let at = subRowStart(display, start.subRow);
+    let at = stringIndexAt(getLayout(display), start.offset);
 
     for (; at < display.length; at++) {
       if (display[at] === ref && --n === 0) break;
@@ -917,7 +917,7 @@ export class FileInput implements PagerInput {
     }
 
     recordLastPosition();
-    this.view.top = { pos: found, subRow: 0 };
+    this.view.top = { pos: found, offset: 0 };
 
     if (forward) {
       if (session.lastFilter) {
@@ -933,8 +933,8 @@ export class FileInput implements PagerInput {
     return true;
   }
 
-  retopSubRow(subRow: number): void {
-    this.view.top.subRow = subRow;
+  retopOffset(offset: number): void {
+    this.view.top = { pos: this.view.top.pos, offset };
     this.sync();
   }
 
@@ -946,7 +946,9 @@ export class FileInput implements PagerInput {
     // og's pos_rehead moves table[TOP] back to the line's beginning
     // (position.c:325); here the top's POSITION already is one, so
     // re-anchoring means dropping the sub-row the caller cleared
-    if (config.subRow === 0) this.view.top.subRow = 0;
+    if (config.subRow === 0 && config.subShift === 0) {
+      this.view.top = { pos: this.view.top.pos, offset: 0 };
+    }
 
     this.sync();
     return true;
@@ -1041,7 +1043,7 @@ export class FileInput implements PagerInput {
 
     const entry = files.list[index];
     const saved = entry ? this.saved.get(entry.path) : undefined;
-    this.view.top = saved ? { ...saved } : { pos: 0, subRow: 0 };
+    this.view.top = saved ? { ...saved } : { pos: 0, offset: 0 };
     this.pending = null;
     this.sync();
   }
@@ -1106,7 +1108,7 @@ export class FileInput implements PagerInput {
     }
 
     recordLastPosition();
-    this.view.top = { pos: Math.max(pos, this.headerPos), subRow: 0 };
+    this.view.top = { pos: Math.max(pos, this.headerPos), offset: 0 };
     const up = jumpSindex();
     if (session.lastFilter) this.filteredBackward(up);
     else this.fileBackward(up);
@@ -1114,23 +1116,6 @@ export class FileInput implements PagerInput {
     this.seam = [];
     markPosClear();
     return true;
-  }
-
-  /**
-   * Rows the shift costs the last screenful, for the clamp's window.
-   *
-   * gotoEnd walks back window-2 rows from the file's last row on the
-   * boundary grid; one row more lands on the shifted grid's own last
-   * row. It can only matter while the top's line is the one that ends
-   * the file - the shift belongs to that line alone.
-   */
-  private shiftLoss(): number {
-    if (config.subShift <= 0) return 0;
-
-    const line = forwLine(this.bf, this.view.top.pos);
-    if (!line || line.next < this.bf.size) return 0;
-
-    return shiftRowLoss(displayText(line.text), this.view.top.subRow);
   }
 
   private forward(rows: number, clampAtLastScreen: boolean): void {
@@ -1149,18 +1134,10 @@ export class FileInput implements PagerInput {
       want -= used;
 
       // the entries land on the absolute grid, but the LAST one ends
-      // at the original top, which may sit mid-boundary - that is the
-      // shift, and dropping it moved the screen a whole row
+      // at the original top, which may sit mid-boundary; the top is an
+      // offset, so it simply goes there
       const off = this.seam.length ? this.seam[0].offset : last.end;
-      const cur = forwLine(this.bf, this.view.top.pos);
-      const disp = displayText(cur?.text ?? '');
-      const starts = getLayout(disp).rowStart;
-
-      let sub = 0;
-      while (sub + 1 < starts.length && starts[sub + 1] <= off) sub++;
-
-      this.view.top.subRow = sub;
-      config.subShift = off - (starts[sub] ?? 0);
+      this.view.top = { pos: this.view.top.pos, offset: off };
 
       if (want <= 0) {
         this.sync();
@@ -1184,7 +1161,7 @@ export class FileInput implements PagerInput {
       ? this.filteredForward(want, clampAtLastScreen)
       : this.view.lineForward(
         want,
-        clampAtLastScreen ? config.window + this.shiftLoss() : undefined
+        clampAtLastScreen ? config.window : undefined
       );
 
     // a short forward move read the end: og's forw discovers the
@@ -1213,11 +1190,7 @@ export class FileInput implements PagerInput {
     // rows below keep the extents they had. The entries say that; a
     // single anchor could only ever say it once.
     const wasPos = this.view.top.pos;
-    const wasLine = forwLine(this.bf, wasPos);
-    const wasOffset = wasLine
-      ? subRowStart(displayText(wasLine.text), this.view.top.subRow) +
-        config.subShift
-      : 0;
+    const wasOffset = this.view.top.offset;
 
     this.backwardFrom(rows, force);
 
@@ -1228,7 +1201,7 @@ export class FileInput implements PagerInput {
     if (this.view.top.pos !== wasPos) {
       this.seam = [];
     } else {
-      const top = { row: config.row, offset: topOffsetOf(session.content) };
+      const top = { row: config.row, offset: this.view.top.offset };
 
       this.seam = [
         ...screenAhead(session.content, top, wasOffset)
@@ -1251,18 +1224,6 @@ export class FileInput implements PagerInput {
   }
 
   private backwardFrom(rows: number, force: boolean = false): void {
-    // og's back_line lands on the greatest row start BELOW the
-    // current position (input.c:358), so from a shifted top that is
-    // the boundary the shift sits inside: undoing the shift IS the
-    // first row of the move (measured against og).
-    if (config.subShift > 0) {
-      config.subShift = 0;
-      if (--rows <= 0) {
-        this.sync();
-        return;
-      }
-    }
-
     // og's back() opens with squish_check (forwback.c:394), BEFORE it
     // knows whether anything can scroll: a backward command repaints
     // the squished short first screen — filling the blank rows above
@@ -1298,27 +1259,28 @@ export class FileInput implements PagerInput {
    *  bottom edge until `lines` of them end their file line, wrap
    *  continuations riding free; the top may land mid-wrap. */
   private newlineForward(lines: number): void {
-    const cur = { pos: this.view.top.pos, subRow: this.view.top.subRow };
+    const cur = { ...this.view.top };
     let line = forwLine(this.bf, cur.pos);
 
     const advance = (): boolean => {
       if (!line) return false;
 
-      if (cur.subRow + 1 < this.view.rowsOf(line.text)) {
-        cur.subRow++;
+      const next = this.view.nextRowOffset(line.text, cur.offset);
+      if (next !== null) {
+        cur.offset = next;
         return true;
       }
 
-      const next = session.lastFilter
+      const nextPos = session.lastFilter
         ? this.nextAccepted(line.next)
         : line.next;
-      if (next === null || next >= this.bf.size) return false;
+      if (nextPos === null || nextPos >= this.bf.size) return false;
 
-      const nl = forwLine(this.bf, next);
+      const nl = forwLine(this.bf, nextPos);
       if (!nl) return false;
 
-      cur.pos = next;
-      cur.subRow = 0;
+      cur.pos = nextPos;
+      cur.offset = 0;
       line = nl;
       return true;
     };
@@ -1332,7 +1294,7 @@ export class FileInput implements PagerInput {
     for (let n = lines; n > 0; ) {
       if (!advance()) break;
       rows++;
-      if (line && cur.subRow === this.view.rowsOf(line.text) - 1) n--;
+      if (line && this.view.nextRowOffset(line.text, cur.offset) === null) n--;
     }
 
     if (rows) {
@@ -1347,8 +1309,8 @@ export class FileInput implements PagerInput {
     let remaining = lines;
     let moved = 0;
 
-    if (this.view.top.subRow > 0 && remaining > 0) {
-      this.view.top.subRow = 0;
+    if (this.view.top.offset > 0 && remaining > 0) {
+      this.view.top = { pos: this.view.top.pos, offset: 0 };
       remaining--;
       moved++;
     }
@@ -1358,7 +1320,7 @@ export class FileInput implements PagerInput {
         ? this.prevAccepted(this.view.top.pos)
         : backLine(this.bf, this.view.top.pos)?.start ?? null;
       if (line === null) break;
-      this.view.top = { pos: line, subRow: 0 };
+      this.view.top = { pos: line, offset: 0 };
       remaining--;
       moved++;
     }
@@ -1429,10 +1391,20 @@ export class FileInput implements PagerInput {
     return null;
   }
 
-  private rowsAt(pos: number): number {
-    const raw = forwLine(this.bf, pos)?.text ?? '';
-    const display = transformContent([raw])[0] ?? '';
-    return maxSubRow(display) + 1;
+  /**
+   * One row back within the top's own line, like back_line landing on
+   * the greatest row start below where it already is.
+   */
+  private rowAbove(): number {
+    const line = forwLine(this.bf, this.view.top.pos);
+    return line
+      ? this.view.rowStartBelow(line.text, this.view.top.offset)
+      : 0;
+  }
+
+  /** The offset of the last display row of the line at `pos`. */
+  private lastRowAt(pos: number): number {
+    return this.view.lastRowStart(forwLine(this.bf, pos)?.text ?? '');
   }
 
   private filteredForward(rows: number, clampAtLastScreen: boolean): number {
@@ -1442,18 +1414,21 @@ export class FileInput implements PagerInput {
     while (moved < rows) {
       if (end && (this.view.top.pos > end.pos ||
           (this.view.top.pos === end.pos &&
-            this.view.top.subRow >= end.subRow))) {
+            this.view.top.offset >= end.offset))) {
         break;
       }
 
-      const total = this.rowsAt(this.view.top.pos);
-      if (this.view.top.subRow + 1 < total) {
-        this.view.top.subRow++;
+      const line = forwLine(this.bf, this.view.top.pos);
+      const next = line
+        ? this.view.nextRowOffset(line.text, this.view.top.offset)
+        : null;
+
+      if (next !== null) {
+        this.view.top = { pos: this.view.top.pos, offset: next };
       } else {
-        const line = forwLine(this.bf, this.view.top.pos);
-        const next = line ? this.nextAccepted(line.next) : null;
-        if (next === null) break;
-        this.view.top = { pos: next, subRow: 0 };
+        const after = line ? this.nextAccepted(line.next) : null;
+        if (after === null) break;
+        this.view.top = { pos: after, offset: 0 };
       }
 
       moved++;
@@ -1466,12 +1441,12 @@ export class FileInput implements PagerInput {
     let moved = 0;
 
     while (moved < rows) {
-      if (this.view.top.subRow > 0) {
-        this.view.top.subRow--;
+      if (this.view.top.offset > 0) {
+        this.view.top = { pos: this.view.top.pos, offset: this.rowAbove() };
       } else {
         const prev = this.prevAccepted(this.view.top.pos);
         if (prev === null || prev < this.headerPos) break;
-        this.view.top = { pos: prev, subRow: this.rowsAt(prev) - 1 };
+        this.view.top = { pos: prev, offset: this.lastRowAt(prev) };
       }
 
       moved++;
@@ -1484,13 +1459,13 @@ export class FileInput implements PagerInput {
     let moved = 0;
 
     while (moved < rows) {
-      if (this.view.top.subRow > 0) {
-        this.view.top.subRow--;
+      if (this.view.top.offset > 0) {
+        this.view.top = { pos: this.view.top.pos, offset: this.rowAbove() };
       } else {
         const prev = backLine(this.bf, this.view.top.pos);
         if (!prev || prev.start < this.headerPos) break;
         this.view.top =
-          { pos: prev.start, subRow: this.rowsAt(prev.start) - 1 };
+          { pos: prev.start, offset: this.view.lastRowStart(prev.text) };
       }
       moved++;
     }
@@ -1498,12 +1473,12 @@ export class FileInput implements PagerInput {
     return moved;
   }
 
-  private filteredEndTop(): { pos: number, subRow: number } | null {
+  private filteredEndTop(): ViewTop | null {
     const last = this.prevAccepted(this.bf.size);
     if (last === null) return null;
 
     const saved = { ...this.view.top };
-    this.view.top = { pos: last, subRow: this.rowsAt(last) - 1 };
+    this.view.top = { pos: last, offset: this.lastRowAt(last) };
     this.filteredBackward(Math.max(config.window - 2, 0));
     const end = { ...this.view.top };
     this.view.top = saved;
@@ -1520,7 +1495,7 @@ export class FileInput implements PagerInput {
     if (end) this.view.top = end;
   }
 
-  private bottomSourcePosition(): { pos: number, subRow: number } | null {
+  private bottomSourcePosition(): ViewTop | null {
     for (let row = config.window - 2; row >= 0; row--) {
       if (!session.lastFilter) {
         const pos = this.view.screenPos(row);
@@ -1555,7 +1530,7 @@ export class FileInput implements PagerInput {
       return;
     }
 
-    this.view.top = { pos, subRow: 0 };
+    this.view.top = { pos, offset: 0 };
   }
 
   private findLinePosition(target: number): number | null {
@@ -1576,7 +1551,7 @@ export class FileInput implements PagerInput {
 
   private clampHeader(): void {
     if (optHeader().lines > 0 && this.view.top.pos < this.headerPos) {
-      this.view.top = { pos: this.headerPos, subRow: 0 };
+      this.view.top = { pos: this.headerPos, offset: 0 };
     }
   }
 
@@ -1925,7 +1900,7 @@ export class FileInput implements PagerInput {
         // the selection and its "Link:" message stay as they were and
         // only the view moves, and only when the target is off screen
         if (!this.onscreen(pos)) {
-          this.view.top = { pos, subRow: 0 };
+          this.view.top = { pos, offset: 0 };
           this.view.lineBackward(jumpSindex());
           this.sync();
           this.seam = [];
@@ -1958,7 +1933,7 @@ export class FileInput implements PagerInput {
     // scrolling." (search.c:2049) — else jump_loc to the -j line;
     // only the jump pos_clears (the highlight is repaint_hilite)
     if (!this.onscreen(pos)) {
-      this.view.top = { pos, subRow: 0 };
+      this.view.top = { pos, offset: 0 };
       this.view.lineBackward(jumpSindex());
       this.seam = [];
     markPosClear();
@@ -2119,7 +2094,16 @@ export class FileInput implements PagerInput {
     const displayBody = transformContent(raw.slice(0, bodyStart)).length;
     this.positions = positions;
     config.row = Math.min(displayBody, Math.max(session.content.length - 1, 0));
-    config.subRow = this.view.top.subRow;
+
+    // the ONE place the top becomes an index: the renderer still asks
+    // for a sub-row plus a remainder, so derive both from the offset
+    // here rather than carrying them alongside it, where they could
+    // disagree with it
+    const topText = forwLine(this.bf, this.view.top.pos)?.text ?? '';
+    const topOffset = this.view.top.offset;
+
+    config.subRow = this.view.subRowAt(topText, topOffset);
+    config.subShift = topOffset - this.view.rowOffset(topText, config.subRow);
 
     // the window just renumbered its rows; the seam is offsets into
     // the top's line, so it survives that and is simply re-anchored

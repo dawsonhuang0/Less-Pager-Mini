@@ -39,9 +39,9 @@ const texts = (v: BigView, n: number): string[] =>
 /** The top line's display text. */
 const forwLineText = (v: BigView): string => v.visible(1).rows[0].text;
 
-/** The top's absolute character offset in its line. */
-const rowStartOf = (v: BigView, text: string): number =>
-  (getLayout(text).rowStart[v.top.subRow] ?? 0) + config.subShift;
+/** The character offset a wrap sub-row begins at. */
+const rowStart = (text: string, subRow: number): number =>
+  getLayout(text).rowStart[subRow] ?? 0;
 
 describe('BigView movement', () => {
   const data = Array.from({ length: 50 }, (_, i) => `line-${i + 1}`)
@@ -93,14 +93,14 @@ describe('BigView movement', () => {
     expect(rows[3].text).toBe('short');
 
     v.lineForward(1);
-    expect(v.top).toEqual({ pos: 0, subRow: 1 });
+    expect(v.top).toEqual({ pos: 0, offset: rowStart(long, 1) });
 
     v.lineForward(2);
-    expect(v.top.subRow).toBe(0);
+    expect(v.top.offset).toBe(0);
     expect(texts(v, 1)).toEqual(['short']);
 
     v.lineBackward(1);
-    expect(v.top).toEqual({ pos: 0, subRow: 2 });
+    expect(v.top).toEqual({ pos: 0, offset: rowStart(long, 2) });
   });
 
   it('scrolling forward stops at the last line', () => {
@@ -124,13 +124,13 @@ describe('BigView movement', () => {
       const v = view('w.txt', words.repeat(12) + '\n');
       const text = forwLineText(v);
 
-      // shift one character into the second row
+      // start one character into the second row
       v.lineForward(1);
-      config.subShift = 1;
+      v.top = { pos: v.top.pos, offset: v.top.offset + 1 };
 
-      const before = rowStartOf(v, text);
+      const before = v.top.offset;
       v.lineForward(1);
-      const after = rowStartOf(v, text);
+      const after = v.top.offset;
 
       // the new top must be a wrap point of the text starting at the
       // OLD top, i.e. it lands just after a space, never inside a word
@@ -138,46 +138,54 @@ describe('BigView movement', () => {
       expect(after).toBeGreaterThan(before);
     } finally {
       opt.wordwrap = 0;
-      config.subShift = 0;
     }
   });
 
-  it('a jump re-homes the top, a scroll keeps its shift', () => {
+  it('a jump lands on a row start, a scroll keeps an off-grid top', () => {
     // og's jumps walk the file for a fresh position, and back_line /
     // find_pos only ever land on a row start of the ABSOLUTE grid -
-    // jump_forw says so outright (jump.c:62). Scrolling instead nudges
-    // the row in place and keeps the shift. Left set, the stale shift
-    // moved G's landing a row down and put p's top mid-grid.
+    // jump_forw says so outright (jump.c:62). Scrolling instead moves
+    // the top within its line, so a top part-way into a row stays
+    // part-way in; there is no shift kept beside it that could be
+    // dropped or left behind by mistake.
     config.chopLongLines = false;
-    const v = view('f.txt', 'x'.repeat(400) + '\n');
+    const line = 'x'.repeat(400);
+    const v = view('f.txt', line + '\n');
+
+    const offGrid = (): boolean =>
+      !getLayout(line).rowStart.includes(v.top.offset);
 
     v.lineForward(2);
-    config.subShift = 7;
+    v.top = { pos: v.top.pos, offset: v.top.offset + 7 };
 
-    // a scroll keeps it: the top stays on the same line, shift and all
+    // a scroll keeps the top off the boundary grid
     v.lineForward(1);
-    expect(config.subShift).toBe(7);
+    expect(offGrid()).toBe(true);
+    // ...and back_line lands on the greatest row start BELOW it, so
+    // the step back re-joins the grid rather than undoing 7 alone
     v.lineBackward(1);
-    expect(config.subShift).toBe(7);
+    expect(getLayout(line).rowStart).toContain(v.top.offset);
 
-    // ...and the probe behind the last-screenful clamp must not eat it
+    // the probe behind the last-screenful clamp must not move the top
+    v.top = { pos: v.top.pos, offset: v.top.offset + 7 };
+    const probed = { ...v.top };
     v.endTop(10);
-    expect(config.subShift).toBe(7);
+    expect(v.top).toEqual(probed);
 
-    // every jump drops it
+    // every jump names a row start of its own
     v.gotoEnd(10);
-    expect(config.subShift).toBe(0);
+    expect(getLayout(line).rowStart).toContain(v.top.offset);
 
-    config.subShift = 7;
+    v.top = { pos: v.top.pos, offset: v.top.offset + 7 };
     v.gotoStart();
-    expect(config.subShift).toBe(0);
+    expect(v.top).toEqual({ pos: 0, offset: 0 });
 
-    config.subShift = 7;
+    v.top = { pos: 0, offset: 7 };
     v.gotoPercent(50);
-    expect(config.subShift).toBe(0);
+    expect(v.top.offset).toBe(0);
 
-    config.subShift = 7;
+    v.top = { pos: 0, offset: 7 };
     v.gotoPos(120);
-    expect(config.subShift).toBe(0);
+    expect(v.top.offset).toBe(0);
   });
 });

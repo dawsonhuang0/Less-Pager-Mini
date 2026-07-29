@@ -30,10 +30,11 @@ export interface PagerInput {
   /** Restores a seekable source after a cancelled/retyped incsearch. */
   restoreSearchOrigin(): void;
 
-  /** Re-anchors the top's sub-row after a width change, since the
-   *  source's own view owns it and a rebuild would restore the old
-   *  one (og keeps table[TOP] across screen_size_changed). */
-  retopSubRow(subRow: number): void;
+  /** Moves the top to a display-character offset in its own line,
+   *  after a width change reshaped how that line breaks. The source's
+   *  own view owns the top, so a rebuild would otherwise restore the
+   *  old one (og keeps table[TOP] across screen_size_changed). */
+  retopOffset(offset: number): void;
 
   /** Matches brackets across the input's complete address space. */
   bracket(open: string, close: string, forward: boolean, n: number): boolean;

@@ -132,6 +132,8 @@ import {
   posRehead
 } from "../features/jumping";
 
+import { topOffsetOf } from "../lines/screenOps";
+
 import {
   files,
   examine,
@@ -343,7 +345,7 @@ export async function contentPager(
   // -s, -x and -r reshape the displayed content when toggled
   hook.hiliteRepaint = markHiliteRepaint;
   hook.hiliteErase = markHiliteErase;
-  hook.reheadSource = () => pagerInput?.retopSubRow(0);
+  hook.reheadSource = () => pagerInput?.retopOffset(0);
 
   // og's table[TOP] survives a width change untouched; ours indexes
   // wrap boundaries, so the offset is captured before and restored
@@ -362,12 +364,11 @@ export async function contentPager(
       config.screen = [];
     pagerInput?.posClear?.();
 
-      // a source engine owns the top's sub-row and writes config.subRow
-      // back from it, so the carry has to land on both - exactly as the
-      // resize path does. Left to itself the engine kept the boundary
-      // it had before the gutter moved, and the next forward move
-      // stepped by the OLD row width.
-      pagerInput?.retopSubRow(config.subRow);
+      // a source engine owns the top and derives config.subRow from
+      // it, so the carry has to reach the engine or the next sync puts
+      // the old boundary straight back - and the next forward move
+      // steps by the OLD row width.
+      pagerInput?.retopOffset(topOffsetOf(session.content));
     };
   };
 
@@ -2020,7 +2021,7 @@ function onResize(): void {
 
     config.subRow = sub;
     config.subShift = offset - subRowStart(top, sub);
-    pagerInput?.retopSubRow(sub);
+    pagerInput?.retopOffset(topOffsetOf(session.content));
   }
 
   calculateEOF(session.content);

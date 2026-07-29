@@ -291,6 +291,33 @@ export function rowEndFrom(layout: LineLayout, from: number): number {
 }
 
 /**
+ * The index into the raw line string that a display-CHARACTER offset
+ * names.
+ *
+ * The two spaces differ on every styled line - the layout keeps its
+ * escape codes in a separate list, so a character index is not a
+ * string index - and on every line with clusters or wide characters.
+ * Anything holding a position (the screen table, the view's top) works
+ * in character space; anything scanning the text itself needs this.
+ */
+export function stringIndexAt(layout: LineLayout, at: number): number {
+  const { chars, codeIdx, codes } = layout;
+  if (at <= 0) return 0;
+
+  const stop = Math.min(at, chars.length);
+  let index = 0;
+
+  for (let c = 0; c < stop; c++) index += chars[c].length;
+
+  for (let k = 0; k < codeIdx.length; k++) {
+    if (codeIdx[k] > stop) break;
+    index += codes[k].length;
+  }
+
+  return index;
+}
+
+/**
  * The drawn text of the characters in [from, to), with the style in
  * force at `from` reopened so the row stands alone like og's (og
  * re-emits attributes per row through at_switch).
