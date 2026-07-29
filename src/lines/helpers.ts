@@ -457,7 +457,15 @@ function transformLine(line: string): string {
             : Math.min(bel, st);
 
         if (end < 0) {
-          out += line.slice(i);
+          // og USED to close an unterminated OSC with a synthesised ST
+          // at end of line; 254fefb calls that unsafe and removes the
+          // whole sequence instead - add_attr_normal sends every OSC
+          // state except OSC_START/OSC_END to remove_ansi(), which
+          // truncates the line buffer back to the introducing ESC. So
+          // the sequence AND everything it swallowed to end of line
+          // simply never reach the screen. (An unterminated CSI is a
+          // different case: its ostate stays OSC_START, nothing is
+          // removed, and what it stored still prints - see below.)
           i = line.length;
           continue;
         }
