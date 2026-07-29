@@ -1,0 +1,3201 @@
+0001	fe6f798541	Initial revision
+0002	f5abfd9e0d	Add changes for v242.
+0003	3d51c2d8a4	Added lesskey.h.
+0004	d87add925d	Initial revision
+0005	1b1513c137	Add -f flag.
+0006	f262f2ea91	Fix compile errors if TAB_COMPLETE_FILENAME not defined.
+0007	19ebb0e116	v244
+0008	17d32fe685	v245
+0009	e14b6bb271	Add WARNING about hilite_search with TAB chars.
+0010	71904857b7	Doc -f flag and #stop.
+0011	88cf6bf149	Don't hilite_search line number displayed with -N.
+0012	982adba9af	Clean up comments.
+0013	6f8e4c49e6	Clean up get_editkeys.
+0014	589927039d	Doc -f flag to lesskey.
+0015	f73dc1a1d7	Put helpfile in /usr/local/share; update defines.dos.
+0016	0aae6edad8	Add -V option.
+0017	1abf5092fc	Clarify use of #stop.
+0018	3502a8f6f6	Update version number.
+0019	446987b79f	Remove lesskey -f flag; add lesskey -V flag; lesskey defaults to .lesskey.in rather than stdin.
+0020	352f4f2d69	Lesskey input file "-" means stdin.
+0021	4f14525f66	Convert cfgetospeed values to ospeed values.
+0022	3f138043ad	Update to v251.
+0023	ce5d0e5ff2	Change default lesskey input file from .lesskey.in to .lesskey
+0024	364b9e1626	Add version.obj to lesskey link.
+0025	544238c7bb	Deal with tags file when pattern has a backslash.
+0026	1326aae5cc	Fix -k option: must init_cmds before opt_k.
+0027	bb24fe6224	Make -k take precedence over ~/.less.
+0028	501abc5c29	Add #define EXAMINE to disable :e command.
+0029	e75313d9e2	Change highlighting: only highlite search results (but now it is reliable).
+0030	7ccde8cf6c	make newfuncs creates funcs.h now.
+0031	604f66c965	Add goto_line; add TERM=LESSDEBUG
+0032	c8fb92bcb9	Add repaint_hilite and optimize highlight manipulation.
+0033	7e80bb3acf	is_hilite epos==NULL_POSITION means to end-of-file.
+0034	321b95e50d	Document highlighting changes.
+0035	9f925007a9	Add warning comment.
+0036	1e83ac524f	Fix bugs if highlighting line with backspaces and BS_SPECIAL is on.
+0037	bd9f1f376c	Convert to autoconf 2.0.
+0038	26a4b57603	Add SECURE to make it easier to build a secure version.
+0039	65049c8a3d	Use system WERASE char as EC_W_BACKSPACE cmd.
+0040	12a9ec54dc	Change static hilite table to a dynamically-allocated linked list.
+0041	0db5e812f2	Change -F to -g; add -G functionality, like old hilite search (hilite every occurence).
+0042	6821b83a54	Reimplement -G, with prep_hilite.
+0043	ce494e17c6	Describe SECURE define.
+0044	8b078caa11	Get rid of extraneous prep_hilites near end of file.
+0045	058c00dff5	Allow EXTRA string after line-edit cmd in lesskey file.
+0046	48b6e846a7	glob() can return NULL.
+0047	c9c2b3ad43	Clean up compilation.
+0048	ef32263a5e	Make filestate dynamic; implement LESSOPEN=|cmd feature.
+0049	a754f3c26b	Add -I flag; clean up quit(-1); start using TRUE,FALSE and OPT_OFF,OPT_ON,OPT_ONPLUS.
+0050	e6bbec9caa	Formalize the four-byte header emitted by a LESSOPEN pipe.
+0051	a66a6f1149	Get rid of four-byte header for LESSOPEN pipe.
+0052	fad60418d0	Use defines for quit() statuses.
+0053	de56cdc6b9	Close alt file before opening new one (avoid multiple popen's).
+0054	25d543162c	Back out thisfile==NULL changes.  Maybe later.
+0055	91d2ec3e7d	Use S_ISDIR,S_ISREG if available.
+0056	33aa190dee	Check VISUAL before EDITOR environment variable.
+0057	eabfedc32f	Use VISUAL; use S_ISDIR/S_ISREG; fix config problem with Solaris POSIX regcomp.
+0058	3e8aa07865	Don't quit on read error or seek error.
+0059	d118928693	Update help file.
+0060	3efcd51334	Fix multi-file searches with LESSOPEN pipe.
+0061	5c8f8542ff	Remove -L, old semantics of -l; add NO_QUERY.
+0062	0849dd9dfb	Remove -L, old semantics of -l; add NO_QUERY.
+0063	77d25633af	Automatically rename defines.dos to defines.h.
+0064	feddeb278f	Update NEWS & README.
+0065	80fabea52b	Don't clear ch_ungotchar in ch_flush: we lose the char we ungot in open_altfile.
+0066	99e849085d	Update LESSOPEN example scripts.
+0067	b21fd46d93	Don't call LESSOPEN on a pipe.
+0068	999ed7e336	v273.
+0069	f3b3945357	Fix ch_ungetchar overrun bug; lint cleanup.
+0070	b40048b724	Allow compile with HILITE_SEARCH = 0.
+0071	4a1059f4cd	Port to OS/2.
+0072	a782f6fa02	Don't need to call fexpand in open_altfile (crashes on file "x%y").
+0073	452bc11054	Fix bug if chnage -G at EOF (prep_hilite must handle epos==NULL_POSITION).
+0074	a50a9fef39	Fix OS/2 version.
+0075	2019be55b9	Initial revision
+0076	2e64580254	Fix OS/2 version.
+0077	62aa7faab9	Change dos charset.
+0078	fc1e8308b7	Add "next" charset; don't display ^X for X > 128.
+0079	1bd4d42332	Update copyright notice
+0080	a2ad8cbbec	v277
+0081	c8e8aa15c5	Minor changes for v277.
+0082	f52ca3ddd6	Change default for -G option.
+0083	ecf8e963bd	Initial revision
+0084	54b5fe049b	Add GNU options --help, --version; minor config fixes.
+0085	de70c40b8d	Clean up glob; don't set # if we can't open the new file.
+0086	7fee052f88	Repeat search should turn on hilites.
+0087	81fa932d26	v281.
+0088	fdb07cffe5	Compiler workaround for IRIX.
+0089	7f1c7e7b7c	Don't leave zombies if LESSOPEN pipe is empty.
+0090	fb4bdca3bb	v281
+0091	aa48485d8c	Open output file in binary mode for dumb OSes.
+0092	917231d680	Open console in O_BINARY for DOS.
+0093	eb4e6606b9	Put correct flags in SYNOPSIS.
+0094	4635013514	Clean up homefile; make OS2 look in $HOME before $INIT,$PATH.
+0095	5c00c37162	Error if "v" on LESSOPENed file; "%" figures out file size on a pipe.
+0096	0dda0b5c53	Don't set # in lsystem; lesskey try $HOME first.
+0097	5b3aa9ab76	Reformat change history in version.c.
+0098	96dc72efe7	Fix hilite bug if overstrike multiple chars.
+0099	2a2161c14f	Allow lesskey to override get_editkey keys.
+0100	6930836727	Fix adj_hilite bug when line gets processed by hilite_line more than once.
+0101	657fd85c33	Add makefile targets configure and tagall.
+0102	66e3f6b802	v290
+0103	ea676180af	v290
+0104	1f8b372035	Fix Makefile for subdirectory builds. Fix Sequent bug with incompatible sigsetmask.
+0105	85fdd69468	Add #env stuff to lesskey. Fix MS-DOS build.
+0106	a61559cf97	Fix typo.
+0107	97d2755035	Update for v291.
+0108	e5df45fe93	Use no_back_scroll, since get_term is done before init_option.
+0109	53d0872fd2	Add support for Borland C; fix arrow keys in MS-DOS versions.
+0110	913d314c21	Fix initcolor for Borland C.
+0111	dd66728420	Disable ^Y and ^V system-defined behavior.
+0112	e29ad5b9f7	Workaround Ultrix bug that doesn't set/restore line discipline.
+0113	f874e60689	Disable initcolor.
+0114	d59de6230b	Add auto-version-number-stuffing stuff to Makefile.
+0115	8cb52b404d	Initial revision
+0116	7afb0719bc	Clean up Borland build.
+0117	6d9f0c705a	Fix Borland build.
+0118	29e09ee00c	Make .VER files depend on version.c
+0119	f11d55bcb6	Fix REPLACE_VERSION stuff.
+0120	961e82a52a	Fix OS/2 bug in expanding filenames.
+0121	dd6685e406	Use $srcdir to find version number in version.c
+0122	242353e0c3	Use O_RDONLY if defineed.
+0123	e262481717	Add email address. [D
+0124	917e01d21b	Add email address.
+0125	3500399668	Don't call termcap functions if tgetent failed.
+0126	8b3a9a8736	Fix some "cmd F" bugs. (?)
+0127	acf9bc10ef	Fix search on squished file; add /@@.
+0128	c3367fd0c7	Make "make tagall" work from subdirectory.
+0129	822c6f771c	Allow cmdbuf longer than screen width.
+0130	743dd5144f	Use #defines for buffer sizes.
+0131	4f0cfba859	Make sure we don't call any termcap functions if tgetent fails. (Faults on Linux.)
+0132	df6f74d727	v297
+0133	2a2099f08d	Add ^K search modifier, clean up makefile.
+0134	469ad0de4f	Fix detection & declaration of errno.
+0135	ebd2a121a0	Fix description of search modifiers.
+0136	1243358b60	Fix overflow in jump_percent calculation. Don't send "ti" after lsystem until user has pressed a key.
+0137	42f802673d	Remove references to shar/unshar, since distribution is normally a .tar.gz file now.
+0138	e3ca17e87f	Make -U cause tabs to print as ^I.
+0139	9d6a9e75bb	v300
+0140	0b41ad3c4d	Make hilites work in cmd F output.
+0141	0602a1aed1	Tweak help file a little.
+0142	80b40354fb	Use OPEN_READ on call to open() tty.
+0143	5255a019a9	Split authoring stuff out from standard Makefile into Makefile.author.
+0144	172edaa12e	Initial revision
+0145	bcada57d6e	Fix command F to notice window-change signals.
+0146	249e88798c	Use newaction to make command F kludge a little less kludgy.
+0147	cba6f8ea3f	v301
+0148	9ea6a494e5	Add ESC-SPACE command.
+0149	902f46a000	Clean up docs.
+0150	a0dad474a4	Add ^R search modifier.
+0151	ab442760c7	Add search modifier ^R; add LESSSECURE.
+0152	609e1271e4	Display error message for _D.
+0153	512feb19e9	Workaround Linux /proc kernel bug.
+0154	f75bd95bdf	Add LESSKEY variable.
+0155	349b904424	Fix compile error.
+0156	368ab1dfa6	Don't force cmd.exe in OS/2 lsystem.
+0157	f3467c2b98	Use the term "option" rather than "flag" consistently.
+0158	956c0ddecf	v306
+0159	81b1440c38	Don't do final clear_bot() if output is not a tty.
+0160	0befdc007e	tagpattern should point to alloc'ed memory, not stack.
+0161	f51a81f32b	Update OS/2 and DOS defines.h files.
+0162	1c2edc2624	If we're squished, we can't repaint hilites. Must repaint whole screen first.
+0163	9b84a5fee1	Allow "--" to end option arguments.
+0164	8c7b1c7065	v307
+0165	115f5d1e60	Fix -d flag. Add "--" option to mark end of options. Beginning of port to OS-9.
+0166	7e8b64aba5	Initial revision
+0167	f933549e07	Port to OS-9.
+0168	19c986825b	Fix typo.
+0169	93a92f7172	Change glob() to lglob() to avoid conflicts.
+0170	d9cbac662d	Avoid compiler warnings.
+0171	26dbd22006	Fix bug in tags: if pattern ends with "$" make sure we match to end-of-line.
+0172	4617d52767	Fix OS-9 build.
+0173	ea74fe6d62	Update copyright notice
+0174	cbebaa552a	Add HAVE_DUP.
+0175	56bd980bce	Initial revision
+0176	a05c41dfe1	Use '?' instead of 0x??.
+0177	c1f23c6d72	Initial revision
+0178	c3f6f6273c	Separate gcc makefile from Ultra C makefile.
+0179	6342ed4584	Removed help file.  Help text is now embedded in less executable.
+0180	7421732b5f	Rename defines.osk to defines.os9.
+0181	64c3789e11	Use ch_getflags() & CH_HELPFILE instead of redundant helping flag.
+0182	657e4393a0	Update for latest version.
+0183	1e35bacf5b	Make sure screen is displayed before expanding editor prototype. Fixes B#143.
+0184	f86b1c2cbf	Allow to compile with CMD_HISTORY undefined. Fixes B#106.
+0185	c24433c645	Merge doscreen.c with screen.c.
+0186	ec02d5d9b4	Initial port of Windows support.
+0187	e3aaaf3f3f	Initial revision
+0188	4cd0eab158	Fix extra #endif.
+0189	36786de58f	Formatting.
+0190	f6f6906672	Attempted to put screen.c into distribution twice.
+0191	5d092f5af3	Initial revision
+0192	3cf62e8fe4	Include mkhelp.c and mkfuncs.awk in the distribution.
+0193	6caed4c8a1	Avoid trailing comma.
+0194	4cf6893b6d	Fix B#110. Add reedit_ifile to allow to continue after "cannot reopen" errors.
+0195	b0c3317764	Don't use null ifiles in reedit_ifile.
+0196	a44a821145	Remove unused variable lno_indent.
+0197	23f16ecf0d	Added horizontal scrolling (ESC-[ and ESC-] commands).
+0198	ac49384cbf	Change -e to quit on reaching end of a squished file.
+0199	473268b698	Fix "!;TAB" bug. Workaround, really.
+0200	547692a4c9	Allow : in filename.
+0201	f52f9a54d2	Add LSHIFT & RSHIFT to lesskey.
+0202	09bcaf534e	Make |a when a < current screen, go to end of current screen.
+0203	c66f28fc9a	Add PATHNAME_SEP. Minor cosmetic cleanups.
+0204	ae1b19ff2f	Add Q command. Clarify some documentation.
+0205	9f03bb9bfd	Minor formatting.
+0206	1ae9cc2749	Create ZIP archive. Make sure files in the archive have correct r/w permissions.
+0207	c3631fea00	Add the -A- (non-ANSI) flag.
+0208	9df53a157c	Update for Microsoft compiler.
+0209	849da27712	Mention lesskey as well as less
+0210	aebe487cfd	Fix missing brackets.
+0211	42154bbd52	Don't write to console if standard output is not a tty.
+0212	cffd879ac7	Fix DOS build.
+0213	e03a8299db	Update with new INSTALL file from autoconf 2.9.
+0214	63440ae798	Back out v314 change to -e option. Cannot easily quit after one screen, because "te" will immediately erase the screen.
+0215	b4ab600ed4	v317
+0216	91fe31e9af	Fix OS/2 build.
+0217	e789b666c4	Fix reading of two-char keys for OS/2 build.
+0218	06f227dc1d	Display usage message if no arguments.
+0219	29e603d82a	Allow ## in filename to mean #.  Same for %%.
+0220	0681d38752	v317
+0221	48409378a9	Suppress warning message if lesskey.obj does not exist.
+0222	aa1c767e4d	Fix the hack for Linux /proc files.
+0223	ec97d40a6a	Make sure -e works with ESC-SPACE command.
+0224	953dcfc887	Avoid duplicate define of off_t (also defined in compiler header file).
+0225	a72cf54525	Use get_scrpos() for the special mark "."
+0226	0ea9e36831	Switch stdin to binary mode for MS-DOS, so pipes work properly.
+0227	c3e19c8375	Add warning about setlocale() treating 00 - 1F as control chars.
+0228	8e05e7e2f5	Use the word "option" instead of "flag" in messages.
+0229	e03bed653e	Port to OS-9 Metaware compiler; minor fixes.
+0230	0cd432450f	Use REG_EXTENDED on POSIX regcomp() to get extended regular expressions.
+0231	113f6d0420	Try to avoid outputing hex constants into help.c.
+0232	c4f9df6770	Change default editor from "vi" to "umacs".
+0233	d99ea56f48	Change names of OS-9 files.
+0234	0ce9466ea0	Initial revision
+0235	bca634b0ea	Fix typos in OS9 Makefiles.
+0236	d3e967f249	Fix typo in OS9 instructions.
+0237	3c9fda04f3	Remove unnecessary declaration.
+0238	67abcf0937	Fix typo.
+0239	6fceaf3287	Fix Windows port.
+0240	11352d57ef	Use tmodes() to use uniform method of getting mode enter/exit sequences from termcap.  Allows "me" to end a sequence if there isn't a specific end-sequence capability.
+0241	045cc48b45	More fixes for Windows port.
+0242	ae22a9dc35	Add @@DATE@@ to man pages, etc.
+0243	87b917651e	v319
+0244	7957ba1afe	Fix @@DATE@@.
+0245	f417f6c64c	Do setmode() on pipes for Windows too.
+0246	02f10ad753	Allow the | command for Windows.
+0247	b539be8a25	Final (?) fixes for Windows.
+0248	5e653359de	v320
+0249	ac0606cd48	Disable TAB filename completion till it works.
+0250	738c8f54ec	Define MSDOS compiler options before including defines.h.
+0251	d83a2c7662	Fix instructions for OS9 build.
+0252	b61abf70f2	Don't have distclean remove files which can't be recreated by the distribution.
+0253	5e532be8a4	v321
+0254	855827abda	Remove reference to less.hlp.
+0255	301868f264	Use LC_ALL, not just LC_CTYPE.
+0256	e59e3b6ed4	Add ESC-( and ESC-). Fix bug which tried to free the LESSKEY filename when it wasn't malloced.
+0257	592f65148f	Add support for Microsoft Visual C under Windows. Fix a couple of bugs.
+0258	5c551e0a6c	Add ESC-( and ESC-).
+0259	85d7f229d3	Add ESC-( and ESC-). Add description of --help and --version.
+0260	0e07e3f5a2	Fix swapped word-left & word-right.
+0261	a7f12a9d12	Describe extra string on quit command.
+0262	707b032a89	Fix bug in tags where tagfile pointed to a local buffer after the function had returned.
+0263	21bf796cd2	Fix bug in deleting the help file's IFILE while holding a reference to it.
+0264	c624eeba74	Fix (harmless) uninitialized variable.
+0265	b30cbc281d	Don't overrun obuf when adding the terminating null byte.
+0266	f6e35db817	Add left/right arrows for horizontal scrolling. Save tty modes only on startup.
+0267	f25a8abd24	Fix ^R.
+0268	c42b8f3e08	Add Windows handler for ^C and ^BREAK.
+0269	fa2982840f	Fix tty opening for Windows.
+0270	6ee5800ffd	v322.
+0271	1d28e5bd12	Initial revision
+0272	23c118bb47	Add pckeys.h.
+0273	8922cf5358	Add dependencies on funcs.h and cmd.h.
+0274	909318f44f	Fixes for Windows, Linux. Port to DJGPP.
+0275	e408630ea6	Add description of post-321 release.
+0276	f5f74832ec	Change names of Makefiles and defines files.
+0277	b895da8f85	Make kill char ^U for DJGPP.
+0278	1c1d87ac50	Add support for spaces in filenames.
+0279	17874e2cfa	Add lessecho; make spaces in filenames work on Unix.
+0280	6beebe5e36	Use unquote_file in a few more places.
+0281	abaab98dc9	Initial revision
+0282	bbb080cf31	Fix bugs in Windows version.
+0283	8ebdea9270	Mention lessecho in the README.
+0284	2e2dbffbc6	Initial revision
+0285	43483da653	Allow interrupt to break out of a :n or :p search for a valid file.
+0286	25b421b113	Fix bugs in DJGPP version.
+0287	7eea525270	v326
+0288	592a33a143	Use quote_char rather than constant '"'.
+0289	8bb29943ba	Clean up some compiler warnings.
+0290	3c599cd4fd	Reorganize lglob.
+0291	6f4e425108	Initial revision
+0292	6b4255bd87	Remove trailing space on filename expansion.
+0293	e2c2b9dc50	Don't eat all the CPU time in a tight loop waiting for console input.
+0294	2612c1c921	Fix bug with piping file that ends on bottom line of screen and -c.
+0295	1fc527244a	v327.
+0296	f80d9099f6	Add glob.h.
+0297	c939cbc76b	Add support for LESS_TERMCAP_xx environment variables.
+0298	87e9a76d55	Make $LINES and $COLUMNS override system's idea of height and width.
+0299	a868b471e4	Fixes for MS-DOS and OS-9.
+0300	1a2e6a350b	Make alias for email address in .VER files.
+0301	8137a4c8e3	v328
+0302	6b56bb616c	In filename completion, append a "/" to directories.
+0303	956bc5274e	v328
+0304	60d3e8ce77	v328 again.
+0305	ee375566f5	Latest fixes for DJGPP port.
+0306	e70b4183b5	Fix typo in OS/2 macro.
+0307	98a864bea9	Workaround bug in some systems' isupper() and tolower(). If the arg is negative, they do bad things.
+0308	f8c4ac85b5	DOS fixes.
+0309	225d0862af	Add @@HOMPAGE@@.
+0310	f3dbedb4c1	Add LESSSEPARATOR.
+0311	231c334f3c	Add open & close quotes; add -" option to change quotes.
+0312	fbfd9e702e	Add comment about setting env vars in MS-DOS.
+0313	7c8504941e	Fix DOS definition.
+0314	7e5ccd6958	Escape all shell special characters, not just spaces.
+0315	68b86e82e9	Add LESSMETACHARS, LESSMETAESCAPE.
+0316	f81e5fef16	Add LESSMETACHARS and LESSMETAESCAPE. Use escaping rather than quoting in shellcmd(), so shell commands which contain quotes will work.
+0317	ebcd89f292	v329
+0318	1a4aa00636	Fix MS-DOS typo.
+0319	685fa43981	Escape filenames in open_altfile & close_altfile.
+0320	1ae9ccb4b9	Fixes for DJGPP.
+0321	547c47e7d1	Provide strchr() if system doesn't have it.
+0322	ff15cf8ed8	Add define for HAVE_POPEN.
+0323	dcc57af9b5	v330
+0324	24b64d3898	OS9 fixes.
+0325	3e1dc799e1	New version of popen for OS9.
+0326	a57424ad8b	Change email address to Netcom.
+0327	fe3d7ab12f	Mention change of email address.
+0328	04fd66dd5e	Don't fail if currently no help.c or funcs.h.
+0329	b9cee910ef	Fix defines for OS/9.
+0330	39dcea794a	Fix build if HAVE_SHELL is not set.
+0331	36904045cc	Caller of ch_init now sets CH_CANSEEK if it wants ch_init to even *try* to seek.  ch_init may still find it can't seek, in which case it will clear CH_CANSEEK.
+0332	e0fd69e2df	Fix bug when buffer is bigger than display window. Still doesn't work quite right.
+0333	6bcb1df40e	Change from netcom.com to fog.net Remove -h flag from tar (wasn't recognized by MKS tar).
+0334	2da19e803f	Fix #196: ignore CAPS-LOCK & NUM-LOCK sequences on input.
+0335	799e9d3e48	Fix so tag match works on DOS-style text (line ends with \r \n).
+0336	b36f0b73f1	Misc Window fixes.
+0337	3d5ca27e93	Remove unneeded declaration.
+0338	dacf7f68ea	Enter filenames into command history.
+0339	9528422bb7	Fix scrollable window problems in Windows. Simulate SIGWINCH in Windows.'
+0340	1543beb297	v331
+0341	aaec2cfb35	v332
+0342	c3820d0f93	Use rcs -n.
+0343	20a1e8b50d	Fix make tagall to work with dumb rcs.
+0344	a8f42c5035	Use TABs so mkfuncs.awk works.
+0345	af05b19cf9	Update EMAIL, HOMEPAGE.
+0346	ab846ba2b3	Use cp, rm.
+0347	7ef9edcfb8	Honor bindir, mandir.
+0348	f00e406ec6	Update flags for MSC 5.0.
+0349	bc372a745e	Update changes.
+0350	84c72bf024	Update copyright.
+0351	cfacd01ed7	Change offset to unsigned to eliminate compiler warnings.
+0352	7d5cd8c3f1	Add iso8859.
+0353	9b4c8bbf7a	Add show_attn stuff.
+0354	478c95c7f9	Change less.ini and lesskey.ini to _less and _lesskey.
+0355	746b314372	Remove remove_top.
+0356	be6f9b16fb	Don't use sparse initializers.
+0357	4f7fc888d0	Add MAX_PRINT_xxx defines.
+0358	c5fe4c8ef3	Add subheadings.
+0359	51c44e80ba	Doc -P better; -w, -W; iso8859; %d, %D.
+0360	3a4860f3f6	Add show_attn stuff
+0361	183e7815f0	Complain if extra chars at end of -D option (to catch missing $ after -D in LESS env var).
+0362	4625978f4a	Quit after reading 20 consecutive nulls (fix for #143).
+0363	a175bd1d6d	Add %d, %D. Make sure we don't overrun prompt buffer.
+0364	272754c28a	Make compile under DOS compilers.
+0365	d23b8390bb	Make OXTABS take precedence over XTABS. Make sys_height,width take precedence over LINES,COLUMNS. Make default color be system color.
+0366	8de30a52f9	Add show_attn stuff. Use REG_NOTBOL in POSIX regexp to fix ^ search bug.
+0367	4f0adf1b03	Ignore SIGQUIT.
+0368	449860bd16	v334
+0369	a6f2e26c4a	Add ebcdic charset.
+0370	b32482187c	Add HOST_IS_EBCDIC.
+0371	579421bc0f	Add HOMEDRIVE/HOMEPATH.
+0372	43af5d24a8	v335
+0373	42fd2137c3	Attempt to fix Windows highlighting problems. (Better, but not completely fixed.)
+0374	74975b3463	Change to 4 digit year in date strings.
+0375	fccb4c4045	Remove warnings about broken compilers.
+0376	5f143ddc48	Output newline after return from lsystem (important for Windows where init() changes screen buffers).
+0377	7fda7bcbbf	Install man pages to the right directories.
+0378	111493d20e	v336
+0379	43a17e482e	Do something sensible in filesize() if fstat or _gs_size() fails.
+0380	98cba2bf3a	v337
+0381	f18f4e8ff7	mkinstalldirs should make mandir/man1, not mandir.
+0382	0275fcce08	Add support for long option names.
+0383	08a7af5260	Fix bug in \b. Fix bug in HOMEPATH: should set $HOME not $PATH.
+0384	5f9c54fea5	-G should not disable -w/-W highlighting.
+0385	02c438f80b	v338
+0386	5e3a4baae4	Document long option names.
+0387	3d51d71b3a	Initial revision
+0388	3d992a42a4	GNU-ification.
+0389	d644db3ac6	Add double-underscore command.
+0390	c0ffad2f10	Add multiple names for one option. Add --silent synonym for --quiet.
+0391	691ec78eaf	Minor stuff.
+0392	b1ed53dd37	Make EOF tildes BOLD.
+0393	6206a9a3cc	Allow "special" keys in lesskey files. Add \k syntax to lesskey. Add long options to lesskey.
+0394	3d35e995d2	Fix #204: maxlines wasn't working in prep_hilite.
+0395	0cdc903a8d	v339
+0396	4e582ec96a	Add :d.
+0397	f456406082	Add -^P. Add :d.
+0398	3b94d3770f	Add :d. Add -^P.
+0399	dd00599ba0	Add -^P.
+0400	b3298f0a49	Fix MS-DOS build
+0401	93613313bc	Make ! toggle in the - command.
+0402	fece987897	Add notbol parameter to local V8 regexec2.
+0403	8c485ac2b9	Just fixing some tabs in the source.
+0404	3445de6b37	Remove unnecessary include of position.h.
+0405	623fb95d62	v340
+0406	262cc8e202	*** empty log message ***
+0407	09d3ffebd1	Initial revision
+0408	dd91168858	Add COPYING to distribution files.
+0409	77ffb2ec57	Remove tabs.
+0410	242067bf8f	Add -F option.
+0411	115c1775f7	Add %c and ?c prompt escapes.
+0412	6b63917dd2	Initial revision
+0413	f96977fb1d	Handle unusual backspace sequences better.
+0414	f8f74e823b	Better includes for DJGPP.
+0415	53955bafcd	*** empty log message ***
+0416	b6814311f2	v341
+0417	439e3fd2bf	Add system lesskey file.
+0418	6adf8d8cb7	Allow either GPL or Less License.
+0419	932c691fd1	v342
+0420	4dcca98778	Support WATCOM regexec. Add install-strip target.
+0421	115a2cd5b0	Add UTF-8 support.
+0422	ffa32186fb	Change default LESSCHARSET to latin1. Add HOME & END commands. Add %P and ?P in prompt strings. Allow search ending with $ on CRLF lines.
+0423	ddc9fefaed	Update documentation.
+0424	c6755c1cc8	Add -R option.
+0425	676cdac324	Fix copyright notice in -V output.
+0426	7774a4c8c5	Change iprintf name to avoid conflict.
+0427	a7abc6bdca	Don't allow :x on the help file.
+0428	8585b69961	Make -w highlight target line of g and p commands. Cleanup for v344 release.
+0429	1fc88d97b2	Initial revision
+0430	168747105a	v344
+0431	009e6b4d0a	Add LICENSE to distribution.
+0432	c46361db4d	Make -R pass thru ESC but not other control chars.
+0433	0894f96813	Fix bugs in long option processing.
+0434	3e49c41784	Fix bug in displaying hilites after R after file changes.
+0435	0597deb67f	v346
+0436	5c51fa1b3f	Fix horizontal scrolling of long lines. Fixs for MS-DOS / DJGPP versions.
+0437	32ca3d1ca3	Escape metachars in lsystem and editproto.
+0438	aab8ecc176	Fix color problem in DJGPP version. Fix bug in :x on a file which contains marks.
+0439	c1c16efda0	Enable UTF-8 if "UTF-8" appears in locale-related env vars. Add --with-editor to configure. Fix bug in v command on filename with quotes, etc. Fix bug in horizontal scrolling. Fix bug in :d on file containing marks. Fixes for DJGPP version.
+0440	1c711892e3	v349.
+0441	679caa3274	Fix clear-while-standout bug.
+0442	be06780d58	v350
+0443	b010d36472	Now fix scroll-while-standout.
+0444	c73437aecf	Optimization for clear-on-scroll fix.
+0445	a1a31ea4ce	Make -M and = prompts include top & bottom line numbers. Update copyright to 2000 for v351.
+0446	a90aebae22	Define regexec2.
+0447	932c0457ae	Fix compile error when HAVE_POPEN is 0.
+0448	6a9b804fb6	Clean up some -Wall warnings.
+0449	5a81e6f19f	Fix NULL deref on scan_option.
+0450	d980170c29	Allow space after numeric valued option letter.
+0451	1f918b16cb	Don't use STDC_HEADERS: check individual headers.
+0452	95869293a6	Fix compile error when EDITOR = 0.
+0453	42fe716f1a	v353.
+0454	a0fca83ded	Remove STDC_HEADERS, add HAVE_STDLIB_H.
+0455	fd2d104276	Add support for PCRE library. Add special-case in configure for HP-UX.
+0456	63f40fb220	Add support for PCRE. Add --with-regex configure option. Add configure kludge for HP-UX B.11.00.
+0457	1f68a27ea0	v354
+0458	6cf7f5b718	Make POSITION be off_t.
+0459	c25a793e2c	Add -# option. Use lmargin instead of tabstop to space after line number. Don't shift line number off screen when horizontally shifted.
+0460	7666005cec	Make horizontal shifting act as though -S were in effect.
+0461	2200c6311b	Add -J option to display status column.
+0462	c46a5baaf1	Change Makefile.dsm to Makefile.dsu.
+0463	56a2a85c9e	Support sigprocmask.
+0464	ae60a3ed30	v357
+0465	01205d357b	Add "digit".
+0466	fb62f1f518	Fix bugs when #stop is used in lesskey file.
+0467	a317d07212	Default charset for DOS version is "dos".
+0468	f2e23a827b	DOS doesn't have setlocale.
+0469	305858ef11	Windows version sets window title.
+0470	5275bad129	More readable description of default charset.
+0471	07862b9c07	Fix bad highlighting due to Windows bug.
+0472	c32ccfe433	Use K&R syntax.
+0473	e145a2ecd0	v359
+0474	97b35c2fc2	Fix Win32 display problems.
+0475	11b59aec73	Move sysless file from /bin to /etc.
+0476	28fd2814c3	Fix 32 bit dependencies. Fix UTF-8 overstriking. Fix EBCDIC host support.
+0477	19c20c6ea0	v361
+0478	ed87434a10	Add -Pw option.
+0479	79cb0b8312	Make status column show search targets.
+0480	6035ed599b	Allow old sysless file for backwards compatibility. Add --no-keypad option. Add latin9 & charset aliases.
+0481	9775936e57	Variable width tab stops.
+0482	cdbb0c0b68	Warn if invalid \k sequence.
+0483	bc83fa88dc	Allow line buffer to expand to handle very long lines.
+0484	cb5dbc391d	Fix shifting text with ANSI color sequences.
+0485	f3e54d033c	Add is_ansi_end public function.
+0486	c2f9438f52	Add warnings to man page about -R searching. Update copyright message.
+0487	758625ee7c	v364
+0488	990d3bd1e7	Don't use BINDIR on Windows. Update email and homepage.
+0489	d018f89109	Save & restore console title for WIN32.
+0490	41f8e345a7	Don't set window title for help file.
+0491	daf9b03734	Fix underlined tabs and bold tabs.
+0492	94378542bb	Add acknowledgment for Info-ZIP.
+0493	d0d2a8c61d	v365
+0494	026a3fe63d	Update.
+0495	6f99b556c3	Add hash table for performance. Increase buffer size from 1024 to 8192.
+0496	fce490b078	Added t and T commands. Added support for "global(1)" tags.
+0497	bd648e890b	Fixes for OS/2.
+0498	02cd820afe	Add scrsize.c to distribution.
+0499	bbf871775e	Initial revision
+0500	2ef087b634	v366
+0501	6fe501feba	Remove compiler warnings about unreferenced variables.
+0502	71309baf70	Must set LESSGLOBALTAGS to use the global command.
+0503	205a8247f0	Allow option table to specify valid chars for a string option.
+0504	672c62dd60	Add author's email address.
+0505	69e5f77812	v367
+0506	3e01ec08ac	Warn if option string is not terminated correctly.
+0507	9ad2ca5d6f	Right/left arrow while entering number are shift commands, not line edit.
+0508	724438b526	Add next-tag, prev-tag, remove-file. Update default keys in man page.
+0509	4dc35d3348	Add homepage to --version output and man page.
+0510	2b969880f2	Update homepage for global(1).
+0511	4a58ca00f1	*** empty log message ***
+0512	7cf85342b8	v368
+0513	f285154712	Make sure _sysless is on C: drive.
+0514	7567b5b88e	Document scrsize.exe.
+0515	75c3f09bd3	Fix error messages.
+0516	a31bbc9fa7	v370
+0517	dde859ca9e	*** empty log message ***
+0518	eee2053f7d	Added reference to global(1) homepage.
+0519	32b0612384	Define HAVE_POPEN for Windows port.
+0520	9f6a04a9f1	Reset new_file in pr_string, not in pr_expand.
+0521	68d5ffe264	v371
+0522	64ec1f8f20	Fix compiler warnings.
+0523	0c6cda1734	Make -t parsing be backwards compatible. (Allow argument to be not terminated with a $ sign.)
+0524	b6393f48f1	Make -b argument be in units of 1K.
+0525	2a6cfac13a	Fix typos.
+0526	5a9639f09c	Improve handling of filenames containing shell metachars.
+0527	7ce1bb93c6	v373
+0528	f460ded8b5	Fix compilation for Windows. Remove some unreferenced variables.
+0529	0ed19ae5a3	Fix djgpp build.
+0530	dd5eed73fc	Fix memory leak.
+0531	347c003dc1	Fix bug in parsing -x option from LESS variable. Change struct option to struct loption.
+0532	610bb0deb0	Fix missing quote in nroff source.
+0533	076b6bdda3	Fix build when SECURE=1.
+0534	07331d98f1	Print error message if use t/T when TAGS is not set.
+0535	1b4bf2bf3f	Use file descriptor in tty variable rather than 2 to set raw mode.
+0536	c2709ff87b	Fixes for DJGPP build, from Eli.
+0537	53c50431bb	Fix typo.
+0538	6802e38b17	Fix searching for lines with ANSI escape sequences.
+0539	382a682199	v375
+0540	12ec93150e	Fix nroff problem.
+0541	75b7dd0eaf	Add files to ifile list in correct order if command line has duplicate filenames.
+0542	aaf7270ac2	Fix problem with spaces in LESS variable.
+0543	42ba08b0a9	*** empty log message ***
+0544	43f3f7f3a8	Fix bug overstriking mulitbyte UTF-8 chars.
+0545	af34c64334	Update copyright dates.
+0546	1457ec47c0	Add missing options to synopsis.
+0547	aa6ab7a877	Update copyright date.
+0548	a59d23744d	Fix bug in Windows version when file contains CR. Fix bug which caused default buffer space to be unlimited rather than 64K.
+0549	d212197d75	Fix bug in adj_hilite with -R and ANSI color escapes.
+0550	e53fc551b3	v377
+0551	8e1f78c89e	Fix compiler warnings.
+0552	c4e133dd8f	Fix some -Wall warnings. Fix bad const declarations. Fix char arg to getnum instead of char*.
+0553	240170447c	Add -L option. Fix bug with invalid long option names. Fix some man page issues. Fix bug with ctrl-K in lesskey files.
+0554	8b1a9864c1	Fixes for UTF-8 overstriking.
+0555	36357ee20b	Add context-sensitive overstriking of underscore with underscore.
+0556	fd1bdbdb92	Add -f flag.
+0557	f935c0bf37	Initial revision
+0558	f6f3d95a67	Switch to autoconf 2.54. Use configure.ac, remove configure.in, defines.h.top, acconfig.h.
+0559	ec59e182c5	v379
+0560	33b0a5c5e4	Use configure.ac not configure.in.
+0561	ea95634e34	Use LINENUM typedef.
+0562	9c7c3fbb52	Don't cast LINENUM to int.
+0563	4321ab9b9d	v379
+0564	ff98173b1c	Make LINENUM same as POSITION.
+0565	26956b0237	Handle large input line numbers.
+0566	5f8455f5d4	Fix non-K&R function definition.
+0567	3f52a24729	Make -N use 7 digits for line number unless need to use more. Fix bug in underlining UTF-8.
+0568	68c24dc1b4	Fix typo.
+0569	0289096210	v381
+0570	d55fa851ea	Fix bugs in crummy findopt_name function.
+0571	e813492e45	Fix off-by-one bug in reverse search when expanding linebuf. Thanks to Len Lattanzi.
+0572	6ad8524a3c	Add .lesshist file.
+0573	e387d69e93	Remove copyrighted OS/9 popen code.
+0574	9f6f6c5c1f	Initial revision
+0575	fc7276cfc3	Reconstruct version 394. Versions between 382 and 394 are lost.
+0576	3c9a217cd9	Initial revision
+0577	df1431fe51	*** empty log message ***
+0578	8e2cc74a69	Many little changes; see NEWS.VER.
+0579	08a5ba8531	Add compatibility with POSIX more.
+0580	57c203ee61	Use PATHNAME_SEP.
+0581	f082d1d3f0	Add TGETENT_OK define.
+0582	8418d91406	Allow decimal point in numbers for commands. Currently only % command uses the fractional part.
+0583	e125b39d2f	Document decimal point in % command.
+0584	042e6ffad0	Allow decimal point in number for -j option.
+0585	953ddfa2b2	Allow n command to fetch last search pattern from history file. Allow up to 5 binary chars before calling it a binary file.
+0586	9bbc240cfe	Add note about multibyte character sets (only UTF-8).
+0587	1678dfd8cf	Fix bug in detecting "more" command.
+0588	faeafc4a3f	Check that CODESET is defined before using it.
+0589	ff63f3a4e9	Implement new bottom of screen behavior. Add --old-bot (temporarily?) to enable old behavior.
+0590	0088a5ac00	Document new bottom of screen behavior.
+0591	5d7e1f6862	*** empty log message ***
+0592	b9738f8538	Document P command.
+0593	3857a6764b	Don't interrupt a read of input file just for a window change signal.
+0594	7557079956	Retry read from input in iread if read returns < 0 and errno == EINTR or EAGAIN.
+0595	2cd131b059	Don't rewrite history file if it hasn't changed.
+0596	224dbce9eb	*** empty log message ***
+0597	e795b3f595	Add some shell metacharacters.
+0598	44d97a1438	Revert extraneous newline change. Can't get it to work with long lines.
+0599	2fb97723ae	Reenable newbot behavior. Finally got it to work (I think).
+0600	91a53f2357	v399
+0601	cebc501caa	Add datarootdir to Makefile.in.
+0602	93b634a49c	Fix unused variable warning.
+0603	381c1035e0	Allow search to find text which follows a null byte, when using PCRE or no-regex (ctrl-R) searching.
+0604	6de7b710e7	Don't warn about binary file if -R is in effect and file contains only ANSI color sequences.
+0605	732559241d	Fix bugs with doing clear_eol in the middle of output. This is problematic on ignaw terminals since the cursor may be stuck on the last column of the previous line and clear_eol just clears that char. Eliminate old -c mode to fix this.
+0606	1d57e9f4d4	v400
+0607	0443c99094	Update docs.
+0608	9f486a0be1	Update copyrights.
+0609	8aa327e3c2	*** empty log message ***
+0610	33e3d6e01a	Doc fixes.
+0611	c264c29943	Fix autoconf bug when memcpy etc are inline.
+0612	37faf9267e	Don't require $ to terminate -j parameter in lesskey file.
+0613	b8770e9c8f	Fix Windows build (no _gettextposition).
+0614	eca4e0be47	Fix bug caused by clear_bot in forw() when long lines are displayed during an F command.
+0615	8dc3532d6a	Add LESS_TERMCAP_DEBUG environment variable.
+0616	196d01c3a5	v405 prelim.
+0617	13e326e337	Fix display bug with -w. Need to move to lower left after moving up to display lines in clear_attn.
+0618	e2216e82b4	Fix secure build. In secure build, ignore shell commands in history file, rather than treating them as search commands.
+0619	995fff5661	Fix configure to include langinfo.h when testing for locale.
+0620	38bf574e6e	Add some checks for thisfile==NULL in ch.c functions. Fixes crash with "less -E file1 file2" when file2 does not exist.
+0621	e20f03a79b	Revert previous change -- allow WINCH signal to interrupt a read. This is necessary to make less resize the text when the window is changed.
+0622	e6c0da4e26	Fix from Ivana Varekova for bug in going to EOF with no newline. Does not fix bug 199.
+0623	0dc8ecf9fa	Accept either ESC-[ or CSI (0x9B) as a start of color escape sequence. Patch from Andreas Wetzel.
+0624	b90fdeb272	v407
+0625	e1cc936b06	Fix -i/-I flags to work with non-ASCII characters.
+0626	9acfdca37a	v407
+0627	77cd6790ed	Make is_ucase work with UTF-8.
+0628	a6b42eb62d	Fix buffer overflow in cvt_text caused by invalid UTF-8 sequences.
+0629	e807f0372b	v409
+0630	7197006c1c	v409
+0631	b8645e0a77	Fix DJGPP build.
+0632	e806daf111	Use wide version of ctype functions if available.
+0633	40e5bfc0bc	Converting to lowercase can make a string grow longer!
+0634	e8cf43d6d0	Use symbolic SEEK_xxx constants in lseek calls.
+0635	a2284a408a	Update copyright date.
+0636	415bbd628d	Fix typos.
+0637	c9a3e7bd8e	Fix adj_hilites to work when length of text changes when it is converted to lowercase.
+0638	c3acfac3f4	Kludge to output an extra " \b" on ignaw terminals when we write a full line, to avoid having the cursor sitting in zombie mode on the right margin.
+0639	08b900840f	Add --follow-name option.
+0640	2024d14802	Fix bugs in --follow-name.
+0641	2187a3f92e	Clarify wording of --follow-name option in man page.
+0642	ed5cd465f9	Fix swapped definitions of curr_ino & curr_dev.
+0643	ac5e70f4b2	Change message.
+0644	a1f7689f90	Clarify some minor points in man page.
+0645	28ce9d5209	Fix crash when searching text containing invalid UTF-8 sequences.
+0646	237c5b6cb8	v416
+0647	be0c7b81d2	Add support for EXEEXT in Makefile.
+0648	60c3cc0cac	Don't use pound sign in temp file name since some systems don't like it.
+0649	c926c45fd0	Don't support single-char CSI when in UTF-8 mode. Prevent buffer overrun with invalid CSI sequence.
+0650	fa4e24487e	Update to GPL version 3.
+0651	c9308ca0e1	Fix bug in searching for text with embedded SGR sequences with -r.
+0652	ca018d8638	Call cmd_exec before gomark to erase the "goto mark:" prompt.
+0653	376bc626a0	v417
+0654	9ed6996c6d	Fix bugs in SGR emulation. Make SGR emulation work in WIN32C build.
+0655	e64932c923	v417
+0656	370d4b5674	Clean up a little.
+0657	48f1a94ee0	Remove WARNINGS section. Clean up some text.
+0658	1eb6033584	Remove unnecessary check for buffer overrun.
+0659	f0c3697387	v418.
+0660	db8fa3ca3c	Fix build with CMD_HISTORY=0.
+0661	29719cec75	Allow CSI (0x9B) in UTF-8 mode.
+0662	d342d8258f	Use entire_file_displayed rather than eof_displayed when checking whether to quit due to -F. Get rid of hit_eof global.
+0663	66b639f400	Fix lastmark bug when jumping to EOF with G command.
+0664	103b80c0d9	Make status column display matches even if matched string is scrolled off screen because -S is in effect. Still doesn't work quite right with wrapped lines. I think it should display a star on ALL screen lines of the physical line.
+0665	f736798508	Add & command.
+0666	586faab78e	Fix build with HILITE_SEARCH=0. Add some comments.
+0667	92e94fa93b	Fix bug in SRCH_NO_MATCH.
+0668	8bc6fc0b8e	Change prompt to &: while filtering is in effect.
+0669	6fddf7064b	Ignore filtered lines while searching. Dispaly & in all prompts while filtering, not just default prompt.
+0670	52c3f66ebb	v421
+0671	5822b60b6a	Fix typo.
+0672	f3f96912ce	Make & command display matched lines, not hide matched lines.
+0673	dc3ce8e229	Output CR at startup.
+0674	a2094bca0d	Fix bug in logic for handling no-wrap terminals.
+0675	2094cbc82b	Fix doc for & command.
+0676	7c4817e58b	Update copyright.
+0677	a624821860	Update copyright.
+0678	8c6e7e4c16	Use "\r\n" instead of " \b" to force cursor to start of next line for non-autowrap terminals.
+0679	6afd79286f	Fix documentation for & command.
+0680	efc6ad4500	Fix compile bug with pcre. Don't filter the help file.
+0681	c9a80fc314	v424
+0682	0e52ce7e09	Fix non-ANSI-compliant code in list handling in ch.c. Fix a few warnings with gcc -Wall.
+0683	a6433b8592	Fix ignaw terminal handling.
+0684	88ae24bc39	Make binary_char work correctly with UTF-8 text.
+0685	cf0d87da6e	v426
+0686	97fb682c67	v426
+0687	0da58d3186	Don't chmod history file if it's not a regular file.
+0688	252b2404d6	-Dn uses "normal background color".
+0689	dadf77bfc8	Don't need to save dir on Win32.
+0690	4c1320286c	Fix SGR emulation: turn off one attribute shouldn't turn off all.
+0691	14d3fc4c5b	Fix win32 code.
+0692	22db8f4fb3	v427
+0693	b05c23c22b	v427
+0694	6a57cbcf4d	Fix bug in PREFIX.
+0695	8b57a2b9a8	Fix problem interrupting the line number calculation for initial prompt. Get rid of nasty lnloop boolean.
+0696	4f3a72dda3	Make sure u_interrupt calls bell() even if intread longjmps.
+0697	81cc29bcc3	Nothing really.  Wanted to restore old behavior where ctrl-C before the Calculating message is printed aborts but does not turn off linenums. This never worked well if the line number request was for the prompt. So leave it like this: ctrl-C while calculating line numbers turns them off, no matter what was displayed.
+0698	22fc07b179	Add "|-" syntax to LESSOPEN.
+0699	5896fb52b0	v428
+0700	4795f21e45	Fix bug in highlighting search match if the matched string is underlined etc.
+0701	9736fb62e3	v429
+0702	1636601a19	Fix MSVC6 compile error.
+0703	b75dba6ad9	Don't pass "-" to non-pipe LESSOPEN unless it starts with a dash.
+0704	8a6ea06477	Update copyright year to 2009.
+0705	c47b93a33d	Allow decimal fraction as argument to the --shift option.
+0706	944f3a7503	Search hilite not displayed if match extends to end of line.
+0707	65a05895aa	v431
+0708	71b2a32827	Fix highlight bug when two search matches are adjacent.
+0709	b39932d6e6	Get rid of adj_hilite.  (Yippee!) Keep track of original char offsets in cvt_text instead.
+0710	f277f65bd0	Try another fix for the unsquashable ignaw terminal problem.
+0711	b1b43aa3f6	v432
+0712	ae4edf38af	Fix search hilite for ".*"
+0713	667e1e43b8	When a char in cvt_text's output represents more than one input char (eg. "a \b a" => "a"), make chpos be the position of the first source char, not the last.
+0714	381f9b5882	Initial revision
+0715	f29af753bd	Code cleanup.
+0716	069a9ae86c	Add pattern.h.
+0717	81842c31ba	Code cleanup.
+0718	312c33c3a5	v434
+0719	0c968a341b	Fix bugs in non-regex filtering.
+0720	444fb78a51	Fix memory leak.
+0721	93f7fa398d	v436
+0722	406e821c22	Run gpg as part of make dist.
+0723	c8a8502bee	Make "please re-enter pattern" message work correctly.
+0724	93cfc44448	Fix typo.
+0725	6393314e0d	Use floating point in percent calculations to avoid resolution limits due to overflow prevention.
+0726	d142caa11e	Set HAVE_FLOAT in configuration.
+0727	d1bc878910	Fix handling of long option names.
+0728	8a6b818555	Split long functions into smaller pieces.
+0729	f15d479846	Make sure we can link floating point multiply and divide before setting HAVE_FLOAT.
+0730	42510c3cc1	Fix typo.
+0731	9848faeeb2	Use linked list instead of fixed length array for ungot chars.
+0732	ca2281fbc4	Fix vs2005 build.
+0733	a71194cacd	Update docs.
+0734	f4b8029944	Remove C++ style comments.
+0735	ba6ec6d965	Allow negative sign in -j option parameter.
+0736	42f5e87192	Fix duplicate definition of less_is_more.
+0737	4ecd6fbfa5	Fix bug in using & filtering with -i/-I: is_caseless was not getting set.
+0738	6568a1ef82	Add %F to prompts.
+0739	36ef58f15a	Use tabs.
+0740	66be2739ce	Fix bug with %t in prompts. Daniel Malament <danielm@bluetiger.net>
+0741	b1634e2e62	Add options.
+0742	2f2190c53a	Exit with status 2 on control-C with -K.
+0743	5e0a40c87b	v438
+0744	5bc14e6bf8	Fix typo.
+0745	52bfb2f530	Add -A option.
+0746	9ec4ed68ad	Don't use current hilite to determine SEARCH_AFTER_TARGET.
+0747	939d219f73	Fix bug displaying prompt after = command which generates an internal unget. Fix bug erasing error message.
+0748	d3fc80a013	v440
+0749	6c57d2d0a8	Update copyright.
+0750	e3095b7fdc	Fix loop in forw_line that doesn't exit on interrupt. Make -A behavior the default.
+0751	85a17288f9	v441
+0752	269a429824	Add ctrl-G line edit command.
+0753	46f16b04fa	Fix search bug: "nothing to search" if backwards search with bottom line empty.
+0754	54dd8834d7	*** empty log message ***
+0755	bc28c4a0e5	v442
+0756	59f85e3065	Win32 fixes from Jason Hood.
+0757	0b5c1e4350	v443 .
+0758	f6c1bed46f	Fix LC_CTYPE typo.
+0759	72f06a4974	Fix search bug caused by inconsistent handling of unget variables.
+0760	6241a527c7	Remove obsolete -l option that causes a crash.
+0761	b0db0eeff2	Add missing parameter declaration.
+0762	3eb5a67529	v444
+0763	78ac4ba20a	Update copyright date.
+0764	6df504eb83	Update help file.
+0765	1e49539f3a	Fix hilite bug scolling back with -J and -S and pattern is scrolled to right. Need to skip to eol in bacck_line so ch_tell later is correct.
+0766	65f1b69e61	Fix hilite bug with backspaces.  If a hilited match is not contiguous in the original file, need to create multiple hilite structs for it.
+0767	98d18dcf97	v445
+0768	63cf29af56	Add MORE environment variable to the list.
+0769	20df17bc2b	blah.
+0770	f78e0955de	Fix some const stuff.
+0771	58e3e26f2f	Fix spelling.
+0772	12f7e10916	Handle CR as a move to start of line. This eliminates the need for pendc and its associated code.
+0773	b6554fca83	Use new CR handling in -u mode.
+0774	47ce9ae095	Document new CR handling.
+0775	1f7606141a	Fix SGR emulation in Win32 compiler. From Eric Lee <saintgimp@hotmail.com>
+0776	34470e55f0	v445
+0777	a221bbf0f2	Revert attempt to process CR better. Gets complicated by folded lines, multibyte chars, etc. Better leave this alone for now.
+0778	ba9ff39063	Use AC_SEARCH_LIBS for regcmp.
+0779	9506f511b7	revert last change; caused display problems. need to rethink this. This whole design is flawed in that it can't handle a backspace sequence that backs up into a segment of the line that has already been output.  Yucko.
+0780	e2fa305d25	Add support for gnu regex.
+0781	9d2b192b6f	Fix some const issues.
+0782	2ffc322057	v445 again.
+0783	15c1f622c9	Add prefix matching to up/down line editing commands.
+0784	8ea33d0072	v445.
+0785	d190574d90	Change email.
+0786	92436cf49a	v445
+0787	525421cc6b	Change "fold" to "wrap" in man page/help.
+0788	d3a29f5c67	v446
+0789	2b0c815fd7	Update lessecho doc.
+0790	37a6c9719f	Add double-pipe syntax in LESSOPEN to use exit status.
+0791	241afb5b0c	Validate LESSOPEN and LESSCLOSE variables.
+0792	9ec0444d4a	Add ESC-F command.
+0793	5461df1ed0	v447.
+0794	c45cdca8a1	bug.
+0795	08173f202c	Text changes.
+0796	3d601956d7	Change to automated copyright message.
+0797	9343b6978a	v447
+0798	effadac7d8	Add forw-until-hilite.
+0799	c828efff88	typo
+0800	60910432cc	Fix leaks.
+0801	1af804fc85	Print name of regex library in version message.
+0802	ed7bed09ba	v448
+0803	67091c551d	v448.
+0804	184f08377c	make release
+0805	6bf1890db2	wording.
+0806	f473a307b9	Fix nondisplay of status column when scrolling backwards and match is past end of line with -S.
+0807	db4a864339	Fix bugs introduced by integrating supposed memory leak fix.
+0808	1b48c06930	typo.
+0809	284d9271df	Fix --with-no-regex build.
+0810	1e533a7842	Allow configure --with-regex=none
+0811	9e64237fe5	Don't call abort.
+0812	148f8164ab	v449
+0813	e335f7fad3	Fix compile error.
+0814	9c8fe8bc01	Put .lesshst file in XDG_CACHE_HOME if set.
+0815	2f0b5dedd4	Revert XDG until we have full support.
+0816	609f6bab6d	Initial revision
+0817	89a2b9616e	Increase max # of user commands.
+0818	1ea5f004ff	Fix bug which retained old EOF position after an ESC-F session. Fix bug which changed ESC-F to plain F after non-abort signal (window resize).
+0819	3e2382dcc4	Add HAVE_FLOAT for MSDOS.
+0820	78662c8f37	Can't fcomplete a quoted filename on MSDOS.
+0821	08628fa2e3	Fix typos.
+0822	ba2080a73d	v450
+0823	032a609a9a	MSDOS SGR tweaks (Jason Hood).
+0824	1da44c0c53	Fix typo.
+0825	48cc3c7496	v451
+0826	a591e756bb	Windows fix, from Eric Lee.
+0827	e7b6501ed1	Fix for stty 0, from Andreas Schwab
+0828	7e6dd00442	Fix for --with-regex=none and some cosmetic issues. Based on fix from g.esp@free.fr.
+0829	0768b48cc7	v452 .
+0830	16e45f7ef1	Allow backslash escaping in command line options ($LESS). Don't quit if syntax errors in command line options.
+0831	4c431976d6	Increase buffer sizes.
+0832	1ab6b8b3dc	Allow pos 0 to be in a pos table considered "epmpty". This is a quick hack fix for the forw-forever in empty file bug.
+0833	26adbacade	v453
+0834	ff160098ce	reword
+0835	20056dd63e	Terminate comment.
+0836	7ddc23334a	v454
+0837	ac151a9137	Fix free() bug.
+0838	fcb013238b	Fix option string parsing incompatibility. Option string should end at dollar only, not space, tab or dash.
+0839	66b20d26a8	Add --use-backslash.
+0840	a5f7b6398c	In cmd_updown, don't copy new string into cmdbuf before calling cmd_home, which needs the old string to determine how far to step left.
+0841	022541f23e	v458
+0842	3c38059084	Fix spelling.
+0843	1839b6e8df	Fix bug with ++/pattern
+0844	460a26ee5a	Use backslash before dash.
+0845	5201f782cf	Incremental search. Not fully functional yet. This version was emailed to matthewlmcclure@gmail.com on 6/19/13.
+0846	8df3281da5	In incremental search, allow pattern entry even if prefix of the pattern is an invalid pattern.
+0847	5292292f5a	Incremental search
+0848	e54aaa1e96	Remove personal email.
+0849	bbc5cd72db	Automate construction of Unicode tables.
+0850	67ddcbde55	Rename unicode files to 8.3.
+0851	71e5ff1503	cleanup
+0852	b44972debe	copyright date
+0853	f00678031a	Call put_wchar to avoid duplicate code.
+0854	3a50de464b	Collapse multiple CR before LF.
+0855	0b3016fc52	v461
+0856	409025b983	add some dots, add use-backslash
+0857	12b07b605c	Force BS_SPECIAL when viewing help file.
+0858	c37a76b8b0	doc
+0859	a6aecc13de	Use REG_STARTEND if available.
+0860	22c4f5bc17	Clarify
+0861	9010afcc62	Don't overwrite history file; just append new entries.
+0862	03c980ba47	Remove unused variable.
+0863	93bf8b1cf0	Cleanup/fix new history file writing.
+0864	a40caf95c2	v462
+0865	e6a0f93008	Make configure writable.
+0866	30e5898d0b	ifdef out incremental search
+0867	8241dcc211	searchstack only used by incremental search.
+0868	6a0a5d1da7	Initial revision
+0869	f92e9f4f2d	Use macro for copyright message.
+0870	cbf9c24191	remove incremental search
+0871	1dbcb0ec65	v462
+0872	b904ad1706	Use more portable char for temp file name.
+0873	d95e031a4c	Larger hash table for better performance.
+0874	e5cbe2b9a0	Remove partially implemented INCREMENTAL_SEARCH
+0875	7622a31492	?
+0876	807fc6c8e6	nits from Bjarni Gislason
+0877	5d90e0a51e	In more mode, -p should apply to every file.
+0878	1fb4c3195c	Fix -e option in LESS_IS_MORE mode.
+0879	5180d43c8f	Fix some signed char types.
+0880	4e4c428f5f	v463
+0881	ef6da456ca	Initial revision
+0882	751e106f04	Implement ESC-G command.
+0883	c4336a6a68	v463
+0884	9a42928212	Fix bugs & improve performance with ampersand filtering. From John Sullivan
+0885	875842d6e6	Update year
+0886	40b3459166	v465
+0887	7d8381958c	Fixes from John Sullivan.
+0888	84b87e2c61	Add colon to ANSIMIDCHARS
+0889	ab98ba3d0d	Remove incremental search
+0890	6a485256f8	v466
+0891	cfa78e88fd	Add colon to LESSANSIMIDCHARS
+0892	7d603c53dc	Fix leak in error path.
+0893	1d913fef05	MSDOS fixes and leak fixes from Jason Hood
+0894	f3dfed2cf8	Update copyright
+0895	ed46cdcb5e	v467
+0896	233e6e6b63	v468
+0897	1fc6bbf012	Add missined change.
+0898	71ef532818	Change type of get_time() to time_type, not long.
+0899	fc16153717	Fix some compiler warnings.
+0900	9f30105504	Use REGS_UNALLOCATED since gnu regex seems to write past the end of the registers array if you allocate it yourself.
+0901	090027e16a	Document --with=regex=gnu
+0902	20af9b3f13	Use explicit END_COMMAND char instead of checking whether cmdbuf is empty when ungetcc runs out. This allows extra chars in lesskey file to append to a search command without executing it.
+0903	262c133fe7	v469
+0904	2dbef2b147	Fix some compiler warnings on 64 bit architectures.
+0905	3db6f9bc04	v470
+0906	265f1911fd	Make ++command work again.
+0907	fc70407c59	Allow compiled value of LESSHISTFILE = "-" to disable history.
+0908	75ba30f74b	Don't close -1 fd.
+0909	97b9ea9e2b	Fix missing prompt with +G.
+0910	6ca8d98381	v471.
+0911	0ebfe607e1	Avoid releasing writable files.
+0912	6c088d2073	Cleaner way to fix permissions.
+0913	ba7fe4272f	Clear forw_prompt after printing stuff; this fixes prompt bug with -^P in lesskey extra string from stdin.
+0914	b8dd3640aa	v473
+0915	9e14d60b01	Fix crash with -g and search for non-match.
+0916	72d9c93c86	In follow mode, reopen file if it shrinks.
+0917	d47b8c3c94	Can't call adjsline with BOTTOM_PLUS_ONE parameter.
+0918	8a455d0935	v474
+0919	05f68016ea	remove file if exists and not writable.
+0920	dcf4efad35	Doc ESC-F.
+0921	5c636454c0	Add missing case for NO_REGEX
+0922	5bfab85a88	Fix possible buffer overrun with non-well-formed UTF-8 sequences.
+0923	b37db0c0ff	v475.
+0924	9406dbfd88	Fix crash in non-match search.
+0925	a4c26ff590	Add missing NULL_PARG parameter.
+0926	c61cbd6ff0	v476; update man pages.
+0927	880e228715	Fix off-by-one error in jump_forw_buffered. Don't add FAKE_* files to cmd history.
+0928	49c1fe4b03	Fix nonportable pointer usage; caused unaligned access exception on Sparc.
+0929	d09fd17b62	Update copyright to 2015.
+0930	eb0527445c	2015
+0931	869d6b48fd	Add missing parameter declaration.
+0932	8f2bb91b3e	Make configure executable.
+0933	b07669db7c	Allow %% escapes in LESSOPEN.
+0934	75bc4d5614	v479
+0935	9f296ac145	Support MSVC v1900 (Gisle Vanem)
+0936	d43766d461	No-regex searches with upper-case were not working.
+0937	f0a6857dbe	v480.
+0938	23570513c2	Fix broken -g option.
+0939	a3304f339b	Allow LESSCHARSET=utf8 and UTF8.
+0940	db2b7b05b0	Call init_cmds before reading environment variables (so #env works)
+0941	9ec6543daf	*** empty log message ***
+0942	afd2d10462	Initial revision
+0943	2d68003ce1	Fix run logic.
+0944	cae36fef4b	Update Unicode tables. # Date: 2015-06-16, 20:24:00 GMT [KW]
+0945	88e9d8e5ce	v482
+0946	32ffd5f6da	typo
+0947	0302101391	Count Fullwidth chars as wide.
+0948	9acb52be57	In building wide.uni, count Fullwidth chars as Wide.
+0949	a456c0b39a	Regenerate hilite when changing search caselessness. (from Jason Hood).
+0950	77e2f0c3ea	*** empty log message ***
+0951	32fd3bad25	Fix bug when terminal has no "cm" (from Noel Cragg). Add s command to help. Handle shift-TAB in DOS (from Jason Hood).
+0952	34b62d5503	Revert last change, breaks arrow keys.
+0953	5c44a210fe	Update Unicode tables to 9.0.0.
+0954	1aaed0f7d4	v483.
+0955	a37ade5d9d	v484
+0956	260a3aa32a	Fix "nothing to search" bug when top/bottom line is empty.
+0957	a694f785c7	v485.
+0958	b440f1e624	Update Windows makefile per Jason Hood.
+0959	09dc2c8d6b	Make line numbers bold.
+0960	93aa0b60b4	Fix debugging feature: hex mode char entry.
+0961	0ddcef38a4	v485
+0962	9e90a13dae	2016
+0963	d8cbf6485c	copyright year 2016
+0964	9704fd89ea	Fix incorrect display when entering double-width chars in search string.
+0965	62ae16d25b	v485
+0966	d85fa16673	Add comment.
+0967	e5c195113d	New commands ESC-{ and ESC-} to shift to start/end of displayed lines.
+0968	e8547670d6	New option -Da in Windows version to enable SGR mode.
+0969	333ba073cb	Format configure help message.
+0970	2b6e4b302e	With -J mark truncated lines.
+0971	f8f3304e43	v487
+0972	a6cf9500f7	Make chop marker work for backwards movement.
+0973	eef0a8f640	Revert chop marker; not working right and don't feel like debugging it.
+0974	2a10dff1cb	v487
+0975	10f1fd724e	Fix memory leaks.
+0976	068306f8f5	v488
+0977	7656c13770	With -F, do not output ti/te if file fits on one screen.
+0978	0632a0fbc7	v489
+0979	301f4d7125	Update copyright date.
+0980	eea49fceb0	Fix inconsistent types of jump_sline_fraction and shift_count_fraction.
+0981	ceda5a2b23	Use ANSI prototypes in funcs.h declarations. Fix const issues. Remove register declarations.
+0982	f6024d4095	v490
+0983	f136880c71	Initial revision
+0984	c295d1d965	Don't use struct tags before defining it.
+0985	31424f6f7b	Change LPARAM to LESSPARAMS.
+0986	5270d70582	Use VOID_PARAM in declaration of functions with no parameters.
+0987	8a83989a14	Fix some signed char problems.
+0988	3089b3f669	v491
+0989	7d054855c0	formatting
+0990	a9aae525c9	Handle SIGTERM.
+0991	c109c579ed	Fix memory leaks (Anton Lindqvist).
+0992	1df52d2763	v492
+0993	36f5f2ea9b	Remove incorrect "constant" declarations.
+0994	2f82fd943f	Restore missing #else for MSDOS build.
+0995	fe7a44262d	v493
+0996	8981691586	Update unicode tables.
+0997	204c932676	Make Cf chars composing (zero width printable), not binary.
+0998	e55dedd040	v494
+0999	526df45745	Improve binary file detection.
+1000	38d9774313	Fix compiler warning.
+1001	3430d4556b	Call init_cmds before get_term, so get_term can use env variables set in the lesskey file.
+1002	1c670f2fa4	v495
+1003	b1a829bf2b	Do cvt filtering for tags matching.
+1004	4b6c36e363	Revert previous change (arrow keys don't work).
+1005	dcbd06b464	v495
+1006	3601542997	v496
+1007	80a9a6e18b	Add right scroll truncation indicator LESSRSCROLL.
+1008	4d4e2b1103	Don't show rscroll indicator if -S is off.
+1009	9aadfbb3b9	v497
+1010	a898886e88	Comments.
+1011	d4880cc3aa	Wording.
+1012	6482c32c9a	Do cvt processing for ANSI colors used in syntax coloring for tags.
+1013	6295563dce	v497
+1014	2b13b4e80e	Don't flush buffers for popened (LESSOPEN) input when closing file (eg. view help file and return).
+1015	dde99f5d11	Fix off-by-one error that truncated a line too early if the last displayed char was double-width.
+1016	58c40b58ec	Avoid extraneous bell.
+1017	61bcd4be15	fix for non-utf_mode
+1018	d169680cf4	Allow TERMCAP_ env vars in lesskey file.
+1019	a7a3453551	Add params to function declarations.
+1020	3fa3755ae8	signed char fix.
+1021	725393a92c	Reset cursor before executing tags movement commands.
+1022	e339cc1a18	Expand cmd tables in separate step to allow init_cmds to precede get_term.
+1023	7ee6b09b11	Revert bin_file change.  Percent based algorithm doesn't work well on small files.
+1024	5651293215	Make undo search stop searching, not just hide the highliting.
+1025	c62488c526	v499
+1026	746d4ba9b1	Comments.
+1027	0ddb9440f0	v499
+1028	3a6780175e	Replace tabs with spaces.
+1029	d6e175e61c	Expose expand_cmd_tables as a separate step so we can call init_cmds before get_term.
+1030	b1f1dfba78	Add ANSI function parameter declarations.
+1031	499f42afce	Reduce duplicated code.
+1032	0e6c69a516	Add ANSI function parameter declarations.
+1033	6587cdeec3	fiddling
+1034	4eb9d6052a	Whitespace
+1035	9f14ab11cd	Allow * and attribute at start of LESSRSCROLL.
+1036	37c354a842	Change setbinfmt -> setfmt and pass pointer to attribute.
+1037	b2a3d20edf	Document attribute indicator in LESSRSCROLL.
+1038	1362f1e248	v500
+1039	6d399aee5a	v501
+1040	674468f9bd	Make sure rscroll char is standout by default.
+1041	9db4099df1	Control rscroll char via command line option, not env variable.
+1042	20b260c63b	v502
+1043	0e360d3fc3	Use git instead of RCS.
+1044	291a375792	Change mkhelp.c to mkhelp.pl Make sure opt_rsearch gets called at startup.
+1045	14c8b9f560	rm help.c.old
+1046	4ca9c1f312	Remove doc for reverted feature.
+1047	a1171f63ad	Fix possible extraneous free().
+1048	ded5c3d84d	Add M command. Make attn mark appear even if attn line is zero length.
+1049	05e12cd13d	Add M and ESC-M commands. Fix buffering bug when using stdin with LESSOPEN pipe (h,q displays corrupt data).
+1050	2e45e53682	Better fix for ensuring 0x00 bytes are detected as binary in utf-8 mode. Warn if no %s in LESSOPEN, not only if >1. Tabs.
+1051	5b33a362a0	Add M and ESC-M commands to lesskey.
+1052	8d5aefff97	Remove junk file.
+1053	00f4fba476	Windows: if console is not UTF-8, convert UTF-8 to multibyte output.
+1054	2a35092d04	Windows: handle "extended" chars, where first byte is \340.
+1055	c2fcbf9609	Revamp how shell quoted filenames are handled. Fixes some bugs in viewing files with strange names like \.
+1056	88704d04f1	Remove some junk files.
+1057	b5a4d5f204	Remove junk file.
+1058	af8625c50b	v507
+1059	17a355253f	Move some globals into struct ifile because there can be more than one. If LESSOPEN is used to read stdin, the pipe cannot be closed when another file is read.  So there may be two altpipes open at the same time.
+1060	d11bc37541	v508
+1061	2195072f46	Don't reopen an ifile that is already open.
+1062	2df89e03e7	v509
+1063	8e55e2d499	Fix underlined punctuation in man page.
+1064	b4f5fe1e96	Fix bug in determining when to reopen a file.
+1065	18e00883e5	Override some chars marked as control in unicode tables but are expected to be found in normal text files.
+1066	f0f0eda636	MSDOS fixes from Jason Hood.
+1067	a5326fd1df	v511
+1068	e31e1bf4cb	Fix MSDOS build.
+1069	e60f8ae078	With -R, fix switching to normal attribute at end of line when using rscroll.
+1070	3b5f62789d	v513
+1071	0f6d609978	Fix bug in fcomplete when pattern does not match any file.
+1072	6af53418c4	v514
+1073	0734f75210	On Windows, allow 'u' in -D option to enable underline.
+1074	918c30703d	Fix bug using LESSOPEN with filenames containing shell metachars.
+1075	e18fb5a6bb	Make status column show search matches even if hiliting is disabled via -G.
+1076	d6eaac2f37	v517
+1077	7036bd256d	Use underline in sgr mode in MSDOS.
+1078	1774516974	Fix rscroll bug when last char of line starts coloration.
+1079	bf228a7124	Fix warning.
+1080	a1ddb70016	Fix compiler warning.
+1081	6edb42041f	Add github address to README.
+1082	a4cf3446db	Fix binary file warning when UTF-8 file contains SGR sequences.
+1083	3af9450635	Factor out common code.
+1084	f86346ad00	Removed unnecessary extern.
+1085	9ec5b86288	Convert keypad Enter sequence to newline.
+1086	e863fd8e48	v522
+1087	1566a4fd4f	Refactor a little.
+1088	dc87a2d736	Cleanup kent handling.
+1089	7f52154f2d	Need to use LWCHAR not char in several places (must hold CHAR_END_COMMAND).
+1090	a89ae061d7	Can't use an array of LWCHAR as a char array.
+1091	0a150b3b08	Change M command to mark bottom line on screen.
+1092	3e9e5aa924	Comments.
+1093	aacde3b87a	Fix search hilite bug introduced in v517.
+1094	39ffe1b2a5	Minor clean up, better distinguish between sline and sindex. Fix off-by-one bug in '$. Document M and ESC-m commands.
+1095	1df389457b	Fix disappearing highlights when repeat search on last page (bottom line is tilde) with -a in effect.
+1096	1093e0314d	v527
+1097	eafce83d66	Make a second ESC-u clear the highlight markers in the status column.
+1098	2170e9225c	Doc.
+1099	07c14bb6bc	Treat Unicode formatting chars as control chars if -U is set.
+1100	0b6c641729	Fix cfi-icall breakage (#1)
+1101	f2575ef2d2	v530
+1102	4383e2e5cc	Add --nohistdups option.
+1103	2c44373355	Fix bug with v command on empty file.
+1104	c0da180cf8	Fix bug in v command on empty file. Fix bug in v command on filename with shell metacharacters in name.
+1105	2ae630c1b7	Document new %g format in prompts.
+1106	d0131ed5ef	Update copyright date.
+1107	7795603c78	Redraw the screen after SIGWINCH even if screen size has not changed.
+1108	7d480c6242	v532
+1109	b61df4af43	Shell-escape filenames in history so they can be used again. Use PCRE_UTF8 flag for pcre regular expressions when in UTF-8 mode. Windows: use wide-char string to set console title.
+1110	727462740e	Punctuation in help file.
+1111	5393f049df	Support PCRE2.
+1112	bc231ee311	Don't count lines of initial screen if using -X with -F.
+1113	3cce7e4754	Clean up dead code, comments.
+1114	9e7f905530	Use descriptive error messages for PCRE2.
+1115	e313b84aaf	Add pcre2 to README.
+1116	ba7c842617	Support mingw build system.
+1117	cb1ced4a78	Clean up some WIN32 code.
+1118	ad0e395cfd	Possible fix for spurious input on Windows with CAPSLOCK.
+1119	55b5b978f6	Configurable regex for mingw.
+1120	726d77f2b2	Add --mouse option.
+1121	10abebdfa7	Add --MOUSE.
+1122	11946a68d3	Add LESS_TERMCAP_MOUSE_{START,END}. Minor rewrite of mouse decode.
+1123	8a604bbb62	Support mouse on WIN32.
+1124	dd8c4cd820	Add --wheel-lines option.
+1125	92aa806083	v542
+1126	74c8c82d7a	v542
+1127	1ef714144c	Add isnullenv.
+1128	fed277e50e	Code cleanup.
+1129	c6b94935b5	Fix default wheel_lines, minor cleanup.
+1130	16903bf060	Fix bug in displaying status of -F option.
+1131	83ee710290	Code cleanup.
+1132	a28aa3deda	Simplify code.
+1133	cd9474b670	Coding stuff. MIAFB
+1134	03e656bee4	Don't output keyboard init or mouse init if -F and file fits on one screen.
+1135	e5beb236ce	Make --mouse toggleable. Fix toggling of triples by the -- command (- worked correctly).
+1136	cdf5bc3799	v544
+1137	baa42c3394	Fix a couple of memory leaks.
+1138	a99d428fbe	Fix WIN32 build.
+1139	c6a8071f98	v545
+1140	128c1dfe9d	Add --save-marks option.
+1141	19d4b0ed86	Comments & cleanup.
+1142	97e0db03f8	Fixes for .mark section in history file.
+1143	5048f6daa4	v547
+1144	93c26ca326	Ring bell on each char of invalid long option name.
+1145	7ef6e9b2e7	Use last_component.
+1146	403f90ddcc	Don't save mark on stdin.
+1147	c0f8cff2e5	Move all regex #ifs to pattern.c.
+1148	ed7a7b56de	Code cleanup.
+1149	d2e6e27f00	Ignore mouse input when line editing.
+1150	82c1a843aa	v548
+1151	301f5de95f	Support X11 mouse reporting extension 1006.
+1152	6643e8d4b5	Kludgy fix for Win32 kill char being ESC.
+1153	83ce2abbe2	Just changing some names.
+1154	8496e5a0bd	Correct delay algorithm for MSOFTC. Minor comments & formatting.
+1155	950a3d9b13	Fix lastmark bug introduced in v547.
+1156	0ea425d0cf	Comment.
+1157	319909fe3e	Rather than reading and discarding mouse events when they're not wanted, just disable mouse reporting in the terminal. This is much simpler than trying to handle weird cases like a mouse command occuring in the middle of another command (eg. ":n", with a mouse sequence between the two chars).
+1158	27a2e8192b	Merge branch 'master' of http://github.com/gwsw/less
+1159	7f62776437	Add VOID_PARAM to definition of functions with no parameters.
+1160	be3e32df8b	Avoid sending multiple MOUSE_START sequences.
+1161	df16f456e0	When LESS_TERMCAP_DEBUG is set, send "<bs>" rather than real backspace.
+1162	f39337d612	Win32 fixes.
+1163	611fdd706b	Update Unicode tables.
+1164	4ce37eb7c3	Add commands to download Unicode tables.
+1165	805ddb8d76	Check in unicode tables for build repeatability.
+1166	1baf042d87	Make git tags annotated.
+1167	61f6fe6d7c	Fix missing braces.
+1168	1a5aba1b38	Don't use tputs in MSDOS builds.
+1169	51f4feb7a8	Add --wheel-lines to help.
+1170	d5015d29f7	Don't emit mouse controls if --mouse is not set.
+1171	6de5ec6be4	v550
+1172	d75674a1e3	Update copyright date.
+1173	9c872fd281	Change bug reporting to use github.
+1174	fe56985c84	Use safer example script.
+1175	85d7f6e8ea	Merge branch 'master' of https://github.com/gwsw/less
+1176	b10a608a8c	v551
+1177	f0475cce07	Remove ';' after function definition (#15)
+1178	2436151e2c	Make sure public functions parameters are unaffected by argument promotion (#14)
+1179	15940087ac	Update Unicode tables.
+1180	a85df588c2	Use ANSI prototypes for static functions. (#17)
+1181	cae21f81c8	Force Hangul Jamo medial vowels and final consonants to be zero width. Fixes #20.
+1182	0474ed2db7	Clarify description of -S.
+1183	008a6d964f	Rebuild Unicode tables.
+1184	d5a63933e4	Add support for libtinfow. Fixes #19.
+1185	a28342ca49	v553x
+1186	a2f1742546	Merge branch 'master' of https://github.com/gwsw/less
+1187	0e3d155408	Fix initial color detection on Windows (#26)
+1188	4b7b8d812c	v553
+1189	0713eaf8d9	Add support for building with MSVC for x64 Windows (#33)
+1190	b88820d3af	Remove redundant preprocessing of the less.hlp file (#34)
+1191	520e5c6ea3	Remove erroneous free() in use_logfile.
+1192	0f0235a96e	Fix special character bindings not working when loaded with -k (#38)
+1193	350bddc753	Merge branch 'master' of https://github.com/gwsw/less
+1194	948a21e3c2	Update version number.
+1195	dc815a7b76	v554
+1196	98dd024fb5	Consistency.
+1197	ada582c036	Document how to build from a git repo clone. Fixes #39.
+1198	c25faac53b	Add opt_toggle_disallowed to abort toggling a string option before the user enters the new string. Use it to abort -o if the input is not a pipe.
+1199	0d8178ea0f	v555x
+1200	23182cf8b3	Improve make -f Makefile.aut clean. Docs.
+1201	14946896b9	v555.
+1202	e3480cecaf	Fix build of defines.h.in.
+1203	03c8db0da7	Update copyright year.
+1204	d48f8f580a	v556.
+1205	1c533a6ec4	Don't use PATH_MAX.
+1206	7aa94f98ad	Make termbuf static so termcap functions can access it after get_term returns.
+1207	f15f9d3659	Minor memory leak.
+1208	fe34920cac	Comment.
+1209	e27853c89b	v557
+1210	8ff8ef9ea4	On WIN32 build, don't init terminal if -F and file fits on one screen. This makes WIN32 behave like other builds.
+1211	a737ff2d16	Fix previous Windows fix.
+1212	84ae6db1de	v559
+1213	64eaf976c8	Revert 58c40b58eca84f5e336cad7f63c2f4e9aea97073. Unintended consequences, such as 'p' in squished state doesn't do anything (should repaint unsquished).
+1214	75c052dd1e	Remove duplicate call to bell().
+1215	e8a6d86824	Remove unnecessary and incorrectly used variable same_pos_bell.
+1216	8d3d2b065c	nroff fixes for less.nro.VER.
+1217	151e0ea96d	Merge branch 'master' of https://github.com/gwsw/less
+1218	17254b3325	nroff fixes for lesskey.nro.VER.
+1219	c99bb26ee2	Update NEWS.
+1220	87599e930a	Fix erroneous EOF calculation when F command is interrupted.
+1221	73f9f66b05	v561
+1222	c93a6399d9	Add -t to nroff command for table.
+1223	f4cf11aafc	Clean-up nroff again (#64)
+1224	1dce2e168b	Update Unicode tables.
+1225	4b65417b77	Revert 1c533a6ec44ccf50a6155f5f77f02f20820c7f40. Not all implementations of realpath() support a NULL second parameter.
+1226	f6c1b84506	v563
+1227	815ed449e5	Create only one ifile when a file is opened under different names.
+1228	637350f2c9	Fully replace email with github in bug report instructions.
+1229	329b2150bf	Remove /MD flag from Windows compiler to avoid dependency on vcruntime140.dll. Fixes #71.
+1230	0b6f4d3717	Minor documentation formatting.
+1231	46fe29aa0b	v564
+1232	c9f84bdc64	Avoid unnecessary calls to realpath().
+1233	dbf4679bef	Remove extraneous frees, associated with removed calls to lrealpath.
+1234	3f789e7b52	v565x
+1235	9ea92b9c38	v565x
+1236	d20779e66f	Clean up README a little.
+1237	7b1787ed1a	Add ESC-U command; change ESC-u to toggle highlight.
+1238	be19239611	Change CLEAR_PATTERN to SET_NULL_PATTERN to avoid confusion with clear_pattern.
+1239	8bd5c7a1b4	Avoid spurious empty lines before the beginning of the file (#93) (#94)
+1240	7ac97b4916	Merge branch 'master' of https://github.com/gwsw/less
+1241	00f19928a4	Fix configure for Xcode 12 (#92)
+1242	f7ac16a5b4	Merge branch 'master' of https://github.com/gwsw/less
+1243	8fdcfa9511	Add ESC-U command to less.hlp.
+1244	4399ca7b8d	Merge branch 'master' of https://github.com/gwsw/less
+1245	6c6bee2ffb	Fix crash when call set_ifilename with a pointer to the name that is already set in the ifile. In that case it was freeing the existing name and storing the new name, but when they are the same, that stored a pointer to a freed buffer.
+1246	d68ff50393	Update version.c
+1247	95914ba23d	Merge branch 'master' of https://github.com/gwsw/less
+1248	fb2016a3e5	Add Makefile.wng to dist tarballs (#81)
+1249	27e2643875	Add wrap-around search modifier. (#82)
+1250	4c1b4f55f0	Revert unnecessary complication in set_pattern.
+1251	95292469ce	Update documentation.
+1252	04465ebe62	Add Markdown version of README, and Python versions of mkhelp.pl and mkfuncs.pl.
+1253	0f810ef167	Make -R support OSC 8 hyperlink escape sequences.
+1254	3087a2c660	Fix typo.
+1255	416a2cc9e0	Move ansi processing out of store_char into do_append.
+1256	e5c98f486b	Documentation.
+1257	2c27490706	Add Markdown version of README, and Python versions of mkhelp.pl and mkfuncs.pl.
+1258	bed6435d88	Merge branch 'doc' of C:/Users/glorious_rise/Git Repos/less into doc
+1259	65d73a2b54	Remove unnecessary call to pshift in pappend. The logic doesn't work if the curr position is close to the point where pappend decides to do the pshift. It's unnecessary because we call pshift in pdone at the end of the line.
+1260	8839365438	Comments.
+1261	3bb781ea44	Reset horizontal shift when opening a new file.
+1262	85e911c128	Merge branch 'doc' of https://github.com/clin1234/less into clin1234-doc
+1263	1a1651cfbd	Merge branch 'clin1234-doc'
+1264	2e81b11d31	Remove README.ver.md file. Currently out of date with README.VER, don't really want to have to keep them in sync.
+1265	67b54db181	Fixed file modes (#98)
+1266	1bafa63fbb	Documentation. v568
+1267	41ab525a22	Merge branch 'master' of https://github.com/gwsw/less
+1268	6a070fc537	Allow multiple & filters to be in effect.
+1269	5bf862fde4	Allow control-X to interrupt F command loop.
+1270	50520ff4bc	Documentation.
+1271	5f84b68648	Better error message in the unlikely case that the system has sys_errlist but not strerror.
+1272	5cc6f71017	Unfortunately (and unbelievably), it appears that poll() does not work on /dev/tty on MacOS.
+1273	7b0cce5729	Reduce sleep time when waiting for data in F command, from 1 second to 2 milliseconds. This is just intended to reduce system load, and a 2 ms sleep should be plenty nowadays.
+1274	23dac1c8a0	Patch for Windows virtual terminal, from Jason Shirk and Jason Hood.
+1275	0483cf9d5e	Documentation.
+1276	df1494f482	Exit F mode if poll gets hangup or error on input file.
+1277	f040c835b0	Make interrupt clear any & filter. This allows an escape from filter pattern with few matches in a large file.
+1278	0ea0ceed89	v569
+1279	26e91bdf17	Allow ^X to exit F mode on Windows.
+1280	879c4e5819	Use getchr to slightly simplify code that reads ^X during F command. Use read rather than iread in getchr to read tty. iread is designed to read the input file fd, not the tty.
+1281	607c9b6373	Better handling of multiple -p and/or + command line options.
+1282	33f4ebff1f	Reimplement linebuf support for horizontal shifting. Now shifts incrementally, as each character is added, keeping a small (currently 1 char) non-printed buffer to the left of the first printable char in the line. This allows overstrikes to work when they are near the left edge due to shifting.
+1283	639197fde8	Correctly handle horizontal shifting of multibyte characters.
+1284	f6e5303d8e	Partially revert 879c4e5819cc2a891b9c79738d1db4a24a124119. Must use iread() rather than read() to read tty, so that it can be interrupted by a signal.
+1285	1322056f67	Documentation.
+1286	65e5afd5f4	Display status column and line numbers correctly.
+1287	143ba3450a	Fix handling of ANSI sequences in a wrapped line.
+1288	4d6a046c6b	v570
+1289	13f1a7d9ef	Add --line-num-width and --status-col-width options.
+1290	f580946636	Fix bug in backc: not decrementing end_column correctly.
+1291	9308650db0	Remove erroneous line truncation logic in store_tab.
+1292	5bdb27735a	Windows: Fix ^C cancelling & (#107)
+1293	f7d346cfbf	Fix typos in mkhelp.py (#106)
+1294	b398971e38	Fix broken attn highlighting in status column (-w with -J).
+1295	1aad5cb07e	Add spurious space to empty lines when -w is in effect, so that the attn highlight will show when applied to an empty line.
+1296	5c20a61084	Merge branch 'master' of https://github.com/gwsw/less
+1297	b0ebcd4bea	v571
+1298	a094f6fa03	Save lastmark in history file along with user marks when --save-marks is in effect.
+1299	b3dc6d35e6	Simplify funcs.h build in Makefile.aut.
+1300	0113a2e9dd	Don't toggle mouse reporting when entering command mode; instead just read and ignore mouse reporting string.
+1301	36bc45e94e	Highlight search match asterisk in status column.
+1302	d5d4ad0266	Regularize some constant names.
+1303	f3196135c1	Protect from buffer overrun.
+1304	d5469898a0	Specify the invalid option letter when complaining about it.
+1305	9e0c907952	Better handling of error messages before initializing terminal.
+1306	2b224d352b	Simplify decision on writing to stdout vs stderr. Add debugging code to assert that we don't do screen manipulation before terminal is inited.
+1307	ee5e2718a7	Just whitespace.
+1308	0af04471e9	Don't rely on tputs to handle tty delays (specified by $<..> in termcap strings). This makes visual bell (flash) look better on some terminals.
+1309	8776795460	v572
+1310	26184dc040	Merge branch 'master' of https://github.com/gwsw/less
+1311	222c93b0d4	Merge
+1312	5eaf6be8d6	Protect against malformed termcap delay string.
+1313	2df9dca346	Ring end-of-file bell no more than once per second.
+1314	d4faa92229	Documentation.
+1315	ce39a10018	v573
+1316	d7a8adcdd7	Don't send final ">" in a termcap delay string to the terminal.
+1317	2f84783e8d	Merge branch 'master' of https://github.com/gwsw/less
+1318	e8692ce928	If a multi-char representation of a printable character starts on screen but extends past the right edge, display just the part that fits on screen. Previously we truncated the line before the start of the char, which produced a ragged right edge and put the rscroll indicator in an unexpected place (not in the rightmost column).
+1319	d7f6d4ec58	Fix some problems with backspaces in the input.
+1320	b78cd2aec7	v573
+1321	faa7c275fb	Update copyright date.
+1322	897ab77378	Make sure pre-print attr is initialized; minor cleanup.
+1323	acf3677646	Set version.
+1324	000b93b810	Change home page URL to use https.
+1325	522afe5c92	ignore *.o and other generated files (#102)
+1326	ae3757b5f1	Add incremental search and --incsearch option.
+1327	fdcc06cf76	Merge branch 'master' of https://github.com/gwsw/less into master
+1328	b09a0c452d	Documentation
+1329	b8c48b5ca7	Add note to --version message in experimental builds.
+1330	0cc1040442	Pass WRAP flag through to incremental search. Shorten SRCH_WRAP_AROUND to SRCH_WRAP.
+1331	71b6ff73d9	Correct year in default copyright notice to year of first publication.
+1332	e853c28e91	Just whitespace changes. Expand all non-initial tabs. Use consistent initial tabs for indentation.
+1333	2834932c7f	Fix some whitespace issues.
+1334	1ea3a68035	Fix build when HILITE_SEARCH is disabled.
+1335	4e33bffb36	Merge branch 'master' of https://github.com/gwsw/less into master
+1336	726022639a	v574
+1337	85188af262	Remove www. from home page URL.
+1338	9b718ada45	Make histpattern return negative value to indicate error. Avoid "Pattern not found" message after "Invalid pattern".
+1339	938c6714ff	Revert to e853c28e91899e9c174fae7560b28ca41e3785e3.
+1340	5656f21aba	Fix copyright message again.
+1341	6e3cc82ae3	Reapply 2834932c7f6d6a33e1aeb407e31eab043fd8496b
+1342	ce2f779bbb	Reapply 1ea3a680352185769769aa33853f352f05a507c8
+1343	a8249f20f2	Reapply 9b718ada456d49c795278328ed9d4d6f7f19686d
+1344	09a76d3fd0	Lesskey: don't translate ctrl-K in an EXTRA string.
+1345	ee31d9733b	Whitespace fixes.
+1346	2e48581900	Fix -Wexpansion-to-defined compiler warning.
+1347	f3ebd01bf4	Whitespace cleanup in .h files. Remove tabs.
+1348	44d5f63af2	v575
+1349	ddae69371a	Make sure a search match is on screen after a search in very long lines.
+1350	4a356316bb	In -S mode, scroll horizontally after search to make sure search match is visible.
+1351	cd1260bb60	Simplify logic.
+1352	f617547b70	Make sure pwidth doesn't access linebuf. Should be independent of linebuf for public access.
+1353	d1fe3e1535	Improve search exposure changes (in ddae69371adb00dc0199e12c0e8672076ff26a85 and 4a356316bbf103d21dbd4adc0ea19b7904881b04) to handle multibyte chars etc.
+1354	7d5d74fec1	Don't unnecessarily read to end of line in forw_line_seg.
+1355	c988d16821	Pull complicated Windows-specific flush code out into separate function.
+1356	1d44a4eda3	Fix #if condition.
+1357	952841a822	Move to experimental status.
+1358	9215563cf6	Merge branch 'master' of https://github.com/gwsw/less
+1359	c967de03b8	Merge branch 'master' of https://github.com/gwsw/less into master
+1360	cd1fa3cdde	Add --use-color and implement --color for non-MS-DOS systems.
+1361	c6eb7aad78	Unify -D option and color handling between MS-DOS and non-MS-DOS builds.
+1362	5e9e01a0aa	Windows build fixes.
+1363	d5b811c14e	Windows build fix.
+1364	0cecceadf1	Windows color fixes from Jason Hood.
+1365	9224e73eb2	Use proper type.
+1366	1bae7a10cd	Redesign color handling, less per-platform implementation.
+1367	cb1bba8b67	Add + syntax to -D option.
+1368	c3dcf365e2	v576
+1369	4d4e6f4676	Call ttyname() to get the name of the tty device file.
+1370	6e7a45cc35	v577
+1371	87140af287	Documentation
+1372	135d47cfcb	Begin v578
+1373	b77ae53d6b	v578
+1374	8912e6b589	Fix some problems with double-wide chars.
+1375	9fa9be5c20	Fix problem when shifted so that half of a double-width char is shifted off the left edge. The extra space we add to the buffer to replace the half-char that we cannot display should not contribute to end_column. It's just a display hack and doesn't "really" exist.
+1376	b63d78418b	Take cshift into account when testing whether end_column is at right edge of screen. Scary change, but it seems like this is correct. Don't know why it hasn't caused any reported problems.
+1377	8c3a190234	Print "half char" for shifted double width char at right edge of screen in rscroll_attr formatting, to be consistent with half char at left edge.
+1378	88b5561d9b	Doc
+1379	63ad02491e	Merge branch 'master' of https://github.com/gwsw/less
+1380	5b70ebaaa7	Merge branch 'master' of https://github.com/gwsw/less into master
+1381	0c08883a66	Don't try to open /dev/tty on MSDOS_COMPILER builds.
+1382	3367ba1e5a	Fix crash when search for nonmatching text.
+1383	8e9f3f5873	Merge branch 'master' of https://github.com/gwsw/less into master
+1384	c763f860fc	v579
+1385	bb0ee4e76c	Color fixes. Don't send "ESC[m" unless --use-color is enabled. Also let LINES/COLUMNS env variables override screen size derived from system.
+1386	fec02ea26e	fix too many arguments warning (#132)
+1387	5ee78756d5	Merge branch 'master' of https://github.com/gwsw/less into master
+1388	7eadd55901	Clarify that README has more specific instructions than INSTALL.
+1389	7f0320bcd3	Add --tty option to support lesstest test suite.
+1390	35f3651c79	Open v580
+1391	9953fe3a1b	Initial work on lesstest test suite.
+1392	4b02abef04	Create cleaner pipeline interface. Add some parsing stuff to use in run program.
+1393	1935811b7e	Refactoring, getting run_test working.
+1394	d69cda4ec6	lesstest: work in progress.
+1395	50e646e2c1	Add --rstat option. Move --tty and --rstat with associated code under #if LESSTEST.
+1396	817de6ffc0	More lesstest work.
+1397	30d92e3d42	lesstest: make -t syntax take less executable as argument.
+1398	939fbc3e93	v580
+1399	084302e989	lesstest work in progress
+1400	bf1e15474f	lesstest: add lt_types.h
+1401	a343462ffe	lesstest:  Send init/deinit term.  Passthru arrow keys.  Name change char1->byte.
+1402	c1ea0b5e01	lesstest: handle LESSCHARSET correctly.
+1403	736d3cd54c	Add unicode.c
+1404	31910bcb77	lesstest: Reorganize, refactor.  Add -d flag.
+1405	480c457d12	lesstest: refactor; add struct LessPipeline; add destroy_less_pipeline to improve cleanup on errors.
+1406	5a2f3f78c7	Don't use @@HOMEPAGE@@ in README.VER, so URL is visible even before make release is run.
+1407	a9b4b42216	lesstest: remove rstat file before exiting.
+1408	51d2898ecc	Merge branch 'master' of https://github.com/gwsw/less into master
+1409	8ef51c5665	Don't display "skipping" line while & filtering is in effect.
+1410	2a55307d31	Open v581
+1411	e4cda41101	Ignore SIGTSTP in secure mode. Also make sure variable secure==1 when compiled with preprocessor SECURE==1.
+1412	1225bc1fd7	lesstest: add gen and run scripts.
+1413	b7ce5cdbc2	Documentation.
+1414	3b2d1b466f	run: recurse on directories gen: simplify .lt numbering
+1415	afd65517bd	lesstest:   Improve handling of environment vars.   Gen passes all LT_XXX vars thru to less, with the LT_ stripped off, and logs them to the .lt file.   Run sets env variables from the .lt file.
+1416	7221d2ecea	Note that -r is deprecated.
+1417	7928864161	Fix some bugs with ANSI handling.
+1418	aee3ac520a	Better environment var handling in lesstest.
+1419	3ed1315d49	Correctly handle unrecognized escape sequences with horizontal shifting. Fix bug in recognizing CSI escape char.
+1420	51afe9a9d1	Allow user to enter Q to quit program when getting a single char query() response.
+1421	6a1c6da22f	Switch output to stdout before sending terminal init sequence.
+1422	48d130645e	v581
+1423	97ecc8cb5c	Fix "Tag not found" error while looking for a tag's location (#147)
+1424	842268e694	Open v582
+1425	27827d6f43	WIP lesskey
+1426	9566d4160e	lesskey WIP Make tables dynamic.
+1427	3a01c5f5b1	WIP lesskey Separate parsing code into lesskey_parse.c.
+1428	d242659ea6	WIP lesskey Add lesskey_parse to all Makefiles.
+1429	abf688ad26	Fix indentation.
+1430	a2137dcb01	Make less read lesskey source file rather than binary file. lesskey tool is no longer needed.
+1431	6ce718aca6	Add sysvar param to lesskey_src. Cleanup.
+1432	b0dbdb8f7c	Better error messages from lesskey parsing. Documentation.
+1433	08e924f07b	Add HAVE_LESSKEYSRC symbol.
+1434	5bc78d59ce	Add HAVE_LESSKEYSRC to configure.ac
+1435	da495f5340	Fix minor memory leak with input preprocessor. (#150)
+1436	df6e714f3f	Fix some compiler and analysis tool warnings.
+1437	a742a9c01c	Add usage note in README.
+1438	9855d50df8	Change algorithm to find lesskey and history files:
+1439	c64b8be961	Merge branch 'master' of https://github.com/gwsw/less
+1440	a718ea1c97	v582
+1441	3c1ed33fca	Open 583. Update docs.
+1442	ce91363eb9	Don't be a jerk.
+1443	14aa5bed96	v583
+1444	0ead0254d6	Include lesskey_parse in less obj files in all Makefiles.
+1445	ea44c64118	Fix build when HAVE_POPEN is not set.
+1446	21e0892eb4	Fix failure to deinit mouse when --mouse is toggled and when exiting less.
+1447	84c951327b	Merge branch 'master' of https://github.com/gwsw/less
+1448	2f76e9a184	Whitespace
+1449	62e93a7c0a	Documentation
+1450	0e822fc9f2	Revert part of bb0ee4e76c2d35df8edb1c2cd03825805d89cb13: Don't let LINES/COLUMNS environment variables override system screen size. This breaks less's ability to react to resizing of the terminal window.
+1451	a4caa7843e	Add --file-size option.
+1452	48d265128e	Open v584.
+1453	58d77d1d81	v584
+1454	058448f797	Allow AT_COLOR_ATTN to be specified by W as well as A, to match the man page.
+1455	37588d020c	v585
+1456	6c5792973b	Open v586
+1457	bbd1b3e325	Fix compiler warning.
+1458	4a8a5cc22d	Remove @@ macros from NEWS.VER and README.VER.
+1459	c4ab73f4f4	Rename NEWS.VER to NEWS, and README.VER to README.
+1460	bd4be11060	v586
+1461	df845a5315	Shouldn't use memcpy to copy to overlapping range.
+1462	9a1161e3a3	For older versions of C, no variable definitions after statements.
+1463	0e5189869d	Open v587
+1464	81c1184064	Call clear_bot_if_needed at start of init() rather than relying on putchr to do it. Windows does not call putchr in init().
+1465	46524c99e1	Add gnu.upload target.
+1466	95f209262c	Don't include lesskey_parse.o in the link if SECURE_COMPILE is set.
+1467	4fb5c52cc3	Merge branch 'master' of https://github.com/gwsw/less
+1468	2c1174af4c	Doc
+1469	da59176d70	Replace instances of @@copyright@@ macro with real copyright message.
+1470	5e3b29e18d	Make xbuf public so it can be used in main code, not just lesskey_parse.
+1471	d8d1584b2d	Make shifted_ansi an xbuf.
+1472	3b0a03c6d1	When using -R with colored text, restore color correctly at the end of highlighted text.
+1473	129b5a1866	If -F and file doesn't fit on screen, then screen is resized to make file fit, don't exit.
+1474	d6fdc1d8c5	v587
+1475	aab48f5d33	Add xbuf.h to release.
+1476	a159af128b	Merge branch 'master' of https://github.com/gwsw/less
+1477	eccc59ca35	Remove add_copyright.
+1478	f54bb221fd	Remove @@HOMEPAGE@@ macro.
+1479	600a065b96	Open v589
+1480	efd2ccee4d	v589
+1481	26fb24c6bf	v589 doc
+1482	0564bdb17a	Open v590. In Makefile.aut, move REL from shell variable to Makefile variable.
+1483	dd740538c5	Add echo_distfiles target.
+1484	1ef68f24ea	Add xbuf.* to non-autoconf Makefiles.
+1485	aa8477699a	Merge branch 'master' of https://github.com/gwsw/less
+1486	850d14afb2	v590
+1487	25282720b1	Fix dist target.
+1488	ba713cbf14	Fix tagall target.
+1489	fcd5d8f5d2	Fix tagall target for real.
+1490	cb3bcf8db8	Remove README and NEWS from .gitignore.
+1491	07881cf08d	Open v591
+1492	bfc8cba514	Fix doc to correctly describe behavior with LESSOPEN starting with "||".
+1493	3719428365	Reset consecutive_nulls when opening a new file.
+1494	bf7c8ce04e	Merge branch 'master' of https://github.com/gwsw/less
+1495	ccb3f80dd0	Use "kb" termcap to determine bytes of ESC-backspace command. Add lesskey support for some missing special keys.
+1496	309e6d7a1e	Fix compiler warning.
+1497	a206e62c49	Fix compiler warning.
+1498	9a3e8ef762	Add \kB for ctrl-backspace to lesskey. Change lesskey man page to use a table for the \k codes.
+1499	99c1bc6757	Doc.
+1500	ab8b83f4ba	Use load_line/put_line to print the prompt, rather than putstr. This correctly handles multibyte & double-width chars etc. in the prompt.
+1501	2cdb98461a	Allow escape sequences in the prompt string to override standard prompt style.
+1502	0202daa172	v591
+1503	02eb6bee24	Use fstatfs to determine whether a file is a procfs file.
+1504	d3bf04dbd6	Open 592
+1505	74c598dd71	Fix crash when enter invaid pattern in & command.
+1506	8221628cb4	Change \k< and \k> to \kL and \kR in lesskey.
+1507	e13adc231a	Open v592
+1508	0cfce54f9c	Merge branch 'master' of https://github.com/gwsw/less
+1509	4a1a532fef	Update text of GPL.
+1510	a8b4980c84	Update URLs in README to https.
+1511	465a0b3549	Add --status-line option.
+1512	d458cdf968	Merge branch 'master' into statfs
+1513	004d2419b9	Don't do /proc file hack if system doesn't support /proc. Assume system supports /proc only if statfs & PROC_SUPER_MAGIC exist.
+1514	55aa3f9b2e	Doc
+1515	fc221c403f	Add --header option.
+1516	11b6b47be3	v592
+1517	5a4f60e7b9	Open v593
+1518	0df0c25fad	Fiddling around.
+1519	c96f16b65e	Support header columns in --header option.
+1520	24a3c8a0bd	Allow '=' as well as newline to terminate long option name input.
+1521	6356151e1e	Add --no-number-headers option.
+1522	caa859f8f7	Fix missing lower_left() when using header columns.
+1523	19d6050d05	v593
+1524	340f1a3542	v593
+1525	8a908e8c1c	Fix header underlining when header columns are used.
+1526	c88e722ccb	Merge branch 'master' of https://github.com/gwsw/less
+1527	b2a7bf6172	Open v594.
+1528	ba26326741	Suppress echoing the echo command.
+1529	0d603786b7	Let caseless match be handled by the regex library where the library supports it. This is currently POSIX, PCRE and PCRE2.
+1530	ea3ce133c5	Merge branch 'master' of https://github.com/gwsw/less
+1531	bc4525fab7	Fix build with PCRE2.
+1532	c9f2a293fa	Fix some bugs related to regex library handling caseless.
+1533	d081e3e79b	Add --redraw-on-quit option.
+1534	93fee11541	Don't lose ^P (NO_PROMPT) flag when we process a + or - at start of option string.
+1535	dc1a0974ef	Add #version to lesskey.
+1536	4f7b8d9443	Change #version '<>' operator to '!='. Tweak error messages a little.
+1537	dd9a11a4c8	Don't do redraw-on-quit if we haven't sent term init ("ti") to switch to the alternate screen.
+1538	5a7bdc844d	Clean up lesskey error messages a little.
+1539	321ce8a958	Mostly doc
+1540	09b7e1eb19	Doc
+1541	41bef8aae5	Doc
+1542	66bb5366e4	lessecho: Make metachars[] a dynamic buffer to avoid buffer overflow.
+1543	d07da7152e	Fix bug when parsing malformed .less file.
+1544	9eba0da958	Don't read or write history file in secure mode.
+1545	6a860ee977	Fix possible buffer overflow with large number of ridiculously large tabstops.
+1546	6f49ad006b	Fix heap overflow with UTF-8 meta characters (#206)
+1547	5091edc1c2	Check malloc return value (#204)
+1548	7318ae5ce3	Fix read beyond end of buffer when using pre-241 lesskey file that is 3 bytes long.
+1549	f9604c6cc2	Merge branch 'master' of https://github.com/gwsw/less
+1550	04434ed918	Doc
+1551	d21820c9d8	Clear hyperlink attr at end of line.
+1552	d0b44fa2c5	Don't print duplicate chars when part of a prchar fits at the end of a line.
+1553	d54eea30b4	Declare buffers closer to where needed.
+1554	426fd42cd9	Fix buffer overflow with invalid quotes (#209)
+1555	1d95a13793	Buffer review.
+1556	7aeb5fa651	Merge branch 'master' of https://github.com/gwsw/less
+1557	a01823e0a3	Add SECURITY.md.
+1558	1f7c222d33	v594
+1559	d09ccefc3b	v594
+1560	4a008b8e88	Open v595
+1561	7b742632cd	Increment parg for characters in less_printf (#212)
+1562	20d1a3d50a	Fix floating point exception when --header is set to LINES-1.
+1563	ba47b33a98	Merge branch 'master' of https://github.com/gwsw/less
+1564	e6eb4c8ddd	Fix integer overflow in match_brac() (#210)
+1565	695c2e2ce3	Add H color for header lines.
+1566	f49c787754	Add += syntax to variable section in lesskey files.
+1567	31a14b8124	Remove unnecessary memory allocation.
+1568	1974e5f8cd	Fix memory leak when using corrupt lesshst file.
+1569	440f1787b4	Fix search history scrolling when --incsearch is set.
+1570	e8edfb80b4	Add the  --search-options option.
+1571	2ea58bf5af	v595
+1572	d8d8264fab	Open v596
+1573	d3edebf528	Add $HOME/.config to possible locations of lesskey file.
+1574	8bea938d79	Fix parsing of non-ASCII chars in lesskey, broken in 5a7bdc844d66e9c000b7b24287b635e6e493fdc6.
+1575	0300ba1197	If an ANSI_ERR condition arises, don't try to remove the ansi sequence from linebuf if in_hilite is set, because it wasn't stored in linebuf.
+1576	dda4dd9e62	At end of highlight, resend last 3 ansi sequences not just 1. Don't resend invalid sequences originally discarded.
+1577	5e425e227b	Update README INSTALLATION section (#218)
+1578	294976950f	v596
+1579	07ffced194	Fix some --header bugs.
+1580	d0ebac8a97	Open v597
+1581	88c9136d3e	v597
+1582	658690e7f6	Open v598
+1583	1007a0ccc4	Folding lines is not really compatible with having headers. Chop lines when any headers are active.
+1584	0983c58ac1	Caller's resposibility to call lower_left.
+1585	add4012305	Windows: remove binary UTF-8 (#225)
+1586	5ee3db4633	Reword -n -N help.
+1587	2fe1ac8241	Merge branch 'master' of https://github.com/gwsw/less
+1588	5e1f4ce2c3	Add $XDG_STATE_HOME and $HOME/.local/state to list of directories to search for the history file.
+1589	1f38d30319	Fix typo in comment.
+1590	3b4624ef63	Doc
+1591	b330735e59	Fix '}' command documentation (#228)
+1592	be39bf8585	Fix signal race in iread.
+1593	f996794a72	Merge branch 'master' of https://github.com/gwsw/less
+1594	fee1cc0394	v598
+1595	0db8ca4621	Open v599
+1596	0f23b1e7fb	Doc
+1597	2fc56db1f8	Open v599
+1598	6830b87edd	Fix typos (#232)
+1599	f90a807301	Don't print "skipping" message or tildes when repainting via --redraw-on-quit.
+1600	795b7d3101	Merge branch 'master' of https://github.com/gwsw/less
+1601	ae087e2e9b	Fix stack buffer overflow (#233)
+1602	be9221a78c	Prevent unnecessary repeated rebuilds of funcs.h.
+1603	ff0d62313f	Merge branch 'master' of https://github.com/gwsw/less
+1604	ab526c6a9a	Merge branch 'master' of https://github.com/gwsw/less
+1605	a3bd452204	Merge branch 'master' of https://github.com/gwsw/less
+1606	7272b14b90	Get rid of dummy parameter 0 in lt_screen.
+1607	35c5543d06	Add some missing fclose calls for lesskey files.
+1608	e746c982b6	Fix const mismatch.
+1609	fc0ea4f23b	Fix overflows with malformed lesskey lines (#234)
+1610	3102e646fe	Fix some instances of non-K&R function definitions.
+1611	24dea158fa	Merge branch 'master' of https://github.com/gwsw/less
+1612	2badb9c71b	Merge branch 'master' of https://github.com/gwsw/less
+1613	d55edc5830	Clarify that lesskey cannot add new functionality (#229)
+1614	b987b35fd6	Merge branch 'master' of https://github.com/gwsw/less
+1615	3a90a3b34d	Don't do TAB filename expansion in contexts where it doesn't make sense, like long option names, numbers, etc.
+1616	30c1fb48a9	This seems risky, but I can't think of a scenario where there is a problem. In all cases the screen appearance is either the same or better after this change. ...{d}
+1617	74678a9416	Merge branch 'master' of https://github.com/gwsw/less
+1618	4a8dc1f41a	v599
+1619	c7d581d927	Merge branch 'master' of https://github.com/gwsw/less
+1620	c7b8c7884a	Open v600.
+1621	88c0486aff	Protect against int overflow in cmd_int. Fix compiler const warning.
+1622	1834829061	Remove dead code (#238)
+1623	14966a81a4	Merge branch 'master' of https://github.com/gwsw/less
+1624	db20b9ec8d	Display error message when overly large integer is entered, rather than using a default.
+1625	d575033f9f	Fix configure error in testing for POSIX regex.
+1626	d0d6d1c003	Combine release notes in NEWS for versions 595, 598, 599 and 600.
+1627	a958ad6de2	Reorder entries.
+1628	d00fa624d8	Remove incorrect NEWS entry.
+1629	18f97527a6	Don't depend on stdlib.h when testing for POSIX regex.
+1630	a1f9451826	Doc
+1631	971471b6d8	Try /dev/tty if ttyname() device doesn't open, not only if ttyname() returns NULL.
+1632	1d0e8245cd	Update copyright year.
+1633	32511c8bd4	v600
+1634	4431bfd1db	Open 601.
+1635	a68453462d	Add the --exit-follow-on-close option.
+1636	c0aba0fbb3	Restore bold line numbers when not using color (#249)
+1637	7a5c0d64a4	Fix regression where lastmark isn't saved (#250)
+1638	6a3e5e8065	Add "beta" to name of tarball.
+1639	edc838d111	v601
+1640	e8f7fb0103	Open v602.
+1641	54124801f8	Doc
+1642	f9c86088d3	Open 602
+1643	721ef42ecb	Doc
+1644	4f5e45b426	Merge branch 'master' of https://github.com/gwsw/less
+1645	fe422b33b1	v602
+1646	1fcca14a48	Open 603.
+1647	6b785cd283	Fix --header display, broken in 30c1fb48a962b8dee8107eafa4108070e7cbe4fa.
+1648	344c38e40a	v603
+1649	efd2c76104	Make configure include <termcap.h> if it exists in test links while looking for terminal library.
+1650	1101069ae7	Open v604.
+1651	7b977a2dba	Added support for UTF-8 commands on Windows (#261)
+1652	2bf67924e3	Error handling for Windows UT8 to multi-byte conversion (#263)
+1653	3f4767f542	Minor style tweaks.
+1654	7f26aa8367	v604
+1655	e3b18e7a55	Update copyright date in man pages.
+1656	c167a44f72	Doc
+1657	b2a16836c2	v605
+1658	29c2596b46	v605 NEWS
+1659	264c860f05	Open v606.
+1660	d1350a2126	Fix help page typo.
+1661	4fc29a0dd2	Open v606.
+1662	99510e60db	Prevent bin_file() -> is_utf8_well_formed() buffer overrun (#271)
+1663	c6ac6de496	Shell-quote filenames when invoking LESSCLOSE.
+1664	2643910367	Merge branch 'master' of https://github.com/gwsw/less
+1665	a687b2228e	Merge branch 'master' of https://github.com/gwsw/less
+1666	7e6da25e34	Fix bug with multibyte UTF-8 chars in search string when --incsearch is in effect.
+1667	f02ef8e426	Doc
+1668	2b14dbab17	Doc
+1669	53139285d1	v606
+1670	b943c94019	v606 again
+1671	99c21b52af	Update Unicode tables. Switch from curl to lftp to download tables.
+1672	6d0c3821fa	Merge branch 'master' of https://github.com/gwsw/less
+1673	ed6654eba8	Open v607.
+1674	0e98ca4f28	v607.
+1675	15b935f942	Remove kludgey fix for a problem which has since been fixed in a better way.
+1676	8080a3ad7d	Merge branch 'master' of https://github.com/gwsw/less
+1677	1ac099ea91	Open v608.
+1678	c7ed204446	Doc.
+1679	22e4af5ccc	v608
+1680	b85bdfb5de	Open 609
+1681	4fd6745e94	Don't output non-printable chars when LESS_TERMCAP_DEBUG is set.
+1682	77d419db47	Fix color display bug caused overstriking with colored char. For now disallow overstriking with colored char.
+1683	57d927ea6a	Remove this. It won't work with UTF-8 chars.
+1684	b00be18993	Remove some unnecessary changes.
+1685	254a7674f3	Fix signal race in iread. (#280)
+1686	c69d0b5855	Fix cfi-icall violations (#279)
+1687	03f011f219	Fix reading procfs files on Linux: bad detection of HAVE_PROCFS.
+1688	83c8c81357	Make xbuf hold bytes not chars.
+1689	deb0c04e01	Deal with character ranges in Unicode data specified by "First" and "Last" tags rather than double-dot ranges.
+1690	fdabc7d239	Update Unicode tables with range fix.
+1691	8c77e72414	Add radix parameter to lstrtoXXX functions for future use.
+1692	dc4fa8c8c4	Add LESSUTFCHARDEF.
+1693	bffa6aa59e	Add sorting requirement for LESSUTFCHARDEF.
+1694	9c7606e242	Work on lesstest: remove rstat; add LESS_DUMP_CHAR.
+1695	0a60b8dd05	lesstest: correctly handle less exit during run_interactive.
+1696	ec29214733	Some runtest tweaks.
+1697	edf9b5365b	Rearrange signal handling a little.
+1698	1fdb99297f	Don't setup_term in test mode.
+1699	531ccec45f	Compile fixes (?)
+1700	b224ee8e61	Pass less-specific env variables to lesstest; get rid of LT_* env variables.
+1701	a78e135111	End OSC8 hyperlink on invalid embedded escape sequence.
+1702	6010178674	Merge branch 'master' of https://github.com/gwsw/less
+1703	5ba14f6106	Move terminal init/deinit to run_interactive since they need setup_term to be done. Fix SIGPIPE race.
+1704	66ba6cf93b	Fix bug in setting env vars from lt file in test mode.
+1705	089e78dbaf	Make runtest work.
+1706	22a4cc173a	lesstest: in interactive mode, call setup_term before less_envp so that terminfo is populated.
+1707	1b01b0e4c7	lesstest: log LESS_TERMCAP_?? vars so termcap keys etc are correct when running test.
+1708	6222588ca3	lesstest: accommodate stupid termcap design where there is no exit-bold or exit-blink capabilities.
+1709	b9892197a5	lesstest: maketest should not overwrite existing lt file.
+1710	3ec55ff97d	lesstest: add -O option to maketest; if textfile is not in current directory, link to current directory so only basename is used.
+1711	7e98aae468	lesstest: add -O option to lesstest.
+1712	68932004a8	lesstest: handle colored text with less -R.
+1713	6f2629c7d9	lesstest: add -e option.
+1714	8ce22cf61c	Use default erase/kill keys if tcgetattr fails.
+1715	1854abde0e	lesstest: split display_screen into display_screen_debug and display_screen.
+1716	c5c8a2c625	Add -E option.
+1717	5f61cd093c	Consistent style.
+1718	e359d5d205	Obsolete file
+1719	0107e58da2	lesstest: use standard erase/kill keys when running a test.
+1720	e043ab43e3	Tuesday style.
+1721	236b5dc57a	Tuesday style.
+1722	ae57646896	lesstest: add support for combining and composing chars.
+1723	b06f615735	Minor runtest output tweaks.
+1724	4e9e4e010e	lesstest: lt_screen should clear param stack after processing escape sequence.
+1725	2494a2e082	Handle fg and bg colors.
+1726	2c01af28e8	Have lt_screen use ANSI sequences for bold, underline etc rather than custom sequences. Need to support ANSI anyway and having two mechanisms is unnecessarily complicated.
+1727	1683b82a95	"ESC[m" should clear attributes as well as colors.
+1728	2b6add4657	lesskey: make lt_screen treat "ESC[0m" like "ESC[m".
+1729	562ce26123	Store 2-char hex values in log file rather than binary bytes. Don't want to accidentally store a newline in the middle of a line.
+1730	4c10e4629e	lesstest: Make display_screen_debug write to stderr not stdout.
+1731	1eeffba2d7	lesstest: Clear screen at end of maketest in case terminal doesn't have "te" cap.
+1732	c8163e39f7	lesstest: Verify that the less binary is built with -DLESSTEST.
+1733	1a4f8e9728	Add check target to Makefile to run lesstest.
+1734	9573d422f6	Don't set LESS_TERMCAP_xx environment vars from terminfo in non-interactive mode. The terminfo struct is not initialized and the vars will be set from the logged environment.
+1735	97d699688d	lesstest: Add README.
+1736	a354e93eea	lesstest: Remove unnecessary exit_all_modes field from terminfo.
+1737	078dbaa0f5	lesstest: Add some initial lt files.
+1738	55caacd71a	lesstest: Remove empty lt file.
+1739	850cdcbd35	lesstest: Add a couple more lt files.
+1740	e3663687aa	Make "make check" work regardless of directory where less is built.
+1741	d4fa295303	lesstest: documentation.
+1742	a28717b813	Fix maketest -s.
+1743	f8d3dad4db	Fixed gmake support (#294)
+1744	b4b6a7d091	Check for termio flag macros to be defined before using them. This was previously done in less for systems using tcgetattr but not for systems using ioctl(TCGETA), and not at all in lesstest. Now it is done in all three places.
+1745	9b5124d053	Merge branch 'master' of https://github.com/gwsw/less
+1746	71bbae09c7	Better Perl portability (#296)
+1747	bdc267c826	Fix gnu_upload target in Makefile.aut.
+1748	ab9ee6b493	Merge branch 'master' of https://github.com/gwsw/less
+1749	5edb416bf7	lesstest: Use /usr/bin/env for maketest and runtest scripts.
+1750	0981ccc577	Move is_ucase_pattern to struct pattern_info.
+1751	6f096ff568	Fix ifdef conditions in set_termio_flags.
+1752	ece2600cb0	v609
+1753	912f211603	Open v610.
+1754	939b26b25e	Fix caseless search (--ignore-case) with no-regex search (ctrl-R).
+1755	2fd1e2ddb0	Fix bug doing again-search after setting an & filter.
+1756	c4c9c97f1e	Change man pages to use modern formatting conventions. In particular, command names are in bold rather than italic/underline.
+1757	ba8cbe8ec9	Fix compiler warning on K&R declaration of xbuf_add_byte.
+1758	d55a330d75	Added another reference (#301)
+1759	afb59e1753	If search_type is changed by an incomplete (not executed) search command, don't retain that search_type in the next "n" command.
+1760	ac45a8f44a	lesstest: add test for search_type handling.
+1761	ab5ad29445	Merge branch 'master' of https://github.com/gwsw/less
+1762	953257f903	Improve ability of ^X to interrupt F. We now avoid calling read() when poll() tells us that there is no data available. This seems reasonable but may have unexpected consequences, and should be tested exensively.
+1763	8e3ec369ac	More reasonable number.
+1764	914ef13904	Doc
+1765	112b028f14	Add unicode-check target.
+1766	4b72e35abc	Update Unicode data files.
+1767	a9d6211d72	Ignore unknown char types in LESSUTFCHARDEF, to avoid future headaches.
+1768	db10685a3b	Doc
+1769	1216c2baa3	Files genrated from updated Unicode data.
+1770	e980ba99fa	v610
+1771	1e062d295b	Doc
+1772	7d3b95f7ef	Open v611.
+1773	e7c30ebc56	Merge branch 'master' of https://github.com/gwsw/less
+1774	b17b080247	Fix problems with EOF after new poll behavior in 953257f9030d29dd930ed3e76fd5811681b672b1.
+1775	474f056da7	Merge branch 'master' of https://github.com/gwsw/less
+1776	92efb3597d	v611
+1777	dd7d1f50ce	v611 NEWS
+1778	02f62a5627	Don't look for ^X interrupt when running lesstest.
+1779	088439e0b1	Fix bug that would lose data near end of input pipe, when poll() returns both POLLIN and POLLHUP.
+1780	679f8ad2b4	Merge branch 'master' of https://github.com/gwsw/less
+1781	7b4da16e59	v612
+1782	0093e02bad	Merge branch 'master' of https://github.com/gwsw/less
+1783	180950a046	Document LESS_TERMCAP_xx.
+1784	80f6689e3d	Document new ^X behavior.
+1785	a03f8263a0	Open v613.
+1786	eb7378dcea	Open v613.
+1787	9d23e5c2e1	Refactor some poll code. Reduce read-again delay from 250 to 50 ms.
+1788	ab490836de	Minor refactoring; add curr_ifile_changed.
+1789	6435e365fc	Minor recode to get rid of a goto.
+1790	3a6846b432	v613
+1791	bf538f725d	Merge branch 'master' of https://github.com/gwsw/less
+1792	a5bdb609aa	Show ^X suggestion in wait message if supported.
+1793	4f4686ace0	Open v614
+1794	1ab5f9f6bc	Tweaks.
+1795	26d2bc6bc6	Doc.
+1796	fc472e7604	v614
+1797	cc00a2cbde	Add --no-vbell option.
+1798	0c6c01757e	Open v615.
+1799	094890f57a	Fix search going in wrong direction after N command.
+1800	d7ffa3816b	Merge branch 'master' of https://github.com/gwsw/less
+1801	f430948532	Doc.
+1802	8901ef4364	Merge branch 'master' of https://github.com/gwsw/less
+1803	ff8869aa04	Doc.
+1804	afb2625e45	While waiting for data, if any other chars are received while checking for ^X, unget them in the correct order.
+1805	d531742a45	v615
+1806	375fad2609	Whitespace.
+1807	608dd697a6	Merge branch 'master' of https://github.com/gwsw/less
+1808	bcb52b0b86	Open v616.
+1809	0194c82dc8	Disallow opening a tty as input unless -f is set.
+1810	71a8cf7080	Get rid of 3 gotos. It's 2022 for god's sake.
+1811	ccb6da07c1	Don't call realpath() on fake pathnames like "-" and FAKE_HELPFILE.
+1812	2f56b1c448	Doc.
+1813	fdc127d803	v616
+1814	b2e24ea061	Open v617.
+1815	fe1526f204	Allow use of poll() on APPLE systems if first component of uname release string is 20 or greater. The poll() bug seems to be fixed on 20.6.0. I don't know exactly which release fixed in, but assume that all 20.x releases are fixed and all earlier releases are not.
+1816	14006d0a07	v617
+1817	8c4997e1b7	v617
+1818	2049dfd0b7	Open v618.
+1819	98782c194f	Move cursor to lower left at startup if we are using an alt screen.
+1820	793b723e14	Call eof_bell on G command when already at end of file.
+1821	5002cda84e	Add shifting().
+1822	eb2bc11788	Change status column character to show matches to the right of the the visible part of the line (>), to the left (<), or both (@).
+1823	fb09748090	Cleanup
+1824	3a35fbf0bc	Colors in header line (search match or embedded SGI sequences) should override the "H" header color.
+1825	418f1074d5	C99 in lesstest (#310)
+1826	4d1ee85e5c	Declarations before code.
+1827	122d8fdb9c	Merge branch 'master' of https://github.com/gwsw/less
+1828	bd63d7d8e2	Add --no-search-headers option.
+1829	d2ecf8ac7f	lesstest: make lt_screen behave better when first half of a wide char is overwritten.
+1830	ced0523700	Add two tests related to headers.
+1831	02d8b0cbfd	Change status column indicator for "matches in both directions" from @ to =. Thanks to C. Bernard for the suggestion.
+1832	0e7c7cb5a6	lesstest: create a test for --no-search-headers.
+1833	7fe9d24317	Add VERBOSE flag to make check:   make check VERBOSE=1
+1834	beebae9d01	Allow the "lines" field to be empty in --header option.
+1835	304124bc67	Add missing 'static' to function.
+1836	0f41e66d42	Doc
+1837	76a7805e1f	Convert function definitions from K&R to C89.
+1838	a3cee36c11	v618
+1839	42a08d1383	Open v619.
+1840	7b6917556f	Fix --no-search-headers when header column contains ANSI sequences.
+1841	a92036a467	Don't squish output when overlaying headers.
+1842	f1436cf116	Simple maintenance improvements (#193)
+1843	7e4a522600	fix defines.h include order (#278)
+1844	c64e51b53f	Use EXIT_SUCCESS and EXIT_FAILURE if they are defined.
+1845	947f94718f	Fix type mismatch warning with clang compiler.
+1846	5cbb734a7e	Fix bug repeating saved search with 'n' before doing any '/' search.
+1847	dc0150136d	Doc.
+1848	ea9ac37906	v619
+1849	e8de9c047d	v619
+1850	20e1302f01	Fixed another C99 issue (#322)
+1851	cf4d46729a	Open v620.
+1852	3239d7382d	Update configure.ac with autoupdate 2.69. Manually define deprecated RETSIGTYPE so code doesn't have to change. (take 2)
+1853	db9785f6df	Add --modelines option.
+1854	c8159e7b8d	Fixed indentation (#323)
+1855	a2f91f744e	Fix some whitespace.
+1856	b85e10184e	Autoconf fixes2 (#324)
+1857	a5b6b628c9	Remove obsolete mkfuncs.* scripts.
+1858	3e6697e127	Update copyright year.
+1859	7a930a4b87	Add --intr option.
+1860	f398927634	Use different colors for subpattern matches.
+1861	8b6dc5be3f	Add color codes 1-6 for subpatterns. Doc.
+1862	f484d48653	Merge branch 'master' of https://github.com/gwsw/less
+1863	9fef9ba66d	Make subpattern coloring work with pcre2 and posix regex libraries.
+1864	894eac8348	Fix bugs when using 6 subpatterns in a search.
+1865	328550255a	Fix some bugs in subpattern coloring.
+1866	b033a6fd92	v620
+1867	b3a5f032ed	Open v621.
+1868	ff5ec01261	Doc.
+1869	57dacf280a	Add --wordwrap option.
+1870	d4b7ac0117	Doc.
+1871	fd2299bb12	Fix some int/char type issues left over from when K&R function definitions were used.
+1872	ccd78cfdf1	Add support for LESS_LINES and LESS_COLUMNS.
+1873	a84b46d57f	Allow LESS_LINES and LESS_COLUMNS to be negative.
+1874	f46f6b75b2	v621
+1875	c5fe3d0b07	Open v622.
+1876	6c19c61019	Don't use "ll" termcap if using LESS_LINES.
+1877	697a6f06ec	Diagnose input preprocessor failures (#258) (#315)
+1878	1915e402fb	Merge branch 'master' of https://github.com/gwsw/less
+1879	dc4692caa4	Add --show-preproc-error option.
+1880	29693e5752	Doc.
+1881	c40ca4ac92	Use feof() to tell if we can rely on the status of pclose().
+1882	cee64ed4f3	Make error() take %x for hex output. Print "input preprocessor error" status code in hex.
+1883	d83ecf41f7	Fix bug in less_printf in hex (%x) output of digits > 9. Macroize iprintf_xxx functions.
+1884	fa974d2815	Try it this way: with --show-preproc-error, all errors, even not at EOF, are reported.
+1885	fbb8eea949	Doc.
+1886	e1c0c35999	Doc.
+1887	d312cdf542	Minor tweaks.
+1888	c4e7f58798	Don't call home() if we haven't initialized the terminal. Fixes display problem when using LESS_LINES and -F.
+1889	5135f6d740	Missing API declaration.
+1890	0c6219522b	Fix generating funcs.h using Makefile.wng (#326)
+1891	c0821ae608	Whitespace.
+1892	125808bc10	v622
+1893	4985c07309	Merge branch 'master' of https://github.com/gwsw/less
+1894	ccf09b61a3	Improve input preprocessor failure diagnostics (#328)
+1895	f0328ed698	Minor style tweaks.
+1896	a9121153e3	Fix incorrect display with -R when AT_ANSI text matches search pattern.
+1897	40ba50520f	match: avoid segmentation fault with no_regex (#332)
+1898	40ff06b603	improved integer overflow fixes (#331)
+1899	8092d98ef0	Minor style changes and C99 issues (variable definitions after code).
+1900	c1280e99ed	Fix compiler warning.
+1901	c7ac75260e	lesstest: Add -v flag to maketest, to print its invocation of lesstest.
+1902	c6a3a48917	Make lt_screen understand OSC8 sequences. It just ignores all text between "\e]8;" and ("\e\\" or "\7").
+1903	d1aa40c7ee	Add a simple lesstest test for OSC8 sequences.
+1904	f198ed32d3	Open v623 (a little late).
+1905	e97ccd3aae	Add # command.
+1906	f06304e07e	Fix bugs with searches that return null subpatterns.
+1907	c6d60143d7	Disable STOP/START chars during less, so we can use ctrl-S and ctrl-Q as commands. (Is this a good idea?)
+1908	ac3ec3acc0	Add ctrl-S search modifier.
+1909	867b988077	Don't use term_init_done to determine whether to call home() when LESS_LINES is set. term_init_done doesn't get set if -X is used.
+1910	79106be98a	Doc.
+1911	88c6bf6ddd	v623
+1912	3390ceb929	Open v624.
+1913	1c82636952	Fix bug in 867b988077051b72810a4783dc2ba2d8852eaecc. Need to decide whether to call home() before after_one_screen_check is set. Also need to use clear() rather than home() if there is already text on the screen so we don't just overwrite it and get a mixture of new and old text displayed.
+1914	d88e0ea893	Don't print "skipping" message if not full screen.
+1915	96431262a4	Fix incorrect display using --incsearch with LESS_LINES.
+1916	e26c196bb3	Cleanup.
+1917	6eeaa3f1f1	Typo.
+1918	750ae5e437	Add ready_to_release script.
+1919	d48dd7d38b	Better ordering.
+1920	27da41422f	Doc.
+1921	ab338892b3	Merge branch 'master' of https://github.com/gwsw/less
+1922	68c630c9e2	Add checks for git status to ready_to_release.
+1923	96f2bcd131	Add --proc-backspace, --proc-tab and --proc-return options. Also fix bug toggling -U while search highlighting is active.
+1924	74f018d6ba	lesstest: add proc-special test.
+1925	9beb3e1bab	v624
+1926	ceaf3e4112	Open v625.
+1927	c567256927	Fix some typos in the man page.
+1928	bd72470710	Doc.
+1929	919fcc8222	clear_attn() should clear line rather than just overwriting to ensure that line highlighting via --status-line is cleared.
+1930	015dfdadd2	Doc.
+1931	cc7bd1469f	Fix disallowing --rscroll="*". The --rscroll parameter was being restricted as if it were to be used as a printf format, like LESSBINFMT.
+1932	4fc2204170	v625
+1933	e824494e30	Open v626.
+1934	c4bd5f2aa3	Fix memory corruption due to linebuf overflow. add_attr_normal calls addstr_linebuf which appends to linebuf without checking for overflow. Move the overflow check from store_char() to set_linebuf() to ensure that we don't store beyond linebuf.end.
+1935	cfb12c18b9	When using --file-size, don't overwrite the "Determining file size" message with the "Waiting for data" message.
+1936	1ab95bcd9f	v626
+1937	66b812395f	v627
+1938	8b36518452	Open v628.
+1939	d25330e1ca	Doc.
+1940	5115835d83	Append newline to "+&..." command line option as is done for "+/...".
+1941	714cea855b	v628
+1942	dff21e2035	Open v629.
+1943	7ffbe025fa	Fixed #341 (#342)
+1944	4b674dd046	Increase delay before displaying "waiting for data" message from 10 ms to 500 ms.
+1945	5b5a34eebb	Merge branch 'master' of https://github.com/gwsw/less
+1946	690a957fde	v629
+1947	e1da99333e	Open v630.
+1948	3b56da0f04	Fix compile error when USE_POLL is not set.
+1949	64ab9ccd78	Change default "waiting for data" delay from 500 ms to 4000 ms. Also add LESS_DATA_DELAY to allow runtime configuration.
+1950	eb81e9698e	lesstest: fix race when there are no commands in an lt file. The text file may be created by lesstest and the immediately deleted before less gets a chance to run. Less may then print a "file not found" error. Not a serious issue since any useful lt file will contain commands.
+1951	90477f43ed	lesstest: better behavior if the lt_screen param buffer overflows.
+1952	7ae3140db2	Merge branch 'master' of https://github.com/gwsw/less
+1953	6ad8ce0a3c	Fix parsing -x option string when there are spaces in the string.
+1954	ee35c105fb	v630
+1955	4c51fa8401	Open v631.
+1956	641ba35912	Doc: add some missing environment variables.
+1957	aa68f38b53	Fix for dead keys on Windows.
+1958	3595b419f3	Doc.
+1959	66875ec086	v631
+1960	0a87a91162	Open v632.
+1961	3f58d4d9fe	Fix deprecated prototype declarations (#356)
+1962	f229eab7ed	Change lesstest files to use LC_CTYPE=en_US.UTF-8 rather than C.UTF-8, for portability. C.UTF-8 is not supported on MacOS.
+1963	70c406fa58	Fix access past end of string when prompt string ends with a backslash.
+1964	f1460ceac6	v632
+1965	3945dc3ecb	Open v633.
+1966	35aac3f111	Look for termcap header in <ncursesw/termcap.h> and <ncurses/termcap.h> in addition to plain <termcap.h>.
+1967	0d7ca88037	v633
+1968	a71de283d2	Open v634
+1969	6c1bf2484c	Fix search modifiers: ^E after ^W did not work.
+1970	8770bc1428	Change some hard-coded char buffer lengths to use INT_STRLEN_BOUND.
+1971	59af9c4fe1	Simplify logic.
+1972	5e93b7b4f9	Don't return READ_AGAIN from iread if no data has yet been received, to allow a program piping data into less to have temporary access to the tty (like sudo asking for a password).
+1973	fd2a746b7c	Fix for previous fix.
+1974	c8df315c74	Avoid stealing data from an input program that uses the tty at startup, like sudo.
+1975	883fc6c4a9	Doc.
+1976	bd05d51028	Move any_data under #if USE_POLL and ensure that tty variable is not accessed when it does not exist (in MSDOS build).
+1977	7a0cb4dcab	Fixed typo (#366)
+1978	39c96a472a	v634
+1979	ca50fca311	Open v635.
+1980	8320d1a920	Fix crash with ! search modifier.
+1981	c9ef20c48f	lesstest: Add subsearch test.
+1982	0d5a0c7eb9	v635
+1983	cb4f8b37d0	Open v636.
+1984	07a99afb2f	Typo in man page.
+1985	9fb64a3120	Doc: restore description of -Da option.
+1986	ac874f70fd	Doc: in the lesskey man page, add hash mark to the list of chars that must be escaped.
+1987	339619e8af	Add some casts to avoid compiler warnings.
+1988	d09cbbb301	Fix setting colors with -D on MS-DOS.
+1989	d7f4a6f275	Doc.
+1990	e22f243e73	Doc.
+1991	eebf1b5592	Windows: fix iread (#384)
+1992	29614c44d3	Doc.
+1993	6fd6739c00	Fix mouse wheel scrolling in Windows.
+1994	7d31d0eaae	Doc.
+1995	bc33edf7d8	Add cast to fix compiler warning.
+1996	6f0e68cf47	windows: improve WIN32ungetch (#388)
+1997	0a57bfbe9b	Minor style changes.
+1998	e7564888de	Make win32_kbhit return true if a char has been ungotten with WIN32ungetch.
+1999	c5117cc025	v636
+2000	2a73b9f1f8	Open v637.
+2001	3f71654355	Doc.
+2002	34ff16287b	Doc.
+2003	9d7be3c2b4	Don't set EOF at the current read position when receiving SIGWINCH. That should be done only for SIGINT.
+2004	867175aeac	Whitespace.
+2005	60050bd405	v637
+2006	e6b38fe041	Open v638.
+2007	3311221a78	Fix compile error with some definitions of ECHONL.
+2008	47c65e9a48	v638
+2009	945acfc004	Fix previous fix. Don't return READ_AGAIN when reading tty.
+2010	1c6f17b241	Merge branch 'master' of https://github.com/gwsw/less
+2011	0a15b054ab	Open v639.
+2012	812fddb22f	v639
+2013	71dc9e2c9e	Open v640.
+2014	9b531e6313	Fix forw() or back() when called with pos==NULL_POSITION. Should not call prep_hilite with pos==NULL_POSITION and should not add to or subtract from pos in that case.
+2015	b49f194a77	When forward() is called with ignore_eoi set, during the loop which calls back() to position the last line at the bottom of the screen, exit the loop if an abort signal is received.
+2016	2303f2c60e	STOP signal should make iread() return READ_INTR not READ_AGAIN.
+2017	ba43a6c72e	Redirect some messages from stdout to stderr and vice versa and tweak some to conform to Automake Simple Test Format. https://www.gnu.org/software/automake/manual/automake.html#Simple-Tests
+2018	5176056d14	Add lesstest to release.
+2019	995e328bd2	v640
+2020	abc7c357d2	v641
+2021	f2a0b247e0	v642
+2022	535a5c6638	Open v643.
+2023	ef04926db7	Fix two Windows crashes when using log files.
+2024	d46f289b4f	configure.ac: Check for tinfow before tinfo
+2025	4c2eaa153c	lesstest: Makefile: allow CFLAGS to be overitten
+2026	10cb220acc	lesstest: Makefile: add LDFLAGS support
+2027	2914bb41d8	Define MUST_DEFINE_ERRNO=0 on all Windows versions.
+2028	5d2bd5d018	Doc.
+2029	dba9042ddb	v643
+2030	30797b239a	Open v644.
+2031	4dcb52a51c	fix possible infinite loop (#414)
+2032	3ecff37520	Include signal.h before using SIGPIPE.
+2033	8626c17a6e	Move check for abort signal out of forw_line/back_line and into ch_get. This allows access to buffered data while handling a signal.
+2034	9a41e8b731	Don't complete search (move to target line) if user has pressed interrupt key.
+2035	ce45b2fea4	Make interrupt (^C or ^X) clear the ungotten character queue.
+2036	a98a671dad	Doc.
+2037	3773c41003	Doc.
+2038	9fa5829591	Doc.
+2039	65cd462c22	lesstest: make lt_screen support \e[39m and \e[49m.
+2040	c7ef29943a	Merge branch 'master' of https://github.com/gwsw/less
+2041	2d631e7f66	lesstest: add check for out of bounds screen movement in lt_screen.
+2042	52b8e35df9	Merge branch 'master' of https://github.com/gwsw/less
+2043	8aec57642d	Windows/MS-DOS: decouple SGR state from screen colors
+2044	6a080be961	Make clean on Windows should delete defines.h.
+2045	8b6a01550c	Change Windows underline color to more readable bright green. Fix type error.
+2046	b931818750	Change Windows default colors.
+2047	9da12910b1	Adjust Windows underline color so foreground is visible regardless of background color.
+2048	11779a9cfc	Doc.
+2049	64464509e9	Restructure edit_ifile(). It now tries to open the new file first, and then if that succeeds, it closes the old (currently open) file. Previously it first closed the current file and then tried to open the new file. If the open failed, it would re-open the old file via reedit_ifile. If reedit_ifile failed, this could cause unintended recursion:
+2050	281ac57146	Doc.
+2051	44d5c6bb12	win32: Fix to handle files larger than 4 GiB
+2052	7fae8d5159	Merge branch 'master' of https://github.com/gwsw/less
+2053	d6556841e5	Doc.
+2054	065f3e42b2	Improve parsing of string options -j, -x and -#. Don't accept "-" and "." anywhere in string, but only at beginning.
+2055	deecfc1e43	Doc.
+2056	f306b46c41	When opening controlling tty, try /dev/tty before ttyname(). Also open tty (open_getchr) before calling get_term, so that tty file descriptor can be used by ioctls in get_term.
+2057	9fd32680b4	Revert "When opening controlling tty, try /dev/tty before ttyname()."
+2058	c56b8097e1	lesstest: fix compiler warning for unused variable in run.c.
+2059	41e391c2f6	Refactor.
+2060	76ea5575d1	Workaround some apparent untrustworthiness in ReadConsoleInputW. It sometimes delivers a faulty KeyDown event where the codepoint is set to zero. The subsequent KeyUp event always seems to have the correct codepoint.
+2061	effde1557f	Doc.
+2062	f4524bab6e	Clean up.
+2063	a6e9f31dea	WideCharToMultiByte does not handle codepoints >= 0x10000, so use put_wchar.
+2064	2da3869ab5	Whitespace.
+2065	b3253638b8	Merge.
+2066	0cd542724f	Doc.
+2067	010d808639	Do "last_down" processing for bogus KeyDown events only for non-ASCII chars. Remove unnecessary .ascii field from KeyRecord.
+2068	cb71ba17be	Fix bug with search for multibyte UTF-8 characters. cvt_text was setting the chpos[] entry for only the first byte of the character. It should set the entry for every byte.
+2069	1dd362c22e	Doc and whitespace.
+2070	378fc4bb8c	Fix incorrect calculation of codepoint from UTF-16 surrogate pair.
+2071	03f4fb1e17	After processing a high surrogate char, immediately try to read the next char (the low surrogate). Don't say there is no char available.
+2072	434f70c5da	Update comment.
+2073	f49b3db4e8	Don't filter header lines via the & command.
+2074	6e3eb91b4d	Doc.
+2075	6efbb89883	Doc.
+2076	236e0419e8	Use simpler and more efficient algorithm to make search match visible when -S is in effect.
+2077	8ec8396db4	Add --match-shift option.
+2078	f548d989dd	Create pos_rehead to fix bugs when we go into chopline mode with a "beheaded" position table (that is, when position(TOP) is not the first char in its line).
+2079	68702d92de	Fix pos_rehead when -S doesn't change, but chopping changes due to hshift changing.
+2080	fa078892a1	pos_shift() doesn't need chpos array.
+2081	d1ed82bea6	Minor cleanup. Privatize global variable screen_trashed, add screen_trashed() and related functions
+2082	8b83d624ba	Doc.
+2083	aad6b00239	Doc.
+2084	ca3ecdb0c6	If search match is visible in unshifted screen (hshift==0), set the screen to unshifted. Previous version would prefer to keep the current hshift if >0.
+2085	ce9a1fd202	Doc.
+2086	81d9fc7474	lesstest: Add -x option to explore a .lt file. Add -D option to create or read a failure details file.
+2087	974468fc77	lesskey.nro.VER: Fix render on mandoc/freebsd
+2088	cf45a59e9f	Doc and variable naming consistency.
+2089	0e7602d6ef	Doc.
+2090	69094b6e20	Doc typo.
+2091	c142abeb6d	lesstest: add extract script to extract text file from an lt file.
+2092	349e6fe617	Typo: unclosed comment.
+2093	a5ea9e734c	Fix compiler warning.
+2094	aa1d3e2cf3	v644
+2095	9c28335c7f	Open v645.
+2096	a4816259ab	Remove unnecessary extern statements.
+2097	34b0e09dce	Update Unicode tables (EastAsianWidth.txt date 2023-07-28).
+2098	b975ca250c	Fix bug in rrshift (ESC-}) when beginning of file is scrolled down, so that position(TOP)==NULL_POSITION.
+2099	5d2995a8dc	Doc.
+2100	48f9272c44	Fix erroneous display with --incsearch when entering chars in a search pattern should cause the display to horizontally scroll.
+2101	710398cd49	Improve shift_visible algorithm.
+2102	60232a13e4	Allow --match-shift to take a decimal fraction, like -#.
+2103	aac48ee99b	Fix --match-shift option.
+2104	ac68a181df	Fix initialization of match_shift.
+2105	81f8b0d15c	Fix MS-DOS/Windows build.
+2106	d32e414f19	Doc.
+2107	b9e81ee34b	Doc.
+2108	8d70697d4b	Fix buffer overrun in pos_rehead.
+2109	d5ede9341d	Rewrite and clean up Windows input handling code. Replace multiple state variables with a single unified queue. Also fixes invalid input when mouse events occur at column >= 95.
+2110	735f0995f3	On Windows, make "waiting for data" message indicate that ^X can interrupt.
+2111	04746adeba	On Windows, if keys are pressed while "Waiting for data" is displayed, call ungetcc_back() rather than WIN32ungetch() to unget them. They should be read by the command processor, not re-read by the keyboard input code.
+2112	5dcf7b5f57	Change default charset on Windows (WIN32C) from dos to utf-8.
+2113	ec906cb8c2	Revert 04746adebaa882844a054b50be33fa44b8252664; this lets iread inappropriately break up a multi-char input sequence. Also make WIN32ungetch() push the char on the front of the queue rather than the back.
+2114	02d17dd203	Remove long-obsolete UTF-8 support for Unicode chars larger than U+10FFFF.
+2115	9d0b54199d	Rename win32_unget_queue to win32_enqueue for consistency.
+2116	a0c369daaa	Limit WIN32 input char repeat count, to avoid starvation if rendering is slow.
+2117	ed8b7dc277	Win32 input: ignore CAPS_LOCK and NUM_LOCK.
+2118	ad4a45c6d9	This is a little clearer.
+2119	70e6374d75	Fixed typo
+2120	235d943359	lesskey: don't ignore HAVE_SNPRINTF
+2121	8de26dca02	windows: mingw and old msvc: don't use _snprintf
+2122	fd458cd1d1	windows: mingw: Makefile.wng: support SHELL=sh (cross compiling)
+2123	0e5bd366ed	windows: mingw: Makefile.wng: use mkhelp.sh if perl is missing
+2124	95fb231fb8	windows: mingw: Makefile.wng: support REGEX_PACKAGE=none
+2125	fdaee1fe98	windows: mingw: Makefile.wng: default to regcomp-local
+2126	adfe1fb906	windows: fix mouse-button-down encoding
+2127	0ffa65babc	mouse: bind right-click as jump to the "#" mark
+2128	448e04dbad	With --file-size option, defer "Determining length of file" message for a few seconds, like "Calculating line numbers" message.
+2129	54817b4d47	Doc.
+2130	b1d79fd699	windows: mingw: Makefile.wng: allow incremental build
+2131	c8c01e3332	regexp.c: modernize functions prototype/definition
+2132	c2e3b8f081	windows: mingw: support files bigger than 2G
+2133	bb675e4e42	Merge branch 'master' of https://github.com/gwsw/less
+2134	c7ffe20875	On Windows, set the console mode before every call to ReadConsoleInputW. If input is a pipe (either directly from the cmd line or via LESSOPEN), the Windows cmd processor may reset the console mode when the pipe writer terminates. Since we can't detect when that happens, just set the mode before every read.
+2135	e4822f7ad4	Merge branch 'master' of https://github.com/gwsw/less
+2136	308cd52f57	Windows: keep console input mode separate from output mode.
+2137	3a4c4c9d88	Windows: don't enable quick edit mode if it's not already enabled at startup.
+2138	ae58dcd0d7	Doc.
+2139	ad440b6cea	windows: ucrt build on win10+: support unicode file names
+2140	5f21a66fc4	windows: msvc: remove Makefile.win-vc64
+2141	102dd881c1	Doc.
+2142	1ce886241b	Windows: correction to 3a4c4c9d884217cbdab0ccfbaf3f1c5a5d52bbe2. Don't enable quick edit mode unless it is already enabled in Windows.
+2143	97d29378b2	Fix a couple of compiler warnings for mixed declarations and code.
+2144	09c10643d2	Fixed C99
+2145	6274eeb913	Fix missed char when win32_get_ichar forces a fake key down event due to a key up without a previous key down.
+2146	c53524ebf2	Windows: at startup, clear only the input console mode bits that we really need to clear.
+2147	4ad71afb61	Windows: avoid unnecessary UTF-8 conversion when repeat count >1.
+2148	06b944e27b	Windows: better handling of input console mode.
+2149	bcd42b1494	Ensure that the target line is not obscured by a header line.
+2150	652eb11a6e	Refactor security code. Code that tests the old "secure" variable is replaced with calls to secure_allow(). The SF_xxx bits distinguish between different security features but currently they are all treated identically.
+2151	7fb7274b0b	Disallow use of --lesskey-src when LESSSECURE is set.
+2152	b431d9193b	Add LESSSECURE_ALLOW environment variable to selectively enable features disabled by LESSSECURE.
+2153	3006aecb98	Add --lesskey-content option.
+2154	70c1b4ee09	Add ltview, a utility to visually explore an lt file.
+2155	0e1bf67bbe	lesstest: ltview: add support for error file (mismatch details from output of "lesstest -D").
+2156	b22a4bbbb3	lesstest: ltview: Better error checking, some cleanup.
+2157	9a3828d222	lesstest: ltview: Add -c option, some cleanup.
+2158	655441d15d	lesstest: ltview: Add = command.
+2159	db11cfc806	lesstest: ltview: add -f flag, some code refactoring.
+2160	783a498595	lesstest: ltview: Minor cleanup.
+2161	425a91c471	lesstest: Make display_screen_debug prefix data lines with "DATA:" to avoid parsing errors in ltview.
+2162	ab0e5d0d6c	lesstest: add extract -k option.
+2163	a9cbde2670	lesstest: add -k option to allow keystrokes to be taken from a previously-built lt file. This simplifies rebuilding an lt file when benign/desirable changes in less cause a test to fail.
+2164	f5702b392c	lesstest: Rebuild the table-50x200.lt test.
+2165	09377f769d	Allow expansion of environment variables in lesskey files, using the syntax ${NAME} and ${NAME/STRING/REPL}. Change lesskey parsing so that definitions override earlier definitions.
+2166	4fd8cdefbb	Add LESS_UNSUPPORT environment variable.
+2167	3d6c5bd1ab	v645
+2168	e9acc6156e	Fix non-autoconf Makefiles.
+2169	d4331cddfa	Merge branch 'master' of https://github.com/gwsw/less
+2170	cdeab234f1	Open v646.
+2171	328d3fc641	Fix a couple bugs caused by moving call to get_term() later in main().
+2172	eefa71e2ef	v646
+2173	2f45bca89e	Open v647.
+2174	756acc92c9	Some constifying.
+2175	5994d671d7	windows: msvc: Makefile.wnm: allow generating funcs.h, help.c
+2176	f7d135e7b2	Windows: mingw: Makefile.wng: allow native funcs.h, help.c
+2177	5354c92847	More constifying. WIP
+2178	8b6e333030	More constifying.
+2179	ccdda0e4d5	Some type changes, since a cmd table is an array of unsigned bytes, not chars.
+2180	d945730abb	A little cleanup of types.
+2181	656ebf130b	Constify.
+2182	42e1b42d3b	More more more constify.
+2183	f9f16817f4	Constify. Add "<name>c" variant of some utility functions for const strings. Yuck.
+2184	a7b3b89b6d	Constify.
+2185	efae1e913d	Constify.
+2186	98acbb0613	Constify.
+2187	5a6c532b6e	Constify.
+2188	987ebdc424	Fix a couple of crashes.
+2189	f1bc6a93cd	Constify.
+2190	72ce019be1	Constify.
+2191	596e8893da	Move some language defines to lang.h, so can be included by less.h and lesskey.h. Make new "mutable" keyword, opposite of "constant".
+2192	f14f61d251	First steps on Project Mutable.
+2193	c6fb7d2916	Constify all the opt_* functions.
+2194	1263a3562d	Constify.
+2195	312532d924	Constify.
+2196	43bfcdc399	More constifying.
+2197	32842f7067	Constify.
+2198	0013d9bfaa	Constify.
+2199	55f1471124	Constify.
+2200	f8a5047caf	Fix some issues from constification.
+2201	5d452eb131	Fix const errors in local regexp.c.
+2202	7c263a16dd	Fix compiler warning using re_comp regex.
+2203	cb4a9492fb	Add xbuf_add_char(). Simplify readfd() by using an xbuf.
+2204	21141436aa	Add xbuf_init_size().
+2205	b78e8b39e9	lesstest: fix ltview to handle wide characters.
+2206	5f05b1478a	lesstest: fix handling of special chars in detailed (lesstest -d) output.
+2207	83b90b6d54	Fix compiler warnings.
+2208	37e202acc2	lesstest: Add README, extract and ltview to release.
+2209	58f749f649	Fix compiler warning on Windows.
+2210	8b71b29287	Fix command line syntax "--+option" to set an option to its default.
+2211	b469710368	Use size_t where appropriate. gcc -Wconversion warning output is reduced from 975 lines to 679 lines.
+2212	3fcc80d51f	Fix Windows build.
+2213	2f5faad94f	Replace some uses of 0 and 1 as boolean constants with TRUE/FALSE macros.
+2214	8992745775	Add new type lbool for boolean expressions.
+2215	2a79e5cd34	Fix some char type confusion. Chars returned from get_cc* are single byte chars, not LWCHARs.
+2216	0c39562bf3	Clean up some more stuff related to char types.
+2217	2d0abe8adc	Fix some more type issues.
+2218	5907455ba8	More obsessive fiddling with types.
+2219	b2e140bf06	Types.
+2220	a82a2a9307	Types.
+2221	d46500e6a2	Final (?) type cleanup.
+2222	de5376f428	Merge branch 'master' of https://github.com/gwsw/less
+2223	c8f47a5a37	Build fixes.
+2224	e98425d989	Build fixes.
+2225	9c34d8756a	Another build fix.
+2226	d286f1a396	Fix some compiler warnings from gcc -Wextra.
+2227	18d1cb9194	v647
+2228	920405d93b	v648
+2229	78b4b88328	Open v649.
+2230	a5b3811e6f	Some minor size_t cleanup.
+2231	2da4a171d0	Fix status column marks when file line wraps onto multiple screen lines. Search match mark should appear only on the screen line that contains the match.
+2232	b116702c9f	Fix typo in NEWS file.
+2233	3f8d4ab3bd	Fix shift_visible algorithm, which assumed that chars == bytes. New get_col() function, fragily dependent on mimicking the pappend algorithm, so needs to be kept in sync with changes there. Fixes #456
+2234	9f32fe1cbc	lesstest: ltview prints nonmatching chars as blinking.
+2235	7f50d98522	Minor tweaks.
+2236	e9245f4a5b	lesstest: add some colors to ltview prompt.
+2237	0b3277c4c7	Add hyphen to lt file names.
+2238	9132d4f9a9	lesstest: make ltview print escape sequences for some control chars.
+2239	f1c4be369f	Header no longer needs to be the first L lines in the file. Add third (line number) parameter to --header option to specify the (first) line number of the header. When used within a running instance of less, make the default value for the third parameter be the top line currently displayed.
+2240	c247cd0b33	lesstest: remove lesstest -x option. It is replaced by the ltview utility.
+2241	9d4c13878c	Merge branch 'master' of https://github.com/gwsw/less
+2242	a1a6f610ea	Remove confirmation message after --header command.
+2243	ca2826b618	Merge branch 'master' of https://github.com/gwsw/less
+2244	653c0d7f77	lesstest: remake table-50x200.lt test file for new semantics of the --header option.
+2245	01fb3719e3	Change man page to replace a lame joke with useful information.
+2246	35e6eb4794	Fixed tiny typo
+2247	64657e81c6	v649
+2248	8bd9c6cf61	Open v650.
+2249	6e9f84a432	Add --no-search-header-lines and --no-search-header-columns. Fix --header option when used on the command line.
+2250	0bcc2cb4aa	A little tweaking of types.
+2251	3417d2c242	Doc.
+2252	d14560945c	Add ctrl-L search modifier character.
+2253	16a526030e	Fix bug if a signal is received while literal_char is set. Previously literal_char was not cleared and the next search command would begin with the Lit flag set.
+2254	53ac8be6d9	Doc.
+2255	48036b4f67	A ^P at the start of a shell command in the !, # and | commands suppresses the done message.
+2256	877b3d047d	Doc.
+2257	0779c7d462	Merge branch 'master' of https://github.com/gwsw/less
+2258	1075be8e7c	lesstest: remake hdr-unicode1 test because --no-sea is no longer an unambiguous abbreviation of --no-search-headers.
+2259	0b3cac4b09	lesstest: fix lt_screen bug when second half of a wide character overwrites the first half of another wide character.
+2260	fbf878d88b	lesstest: Fix ltview bug parsing error file. Should not discard null bytes.
+2261	860d5941df	lesstest: improve error handling/reporting in extract.
+2262	989b659992	lesstest: remake hdr-unicode.lt and hdr-unicode1.lt. They were previously built erroneously due to the wide char overwrite bug in lt_screen.
+2263	55044e0524	Display a message when search with ^W modifier wraps.
+2264	8f4691901c	Whitespace.
+2265	0307078cad	Fix two bugs in the shift_visible logic. 1. search_range should pass the offset of the file position of    the start and end of the match relative to the file position    of the start of the line to shift_visible.    It was passing the offset of the converted line. 2. When encountering an escape sequence, get_col was failing to    call ansi_step with the initial ESC.
+2266	1bc88c9be7	Implement OSC8 search commands ^O^N and ^O^P. The ^O^O command is plumbed but not yet implemented.
+2267	90d9d12ba9	Implement osc8_open().
+2268	5c29be3dd5	Fix regression in parsing non-OSC8 escape sequences.
+2269	56740cbf30	Display OSC8 link URI after ^O^N or ^O^P command.
+2270	0645571353	Allow OSC8 links to local files using "localhost" or an empty string as the hostname component of the URI.
+2271	bc9499416b	Make OSC8 hyperlink end at the start of the second OSC8 sequence, not the end of it. This allows searching for the second of two contiguous hyperlinks.
+2272	645aed4dcd	Add ":e" syntax for OSC8 hyperlink opener. Fix build when OSC8_LINK is undefined.
+2273	7d9ccdb2e6	Some type cleanup.
+2274	fc5c49d0a0	Avoid spurious highlighting by ensuring that we don't call is_hilited_line with pos==NULL_POSITION.
+2275	837b3f5482	Make OSC8 searches skip over links which have an empty link text.
+2276	ca8f0f61a2	Implement opening OSC8 link of "#xxx" which is taken to be a link to the OSC8 sequence containing "id=xxx" in its parameters.
+2277	525541877f	Change prompt expansion of %o to be the plain OSC8 URI, not the shell-escaped version. Shell escaping is unnecessary since the LESS_OSC8_* script can just quote it manually.
+2278	d650ba7daf	Fix messed up LESS_OSC8_* defaults.
+2279	5fae66ace7	Allow OSC8 links used as anchors to have empty text.
+2280	74ea330d33	Add ^O^L command.
+2281	2a59884f19	Fix uninitialized variable.
+2282	0f7f4987c3	Set VDISCARD char to null. On MacOS, VDISCARD is ctrl-O, which interferes with the new ^O commands.
+2283	f8fbf2d6d4	Enable support for IBM z/OS
+2284	1dd094e458	Include signal.h for z/OS (__MVS__)
+2285	1fafd968b4	use read(), not statfs(), to detect files that lie about size
+2286	19679de686	Do not assume PATH_MAX is defined
+2287	d32971154b	lesstest: update lt files to define LESSCHARSET. On systems with nl_langinfo, the value of nl_langinfo(CODESET) overrides the value of LANG/LC_TYPE, which can cause tests to fail because less uses ASCII rather than UTF-8.
+2288	fcdc61f38c	Fix typos in man page.
+2289	0582cc9c4a	Merge branch 'master' of https://github.com/gwsw/less
+2290	1d3d3876f7	Add LESS_OSC8_ANY.
+2291	1f5e9904ca	Use lbool type in some more places.
+2292	602fd25be8	Merge branch 'master' of https://github.com/gwsw/less
+2293	846bc3005d	Consider an OSC8 "anchor" sequence, with the URI equal to "#", to be empty.
+2294	4f77699b0c	Doc.
+2295	de6108bc7b	Allow one command or environment variable to be a prefix of another.
+2296	ee761f6a6e	Fix bug when one command or environment variable is a prefix of another. This bug was introduced in 09377f769d2f28f0892f152fd57260b9bd240eb6.
+2297	7ad1da3de2	Merge branch 'master' of https://github.com/gwsw/less
+2298	463b59650c	Rename get_col to col_from_pos for future consistency.
+2299	1eb1dbf9d5	Revert ee761f6a6e6b5b936d814878e0c9996407b07a69. It breaks parsing of arrow keys.
+2300	fba083190e	Add pos_from_col in preparation for OSC 8 mouse support.
+2301	831044a659	Mouse click on an OSC 8 link will select that link.
+2302	8031de918d	Allow mouse double-click to open OSC 8 hyperlink.
+2303	2433d25540	Doc.
+2304	94f1ae3618	When adding a spurious space to an empty line so that -w has a character to highlight, if the line ends with CR/LF, put the space before the CR, not between the CR and the LF.
+2305	1991cccf43	Doc.
+2306	9ea90038ef	Fix bug when lesskey #env section contains one environment variable which is a prefix of another one. Fixes #473.
+2307	314d971809	Remove ESC-] and ESC-[ commands which are not documented in the less man page and haven't worked for quite a while.
+2308	5e0a91f838	Fix mouse click on OSC 8 links when display is horizontally shifted or when -N or -J is in effect.
+2309	1b575fccd5	Update copyright date to 2024.
+2310	898774b20b	v650
+2311	1e0386503e	Open v651.
+2312	a055278b98	windows: improve UTF-8 locale comment (no-op)
+2313	7342fd48f8	windows: fix console title with unicode file name
+2314	d7399711ce	windows: restore unicode console title correctly
+2315	f36c997f20	Alphabetize list.
+2316	608c8e5180	Add support for attribute characters ('*', '~', '_', '&') in the --color option.
+2317	9837edbdb6	Refactor fexpand() to reuse code between the two passes.
+2318	8b0c667d6b	When expanding a '#' or '%' char to a filename, backslash-escape any spaces. (This doesn't work for Windows.)
+2319	4cee0c0aa8	Fix '#'/'%' substitution with embedded spaces for DOS/Windows.
+2320	d1e1111db2	Add fexpand_esc to specify escape char or quote char for spaces in filenames output by fexpand. Not yet user selectable; defaults to quotes on Windows and backslash on everything else.
+2321	1626d061a6	Simplify fexpand a little. We don't need backslash escaping; we just need quotes to protect from textlist processing in edit_list. Quotes also work (coincidentally) for escaping in A_SHELL handling in exec_mca, in both Linux shells and Windows cmd. But we're walking a tightrope here.
+2322	f9f2498f20	When not using -Da (and always on Windows before 10), we process SGR sequences internally and apply them as Windows/DOS colors.
+2323	092448c0cc	Doc.
+2324	d251937bd5	Doc.
+2325	46f637c35e	Don't set hlink_in_line until we've seen an entire OSC 8 sequence. This prevents sending an unnecessary OSC 8 close (ESC]8;;ESC\) at end of line.
+2326	b4ea7b4811	Fix bugs in behavior of -D on Windows, introduced in 09377f7.
+2327	48c336921b	Add alphabetic alternatives for the --color attributes (s=~, u=_, d=*, l=&). Implement the first two on Windows. The addition of 'u' on Windows partially restores backwards compatibility with the old 'u' modifier, although previously it could appear at the start or end of a color string and now can only appear at the end.
+2328	a1391d8660	On Windows, extend u and s modifiers to work for uppercase color selectors.
+2329	89df5e0e0b	Fix bug with -D on command line. Should not call init_win_colors before get_term is called.
+2330	448962e844	Fix bug viewing help file on Windows. Code was calling filesize(-1) which just returns -1 on Linux but crashes on Windows.
+2331	64080f894a	If we use spaces to move to the right column to print the rscroll char, leave those spaces uncolored. Previously they were colored with the rsrcoll color.
+2332	ad1c9b81c0	Doc. Improve description of MS-DOS-specific behavior of --color. Change some attr variable names to cattr for consistency.
+2333	b33f9a2552	Fixed function name
+2334	36c529a7c5	Doc.
+2335	7a9753d36f	Make help file consistent in use of brackets around optional input. If an option reports state when invoked with no parameter, its parameter should be documented as optional.
+2336	840c9d2d4a	Merge branch 'master' of https://github.com/gwsw/less
+2337	d4b3821af2	Allow --rscroll to accept a non-ASCII character.
+2338	3a1f7ff8ca	Doc.
+2339	812d8a5747	v651
+2340	72da108f6b	Open v652.
+2341	bb01a1438b	Doc.
+2342	14228801c3	Doc.
+2343	a16053ea21	Fix erroneous parameter to usleep. Was passing milliseconds, should pass microseconds.
+2344	a5702944c4	Doc.
+2345	0e679d5de9	v652
+2346	955765b424	Open v653.
+2347	874f1bcbe3	lesskey.nro.VER: Fix a minor markup issue
+2348	c14b25f8f7	Merge branch 'master' of https://github.com/gwsw/less
+2349	dd5be801c6	Merge branch 'master' of https://github.com/gwsw/less
+2350	3d49bf1351	On systems that don't have nl_langinfo, make default non-DOS charset utf-8 rather than latin1.
+2351	b186c27d9d	Doc.
+2352	d23488c833	Doc and minor cleanup in Makefile.aut.
+2353	6f73284834	Minor doc grammar and punctuation.
+2354	ff4c476980	v653
+2355	d63390e0fe	Open v654.
+2356	40fc2f741f	Doc.
+2357	3440a1d490	When set in the LESS environment variable, the parameter for options --color, --quotes, --rscroll, --search-options and --intr can be terminated with a space as well as with a dollar sign.
+2358	ec13814f09	Fix bug in setting --no-search-header* from command line.
+2359	ae947389c6	Fix bug introduced in 64464509e9dc1b27961744ff72eaedd672e7172c, where first character of file is not displayed when using LESSOPEN. Since this change, when viewing a new file while another file is already open, the new file is opened first and then the current file is closed. When the new file is opened, open_altfile reads a char from the new file to see if it is empty, and then calls ch_ungetchar to unget it, so that it will later be the first char read from the file. But when closing the old file, close_altfile calls ch_ungetchar(-1) which overwrites the ungotten char. This call was added in 05e12cd1. I'm not exactly sure why it was added, but it seems unnecessary and removing it fixes this problem.
+2360	8e68ac4752	Remove unused label to fix compiler warning.
+2361	007521ac3c	Fix bug when viewing a file whose name contains a newline.
+2362	a56da8f472	Merge branch 'master' of https://github.com/gwsw/less
+2363	a98154ccfd	dos: fix djgpp build
+2364	b935030d29	Doc.
+2365	24cf67ff86	lesskey.nro.VER: Fix another minor markup issue
+2366	0546b1537d	Merge branch 'master' of https://github.com/gwsw/less
+2367	650a486638	doc: Remove claim that "more" can't move backward
+2368	2ef383e210	Fix minor typos in comments.
+2369	a60cc1bd96	Fix bug in control_char(). Was broken in 2d0abe8adc5020c0dd596a45b3d7f14902158953.
+2370	2a642a07d8	Fix incorrect display when filename contains control chars. Such chars should not be printed directly to the screen, but instead passed through prchar() or prutfchar().
+2371	e98b2282d4	Merge branch 'master' of https://github.com/gwsw/less
+2372	cb2259bddc	Doc.
+2373	fabdc15506	v654
+2374	660bc14ce1	Open v655.
+2375	855ab5cc9b	Fix bug in doing a save/restore of updown_match. Previously this was done by saving the value of updown_match, but recently updown_match was split into two varibles. Need to save/restore have_updown_match as well.
+2376	ac0230c2e9	Add lesstest for search history, with and without --incsearch.
+2377	e735419e18	Make the updown variables static since they're no longer accessed outside cmdbuf.c.
+2378	57d6622c42	Doc.
+2379	d5bf864102	Fix bug that makes all chars > 0x7f be treated as control chars, regardless of locale setting. This was a logic error in a60cc1bd96508c051ef31b4e8bf31d7c9a2ec92b.
+2380	0c3e507d8d	Merge branch 'master' of https://github.com/gwsw/less
+2381	4e98cceb40	Fix help indentation
+2382	6e6438582d	v655
+2383	cf4023afb1	Open v656.
+2384	bf14bc4a61	Fix bug using escape sequences in prompts. Change 2a642a07d86f7f9484db18cd748bc521e71c997f introduced a regression where a prompt set by -P is converted to printable form before printing. This breaks using escape sequences to affect the formatting of prompt strings.
+2385	e8294668cf	v656
+2386	0faa2231a7	Open v657.
+2387	f752294df2	fix crash - buffer overflow by one in fexpand
+2388	2fb5fcab9d	Revert unintentional commit of experimental changes.
+2389	25d08b356e	v657
+2390	fbd04f29cf	Open v658.
+2391	1649cc355a	Fix double free in parse_lesskey. Fix passing NULL to strcmp and fopen in parse_lesskey if homefile returns NULL. Fix invalid lesskey filename in error messages if there is a syntax error in a --lesskey-content parameter.
+2392	db13e77132	Fix segfault when using -N and actual width of line number exceeds the value specified by --line-num-width.
+2393	bfeb791c4e	Minor grammar errors in man page.
+2394	532bd93204	Correct doc. Bug #529 was introduced after less-643.
+2395	2d52a99c0e	v658
+2396	a5c780cb81	Open v659.
+2397	0fed37a10c	Fix typo in help file.
+2398	b4a1f590c0	v659
+2399	4b84a6e83c	Change some variables to lbool.
+2400	c33b98e9e2	Fix prompt coloring when prompt contains manual SGR sequnces. Related to #516.
+2401	c86d29d736	Pass through all OSC escape sequences (not just OSC 8). Related to #504.
+2402	a8ae92e19d	Add --no-paste option. Related to #523.
+2403	242313ff54	Fix missing confirmation msg after toggling no-search-header*.
+2404	f800e8c36e	Allow TAB in the -- command to complete a partial option name. Related to #531.
+2405	0e652df3f7	Doc.
+2406	726c9afceb	Doc.
+2407	8491cb4992	Fix type mismatch.
+2408	22ac9f0d1d	Merge new SGR processor from avih/less.
+2409	d53a4a13cf	Open v660.
+2410	a21350bfac	Fix bug in ixerror, used when displaying the interrupt char during the F command. Since 2a642a07d86f7f9484db18cd748bc521e71c997f, less_printf can call prchar, thus overwriting the static buffer returned by prchar. Need to save the result of prchar across a call to less_printf.
+2411	d4bd23c4be	Doc.
+2412	aff7683fde	v660
+2413	a0d1f5b962	Add --form-feed option. Related to #496.
+2414	f0eb3ee233	Fix problem when set-mark command is defined in a lesskey file with the mark letter in the "extra" string, and then invoked in the help file. The set-mark command is ignored in the help file, so the mark letter is interpreted as a command. We now read and discard one command char after deciding to ignore a set-mark because we're in the help file. Do this only if the char comes from the extra string (it is ungotten).
+2415	4c86653bb7	Add support for mouse drag. With --mouse, dragging will scroll text forward and backward. Single clicking still sets the # mark, but a click and drag would previously set a mark where the drag ends. Now the drag scrolls the text, and no mark is set when the drag ends.
+2416	d67f5b0b5c	Flush output before starting a potentially time-consuming search operation. Without this, buffered data may be not written or only partially written to the screen, so the screen could look inconsistent while the search operation is in progress. Related to #533.
+2417	6819fa5a4d	Open v661.
+2418	c9be49bfe1	Simpler fix for ixerror bug. Use stack rather than heap to save prchar output.
+2419	55fa179597	v661
+2420	02bed134f1	Change missing_cap from int to lbool.
+2421	fc16b70df2	Merge branch 'master' into post659
+2422	d602455ac1	Add --no-edit-warn option. Related to #513.
+2423	9e01fe6298	Improve passthru of OSC sequences. All OSC sequences in a prompt are passed thru. LESSANSIOSCALLOW specifies which OSC sequences in the file contents are passed thru. LESSANSIOSCCCHARS specifies nonstandard OSC intro chars, and specifies which of them are allowed in file contents.
+2424	8990ba6b96	Setting LESS_IS_MORE=0 will disable "more" compatibility mode, even if less is invoked via a file link named "more". Related to #500.
+2425	8e246366bc	lesstest: add remaketest.
+2426	fcd27cacf2	lesstest: add -d option to ltview.
+2427	0b0e844f28	lesstest: remake hdr-unicode1.lt after 242313ff5462da6db8cbb0dfdca2d99c9e78ee1f adds a confirmation message after toggling the --no-search-headers option.
+2428	0511532b5d	Rewrite command decoder. Change [fe]cmd_decode so instead of returning only commands that match the entire cmd string, we return commands that match a tail of the cmd string. This allows spurious leading chars in command entry to be ignored. Related to #543.
+2429	d8aa003e20	Fix bug in new command decoder. If we find a partial match (prefix) which is longer than an previous match, take the partial match even if the previous match was exact. Previously, for example, if we get the paste bracket "\e[200~", it would parse the '\e' and '[' as A_PREFIX, but then it would parse the '2' as A_DIGIT instead of A_PREFIX.
+2430	9496b1cc3a	Fix regression in new command decoder: If there are two identical commands in a command table, accept the later one.
+2431	6a6aa61f75	If we find matches for a command in multiple command tables, take the longest match.
+2432	86ed780034	Fix step_char to work better with malformed UTF-8 sequences. If we encounter a malformed sequence, just step one byte at a time.
+2433	08725e2f42	Doc.
+2434	6ab09876fd	Simplify code a little.
+2435	be1498e3a5	Fix typo in gnu-upload target in Makefile.aut.
+2436	c9cb23a7f9	Harden step_charc a little to better handle invalid UTF-8 sequences.
+2437	26c7a12154	Fix compile error when building with --with-secure. Related to #544.
+2438	8092f24c96	windows 10+: make 256/true colors "work" without -Da
+2439	a0207f932e	Open v662. (Should have been done 2 commits ago.)
+2440	75dc49c00e	Doc.
+2441	e519697f30	Merge branch 'master' into post659
+2442	20180d2690	Fix some compiler warnings when built with --with-secure.
+2443	f9e5b43d8f	Fix crash when use --header on command line with 3 arguments. Can't call parse_header during scan_option because input file is not yet open, so calling find_pos while parsing third argument will fail. Instead, save the --header parameter and parse it after opening the input file.
+2444	1ca819b337	Config files, like _lesskey, are determined at homefile(...), and on windows, after trying $HOME and $HOMEDRIVE$HOMEPATH, it could fallback to using _searchenv, which first searches CWD and then in $PATH.
+2445	91fbc107b6	Revert "Config files, like _lesskey, are determined at homefile(...), and on windows, after trying $HOME and $HOMEDRIVE$HOMEPATH, it could fallback to using _searchenv, which first searches CWD and then in $PATH."
+2446	f28a67e0ef	Fix possible memory overrun when scrolling left/right or toggling -S. The destination buffer allocated for cvt_text() must be of the size returned by cvt_length(). pos_shift was failing to do this correctly.
+2447	f21323f72e	Merge branch 'master' into post659
+2448	3bcd6c2262	Config files, like _lesskey, are determined at homefile(...), and on windows, after trying $HOME and $HOMEDRIVE$HOMEPATH, it could fallback to using _searchenv, which first searches CWD and then in $PATH.
+2449	2453357fb9	Make lesstest work if the system does not support /dev/stdin.
+2450	91aff33708	windows: SGR processor: improve end-of-buffer detection
+2451	ce1dfeca48	windows: SGR processor: use memmove instead of strcpy
+2452	5854746277	windows: SGR processor: increase buffer size for less issues
+2453	325d4dbc23	is_ansi_middle(0) and is_ansi_end(0) should return FALSE. Currently they return TRUE, which can cause problems when there is a NUL char in the input file.
+2454	ef44dd6522	Doc.
+2455	2526c72b12	Fix use of #stop in a lesskey file. This was probably broken in 09377f769d2f28f0892f152fd57260b9bd240eb6. Related to #551.
+2456	4302ef5723	Fix use of #stop in lesskey file. This is a port of 2526c72b1212b2a1f34bdda88a93b0c7f7b4a16a from the master branch. Related to #551.
+2457	b7573ba8d9	Merge branch 'master' into post659
+2458	e6ba38287c	Doc.
+2459	469b79e191	Fix display bug when using +:n +:p +:x or +:d on the command line. Was missing calls to cmd_exec() before executing some commands. This is necessary to clear the string on the command line. Related to #552.
+2460	5701f020f9	Fix --shift and --match-shift on command line with fractional parameter.
+2461	99d2557a9a	Fix R command to refresh the file size.
+2462	64c8e03ccb	Doc.
+2463	0d0a88cd2d	Merge branch 'master' into post659
+2464	ca9ed967ff	Fix bug using --header with a file shorter than screen height.
+2465	83cc7d3a33	v662
+2466	df120ea854	Open v663.
+2467	ed454a217d	Fix bug related to ctrl-X when output is not a terminal.
+2468	55b44b02ad	Doc.
+2469	1252af018c	Merge branch 'master' into post659
+2470	994786e414	Add LESS_SHELL_LINES environment variable.
+2471	56fb53f2e1	Fix bug using LESS_SHELL_LINES with -X.
+2472	b1548ca118	v663
+2473	de94ea2fb1	Remove some defines that are no longer used.
+2474	8c2ab3d887	Merge branch 'master' into post659
+2475	bb64fc91ec	Open v664.
+2476	d044a2a9df	Fix Windows build.
+2477	71fab1d12e	Rename some constants in option.h
+2478	6bea6183a5	Fix a few compiler warnings due to type mismatches.
+2479	aab9dd3a7e	Merge branch 'master' into post659
+2480	1f8865978c	windows: increase WIN32textout internal buffer
+2481	9945826301	v664
+2482	644733aa4c	Open v665.
+2483	2bfad47fb4	Fix problem in getccu when ctrl-Z is entered.
+2484	2cfdde5313	lesstest: rebuild utf8-2 test without E command.
+2485	6d60a4a167	Fix a few man page issues. Related to #564.
+2486	83192ad11a	Doc.
+2487	6cd6b11cd7	Change type of two boolean vars from int to lbool.
+2488	47a7b8e25a	Fix bug with --no-number-headers when header is not at start of file.
+2489	f88f5fd159	v665
+2490	9933cf1938	Attempting to scroll forward at EOF now rechecks the file size.
+2491	f4e217315b	Doc.
+2492	c02f7554a1	Allow SOURCE_DATE_EPOCH to override timestamps in generated files.
+2493	eb5a692613	Reuse isnullenv function
+2494	deb498116b	Fixed spurious warning on adm5 terminal
+2495	3ac510ebc4	lesstest: Look for less executable in .. if not found in ../obj
+2496	c06a2a50fb	Open v666.
+2497	03f9f1a63c	Fix bug when first byte from a LESSOPEN script is non-ASCII.
+2498	f7f5b36bf0	lesstest: fix bug where test fails if window is resized during test.
+2499	ec23abda57	v666
+2500	0df5d8b3d6	Add mouse commands to lesskey.
+2501	979aeab68e	Fix two bugs related to EOF when reading from a pipe.
+2502	f8bdcd0f35	Update Unicode tables.
+2503	85f1bb6823	Open v667.
+2504	715297eb51	Fix use of uninitialized variable.
+2505	bfdb938dbb	v667
+2506	09db5b3559	Merge branch 'master' into post659
+2507	11e506c292	Revert Windows escape sequence processor to before commit 22ac9f0.
+2508	9f2bbc215e	Doc.
+2509	4e516a1ee8	Add --no-poll option.
+2510	048b4a4d6f	Open v668.
+2511	5a369eda70	Fix incorrect handling of UTF-8 chars in prompts.
+2512	e77e1176c8	v668
+2513	e720dc376e	Avoid overrun in expanding env vars if backslash at end of string.
+2514	cb39459e96	Merge branch 'master' into post659
+2515	99d7d2d78a	Doc.
+2516	9c7105e01f	Fix error message that should have been updated long ago.
+2517	98d5fd4ce1	Use SOURCE_DATE_EPOCH to build man pages.
+2518	37cfa169ca	Fix spurious '\0' char when signal is received.
+2519	132e657208	Add LESS_SIGUSR1 and LESS_SIGUSR1 environment variables.
+2520	ef0b755636	Open v669.
+2521	8fff6c56bf	Fix configure parameters --with-secure=no and --without-secure.
+2522	15a1ab992b	Remove LESS_SIGUSR2. Reserve SIGUSR2 for future use.
+2523	36da1f9101	Fix segfault using TAB completion with -- command.
+2524	de2a9775f3	Add support for compiling with address sanitizer for debugging.
+2525	1778c6352d	Doc.
+2526	23ff6a4248	Allow any key, not just ctrl-C and ctrl-X, to interrupt a file read.
+2527	103588968e	Support mouse drag on Windows.
+2528	06a2ede883	v669
+2529	66e2f6f165	Open v670.
+2530	7575d3fd53	Use hash table for block lookups in sync_logfile
+2531	e2d4573ddc	Fix handling of SIGWINCH signal.
+2532	aba34b8c55	Add warning when F command is used with LESSOPEN.
+2533	8bdd013a4c	Treat 0x1b or 0x9b as CSI only if they are defined as control chars.
+2534	7758291c71	Doc.
+2535	2033efccae	Mention search case-sensitivity in help screen.
+2536	42787fdeb0	Fixed C89 support
+2537	9ce4c71449	Implement 23ff6a42488a9eee83341265c0c053d97b56f33d for Windows.
+2538	de3e84f9c3	Allow reading from a fifo that is closed and reopened by the writer.
+2539	ca59eda0ba	Use interruptible iopen() to open input file.
+2540	adc077fa2b	v670
+2541	a6d0c520a6	Open v671.
+2542	8db7960040	Remove the consecutive_nulls kludge.
+2543	7e57182074	Fix attempt to read past EOF in help file, broken in de3e84f9c346fd8d41d69b6393817239ed09cb0d.
+2544	deb9a06e16	Fix use of multibyte characters as commands.
+2545	a2573bbe25	Restore v668 version of output.c.
+2546	9b1bc21ba2	Fix djgpp build.
+2547	3b8c09d18d	Fix bug in handling a multibyte command char longer than 2 bytes.
+2548	d420f1909e	lesstest: add new test
+2549	de6896ed56	Doc.
+2550	82add99918	Merge branch 'master' of https://github.com/gwsw/less
+2551	ecf29c5855	Fix background color problem.
+2552	dee132a6a1	Fix setting of auto_wrap on Windows.
+2553	88813186ae	v671
+2554	176e568d14	Open v672.
+2555	fdfa8c572d	Man pages: .UR and .UE macro used to format URLs.
+2556	52b2d920f4	Don't poll input file if -F will exit.
+2557	59452b64b4	Remove --no-poll option.
+2558	2de3c52c8f	Make SIGTSTP work as expected if received during iopen.
+2559	31cd391dd4	"waiting for data" msg should appear immediately on F command on a fifo.
+2560	4f2ad72e01	Fix SIGWINCH during blocked open.
+2561	aff8b6f4d6	Fix bug in file movement when & filtering is in effect.
+2562	6050833dce	Whitespace.
+2563	90e8931bbb	Update year in copyright messages.
+2564	a0dd906a29	v672
+2565	7da8f28a0d	Open v673.
+2566	95f1d4d553	Treat -r in LESS environment variable as if it were -R.
+2567	570f5870c6	A couple of man page corrections.
+2568	4f0b268556	Change type of boolean in_hilite from int to lbool.
+2569	9b0fff7440	Add ESC-j and ESC-k commands.
+2570	6d3175e4f4	Merge branch 'master' of https://github.com/gwsw/less
+2571	b71a5788da	Fix a couple of bugs related to the ctrl-S search modifier.
+2572	f4916b6490	Doc.
+2573	69a7a49b5d	Doc.
+2574	e2fc00c7c1	Change return types of some functions from int to lbool.
+2575	c21e2d6fed	Inherit DESTDIR from the environment.
+2576	bb4df5c07c	Fix bug searching empty line with non-match search.
+2577	8a009ecf5b	Merge branch 'master' of https://github.com/gwsw/less
+2578	da2a9ecdf1	New strategy for handling highlighting.
+2579	8fdb87cbbc	lesstest: remake seq200 test.
+2580	63d3bbff9e	Add soft_eof to record position of forw_line returning NULL_POSITION.
+2581	6ef4489dd6	forw_line and back_line should not leave *p_linepos uninitialized.
+2582	3894f47401	Possible fix for hang in Windows when scrolling with arrow key.
+2583	591911166d	Fix bug scrolling backwards with long lines.
+2584	bef2105142	Remove unused parameter from back_line().
+2585	f59f35200c	Increase size of line number pool from 200 to 1024.
+2586	8fcb4b9044	Merge branch 'master' of https://github.com/gwsw/less
+2587	5f601789b6	Fix bug in UTF-8 handling with the PCRE2 regular expression library.
+2588	cc1bc7c84c	Fix word boundary search with some regex libraries.
+2589	342c928d4e	Fix bug when using POSIX regular expressions.
+2590	fe5bea2b10	Simplify.
+2591	874d69d7bb	Stop trying to fill initial screen when a command is entered.
+2592	88b843e609	With -F, allow a command to interrupt get_one_screen.
+2593	1529660e9c	Doc.
+2594	157abecc15	Make Windows terminal do Concept-style wrapping (nl ignored when at last column)
+2595	c35b93f45e	v673
+2596	30ae4e5b03	Open v674.
+2597	cc6a430027	Open v674.
+2598	68c2601bf3	Doc typo.
+2599	c1d24c0687	Improve behavior of OSC 8 ^O^N / ^O^P commands.
+2600	7e0eeb56d7	lesstest: add osc8.lt to test commands related to OSC 8 links.
+2601	70a31eceba	Doc.
+2602	42820e2246	v674
+2603	369d053462	Open v675.
+2604	c8b82b0fca	Print newline after finishing logfile so shell prompt doesn't display on same line as the "Finishing logfile" message.
+2605	190eaa92fa	Merge branch 'master' of https://github.com/gwsw/less
+2606	c700fa8a52	Merge branch 'master' of https://github.com/gwsw/less
+2607	ccad3d7d9d	Add ESC-b command.
+2608	c7006707dc	v675
+2609	4217b7da59	Open v676.
+2610	77306b77fc	Fix off-by-one error in highlighting OSC 8 links.
+2611	3cbfbe179c	Clear selected OSC 8 link when viewing a new file.
+2612	f1fdff7593	Doc.
+2613	17532c18f3	v676
+2614	3ba4162e6f	Open v677.
+2615	d501687dcb	lesstest: fix a couple of bugs in ltview.
+2616	6f1a946a23	Fix handling of position table in forw().
+2617	ec9fa3e020	lesstest: remake seq200.lt test.
+2618	b77004a5c9	Doc.
+2619	63715f66fd	Fix bugs introduced in 6f1a946a23d3ded8e5449c8241b203d02b6c29e2.
+2620	86b1dc0af0	Fix problem in jump_loc when using & filtering.
+2621	405e92cebc	lesstest: add filter1 test to test & filtering.
+2622	26cfc73042	v677
+2623	e01d54079c	Open v678.
+2624	5cab95a2ce	Fix tabs not preserved in raw mode
+2625	b164ae40f7	Merge branch 'master' of https://github.com/gwsw/less
+2626	6d1fcd3a35	v678
+2627	4c2f4c4479	Open v679.
+2628	04ab72cea3	Fix bug in command decoder when a command is a prefix of another.
+2629	4befc2168d	Use separate bit S_SWINTERRUPT instead of S_INTERRUPT for sw-generated interrupts.
+2630	302187c0e9	Doc.
+2631	70f0ca1251	v679
+2632	7edde76827	Open v680.
+2633	e66db83fae	Fix hang with ^S modifier if search matches empty string.
+2634	261c9a2912	v680
+2635	091d94c498	Open v681.
+2636	2993a4f7c3	Fix bug when using -g with -J.
+2637	dbaedc56b0	Doc.
+2638	774cb5e3c5	Fix bug when pasting a search pattern while --incsearch is enabled.
+2639	0571d117ae	build: Make mingw build work properly from autotools
+2640	9bd8e95ac6	Consistency.
+2641	6c5df610ab	Merge branch 'master' of https://github.com/gwsw/less
+2642	83bef2bbc3	lesstest makefile should use same curses library as main makefile.
+2643	913eb926cd	Doc.
+2644	bfef26167d	Improve performance with very long lines.
+2645	4ae4379ac1	Clear line_contig_pos in clear_buffers. Seems safer.
+2646	36562bd5e5	Doc.
+2647	a835925b7c	Fix performance issue with & filtering.
+2648	5890674412	Restore code from earlier commits.
+2649	901b749325	Doc.
+2650	94fdb0ceb7	Doc.
+2651	02860b91f0	Implement 774cb5e3c590d270f48ca9c7f7933da8ed8e5c70 for Windows build.
+2652	2613f470ca	Allow ^X to interrupt read during a search with --incsearch.
+2653	74289550cd	Improve behavior of --incsearch.
+2654	3fdb5f614c	Fix 02860b91f0f170ce040cb4efcc42c29ff2156c5b again.
+2655	138c02592a	lesstest: rebuild search-hist.lt
+2656	4838265e1b	lesstest: add -e option to extract.
+2657	023bc6404b	Treat U+00AD and U+200D as binary characters.
+2658	de611e5ce3	Doc.
+2659	9d3d5a2c6c	Merge branch 'master' of https://github.com/gwsw/less
+2660	e52fba047a	Defer search with --incsearch until tty input queue is empty.
+2661	88ff6ccac1	Fix whitespace.
+2662	dd25e61150	v681
+2663	dc460f70ce	Open v682.
+2664	80ff711497	Doc.
+2665	3979f5cb7f	Add --cmd option.
+2666	4b1d67ec21	Fix problem using #stop in lesskey file.
+2667	ca223116fd	Fix problem assigning the "invalid" in a lesskey file.
+2668	84577cde0a	Doc.
+2669	a2b165b0e6	Minor function parameter type change: add "mutable".
+2670	c1e2880cec	Make some emoji modifier chars be treated as binary.
+2671	a69d8e4639	More Unicode chars to treat as binary.
+2672	50c5c3e5f9	Revert "Man pages: .UR and .UE macro used to format URLs."
+2673	4ad1ce1c9a	Delete emoji modifier characters from output.
+2674	dcac8f3981	Fix handling of variation selector 15.
+2675	f2cbc63bdb	Doc.
+2676	629ac8004a	Doc.
+2677	6bee019b52	v682
+2678	907f55cde2	Open v683.
+2679	bf7cd4418d	Doc.
+2680	a2a72de9a2	Make src parameter to xbuf_set be constant.
+2681	cdade239de	Fix a few problems in recent commits.
+2682	501af7b41d	Don't set EOF upon receiving an abort signal.
+2683	e66e974ebf	Merge branch 'master' of https://github.com/gwsw/less
+2684	b6ee3d1b40	Doc.
+2685	3b16f1b670	Doc.
+2686	74ef709e0b	v683
+2687	f46b1a2e30	Open v684.
+2688	ff7daa743b	Allow mixing of option arguments and filename arguments on command line.
+2689	2278c2eef9	Implement POSIXLY_CORRECT to disable mixing options and filenames on command line.
+2690	1d21e5713f	Make POSIXLY_CORRECT be treated as true if set to an empty string, for compatibility with gnu getopt.
+2691	f118772f6a	Doc.
+2692	77dddb2024	Add LESS_TERMCAP_SUSPEND and LESS_TERMCAP_RESUME.
+2693	0c06f04326	clear() should emit SUSPEND sequence before clearing screen, not after.
+2694	747a4b8c5d	Doc.
+2695	fe793a0287	Universal fix for flicker on horizontal scroll.
+2696	11273f7922	Merge branch 'master' of https://github.com/gwsw/less
+2697	7bf5441da5	Initial work to support terminfo.
+2698	84acbf7d78	Fix build if SIGPIPE is not defined.
+2699	b635bc2024	Implement command bindings for keypad keys.
+2700	67d0c24692	Implement HOME & END edit commands on keypad.
+2701	bb0bf0c84c	Use terminfo name "OTbc" for termcap "bc".
+2702	375e3d934c	Disable use of poll() in z/OS
+2703	1b9e6b2836	v684
+2704	998a60d0af	Implement F1 key for help when using termcap or terminfo.
+2705	e83edc8bbe	Implement several other keys for termcap/terminfo systems.
+2706	86a0d79b8d	There are no termcap codes for CTL_RIGHT_ARROW and CTL_LEFT_ARROW.
+2707	e59c74cb38	Just reorder some functions.
+2708	9fcf03948d	Implement insert mode toggle.
+2709	662f9be391	Add LESS_TERMCAP_RCURSOR and LESS_TERMCAP_NCURSOR.
+2710	6ca3c73d33	Make lesskey support keypad keys.
+2711	87dd3be299	Open v685.
+2712	342a086836	Further improvement to behavior of --incsearch.
+2713	5776245a0f	Change behavior of HOME & END, and implement shift and ctrl versions.
+2714	60a73e6a15	Reassign some PCK_ values.
+2715	b97fd55758	Fix possible buffer overrun in forw_textlist.
+2716	6b142597d7	Make sure that forw() and back() initialize *p_newline.
+2717	057ca07e53	Initialize the hl_attr field of the hilite structs used in filtering.
+2718	b4ff8273bd	Doc.
+2719	eaed5d2698	Doc.
+2720	bfd4fd59c1	Doc.
+2721	bcfda5f4ff	v685
+2722	84a5b42a12	Change some key mappings in edit mode.
+2723	c4e2cbaf9b	Update `TH` calls in man pages.
+2724	dfef39ef93	Fix unescaped hyphens in man pages.
+2725	ddb2254180	Prevent URLs from oversetting line if possible.
+2726	181a8533b2	Use paragraphing macros instead of blank lines.
+2727	a54a9e17e9	less.nro.VER: Reformat prompt option material.
+2728	8f720a4281	Bracket example displays with `EX`/`EE` calls.
+2729	79a079ad66	Favor paragraphing macro calls over `sp` requests.
+2730	5be168c81e	Port use of `\(ha` to AT&T-based troffs.
+2731	5ba519c9cf	Port use of `\(ti` to AT&T-based troffs.
+2732	65ae0c3901	Obtain ' character more portably in man pages.
+2733	b79fd0b0eb	Revise lessecho(1) synopsis.
+2734	c6c928c6ce	Revise lesskey(1) synopsis.
+2735	8a0783f9da	Revise less(1) synopsis (1/9).
+2736	890c0ec6b0	Revise less(1) synopsis (2/9).
+2737	78ac9e34a4	Revise less(1) synopsis (3/9).
+2738	43cf5efd24	Revise less(1) synopsis (4/9).
+2739	6da8790f17	Revise less(1) synopsis (5/9).
+2740	54276d050e	Revise less(1) synopsis (6/9).
+2741	b459b63453	Revise less(1) synopsis (7/9).
+2742	aa77207903	Revise less(1) synopsis (8/9).
+2743	1706faac00	Revise less(1) synopsis (9/9).
+2744	1c322d4f12	Access double quote char portably in man pages.
+2745	03440d45a5	Document `-"cc` option in less(1) synopsis.
+2746	ceac046fab	Make ESC-u clear OSC 8 highlight without error message.
+2747	05e8168afc	Open v686.
+2748	e3ca53222c	Merge branch 'terminfo'
+2749	169d87c4ed	Don't use terminfo for lesstest.
+2750	a5bc6b5833	Change some function calls that pass 0 and 1 as lbools to be FALSE and TRUE.
+2751	e223eb6920	Doc typo.
+2752	962884ee0d	Change some function calls that pass 0 and 1 as lbools to be FALSE and TRUE.
+2753	f2557bd6d4	Fix problem if shell_coption() ever returns a string longer than 2.
+2754	a13e486012	Merge branch 'master' into master
+2755	96ea7a4d43	Merge branch 'g-branden-robinson-master'
+2756	cf292eecaa	Fix 169d87c4edd07fa1ba4a0fa6e90d2ac950cc26fe.
+2757	b97431d70d	Doc.
+2758	3cea6e5826	Fix bug entering search modifer key at start of non-empty search string.
+2759	0dff10c69f	Merge branch 'master' of https://github.com/gwsw/less
+2760	db2e844e01	Remove replace mode and the commands that change it.
+2761	49424ad9c6	Doc.
+2762	02858e1279	Don't remove marks from history file when --save-marks is not specified.
+2763	5d93fd9d1a	man pages: Fix unescaped hyphens.
+2764	2ec9af1643	less.nro.VER: Obtain formattable `\` correctly.
+2765	5d8aa263b3	Access single quote char portably in man pages.
+2766	389ad17f22	Slight simplification of mark letter handling.
+2767	cd41cac326	Some renaming and refactoring.
+2768	abce3859f5	Doc.
+2769	04b4c3a8e7	Fix bug in display of Lit indicator.
+2770	2124f8755d	lesstest: add wordwrap test.
+2771	31e651fa45	Use mca_search1 rather than mca_search to redraw prompt after clearing Literal mode.
+2772	656cec209f	Remove unused variable at_prompt.
+2773	056ed731cc	Whitespace.
+2774	7724658652	lesstest: make all tests use LC_CTYPE=en_US.UTF-8
+2775	8076e8398d	Rename ignaw to defer_wrap.
+2776	ddda588374	Merge branch 'master' of https://github.com/gwsw/less
+2777	74c1ca1be6	Clarify comment.
+2778	bfbef0f14f	Merge branch 'master' of https://github.com/gwsw/less
+2779	29c9cda82d	Fix problem with --form-feed.
+2780	cfb553fb60	Doc.
+2781	0db80e8566	Merge branch 'master' of https://github.com/gwsw/less
+2782	cb0d3799f1	Fix negative argument to -j option.
+2783	cf2b5d6fb7	Improve error handling for numeric command line options.
+2784	ce060e2de1	Fix typo in previous commit.
+2785	57c2728117	Display confirmation message after changing string valued options.
+2786	7c9566c7f0	lesstest: update tests after change in - command.
+2787	84b407f5f0	Fix bug in -j option on command line.
+2788	df8dc51823	Merge branch 'master' of https://github.com/gwsw/less
+2789	04ccd8c2d5	lesstest: make remaketest use same env vars as original test.
+2790	68dbad2bb2	An O_STRING option always has an ofunc handler, but let's be safe.
+2791	2fcb3c5a90	v686
+2792	8a27ff1431	Open v687.
+2793	bb7b893298	Disallow opening OSC8 link via mouse click in SECURE mode.
+2794	62d87f4b90	Fix ESC-u command.
+2795	03bdeffe57	Add --autosave option.
+2796	3e887822ad	Don't allow sindex_from_sline to return sc_height.
+2797	bc4f6770dd	Declare ignore_eoi as lbool rather than int.
+2798	9225f65fb3	Doc.
+2799	c021dbb5f2	Make SIGHUP do an orderly exit like SIGTERM.
+2800	16879fd41d	Add ESC-f command.
+2801	a55140f63f	Don't initialize terminal until input data has been read.
+2802	4dfb06b0f9	Merge branch 'master' of https://github.com/gwsw/less
+2803	5862ab1fd7	Fix terminal initialization on an empty file.
+2804	2663f0c950	Rename init() and deinit() for clarity.
+2805	dcc567aa9b	Allow line numbers to be colored without bold formatting.
+2806	c3a00f8386	changes to manual section on the -X option, partly to document #682
+2807	05124a1743	Doc.
+2808	01b9d465de	Minor style change.
+2809	399aa0c003	Doc.
+2810	db386e295e	v687
+2811	bb59da5ccf	Open v688.
+2812	9ef82feb9b	Doc.
+2813	ba296e422c	Doc.
+2814	6236ba544f	Merge branch 'master' of https://github.com/gwsw/less
+2815	d4dc02190c	Improve error message for ambiguous option name abbreviation.
+2816	b396145a11	Doc.
+2817	a1bce6afff	Add column number to long prompt and equals message.
+2818	7c5f310197	Merge branch 'master' of https://github.com/gwsw/less
+2819	33251febcc	Don't perform terminal operations before calling term_init.
+2820	6a18e00079	Rename some variables and implement assert_interactive().
+2821	6f498e33fa	Add LESSNOCONFIG environment variable.
+2822	965171e7b7	Change xbuf_add_data argument type to avoid unnecessary casting.
+2823	1499089c7a	Merge branch 'master' of https://github.com/gwsw/less
+2824	293771affd	Make null value of LESSNOCONFIG be treated the same as unset.
+2825	14bb5e8f87	Use consistent type (lbool) for ignore_eoi.
+2826	253a8dde1d	Update Unicode tables.
+2827	297b1a8fee	Rename function not_in_no_config to clearer name word_no_match.
+2828	28af031bdb	v688
+2829	99ccb8f0ab	Open v689.
+2830	650b291efd	Fix Windows build.
+2831	7f8d2c5ff6	Missing terminal initialization on empty file.
+2832	9e967b95fa	Add new shift-related prompt protypes sequences.
+2833	8822749cfc	Add new shift-related prompt protypes sequences.
+2834	69db1d0f6a	Add -D to SYNOPSIS.
+2835	0eb6255a18	Fix yet another terminal not initialized error.
+2836	a740880061	Merge branch 'master' of https://github.com/gwsw/less
+2837	9c2b17fca7	Move have_read_data() to ch.c since it is used only in that file.
+2838	cc60466361	Revert changes to os.c
+2839	172c9daa9b	Fix empty file detection on a pipe.
+2840	a9a59ef81d	Doc.
+2841	fbf36a4a29	Fix yet another issue where term_init is not called on an empty file.
+2842	f772291060	Doc.
+2843	5397c7f6ae	Doc.
+2844	513a43619c	Allow SIGINT to interrupt first read from a pipe.
+2845	2aac423a50	Revert a55140f63f409cf0069279a6dbaf2d0ea385a2e5.
+2846	0c707c9df5	In incremental search, don't jump back to start if it is NULL_POSITION.
+2847	67202cb530	New implementation to defer terminal init until data received.
+2848	d70ac516d9	Improve error messages for command line option errors.
+2849	6544229ada	Fix non-tty output on Windows version.
+2850	d24af52690	Doc and whitespace.
+2851	588c04161c	Fix crash in "less --version".
+2852	c0fae2197c	Merge branch 'master' of https://github.com/gwsw/less
+2853	ceead6d910	Change variable name for clarity.
+2854	2db32efea4	Don't allow any command to interrupt "Waiting for data".
+2855	41c5593fc5	Merge branch 'master' of https://github.com/gwsw/less
+2856	c8b5171d03	Doc.
+2857	4cb28c2ef8	Man page: render command line options in bold.
+2858	ddb90ac932	Doc.
+2859	3cace738ce	Doc.
+2860	e0668fc9f3	Change name have_read_data to polling_ok and tweak some #ifs.
+2861	bb2391e0b5	Doc.
+2862	64725f8afc	Doc (alphabetize).
+2863	6dd0c471f1	Minor changes to make system-specific defines.* closer to defines.h.in.
+2864	a5548df2d4	Fix SECURE build; allow SECURE build on Windows.
+2865	7087500ce4	Doc.
+2866	888e3213b2	Fix build with Borland 5.5 compiler.
+2867	1d63cc1696	Don't disable features based on absence of strstr().
+2868	41f8ca8543	Remove unused stuff from configure.
+2869	7d60c134f2	Reorganize defines.wn.
+2870	af3efbfdb9	Make SECURE_COMPILE work for Borland compiler (Makefile.wnb).
+2871	64d80f933f	Doc.
+2872	2358717a65	Fix screen resize on Windows.
+2873	f56993d95e	Merge branch 'master' of https://github.com/gwsw/less
+2874	9df318814a	Doc.
+2875	f23e0f17d5	Use "constant" not "const".
+2876	6e29456f0f	More fixes for screen resizing.
+2877	b3f04c3d53	Some fixes for recent regressions in Windows console resizing.
+2878	611ca23ede	Remove unnecessary get_term parameter.
+2879	084fda8c25	Add declarations for conditionally implemented functions.
+2880	33db19f51b	Add --without-termlib to configure script.
+2881	6c4fb94fdb	Doc.
+2882	e433832603	Doc.
+2883	36b879596a	Doc.
+2884	d65d4dd74c	Don't check for terminfo when --without-termlib is given.
+2885	e665d4b529	Make "configure --help" consistently use lowercase for messages.
+2886	c8ba9c69e2	Doc.
+2887	5b6ca1e413	v689
+2888	af6dbeead8	Open v690.
+2889	367ba51ecf	A little type cleanup.
+2890	017f229e36	v690
+2891	4a4dc06a88	Open v691.
+2892	4556ade263	Fix mingw build.
+2893	62ff8f96d0	windows: mingw: Makefile.wng: update regex comment (no-op)
+2894	03bbafaf5a	windows: mingw: Makefile.wng: allow extra CFLAGS/LDFLAGS/LDLIBS
+2895	ac365da875	v691
+2896	7c7f6fbac1	Open v692.
+2897	fe7761edc4	Add copyright notice to some files from which it is missing.
+2898	3c77c37927	Update year in copyright notices.
+2899	70fd5dd595	Fix memory leak in setupterm.
+2900	e65b895126	Clear ICRNL and INLCR in termio c_iflag.
+2901	92b96234ea	Don't use lesskey files when running lesstest.
+2902	3eb4d40f8d	Fix -z option with negative values.
+2903	621f934399	Doc.
+2904	5e489afc48	Ensure that "make check" rebuilds less if necessary.
+2905	18db5ae3ae	Fix handling of empty terminfo capabilities.
+2906	7f99df7f0d	lesstest: enable print_strings
+2907	038ccd96cb	Fix end-of-buffer issue in bin_file.
+2908	05e0d1feb0	lesstest: don't use system locale when running a lesstest.
+2909	950867ac7a	Fixed support of old Perl interpreters
+2910	2554dcb5b5	Doc.
+2911	155bec40a1	Get screen size from fd 1 if fd 2 fails.
+2912	fe4fb0ca17	Revert HOME/END to pre-691 behavior.
+2913	dc60d93e81	v692
+2914	b7beb916eb	Open v693.
+2915	0f41a20b9a	Don't do binary file check if output is not a tty.
+2916	0a8419135f	Fix for previous commit.
+2917	e1fdd8c28c	Display error messages on stderr if stdout is redirected.
+2918	8458d09bea	Don't allow buffer overflow when using malformed binary lesskey file.
+2919	77c46cfa14	Doc.
+2920	e44aafe214	Doc.
+2921	b1e80b519c	More buffer overrun protection with malformed binary lesskey file.
+2922	bc798f824a	Fix unexpected scrolling past end of file.
+2923	8697a6f48e	Fix regression in command parser.
+2924	cf5ba8106a	Another rewrite of the command parser.
+2925	acdbad9234	Fix bug when setting attributes on a --color value.
+2926	368a91202d	Remove unnecessary message when toggling the -D option in Windows.
+2927	116effc8db	Fix previous commit.
+2928	543eb06798	Add -DT option to format tilde lines.
+2929	b99293f386	Merge branch 'post692' of https://github.com/gwsw/less into post692
+2930	2c112b77f5	Make -w/-W highlight line after backward movement as well as forward.
+2931	19c59a9657	Display search pattern in "Pattern not found" message.
+2932	7ad15bb833	v693
+2933	480b65e7df	Open v694.
+2934	c93755d5ec	Fix clang compile warning about signed shift.
+2935	9435e48cac	Don't use u numeric suffix.
+2936	6e1a0c5baa	lesstest: rebuild tests invalidated by recent message change.
+2937	2a9cbf2605	Make | command pipe one line if marked line is at top of screen.
+2938	b8f9444155	Fix reversed status messages for --use-backslash.
+2939	395005ef5d	Allow numeric arg on m and M commands.
+2940	e60346e300	Fix regression in bc798f824 using ESC-SPACE.
+2941	3569beb7c9	Install lessecho into libexecdir
+2942	28e950f36a	Fix extra tilde when jumping to $ mark.
+2943	b40d6b5c75	V8 regexp.c: modernize functions declaration with DEBUG
+2944	2497da55c2	V8 regexp.c: fix warnings in regdump
+2945	044fcbeec9	V8 regexp.c: move bracket handling to a function (no-op)
+2946	bdc8ec52b7	V8 regexp.c: support character classes [:NAME:]
+2947	3a20b03012	V8 regexp.c: use libc strstr instead of NIH code
+2948	77840f867d	Doc.
+2949	19b689e7f5	Don't retry read after a read error.
+2950	fa091e85ec	Doc.
+2951	6c4a43bce2	Replace timer for read error messages.
+2952	23f8672750	Treat a line number of 0 in a tags file as invalid instead of crashing
+2953	ae1050a33c	Doc.
+2954	57015db634	Add --past-eof option.
+2955	97c17c4d68	Support horizontal mouse wheels
+2956	a7bedb515d	WIP Create a `--horz-mouse` option
+2957	c9e42e721a	WIP horizontal mouse drag support
+2958	6c7fb386ab	squash! Support horizontal mouse wheels
+2959	eccf8aff14	Let `--horz-mouse` imply `--mouse`
+2960	6927cff5c9	Prevent negative `hshift`
+2961	82d11411cc	Fix erroneous prompt when reading a directory.
+2962	5b9b1aab66	Clear pending "read error" message when editing a new file.
+2963	033c1f256a	Add --hilite-target option.
+2964	1f282c3ada	Improve highlighting for --hilite-target.
+2965	f29c017b56	Doc.
+2966	e34a2f4249	Improvements for --hilite-target.
+2967	5a88303cff	Clarify --status-line messages.
+2968	2d23c0a796	Replace --horz-mouse with --emouse.
+2969	5133f6ff64	Don't pad line unnecessarily.
+2970	620f290be7	Minor cleanup.
+2971	a8b1c3b64e	Force -S when dragging horizontally.
+2972	6173a44c55	Simplify "vscroll,vdrag" -> "vmove".
+2973	778e15152f	Make setting hshift in pos_rehead() optional.
+2974	69c9246f61	Whitespace.
+2975	1a5f5e62ab	Fix scrolling too far problem in forced scrolling.
+2976	feb6a008ef	Fix unintentional file wrap when force scrolling with -c.
+2977	bfc291723b	Merge branch 'horizontal-scrolling2'
+2978	f2c7e7c6f6	Doc.
+2979	ad023f2d88	autoconf: fix warning: The macro 'AC_PROG_GCC_TRADITIONAL' is obsolete.
+2980	903b3cffaa	Merge branch 'master' into hilite_target
+2981	be8efd6db5	Whitespace.
+2982	640adf1872	Forced backwards scrolling stops when first file line is at screen bottom.
+2983	7bd865254d	Doc.
+2984	93c0da3668	Merge branch 'master' into hilite_target
+2985	3f07484ffd	Fix bug in --save-marks when mark is not at first line.
+2986	a470d324e6	Don't save a cleared mark to history file.
+2987	cf28479547	Doc.
+2988	46d6836e4d	Doc.
+2989	d6204d451b	Support "-" and "^P" prefix for OSC8 opener commands.
+2990	81330df21c	Merge branch 'master' into hilite_target
+2991	2a1d0f61b7	Make --hilite-target use underline highlight if --use-color is disabled.
+2992	2dabc11947	Make --status-line highlighting extend to right column.
+2993	e650b2597a	Don't force --hilite-target highlight to include underline.
+2994	9f1780f289	Doc.
+2995	5e04dcb4f3	v694
+2996	96b1a34eb3	Open v695.
+2997	f98933bd0f	Make build work for different versions of tparm().
+2998	9e75556f8f	Fix tparm check in previous commit.
+2999	2f228d3031	Replace runtime checks for re_handles_caseless with compile-time checks.
+3000	7fc61d95e6	Fix a few instances of dependence on 2s complement.
+3001	43957b96b8	When & filtering with long prompt, allow space for the "&" indicator.
+3002	2f65ad04b5	Fix incorrect highlighting when change -i option while filtering.
+3003	fab37c3655	Minor style tweaks.
+3004	3cb1bfcf0b	Doc.
+3005	71cb86e592	Use putstr, not cmd_putstr, to print the & indicator.
+3006	ac52eeb047	Minor lbool cleanup; remove consecutive_nulls dead code.
+3007	dec42b7b90	Add --end-prompt option.
+3008	b7d636267d	Avoid printing in the last cell of the last line on the screen.
+3009	1cb9a8444a	Let --end-prompt take "-" to mean clear the end-prompt string.
+3010	e69182f91f	Doc.
+3011	a4cda05ebc	Merge branch 'master' into libexec
+3012	d32b563239	Remove some unnecessary code.
+3013	44db826f3a	A few minor type cleanups.
+3014	3225c2a70c	Clear command line before executing some commands.
+3015	8f107024f8	Make sure initial screen is displayed before executing + commands.
+3016	bcd3ebe48c	Treat 5 and 6 byte UTF-8 sequences as not well-formed.
+3017	6145ed1cf5	Doc.
+3018	11c67859b3	Treat Unicode chars above U+10FFFF as binary.
+3019	6cee1d96a8	Minor style change.
+3020	e5e52da956	Change interpretation of number argument to m and M commands.
+3021	be6ea6f1d3	Add numeric argument to ' command.
+3022	c2c62976aa	Doc.
+3023	739e0d8b0a	Doc.
+3024	e0d51f0ddf	Add %O to prompt strings and fix quoting in default OSC 8 handlers.
+3025	53e13d3677	Don't clear current OSC8 link after opening it.
+3026	930053c19e	Add ?o prompt conditional.
+3027	7d6f3b8af6	Port to shells lacking last command optimization
+3028	e311f00914	Minor style changes.
+3029	9b68e43c06	Doc.
+3030	315d3f92fd	Doc.
+3031	ec7aa2c543	v695
+3032	7bf7667b30	Merge branch 'master' of https://github.com/gwsw/less
+3033	c2cc8ef56c	v696
+3034	b251287582	Open v697.
+3035	8d9792fd0d	Fix problem matching pattern with many parentheses using PCRE2.
+3036	96d90d853a	Better way to handle previous commit.
+3037	71220ce3f3	Doc.
+3038	0b92e33531	Discard pending keys when interrupt F mode with ^X.
+3039	5b28a3ab32	Doc.
+3040	da20547529	In F mode, ignore keys other than ^X and ^C.
+3041	51fbb9b346	Minor code simplification.
+3042	7f5bb2743b	Different fix for mark command in + option.
+3043	bc3959aab7	Doc.
+3044	b76bdde1c2	Fix inconsistent type of full_screen.
+3045	d377035e1f	Fix incorrect display if LESS_LINES is smaller than actual screen height.
+3046	752dc96dac	Remove now-unneccesary lclear in make_display with LESS_LINES.
+3047	b1f29b8914	Fix a few no-arg function definitions that are missing "void".
+3048	3be4644b58	v697
+3049	311c9eb18f	Open v698.
+3050	429ed1f4ce	Fix bad display if prompt_message wraps.
+3051	a2a5b30ee1	Change OSC 8 handling: replace LESS_OSC8_xxx with LESS_OSC8_OPEN_xxx.
+3052	3c77ac770c	Fix install target.
+3053	42caeafbe1	Doc.
+3054	1ff22c54a3	Allow lesskey mapping of keypad ENTER.
+3055	c14263c109	v698
+3056	5bd35f9a2b	Open v699.
+3057	579da93e80	Add new less-osc8-*.bash files to distribution.
+3058	547f825779	v699
+3059	53be2c2e91	Open v700.
+3060	c8761b92bb	Fix backwards conditional in handling keypad ENTER.
+3061	953bc9e87d	Fix "make install-strip".
+3062	37118f1a9a	Allow OSC 8 man link with non-numeric section name.
+3063	e979afc2af	Doc.
+3064	56de795185	Fix "make install".
+3065	c7fa62cdcd	Doc.
+3066	acb3032e3c	Use /usr/bin/env to find bash rather than hardcoding path.
+3067	3282842a84	Don't call free(NULL).
+3068	dadcce10bd	Doc.
+3069	14912ab355	Use [[...]] rather than [...] in bash scripts.
+3070	e5ce844ab2	Remove unnecessary exit status from less-osc8-file.
+3071	d3cffdef71	v700
+3072	fbaa3aed7d	Open v701.
+3073	f312b8477c	Fix some buffer overruns using malformed lesskey files.
+3074	4f9eb98afc	Simplify cmd_next_entry a little.
+3075	4c7fc82319	Add alternate forms for shift/ctrl special keys in lesskey file.
+3076	b5cdbec25a	Add support for more shift/ctrl special keys.
+3077	f959db97ed	Fix buffer overrun on another type of malformed lesskey file.
+3078	06ef944837	Make unassigned special keys do nothing.
+3079	ee44221f22	Make BS and DEL be NOACTION outside of command line.
+3080	afec51bad1	On Windows, use simulated SIGWINCH instead of check_winch().
+3081	ee95530ece	Add LESSSECURE_DISALLOW environment variable.
+3082	0329ffe62b	Doc.
+3083	7c3244f05c	Add LESS_SHELL_COPTION environment variable.
+3084	e4bf87c300	less.nro.VER: Fix font style nit.
+3085	0bfee0114e	Fix macro calls that grief DWB 3.3 nroff.
+3086	496d3eaef4	Migrate lesskey man page to section 5.
+3087	7b82905df1	Quote references to section heading titles.
+3088	30a9914b06	Migrate cumbersome URL to groff man `UR` and `UE`.
+3089	5e27075031	Favor paragraphing macro over blank line.
+3090	2d879adcc8	Start sentences on new input lines in man pages.
+3091	ea384f5ca5	Use idiomatic section heading title in man page.
+3092	9b0b00633f	Use (and define if needed) groff hyperlink macros.
+3093	a5439544e1	Merge branch 'post700' of https://github.com/gwsw/less into post700
+3094	a8010939d4	Doc.
+3095	5e90be3ef7	Open v701.
+3096	ebf0be813d	Bump provisional version number to 702.
+3097	32c1a2a4d6	Don't init terminal if stdout is not a tty.
+3098	ba32909890	less-osc8-{file,man}: use POSIX sh instead of bash
+3099	14e997e4e6	Fix minor display issues with opening OSC 8 hyperlinks.
+3100	4d4583c652	Fix beep when resizing window on Windows build.
+3101	31203c4e58	Doc.
+3102	fe404e9850	Don't return special keys (scan codes) from win32_kbhit2(ptr).
+3103	102e2a286b	Don't return non-ASCII keys from win32_kbhit2(ptr).
+3104	401b9b98f6	Merge branch 'master' of https://github.com/gwsw/less
+3105	edc65916c6	Replace remaining references to manext in Makefile.
+3106	cc471fb901	Merge branch 'master' into post700
+3107	4d7ec98bf1	Doc typo.
+3108	c082728215	Lowercase the scheme when finding LESS_OSC8_OPEN_xxx variable.
+3109	3e11cb49b2	Don't prompt-expand LESS_OSC8_OPEN_xxx.
+3110	96c8eb9f35	Replace less-osc8-file and less-osc8-man with less-osc8-open.
+3111	36612f2d63	Improve error message for malformed OSC 8 file: links.
+3112	bbc23b65a2	Fix bug in mouse clicking OSC 8 link that crosses a screen line.
+3113	3c21f8f238	Doc.
+3114	000cf2eb63	Merge branch 'master' into post700
+3115	a2cb67121f	Doc.
+3116	856addc90f	Remove unused variable declaration.
+3117	b7086e9741	Merge branch 'master' into post700
+3118	0936ad1ee4	Whitespace.
+3119	ccf527634b	Doc.
+3120	7649e1d152	Set EOF when jumping to end of file even if filtering.
+3121	4e4dce3614	Fix missing bell when jump to end with & filter in effect.
+3122	c5f6ccf2d4	Allow OSC 8 man: links with an blank section number.
+3123	86fc76d1e0	Simpler version of previous fix.
+3124	16b566994d	Doc.
+3125	10bad7ed6e	v701
+3126	6f76a67347	lesstest: remake filter1 test.
+3127	2f29d3690f	Display OSC 8 links in underline mode, and add -DO to change this.
+3128	3cb2ea193f	Bump provisional version number to 703.
+3129	0ee02bad15	Open v702.
+3130	73b731ceb1	Fix man page; description left over from superceded functionality.
+3131	335caa69b5	Merge branch 'master' into post700
+3132	c654d98715	Simplify clearing wrapped OSC 8 link at end of line.
+3133	604a1f002e	Fix two display issues related to OSC 8 link underlining.
+3134	d74aaccf54	lesstest: add osc8-hilite to test interaction of OSC 8 underlining with coloring and highlighting.
+3135	7bd3385b1c	Merge branch 'post700' of https://github.com/gwsw/less into post700
+3136	b2ae15743b	More fixes for OSC 8 link display.
+3137	1a60d8989d	lesstest: recreate osc8-hilite test to include changing -DO color.
+3138	9797e2faa5	Make selected OSC 8 links be underlined as well as highlighted.
+3139	f65bf48c7a	Loosen the syntax requirements for color descriptors a little.
+3140	b097e6d999	Remove deprecated lesskey program; fix build if USERFILE is undefined.
+3141	2ceadafa69	Fix build with Watcom C compiler.
+3142	14e731cdd2	lesstest: more detailed usage message in lesstest program.
+3143	fcedc64d49	Add some comments to code related to UTF-8 handling.
+3144	b9974c8d97	Fix some issues if shell_quote() returns NULL.
+3145	25b4479aec	Doc.
+3146	9f04bea1c8	Add %G, %y and %% expansions in prompt strings.
+3147	fc7dafdbdf	v702
+3148	adc1984152	lesstest: remaketest should use same screen geometry as original test.
+3149	7a58199d0c	lesstest: remake some tests
+3150	e98994ffa6	Bump version number to 704.
+3151	31d754d56c	Open v703.
+3152	41e7392d62	Prevent less-osc8-open on an OSC 8 man link from executing a shell cmd.
+3153	254fefb41f	Fix unsafe handling of unterminated OSC sequence.
+3154	129d5e7a42	Merge branch 'master' into post700
+3155	1cb75cacbf	Fix a few signedness mismatch issues.
+3156	ba58a22ac2	Use custom version of shell_quoten for Windows.
+3157	9f2e50f2ee	Make # and % expandion in :e and ! commands be shell-escaped.
+3158	0fc99a928e	Doc.
+3159	32349331dd	v703
+3160	8cd7d710f1	Open v704.
+3161	d753d037d5	Bump version number to 705.
+3162	72075b0e25	Fix typo in uninstall rule.
+3163	7ea9586a9a	v704
+3164	121e03b378	Fix compiler warnings when using TO_UPPER and TO_LOWER.
+3165	f108811881	Prevent "make install" when less is built with LESSTEST support.
+3166	56f8db9fc9	Merge branch 'master' into post700
+3167	787508b08d	Make raw_mode parameter be lbool not int.
+3168	f2926cf132	On Windows, don't reset signal handlers while running a subprocess.
+3169	ee0ed01140	Better handling of lesstest binaries.
+3170	08ec7469d1	Improve Makefile rules if configure sets EXEEXT.
+3171	03ab05aa7f	Open v705.
+3172	fd09752779	Fix lesskey problem in overriding a command with a longer command.
+3173	70cb31387f	Bump version to 706.
+3174	d417adca52	Merge branch 'master' into post700
+3175	9af2a4f3a8	Add environment variable cache in case getenv returns a volatile string.
+3176	2f75e2e1e1	v705
+3177	e23a1c0909	Merge branch 'post700' of https://github.com/gwsw/less into post700
+3178	9e18ad0009	Merge branch 'master' into post700
+3179	da06cce758	Fix compiler warning on Windows.
+3180	665d5e5207	Whitespace.
+3181	af9e13e68e	Doc.
+3182	81ba76ffb6	Fix bug in handling POSIXLY_CORRECT.
+3183	d5122e3060	Add J, K and Y commands to help screen.
+3184	7c85230feb	Exit with a failure status in more cases
+3185	8ac449c9cc	Fix tty EOF handling
+3186	94c7ae89e2	Revert "Fix tty EOF handling"
+3187	df53ea612b	Fix tty EOF handling
+3188	47bf78d8e8	Doc.
+3189	f53731abe9	v706
+3190	170519d030	Open v707.
+3191	8f951a3180	Better fix for #795.
+3192	36e9ac8e2a	Doc.
+3193	df70e7a8aa	Revert 8f951a31801abb0df7d50016655bbf0e32ac4878.
+3194	92413259bb	Even better fix for #795.
+3195	c956fb2d1e	Doc.
+3196	48b4bc6e0e	The ' command (goto-mark) should not modify the mark.
+3197	1a3a213aac	Doc.
+3198	152e9cb358	Doc.
+3199	81df883854	Add || command.
+3200	832d864bb2	Add ^N to pipe command.
+3201	b86b812fc0	make check should run "make LESSTEST=1" unconditionally.
