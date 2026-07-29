@@ -19,7 +19,14 @@ import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
 
 import { subRowStart, posRehead } from "./jumping";
 
-import { screenBack, screenForward } from "../lines/screenOps";
+import {
+  screenBack,
+  screenForward,
+  rowStartBelow,
+  lastRowStart,
+  topOffsetOf,
+  setTopOffset,
+} from "../lines/screenOps";
 
 import { INVERSE_ON } from "../state/constants";
 
@@ -328,22 +335,7 @@ function lineBackwardFrom(
   offset: number,
   attn: boolean = true
 ): number {
-  // og's back_line reads back to the LINE's start and re-wraps
-  // forward from there (input.c:358), so it lands on the greatest row
-  // start BELOW the current position - the absolute grid. From a
-  // shifted top that boundary is the one the shift sits inside, so
-  // undoing the shift IS the first row of the move. Measured: a top
-  // shifted to 308 goes to 284 (4 x width), not to 308 - width.
-  if (config.subShift > 0) {
-    config.subShift = 0;
-    if (--offset <= 0) {
-      if (mode.INIT) mode.INIT = false;
-      mode.EOF = false;
-      return 0;
-    }
-  }
-
-  if (config.row === 0 && config.subRow === 0) {
+  if (config.row === 0 && config.subRow === 0 && config.subShift === 0) {
     if (mode.INIT) mode.INIT = false;
 
     // --past-eof forces backward scrolls over BOF too, like og's
@@ -405,30 +397,40 @@ function lineBackwardFrom(
     return leftover;
   }
 
+  // og's back() is one rule repeated: back_line lands on the greatest
+  // row start BELOW where it is, stepping onto the previous line's
+  // last row when it is already at a line's beginning (input.c:358).
+  // Walking it a row at a time is what makes a top part-way into a
+  // row ordinary - it steps to the boundary it sits inside like any
+  // other row - and it is also what --wordwrap needs, since its rows
+  // are unequal and cannot be subtracted.
   let leftover = 0;
+  let row = config.row;
+  let at = topOffsetOf(content);
 
-  while (offset > 0 && config.row >= floor) {
-    if (config.subRow >= offset) {
-      config.subRow -= offset;
+  while (offset > 0) {
+    if (at > 0) {
+      at = rowStartBelow(content[row] ?? '', at);
+      offset--;
+      continue;
+    }
+
+    if (row <= floor) {
+      leftover = offset;
       break;
     }
 
-    if (config.row === floor) {
-      leftover = offset - config.subRow;
-      config.subRow = 0;
-      break;
-    }
+    row--;
+    at = lastRowStart(content[row] ?? '');
+    offset--;
 
-    offset -= config.subRow + 1;
-
-    config.row--;
-    config.subRow = maxSubRow(content[config.row]);
-
-    if (optStopOnFormFeed() && isFormFeed(content[config.row])) {
-      config.subRow = 0;
+    if (optStopOnFormFeed() && isFormFeed(content[row])) {
+      at = 0;
       break;
     }
   }
+
+  setTopOffset(content, row, at);
 
   if (
     mode.EOF && (

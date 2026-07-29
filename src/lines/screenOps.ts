@@ -1,4 +1,5 @@
 import { config } from '../state/config';
+import { chopLine } from '../options';
 
 import { getLayout, rowEndFrom } from './lineLayout';
 
@@ -24,6 +25,73 @@ import { ScreenRow } from './screenTable';
 /** og's pos_clear: the table is empty and the paint rebuilds it. */
 export function screenClear(): void {
   config.screen = [];
+}
+
+/**
+ * Where the row containing `offset` begins.
+ *
+ * og's back_line reads back to the LINE's start and re-wraps forward
+ * from there (input.c:358), so it lands on the greatest row start
+ * BELOW the position it was given. A top part-way into a row therefore
+ * steps to the boundary it sits inside, and that IS one row - the same
+ * move as any other, needing no special case of its own.
+ */
+export function rowStartBelow(line: string, offset: number): number {
+  if (offset <= 0 || chopLine() || config.col) return 0;
+
+  const layout = getLayout(line);
+  let start = 0;
+  let next = rowEndFrom(layout, 0);
+
+  while (next < offset) {
+    const step = rowEndFrom(layout, next);
+    start = next;
+    if (step <= next) break;
+    next = step;
+  }
+
+  return start;
+}
+
+/** The offset of a line's last display row. */
+export function lastRowStart(line: string): number {
+  if (chopLine() || config.col) return 0;
+
+  const layout = getLayout(line);
+  const len = layout.chars.length;
+  let start = 0;
+
+  for (;;) {
+    const end = rowEndFrom(layout, start);
+    if (end >= len || end <= start) return start;
+    start = end;
+  }
+}
+
+/** The wrap sub-row an offset falls in, for the renderer's index. */
+export function subRowAt(line: string, offset: number): number {
+  if (chopLine() || config.col) return 0;
+
+  const starts = getLayout(line).rowStart;
+  let sub = 0;
+  while (sub + 1 < starts.length && starts[sub + 1] <= offset) sub++;
+  return sub;
+}
+
+/**
+ * Puts the top at a place in a line, deriving the sub-row index and
+ * remainder the renderer still asks for.
+ *
+ * Movement works in offsets, like og's table entries; nothing outside
+ * this function may set the two halves independently, or they can
+ * disagree about where the screen starts.
+ */
+export function setTopOffset(content: string[], row: number, at: number): void {
+  const line = content[row] ?? '';
+
+  config.row = row;
+  config.subRow = subRowAt(line, at);
+  config.subShift = at - (getLayout(line).rowStart[config.subRow] ?? 0);
 }
 
 /**

@@ -9,6 +9,8 @@ import { transformContent } from '../lines/helpers';
 
 import { getLayout, rowEndFrom, LineLayout } from '../lines/lineLayout';
 
+import { rowStartBelow, lastRowStart, subRowAt } from '../lines/screenOps';
+
 /**
  * The visible-screen model for file-backed sessions, ported from
  * og's position.c + forwback.c: the view is a position INSIDE the
@@ -83,44 +85,14 @@ export class BigView {
     return end < this.lineLength(text) && end > offset ? end : null;
   }
 
-  /**
-   * og's back_line: it reads back to the LINE's start and re-wraps
-   * forward from there (input.c:358), landing on the greatest row
-   * start BELOW the position it was given. From a top part-way into a
-   * row that is the row's own start, so a top which is not on a
-   * boundary steps to the boundary it sits inside - one row, exactly
-   * like any other.
-   */
+  /** og's back_line, on this line's display text (see screenOps). */
   rowStartBelow(text: string, offset: number): number {
-    if (offset <= 0 || chopLine() || config.col) return 0;
-
-    const layout = this.layoutOf(text);
-    let start = 0;
-    let next = rowEndFrom(layout, 0);
-
-    while (next < offset) {
-      const step = rowEndFrom(layout, next);
-      start = next;
-      if (step <= next) break;
-      next = step;
-    }
-
-    return start;
+    return rowStartBelow(displayText(text), offset);
   }
 
   /** The offset of the line's last display row. */
   lastRowStart(text: string): number {
-    if (chopLine() || config.col) return 0;
-
-    const layout = this.layoutOf(text);
-    const len = layout.chars.length;
-    let start = 0;
-
-    for (;;) {
-      const end = rowEndFrom(layout, start);
-      if (end >= len || end <= start) return start;
-      start = end;
-    }
+    return lastRowStart(displayText(text));
   }
 
   /** The offset a given wrap sub-row begins at. */
@@ -131,12 +103,7 @@ export class BigView {
 
   /** The wrap sub-row an offset falls in, for the renderer's index. */
   subRowAt(text: string, offset: number): number {
-    if (chopLine() || config.col) return 0;
-
-    const starts = this.layoutOf(text).rowStart;
-    let sub = 0;
-    while (sub + 1 < starts.length && starts[sub + 1] <= offset) sub++;
-    return sub;
+    return subRowAt(displayText(text), offset);
   }
 
   /** Display sub-rows a line occupies under the current mode. */
