@@ -1573,9 +1573,79 @@ export class FileInput implements PagerInput {
   }
 
   /** Finds a 0-based file line without retaining the traversed text. */
+  /**
+   * og's onscreen() (position.c:135): the screen row holding a byte,
+   * or -1. Note it returns -1 when the byte is past EVERY row, not the
+   * bottom row - the loop only ever answers from `pos < table[i]`, so
+   * falling out the end means "not on screen". Getting that backwards
+   * made a jump to the file's end look like a jump onto the screen.
+   */
+  private onScreenRow(target: number): number {
+    // og's table holds a BYTE PER ROW, so on a wrapped line its
+    // entries differ row to row. Ours holds the row's LINE START plus
+    // an offset, and comparing the line starts alone collapses every
+    // row of one long line to the same value - on a single-line file
+    // that made a top deep inside the line compare equal to byte 0
+    // and report "on screen" for a target that was far above it.
+    const before = (at: ViewTop): boolean =>
+      target < at.pos || (target === at.pos && at.offset > 0);
+
+    const first = this.view.screenPos(0);
+    if (!first || before(first)) return -1;
+
+    for (let k = 1; k < config.window; k++) {
+      const at = this.view.screenPos(k);
+      if (at && before(at)) return k - 1;
+    }
+
+    return -1;
+  }
+
+  /**
+   * og's jump_loc near-target branch (jump.c:337): a target that is
+   * ALREADY DISPLAYED is scrolled to with force=TRUE rather than
+   * repainted, which keeps the junction a backward move leaves behind
+   * instead of regenerating the screen from the target.
+   *
+   * @returns True when it handled the jump.
+   */
+  private jumpNear(target: number, sline: number): boolean {
+    // under a filter the rows this walk produces are not the rows on
+    // screen, so onscreen() would be comparing against the wrong table
+    if (session.lastFilter || this.padTop > 0) return false;
+
+    const nline = this.onScreenRow(target);
+    if (nline < 0) return false;
+
+    // sindex_from_sline: clip to 1..sc_height-1, then make it 0-based
+    const sindex = Math.min(Math.max(sline, 1), config.window - 1) - 1;
+    const delta = nline - sindex;
+
+    if (delta > 0) {
+      this.forward(delta, false);
+    } else if (delta < 0) {
+      this.backwardFrom(-delta, true);
+    } else {
+      this.sync();
+    }
+
+    return true;
+  }
+
   private gotoLine(target: number): void {
     const floor = optHeader().lines > 0 ? optHeader().start : 0;
-    this.seekLine(Math.max(target, floor), true);
+    const want = Math.max(target, floor);
+    const pos = this.findLinePosition(want);
+
+    // og's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
+    // scrolls instead of repainting when the line is already on screen
+    if (pos !== null && this.jumpNear(pos, jumpSindex() + 1)) {
+      this.seam = [];
+      markPosClear();
+      return;
+    }
+
+    this.seekLine(want, true);
     this.sync();
     this.seam = [];
     markPosClear();
