@@ -303,6 +303,20 @@ export async function openForCat(
     return { path: alt.path };
   }
 
+  // og's edit_ifile takes the name "-" to mean standard input, on the
+  // descriptor it already has and with CH_KEEPOPEN so it is never
+  // closed and reopened (edit.c:516). bad_file never sees it
+  if (entry.path === '-') {
+    entry.everOpened = true;
+
+    await new Promise<void>(resolve => {
+      process.stdin.pipe(out, { end: false });
+      process.stdin.on('end', resolve);
+    });
+
+    return {};
+  }
+
   try {
     if (!statGuard(entry.path)) return null;
   } catch (error) {

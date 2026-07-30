@@ -233,6 +233,24 @@ async function main(): Promise<void> {
     return;
   }
 
+  // og's edit_ifile reads the name "-" from standard input (edit.c:516)
+  // and, having skipped bad_file, is the one place that reaches the
+  // isatty guard below it: a terminal on fd0 is refused, and with no
+  // other file to fall back on edit_first quits QUIT_ERROR
+  if (files.length === 1 && files[0] === '-') {
+    if (stdinTty && !opt.forceOpen) {
+      process.stderr.write('- is a terminal (use -f to open it)\n');
+      process.exitCode = 1;
+      return;
+    }
+
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
+
+    markTerminalInvocation();
+    await pagerPipe(process.stdin);
+    return;
+  }
+
   if (files.length) {
     // a piped stdin alongside files still needs a keyboard
     if (!stdinTty && !openTtyKeyboard()) {
