@@ -413,13 +413,8 @@ export function vlinenumAbsolute(absolute: number): number {
 export const mulFrac = (n: number, frac: number): number =>
   Math.round(n * frac / 1000000);
 
-/**
- * OG keeps sc_width as the complete terminal width. Our renderer stores the
- * text width after reserving the line prefix, so commands defined in terms
- * of sc_width must add that applied reservation back.
- */
-export const fullScreenWidth = (): number =>
-  config.screenWidth + opt.appliedGutter;
+export { fullScreenWidth } from "./state";
+import { fullScreenWidth } from "./state";
 
 /** The -j target as a 0-based screen row for the current window. */
 export function jumpSindex(): number {

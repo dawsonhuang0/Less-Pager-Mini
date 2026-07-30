@@ -1,6 +1,9 @@
 import { strWidth } from 'char-width';
 
-import { config } from "../state/config";
+// og's cmdbuf.c measures against sc_width, the whole terminal: the
+// command line is the BOTTOM row, which never carries the -N/-J
+// gutter that config.screenWidth has had taken out of it
+import { fullScreenWidth } from "../options/state";
 
 import { ringBell } from "../helpers";
 
@@ -249,7 +252,7 @@ export function cmdDisplay(): string {
 
   for (let i = cmd.offset; i < cmd.steps.length; i++) {
     const width = stepWidth(cmd.steps[i]);
-    if (col + width >= config.screenWidth) break;
+    if (col + width >= fullScreenWidth()) break;
 
     out += stepText(cmd.steps[i]);
     col += width;
@@ -262,7 +265,7 @@ export function cmdDisplay(): string {
  * Shifts the display left a half usable screen, like cmd_lshift.
  */
 function cmdLshift(): void {
-  const half = Math.floor((config.screenWidth - cmd.promptCol) / 2);
+  const half = Math.floor((fullScreenWidth() - cmd.promptCol) / 2);
   let s = cmd.offset;
   let cols = 0;
 
@@ -277,7 +280,7 @@ function cmdLshift(): void {
  * Shifts the display right a half usable screen, like cmd_rshift.
  */
 function cmdRshift(): void {
-  const half = Math.floor((config.screenWidth - cmd.promptCol) / 2);
+  const half = Math.floor((fullScreenWidth() - cmd.promptCol) / 2);
   let s = cmd.offset;
   let cols = 0;
 
@@ -296,8 +299,8 @@ export function cmdRight(): void {
   const col = cmdCol();
 
   if (
-    col + width >= config.screenWidth ||
-    (col + width === config.screenWidth - 1 &&
+    col + width >= fullScreenWidth() ||
+    (col + width === fullScreenWidth() - 1 &&
       cmd.cur + 1 < cmd.steps.length)
   ) {
     cmdLshift();

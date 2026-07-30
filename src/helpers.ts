@@ -502,7 +502,10 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
  * @param key - Character to append.
  */
 export function addBufferChar(buffer: string[], key: string): void {
-  if (visibleBufferLength(buffer.length) + 1 === config.screenWidth - 1) {
+  // the digit prompt is the BOTTOM row, so it measures against og's
+  // sc_width like the rest of cmdbuf - never the gutter-reduced
+  // config.screenWidth, which shifted it a whole gutter early
+  if (visibleBufferLength(buffer.length) + 1 === fullScreenWidth() - 1) {
     config.bufferOffset++;
   }
 
@@ -2064,7 +2067,12 @@ function getPrompt(content: string[]): string {
  * prints those full and lets them trash the screen.
  */
 function clipPrompt(text: string, indent: number = 0): string {
-  const max = config.screenWidth - 1 - indent;
+  // load_line reserves ONE column of og's sc_width (command.c:1027).
+  // sc_width is the terminal's width: the -N/-J gutter is added by
+  // plinenum, per content line, and never comes out of the prompt's
+  // room. config.screenWidth already has it subtracted, so asking it
+  // here clipped the prompt by a whole gutter
+  const max = fullScreenWidth() - 1 - indent;
   if (text.length <= max && !isStyled(text)) return text;
   if (visualWidth(text) <= max) return text;
 
@@ -2104,7 +2112,7 @@ function prChar(char: string): string {
  * @returns The buffer as a string, trimmed if necessary.
  */
 function getBuffer(buffer: string[]): string {
-  const width = config.screenWidth - 1;
+  const width = fullScreenWidth() - 1;
   const halfWidth = Math.floor(width / 2);
 
   return buffer.slice(halfWidth * config.bufferOffset).join('');
@@ -2117,7 +2125,7 @@ function getBuffer(buffer: string[]): string {
  * @returns Number of visible characters based on offset.
  */
 function visibleBufferLength(bufferLength: number): number {
-  const width = config.screenWidth - 1;
+  const width = fullScreenWidth() - 1;
   const halfWidth = Math.floor(width / 2);
   return bufferLength - halfWidth * config.bufferOffset;
 }

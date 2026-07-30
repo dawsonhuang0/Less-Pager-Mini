@@ -1,3 +1,5 @@
+import { config } from "../state/config";
+
 /**
  * Mutable option state shared by the option files, like og
  * opttbl.c's globals. Defaults mirror og's option table.
@@ -101,3 +103,15 @@ const DEFAULTS = JSON.parse(JSON.stringify(opt)) as typeof opt;
 export function resetOptions(): void {
   Object.assign(opt, JSON.parse(JSON.stringify(DEFAULTS)) as typeof opt);
 }
+
+/**
+ * OG keeps sc_width as the complete terminal width. Our renderer stores
+ * the text width after reserving the line prefix, so anything defined in
+ * terms of sc_width - every bottom-row measurement, since the command
+ * line never carries the gutter - must add that reservation back.
+ *
+ * It lives here, in the leaf, so the low-level display code can ask
+ * without pulling the whole option table in behind it.
+ */
+export const fullScreenWidth = (): number =>
+  config.screenWidth + opt.appliedGutter;
