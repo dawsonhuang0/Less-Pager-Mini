@@ -182,8 +182,8 @@ we have it · `2783` negative numeric options, see F58 · `2789` lesstest, N/A.
 | F77 | `2713`+`2722` | HOME becomes `ESC-{` (beginning of LINE), END `ESC-}`, with ctrl/shift variants. | **N/A — SUPERSEDED** by `2912` (`fe4fb0c`), which reverts HOME to `g` and END to `G`. Do not port `2713`. |
 | F78 | `2912` `fe4fb0c` | HOME acts like `g`, END like `G`. | **OK against the SPEC, unverifiable here.** Our pager takes `ESC[H` to the file start, which is `g`. The binary cannot be probed for it: the harness passes no `$TERM`, so og's `setupterm` fails and it has NO special-key bindings — it read `ESC`, `[`, `H` as three keys and opened the HELP screen. Same class of limitation as the mouse sequences. |
 | F79 | `2762` `02858e1` | Marks already in the history file must be written back on exit even WITHOUT `--save-marks`; the option only governs whether NEW marks are saved. | ? |
-| F80 | `2746` `ceac046` | `ESC-u` with an OSC 8 highlight but no search pattern must clear the highlight, update the display, and NOT say "No previous regular expression". | ? |
-| F81 | `2712` `342a086` | `--incsearch` returning to the start line on a non-match must restore the horizontal COLUMN too, not just the line. | ? |
+| F80 | `2746` `ceac046` | `ESC-u` with an OSC 8 highlight but no search pattern must clear the highlight, update the display, and NOT say "No previous regular expression". | **FIX** we showed og's PRE-fix message. og's `undo_search` runs `osc8_active = undo_osc8()` FIRST and gates the complaint on it: `else if (!osc8_active) error(...)` (search.c:405). Verified all three branches against the binary — link selected (quiet), pattern present (toggles), neither (still errors). |
+| F81 | `2712` `342a086` | `--incsearch` returning to the start line on a non-match must restore the horizontal COLUMN too, not just the line. | **?** — probe inconclusive AND it exposed something else. With `--incsearch` on chunks.txt, two `ESC-)` shifts already diverge BEFORE any search: og's prompt reads `(END)`, ours `:`. So a horizontal shift changes og's eof_displayed and not ours (see F83); the incsearch claim itself is still untested behind it. |
 | F82 | `2782` `cb0d379` | A NEGATIVE `-j` argument is normalized in calc_jump_sline, plus a check that jump_sline stays on screen. | ? |
 
 ### Adjudicated without a flag
@@ -191,3 +191,5 @@ we have it · `2783` negative numeric options, see F58 · `2789` lesstest, N/A.
 `xn` reading · `2779` --form-feed must not stop while repainting · `2769`/`2771`
 Lit indicator · `2766`/`2717`/`2716`/`2715`/`2756` internal/valgrind/compiler
 fixes, N/A · `2732`/`2728`/`2727` man-page formatting, N/A.
+
+| F83 | measured, `ESC-)` on a one-line file | Two `ESC-)` right-shifts and og's prompt becomes `(END)` while ours stays `:`; content rows agree. A horizontal shift changes og's `eof_displayed` answer and not ours. Same SHAPE as the resize-EOF bug fixed in `e12e089` — a second source of truth for "is the end displayed" going stale — but a different trigger, and not yet traced. | **GAP** |

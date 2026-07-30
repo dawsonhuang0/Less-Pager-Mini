@@ -48,6 +48,8 @@ import {
 
 import { colored, ColorKind } from "./color";
 
+import { selectedOsc8, setSelectedOsc8 } from "./osc8";
+
 import {
   INVERSE_ON,
   INVERSE_OFF,
@@ -696,8 +698,17 @@ export function setHiliteHidden(hidden: boolean): void {
 }
 
 export function toggleHighlight(): void {
+  // og's undo_search: `osc8_active = undo_osc8()` runs FIRST and its
+  // result gates the complaint - `else if (!osc8_active) error("No
+  // previous regular expression")` (search.c:405). So ESC-u on a
+  // selected OSC 8 link with no search pattern clears the link
+  // quietly; ceac046 is the commit that stopped it erroring, and it
+  // fixed the display too, since repaint_hilite runs either way.
+  const hadOsc8 = selectedOsc8() !== null;
+  if (hadOsc8) setSelectedOsc8(null);
+
   if (!search.regex) {
-    search.message = 'No previous regular expression';
+    if (!hadOsc8) search.message = 'No previous regular expression';
     return;
   }
 
