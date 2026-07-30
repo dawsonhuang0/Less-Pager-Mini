@@ -9,7 +9,8 @@ import { config, fullScreen, mode } from './state/config';
 import { chopLongLines } from './lines/chopLongLines';
 import { wrapLongLines } from './lines/wrapLongLines';
 
-import { maxSubRow, visualWidth, isStyled } from './lines/helpers';
+import { maxSubRow, visualWidth, isStyled, transformPrompt, promptHasAnsi }
+  from './lines/helpers';
 
 import { search, searchPrompt, statusColChar, setHiliteHidden }
   from './features/searching';
@@ -2016,7 +2017,7 @@ function getPrompt(content: string[]): string {
   if (mode.BUFFERING) return colored('prompt', ':');
 
   if (mode.HELP) {
-    const helpPrompt = prExpand(content, hProto());
+    const helpPrompt = transformPrompt(prExpand(content, hProto()));
     promptPainted = true;
 
     return colored(
@@ -2032,7 +2033,10 @@ function getPrompt(content: string[]): string {
   // the bottom line expands the -P prototype of the -m/-M style; the
   // short prompt shows a new file's name once (?n) and the (END)
   // marker with the next file, like s_proto
-  const text = prExpand(content, prProto(displayPrType()));
+  // og hands pr_string's result to load_line, which pappends it like
+  // any file line: tabs reach their stops and control chars take
+  // caret notation rather than the terminal (command.c:1027)
+  const text = transformPrompt(prExpand(content, prProto(displayPrType())));
   if (files.newFile) files.newFile = false;
 
   promptPainted = true;
@@ -2043,6 +2047,11 @@ function getPrompt(content: string[]): string {
   const amp = search.filters.length ? '& ' : '';
 
   if (!text) return amp + colored('prompt', ':');
+
+  // load_line colours the prompt standout only when the line carries
+  // no ANSI sequences of its own (line.c:1950): a -P prototype with
+  // escapes in it keeps its own attributes instead
+  if (promptHasAnsi(text)) return amp + clipPrompt(text, amp.length);
 
   return amp +
     colored('prompt', clipPrompt(text, amp.length), INVERSE_ON, INVERSE_OFF);

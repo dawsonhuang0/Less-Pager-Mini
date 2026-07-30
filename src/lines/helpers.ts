@@ -352,8 +352,36 @@ export function ansiRunEnd(line: string, start: number): number {
   return scan >= line.length ? line.length : scan + 1;
 }
 
-function transformLine(line: string): string {
-  const ctldisp = optCtldisp();
+/**
+ * The prompt line through the same char machinery as content, like
+ * og's prompt() handing pr_string's result to load_line (command.c),
+ * which pappends it character by character exactly as forw_line does
+ * a file line: tabs expand to their stops and control characters take
+ * caret notation instead of reaching the terminal.
+ *
+ * The prototype's literal bytes are NOT converted while the prompt is
+ * being built - og's ap_char stores them raw (5a369ed, whose whole
+ * point was that routing them through ap_str corrupts multibyte
+ * chars). The conversion belongs here, at the draw.
+ */
+export function transformPrompt(line: string): string {
+  charCache = new Map();
+  return CONTROL_REGEX.test(line) ? transformLine(line, 2) : line;
+}
+
+/**
+ * og's do_append recognizes an ANSI sequence when ctldisp is ONPLUS
+ * *or* the char has no file position (line.c:1302) - and a prompt is
+ * appended with NULL_POSITION, so its escapes are always live. When one
+ * is there, load_line then leaves the line's own attributes alone
+ * instead of colouring the whole prompt standout (line.c:1950).
+ */
+export function promptHasAnsi(line: string): boolean {
+  return line.includes('\x1B') || line.includes('\x9B');
+}
+
+function transformLine(line: string, ctldispOverride?: number): string {
+  const ctldisp = ctldispOverride ?? optCtldisp();
   let out = '';
   let col = 0;
   let i = 0;
