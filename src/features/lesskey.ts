@@ -14,6 +14,10 @@ import { actualEnv, deleteLesskeyEnv, lgetenv, resetLesskeyEnvironment,
 
 import { terminalCapability } from '../tty/terminal';
 
+import { hook } from '../options/shared';
+
+import { secureAllow } from './secure';
+
 /**
  * A #command binding: the pager action, an optional canonical key for
  * key-sensitive actions (`-`/`_`), and the "extra" input string fed
@@ -393,6 +397,25 @@ export function resetLesskey(): void {
  * $XDG_CONFIG_HOME/lesskey, ~/.config/lesskey and ~/.lesskey.
  * $LESSNOCONFIG skips everything.
  */
+/**
+ * og's opt_k -> lesskey(filename, 0): read a COMPILED lesskey file and
+ * add its tables. Returns false where og's lesskey() returns nonzero -
+ * blocked by SECURE or LESSNOCONFIG, unopenable, or shorter than the
+ * 3 bytes a valid file must have (decode.c).
+ */
+hook.loadLesskeyFile = (path: string): boolean => {
+  if (!secureAllow('lesskey') || actualEnv('LESSNOCONFIG')) return false;
+
+  try {
+    const buf = fs.readFileSync(path);
+    if (buf.length < 3) return false;
+    parseLesskeyBinary(buf);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export function loadLesskey(): void {
   resetLesskey();
 
