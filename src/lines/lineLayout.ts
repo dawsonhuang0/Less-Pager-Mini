@@ -42,6 +42,17 @@ let cacheWidth = 0;
 let cacheWordwrap = false;
 let cacheCtldisp = -1;
 
+// Which layout the cached extents came from. og never needs this: its
+// position table holds STARTS only and forw_line re-derives the extent
+// at every draw, so a width or ctldisp change re-extents every row for
+// free. Ours stores each row's end - the bottom row has no next entry
+// to read it from, and a row a scroll seam cut short has to stay short
+// - and those ends mean nothing under a different layout.
+let generation = 0;
+
+/** Bumped whenever the cached layouts stop applying. */
+export const layoutGeneration = (): number => generation;
+
 /**
  * Returns the cached layout for a line, building it on first access.
  *
@@ -61,6 +72,7 @@ export function getLayout(line: string): LineLayout {
     cacheWidth = config.screenWidth;
     cacheWordwrap = optWordwrap();
     cacheCtldisp = optCtldisp();
+    generation++;
   }
 
   let layout = cache.get(line);

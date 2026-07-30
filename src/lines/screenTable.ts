@@ -1,6 +1,7 @@
 import { config } from '../state/config';
 
-import { getLayout, rowEndFrom, emitRange } from './lineLayout';
+import { getLayout, rowEndFrom, emitRange, layoutGeneration }
+  from './lineLayout';
 
 import { withReset } from './helpers';
 
@@ -45,6 +46,9 @@ export interface ScreenRow {
  * @param count - How many content lines exist.
  * @param cap - How many rows the screen still has room for.
  */
+// the layout the kept entries' ends were measured under
+let tableGeneration = -1;
+
 export function buildScreen(
   lineAt: (row: number) => string,
   count: number,
@@ -63,7 +67,10 @@ export function buildScreen(
   // which is pos_clear by another name.
   const kept = config.screen;
   const valid = kept.length > 0 && kept[0].row === row &&
-    kept[0].offset === offset && kept[kept.length - 1].row < count;
+    kept[0].offset === offset && kept[kept.length - 1].row < count &&
+    tableGeneration === layoutGeneration();
+
+  tableGeneration = layoutGeneration();
 
   const rows: ScreenRow[] = valid ? kept.slice(0, cap) : [];
   if (!valid && kept.length) config.screen = [];

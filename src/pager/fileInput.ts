@@ -4,6 +4,8 @@ import { Actions } from '../state/interfaces';
 
 import { config, mode } from '../state/config';
 
+import { layoutGeneration } from '../lines/lineLayout';
+
 import { session, deriveContent } from '../state/session';
 
 import {
@@ -111,6 +113,9 @@ export class FileInput implements PagerInput {
   private incrementalOrigin: ViewTop | null = null;
   private headerRow = 0;
   private headerPos = 0;
+
+  /** The layout generation this.seam's extents were measured under. */
+  private seamLayout = -1;
   private pending: {
     index: number,
     bf: BlockFile,
@@ -1308,6 +1313,16 @@ export class FileInput implements PagerInput {
 
   /** Re-expresses the seam in the row indices this paint will use. */
   private publishSeam(): void {
+    // a seam cell is an EXTENT, measured under the layout that was in
+    // force when back_line bounded it. og never carries one across a
+    // layout change - its table holds starts only, and forw_line
+    // re-extents every row at the draw - so a width, --wordwrap or
+    // ctldisp change makes these ends describe a screen that no longer
+    // exists. -r is the sharp case: it turns the whole line into ONE
+    // row, and a stale 80-column seam re-chopped it behind the paint
+    if (this.seamLayout !== layoutGeneration()) this.seam = [];
+    this.seamLayout = layoutGeneration();
+
     config.screen = this.seam.map(cell => ({ row: config.row, ...cell }));
   }
 

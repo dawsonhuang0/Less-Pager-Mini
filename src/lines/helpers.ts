@@ -49,6 +49,13 @@ import {
 export function maxSubRow(line: string): number {
   if (chopLine()) return 0;
 
+  // under -r og counts no widths at all - fits_on_screen returns TRUE
+  // outright for ctldisp == OPT_ON (line.c) - so however long the line
+  // is, it is ONE row and the terminal does the wrapping. The plain
+  // ASCII shortcut below divides by the screen width and would answer
+  // with the row count the layout deliberately does not have
+  if (optCtldisp() === 1) return 0;
+
   // --wordwrap boundaries live in the layout, even for plain lines
   if (!optWordwrap() && !isStyled(line) && isAscii(line) &&
       !line.includes('\x08')) {
