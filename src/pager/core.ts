@@ -1300,9 +1300,15 @@ let prevMouseButton = 0;
  */
 function normalizeMouse(key: string): string | null {
   const intro = userBoundTo('MOUSE_X11_IN') ?? '\x1b[M';
-  if (!key.startsWith(intro) || key.length < intro.length + 3) return null;
+  if (!key.startsWith(intro)) return null;
 
-  const rest = key.slice(intro.length);
+  return x11ToSgr(key.slice(intro.length));
+}
+
+/** The three report bytes, in the SGR shape. */
+function x11ToSgr(rest: string): string | null {
+  if (rest.length < 3) return null;
+
   const button = rest.charCodeAt(0) - 32;
   const x = rest.charCodeAt(1) - 32;
   const y = rest.charCodeAt(2) - 32;
@@ -1322,8 +1328,54 @@ function normalizeMouse(key: string): string | null {
   return `\x1b[<${button};${x};${y}M`;
 }
 
+// a mouse report whose INTRODUCER a lesskey file moved: og reads the
+// rest with getcc from inside x11mouse_action/x116mouse_action, so the
+// binding names only the introducer and the decoder discovers the
+// length. Ours arrives pre-split, so the bytes are collected here.
+let mouseReport: { sgr: boolean, buf: string } | null = null;
+
 function dispatchKey(sequence: string): void {
   session.key = sequence;
+
+  if (mouseReport !== null) {
+    const report = mouseReport;
+    report.buf += sequence;
+
+    // og's getcc_int gives up on a char that cannot belong to the
+    // report (decode.c), and so does this
+    const ok = report.sgr
+      ? /^[\d;]*[Mm]?$/.test(report.buf)
+      : report.buf.length <= 3;
+
+    if (!ok) {
+      mouseReport = null;
+      return;
+    }
+
+    const done = report.sgr
+      ? /^\d+;\d+;\d+[Mm]$/.test(report.buf)
+      : report.buf.length === 3;
+
+    if (!done) return;
+
+    mouseReport = null;
+
+    // NOT by re-forming the introducer: it is the REBOUND one, which
+    // normalizeMouse would then look for again. The report's own
+    // bytes are what both formats decode from
+    const sgr = report.sgr ? '\x1b[<' + report.buf : x11ToSgr(report.buf);
+    if (sgr !== null) dispatchKey(sgr);
+    return;
+  }
+
+  {
+    const bound = userBinding(sequence)?.action;
+
+    if (bound === 'MOUSE_SGR_IN' || bound === 'MOUSE_X11_IN') {
+      mouseReport = { sgr: bound === 'MOUSE_SGR_IN', buf: '' };
+      return;
+    }
+  }
 
   // the interrupt key abandons a G/% pipe drain: og's interrupted
   // ch_end_seek returns SUCCESS (the loop exits on the READ_INTR
@@ -1725,7 +1777,11 @@ function dispatchKey(sequence: string): void {
   // --MOUSE) reverses the scroll direction, like less; the wheel
   // is ignored without the vscroll --emouse feature (decode.c)
   if (!session.escCount && session.key.startsWith('\x1b[<64;')) {
-    if (!optWheelEnabled()) return;
+    // og's command loop returns to prompt() for EVERY key it consumed,
+    // even one whose action does nothing: the report is swallowed but
+    // the prompt is still reprinted, which is visible on the first one
+    // because that is when the filename prompt gives way to ":"
+    if (!optWheelEnabled()) return void render(session.content, session.buffer);
 
     if (optMouseReverse()) {
       lineForward(session.content, optWheelLines());
@@ -1738,7 +1794,7 @@ function dispatchKey(sequence: string): void {
   }
 
   if (!session.escCount && session.key.startsWith('\x1b[<65;')) {
-    if (!optWheelEnabled()) return;
+    if (!optWheelEnabled()) return void render(session.content, session.buffer);
 
     if (optMouseReverse()) {
       lineBackward(session.content, optWheelLines());
@@ -1755,7 +1811,9 @@ function dispatchKey(sequence: string): void {
   if (!session.escCount &&
       (session.key.startsWith('\x1b[<66;') ||
         session.key.startsWith('\x1b[<67;'))) {
-    if (!(opt.emouse & EMOUSE_HSCROLL)) return;
+    if (!(opt.emouse & EMOUSE_HSCROLL)) {
+      return void render(session.content, session.buffer);
+    }
 
     const left = session.key.startsWith('\x1b[<66;') !== (optMouseReverse());
 
