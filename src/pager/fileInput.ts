@@ -470,22 +470,7 @@ export class FileInput implements PagerInput {
             this.gotoFilteredEnd();
           } else {
             this.view.gotoEnd(config.window);
-
-            // og's jump_loc walks back sindex lines to place the last
-            // one at the bottom; when back_line hits BOF first it
-            // BREAKS and hands the shortfall to forw() as its nblank
-            // argument - "rely on forw() below to draw the required
-            // number of blank lines at the top of the screen"
-            // (jump.c). So a file shorter than the screen ends up at
-            // the BOTTOM under tildes. gotoEnd on its own just clamps
-            // at BOF and leaves the text at the top.
-            const rows = this.view.visible(config.window - 1).rows.length;
-            const blank = Math.max(config.window - 1 - rows, 0);
-
-            if (blank > 0) {
-              this.padTop = blank;
-              this.keepPad = true;
-            }
+            this.padShortScreen();
           }
 
           this.sync();
@@ -1086,6 +1071,26 @@ export class FileInput implements PagerInput {
     this.sync();
   }
 
+  /**
+   * The null rows an end jump leaves above BOF, like og's jump_loc
+   * walking back sindex lines to put the last one at the bottom: when
+   * back_line hits BOF first it BREAKS and hands the shortfall to
+   * forw() as its nblank argument - "rely on forw() below to draw the
+   * required number of blank lines at the top of the screen"
+   * (jump.c:316). So a file shorter than the screen ends up at the
+   * BOTTOM under tildes; gotoEnd on its own just clamps at BOF and
+   * leaves the text at the top.
+   */
+  private padShortScreen(): void {
+    const rows = this.view.visible(config.window - 1).rows.length;
+    const blank = Math.max(config.window - 1 - rows, 0);
+
+    if (blank > 0) {
+      this.padTop = blank;
+      this.keepPad = true;
+    }
+  }
+
   private pinFollowEnd(): boolean {
     if (!this.sourceActive()) return false;
 
@@ -1101,6 +1106,14 @@ export class FileInput implements PagerInput {
       this.gotoFilteredEnd();
     } else {
       this.view.gotoEnd(config.window);
+
+      // F is jump_forw_buffered, which reaches the same jump_loc with
+      // the same sc_height-1 target as G: content shorter than the
+      // screen sits at the BOTTOM either way. og gets there through
+      // the onscreen branch instead (no pos_clear), which back()s the
+      // shortfall in as null lines rather than passing it as nblank -
+      // a different route to the same screen
+      this.padShortScreen();
     }
     this.sync();
     return true;
