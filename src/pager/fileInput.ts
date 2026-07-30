@@ -445,6 +445,27 @@ export class FileInput implements PagerInput {
           this.startDrain('', '');
           this.spool?.drain();
         } else {
+          // og's jump_forw bells and returns when the end is already
+          // displayed, and 4e4dce3 widened that test to the FILTERED
+          // end: `bot_pos == end_pos || (bot_pos == soft_eof &&
+          // soft_eof != NULL_POSITION)` (jump.c:44). Without the
+          // second half, G at the end of &-filtered input stayed
+          // silent whenever the file's real last line was filtered
+          // out, because bottom+1 never reaches the file's end.
+          // NOT simply "EOF is displayed": og compares
+          // position(BOTTOM_PLUS_ONE), so on a screen that ends in
+          // tilde rows that entry is NULL_POSITION and no bell is
+          // rung, even though the end is plainly visible. The screen
+          // must be FULL as well as at the end.
+          const shown = session.lastFilter
+            ? session.content.length
+            : this.view.visible(config.window - 1).rows.length;
+
+          if (mode.EOF && shown >= config.window - 1) {
+            ringBell('eof');
+            return true;
+          }
+
           if (session.lastFilter) {
             this.gotoFilteredEnd();
           } else {
