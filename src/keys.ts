@@ -7,8 +7,17 @@ import { terminalCapability } from './tty/terminal';
  * an ESC-prefixed combination, or a single code point.
  */
 const KEY_SEQUENCE_REGEX =
-  // eslint-disable-next-line no-control-regex
-  /\x1B\[[\x20-\x3F]*[\x40-\x7E]|\x1BO[\x40-\x7E]|\x1B[\s\S]|[\s\S]/gu;
+  // an X10/X11 mouse report is THREE raw bytes after a complete CSI
+  // ("ESC [ M" ends at its final byte), so it has to be claimed
+  // before the general CSI rule or the coordinates arrive as three
+  // separate keys - og reads them with getcc, one at a time, from
+  // inside the action itself (decode.c x11mouse_action)
+  new RegExp(
+    '\\x1B\\[M[\\s\\S]{3}' +
+    '|\\x1B\\[[\\x20-\\x3F]*[\\x40-\\x7E]' +
+    '|\\x1BO[\\x40-\\x7E]|\\x1B[\\s\\S]|[\\s\\S]',
+    'gu'
+  );
 
 /**
  * Splits raw terminal input into individual key sequences.

@@ -78,8 +78,8 @@ const CMD_ACTIONS: Record<string, Actions | null> = {
   'index-file': 'INDEX_FILE',
   'invalid': null,
   'left-scroll': 'SET_HALF_SCREEN_LEFT',
-  'mouse': null,
-  'mouse6': null,
+  'mouse': 'MOUSE_X11_IN',
+  'mouse6': 'MOUSE_SGR_IN',
   'next-file': 'NEXT_FILE',
   'next-tag': 'NEXT_TAG',
   'no-scroll': 'FIRST_COL',
@@ -284,10 +284,10 @@ const ACTION_CODES: Record<number, Actions | null> = {
   61: 'LINE_BACKWARD',           // A_B_NEWLINE
   62: 'CLEAR_MARK',              // A_CLRMARK
   63: 'SET_MARK_BOTTOM',         // A_SETMARKBOT
-  64: null,                      // A_X11MOUSE_IN
+  64: 'MOUSE_X11_IN',            // A_X11MOUSE_IN
   66: null,                      // A_F_MOUSE
   67: null,                      // A_B_MOUSE
-  68: null,                      // A_X116MOUSE_IN
+  68: 'MOUSE_SGR_IN',            // A_X116MOUSE_IN
   69: 'PSHELL_COMMAND',          // A_PSHELL
   70: 'CLEAR_SEARCH',            // A_CLR_SEARCH
   71: 'OSC8_FORWARD',            // A_OSC8_F_SEARCH
@@ -369,6 +369,21 @@ const currentVars = new Map<string, string>();
 /** The #command binding for a key sequence, if the user made one. */
 export const userBinding = (seq: string): UserBinding | undefined =>
   bindings.get(seq);
+
+/**
+ * The sequence a user bound to an action, for the two that are read as
+ * the INTRODUCER of a longer report rather than matched whole: og's
+ * A_X11MOUSE_IN and A_X116MOUSE_IN, which lesskey names "mouse" and
+ * "mouse6" (lesskey_parse.c:72). Everything after the introducer is
+ * the report's own bytes, so the dispatcher has to know the prefix.
+ */
+export function userBoundTo(action: Actions): string | undefined {
+  for (const [seq, binding] of bindings) {
+    if (binding.action === action) return seq;
+  }
+
+  return undefined;
+}
 
 /** True when #stop discards the built-in key bindings. */
 export const userStop = (): boolean => stopped;

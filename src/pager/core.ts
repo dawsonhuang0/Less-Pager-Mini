@@ -246,6 +246,7 @@ import { secureAllow } from "../features/secure";
 
 import {
   userBinding,
+  userBoundTo,
   userIsPrefix,
   userStop,
   translateEditKey
@@ -1282,6 +1283,45 @@ function choppedColumns(): boolean {
   return session.content.some(line => visualWidth(line) > config.screenWidth);
 }
 
+// og's x11mouse_action keeps the last button pressed in a static,
+// because the X10 report says only "a button came up" (button 3) and
+// never which one (decode.c:773)
+let prevMouseButton = 0;
+
+/**
+ * An X10/X11 mouse report rewritten in the SGR shape, or null when the
+ * key is not one.
+ *
+ * og decodes the two formats separately and calls the same handlers;
+ * rewriting is the same thing with one decoder. The byte arithmetic is
+ * og's: the button and both coordinates are offset by 32, and og then
+ * takes one more off each coordinate (X11MOUSE_OFFSET-1) where SGR
+ * counts from 1 - so an SGR parameter is just the raw byte minus 32.
+ */
+function normalizeMouse(key: string): string | null {
+  const intro = userBoundTo('MOUSE_X11_IN') ?? '\x1b[M';
+  if (!key.startsWith(intro) || key.length < intro.length + 3) return null;
+
+  const rest = key.slice(intro.length);
+  const button = rest.charCodeAt(0) - 32;
+  const x = rest.charCodeAt(1) - 32;
+  const y = rest.charCodeAt(2) - 32;
+
+  // og's X11MOUSE_BUTTON_REL: a release names no button, so the one
+  // remembered from the press is the one that came up. The drag bit
+  // rides along in the SGR parameter, which is why only the BARE
+  // button is compared here
+  const bare = button & ~0x20;
+
+  if (bare === 3) return `\x1b[<${prevMouseButton};${x};${y}m`;
+
+  // og remembers the BARE button (its `b` has the drag bit already
+  // stripped, decode.c:777), so a release after a drag reports the
+  // button that was held, not the drag bit
+  if (bare <= 2) prevMouseButton = bare;
+  return `\x1b[<${button};${x};${y}M`;
+}
+
 function dispatchKey(sequence: string): void {
   session.key = sequence;
 
@@ -1669,6 +1709,16 @@ function dispatchKey(sequence: string): void {
     config.keyPrefix = session.key;
     render(session.content, session.buffer);
     return;
+  }
+
+  // og reads mouse reports in TWO wire formats, each introduced by
+  // its own bound sequence: A_X11MOUSE_IN for the three-byte X10/X11
+  // form and A_X116MOUSE_IN for SGR/1006 (decode.c:78). Both decode
+  // into the same handlers, so the X11 one is normalized into the SGR
+  // shape here and everything below reads one format
+  if (!session.escCount) {
+    const normalized = normalizeMouse(session.key);
+    if (normalized !== null) session.key = normalized;
   }
 
   // mouse wheel ticks scroll --wheel-lines lines; --rmouse (or

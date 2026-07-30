@@ -151,6 +151,11 @@ export type Actions =
   | 'INDEX_FILE'
   | 'REMOVE_FILE'
   | 'CURRENT_INFO'
+  /** og's A_X11MOUSE_IN / A_X116MOUSE_IN: the sequence that
+   *  INTRODUCES a mouse report, in the X10/X11 three-byte form and
+   *  the SGR (1006) form. lesskey names them "mouse" and "mouse6". */
+  | 'MOUSE_X11_IN'
+  | 'MOUSE_SGR_IN'
   | 'NOACTION'
   | 'VERSION'
   | 'FORCE_LINE_FORWARD'
