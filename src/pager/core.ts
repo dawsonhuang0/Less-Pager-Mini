@@ -2065,7 +2065,20 @@ function onResize(): void {
     pagerInput?.retopOffset(offset);
   }
 
+  // calculateEOF decides mode.EOF from whether the CONTENT ARRAY fits
+  // one screen. For a source engine that array is a materialized
+  // window of several screens, so the answer is always "no" and it
+  // wipes the mode.EOF that the engine's own sync() just derived from
+  // the file. og has no such conflict: eof_displayed reads
+  // position(BOTTOM_PLUS_ONE) off the one table (forwback.c:95), so a
+  // resize that does not move the top cannot change the answer. Keep
+  // the endRow/endSubRow anchors it computes and put the engine's
+  // verdict back.
+  const sourceEof = pagerInput !== null ? mode.EOF : null;
+
   calculateEOF(session.content);
+
+  if (sourceEof !== null) mode.EOF = sourceEof;
 
   if (config.windowContent.length !== config.window) {
     config.windowContent = new Array(config.window).fill('');

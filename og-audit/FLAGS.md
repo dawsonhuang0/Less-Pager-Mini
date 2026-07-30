@@ -142,7 +142,7 @@ og REVERTED in 2845 — do not port.
 |---|---|---|---|
 | 1 | — | — | **FIXED** by the near-target `g` branch (`7d76144`). |
 | 2 | 16 | RETURN | unexamined. |
-| 3 | 14 | RESIZE | unexamined; RESIZE is a different mechanism from the near-target branch. |
+| 3 | 55 | RETURN | **step 14 FIXED.** Bisected to a 3-key minimum: RESIZE, `G`, RESIZE. Only the PROMPT differed — og `(END)`, us `:` — with every content row identical. Cause: `calculateEOF` decides `mode.EOF` from whether the CONTENT ARRAY fits one screen, but for a source engine that array is a multi-screen materialized window, so it always answers "no" and wiped the `mode.EOF` the engine's `sync()` had just derived from the file. og cannot have this bug: `eof_displayed` reads `position(BOTTOM_PLUS_ONE)` off its one table (forwback.c:95), so a resize that does not move the top cannot change the answer. Now diverges much later, at step 55. |
 | 4 | 15 | RETURN | unexamined. |
 | 5 | 15 | `g` | NOT a near-target miss. The keys before it are `...2d,72,0a` — `-r` is ON, so the whole 11001-byte line is ONE screen row (`fits_on_screen` returns TRUE unconditionally, line.c:842). og ends with a screen of tildes, we show content. Same `-r` family as the styled gate's r-toggle/r-resize, i.e. the linebuf model, not the jump. |
 | 7 | 12 | `u` | unexamined. |
