@@ -206,3 +206,21 @@ fixes, N/A · `2732`/`2728`/`2727` man-page formatting, N/A.
 | F89 | `2705`+`2704` | INSERT, BACKTAB, CTL_RIGHT/LEFT arrows and F1 implemented for termcap/terminfo systems. | ? unverifiable in the harness (no `$TERM`, see F78). |
 
 | F90 | found by sweeping for "not supported" comments | `-k` (`--lesskey-file`) was a STUB: `set: () => {}` under a comment reading "-k names the binary lesskey format, which is not supported" — untrue, since the compiled-lesskey reader already existed for the default files. og's `opt_k` is `if (lesskey(s,0)) error("Cannot use lesskey file \"%s\"")`. | **FIX** wired through a new `hook.loadLesskeyFile` (keeps the option table free of the features/lesskey import). Verified against the binary: a MISSING file gives the identical message on stderr with rc=0 and the content still catted, a VALID compiled file loads silently, and a file binding `X` to A_QUIT makes both pagers exit on `X` while both survive without `-k`. Building that test file also caught that og's section length is **radix-64 little-endian** (`gint`: `n = *p++; n += *p++ * 64`, hence `KRADIX 64`) — a big-endian guess made og reject the file while OUR parser accepted it, so our binary reader is more permissive than og's. |
+
+## Sweep: option specs with stub implementations (not from a commit)
+
+Prompted by `?O`, `LESS_TERMCAP_SUSPEND` and `-k` all turning out to be
+features described in a comment but never wired. Six option specs carry an
+empty `set: () => {}` or `get: () => ''`:
+
+| option | verdict |
+|---|---|
+| `-k` `--lesskey-file` | **WAS A REAL GAP** — fixed in `f20d65e`. |
+| `-o` / `-O` log-file | OK, intercepted in `index.ts` by `setStartupLogFile`. |
+| `--lesskey-src` | OK, intercepted (`opt_ks`). |
+| `--lesskey-content` | OK, intercepted, `parseLesskeyContent`. |
+| `-p` `--pattern` | **OK, verified by running** — `-p line-020` puts line-020 at the top in BOTH, so it is handled outside the spec like og's `opt_p` ungetting `/pattern⏎`. |
+| `-t` `--tag` | handled by `features/tags.ts` (the Gap C work); not re-probed here. |
+
+Hit rate one in six, from a two-minute grep. Worth repeating whenever a stale
+comment turns up: the pattern is a spec that PARSES an option and drops it.
