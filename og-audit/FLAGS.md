@@ -82,3 +82,28 @@ family) · `d32b563`/`7fc61d9`/`2f228d3`/`f98933b` C portability, N/A ·
 `3007` `--end-prompt` present · `2968` `--emouse` present · `2958` cmd.h
 constant numbering, N/A · `2970`/`2969` cursor-addressing and padding
 details of --hilite-target, folded into F33.
+
+## From commits 2908-2949 (v703..v704 era)
+
+| # | commit | what the message claims | status |
+|---|---|---|---|
+| F46 | `e60346e` [2940] | **Revises `bc798f8`.** Removing forw()'s per-line EOF stop was a REGRESSION: forward()'s test runs once at the start, forw()'s runs per line, so both are needed. Later replaced again by the 3-row test in `1a5f5e6`/`640adf1`. | **OK, with a correction to our own history.** HEAD's forw() is the 3-row form (forwback.c:318-325). Our `1c61681` commit message cites `bc798f8` as if final — the FIX is sound because it was measured against the binary, but the citation is incomplete. Probed `e60346e`'s exact scenario (short file with tildes at bottom, then ESC-SPACE; also `G`+ESC-SPACE and ESC-b): all identical to og. |
+| F47 | `2937` `2a9cbf2` | The `|` command pipes just ONE line when the marked line is at the top of the screen, instead of the whole screen. | ? |
+| F48 | `2930` `2c112b7` | `-w`/`-W` must highlight the new line after BACKWARD movement too, not only forward (#729). | ? |
+| F49 | `2942` `28e950f` | `getmark('$')` must place the BEGINNING of the last line on the second-to-bottom row, not the file's end position on the bottom row — otherwise an extra tilde appears (#720). | ? |
+| F50 | `2917` `e1fdd8c` | Errors while opening the input must go to STDERR when stdout is redirected (`less fifo >out` must not write the message into `out`). | ? |
+| F51 | `2915`+`2916` | Skip the binary-file check when output is not a tty, but STILL call bin_file so `nread` is set, or `less /proc/x > o` yields an empty file. | ? |
+| F52 | `2912` `fe4fb0c` | HOME acts like `g`, END like `G`; shift-arrows act like ctrl-arrows; lesskey gains `\kE \kF \kH \kI \kM \kS`; lesskey gains the missing commands `forw-bell-hilite`, `goto-pos`, `osc8-jump`. | **PARTIAL** the `\kE/\kF/\kH/\kI/\kM/\kS` escapes are all in our table; the three lesskey COMMAND names and the HOME/END/shift-arrow bindings are unverified. |
+| F53 | `2911` `155bec4` | `scrsize()` falls back to fd 1 when the `TIOCGWINSZ` ioctl on fd 2 fails (#711). | ? |
+| F54 | `2928` `543eb06` | `-DT` formats tilde lines. | **OK** `color.ts:36` maps `T: 'tilde'`; og's `optfunc.c:669` `case 'T': return AT_COLOR_TILDE`. |
+| F55 | `2938` `b8f9444` | `--use-backslash` status messages were REVERSED (#735). | **OK** ours reads "Don't use backslash escaping..." then "Use backslash escaping...", matching og opttbl.c:551-552 in that order. |
+
+### Adjudicated without a flag
+`2949` read errors treated as EOF (pairs with F45) · `2947`/`2946`/`2945`/
+`2944`/`2943` V8 regexp.c internals — N/A, we use V8's own engine ·
+`2941` lessecho install path, N/A · `2939` numeric arg on m/M = F30, OK ·
+`2935` C portability, N/A · `2931` "Pattern not found" shows the pattern —
+ours does (`Pattern not found: ${pattern}`) · `2927`/`2926`/`2925` Windows SGR
+message noise and attrmode, N/A · `2924`/`2923`/`2921`/`2918` command-parser
+rewrites and lesskey overrun hardening — fold into F01/F20 · `2922` bc798f8,
+superseded by F46 · `2908` lesstest locale, N/A.
