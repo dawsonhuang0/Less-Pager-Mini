@@ -147,8 +147,20 @@ export function gateReleasedByWinch(): boolean {
   return gateKind === 'winch';
 }
 
+// where the last gate's message ended, og's error() col: the standout
+// widths (zero on any terminal whose sequences take no columns), the
+// message, and the whole "  (press RETURN)" array INCLUDING its
+// terminating NUL, which og counts with sizeof (output.c:730)
+let gateCol = 0;
+
+/** The column the last gate's message reached. */
+export function gateEndColumn(): number {
+  return gateCol;
+}
+
 export function gateReturn(message: string): void {
   gateKind = 'dismiss';
+  gateCol = message.length + '  (press RETURN)'.length + 1;
 
   if (!process.stdout.isTTY || !keyboard().isTTY) {
     // og's non-interactive error() prints plainly with no gate

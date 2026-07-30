@@ -731,6 +731,24 @@ function collapseNulRows(rows: string[]): string[] {
   return out;
 }
 
+/**
+ * og's squish_check (forwback.c:88), which error() calls before it
+ * writes anything: a squished first paint - a short file stuck to the
+ * bottom of the screen with nothing above it - is un-squished and
+ * repainted, so the message lands over a normal screen with the text
+ * at the top and tildes below it.
+ *
+ * render() does this itself for a message it is about to draw; this is
+ * for the gated messages, which write straight to the terminal and
+ * would otherwise leave the squished frame underneath.
+ */
+export function squishCheck(): void {
+  if (!mode.INIT || optOldBot()) return;
+
+  mode.INIT = false;
+  render(session.content, session.buffer);
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole

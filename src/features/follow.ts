@@ -8,9 +8,12 @@ import { optFollowName, optExitFollowOnClose } from "../options";
 
 import { POLLHUP_EXITS_F } from "../tty/platform";
 
+import { gateReturn, gateEndColumn } from "../tty/keyboard";
+
 import { session, deriveContent } from '../state/session';
 
-import { render, ringBell, calculateEOF } from '../helpers';
+import { render, ringBell, calculateEOF, squishCheck, markFullRepaint }
+  from '../helpers';
 
 import { lastLine, endPad } from './jumping';
 
@@ -254,6 +257,22 @@ export function beginFollow(kind: FollowKind): void {
   // og's forw_loop is a no-op on the help file
   if (mode.HELP || follow.active) return;
 
+  // og warns BEFORE forw_loop, and error() is a get_return gate: the
+  // screen holds where it is until RETURN, and only then does the
+  // jump-to-end happen. The script has already exited by now, so
+  // further changes to the real file will not be seen (command.c:1813)
+  if (files.list[files.index]?.alt) {
+    squishCheck();
+    gateReturn('Warning: command may not work correctly ' +
+      'when file is viewed via LESSOPEN');
+
+    // "Printing the message has probably scrolled the screen"
+    // (output.c:733): a message that reaches the right margin wraps,
+    // and og answers that with screen_trashed, so the repaint lands
+    // once the gate is dismissed rather than a scroll off the old rows
+    if (gateEndColumn() >= config.screenWidth) markFullRepaint();
+  }
+
   if (!startFollow(kind)) {
     ringBell();
     return;
@@ -262,13 +281,6 @@ export function beginFollow(kind: FollowKind): void {
   // og's forw_loop reads immediately: a completed pipe returns
   // its EOI before the wait prompt shows
   revealPipeEnd();
-
-  // og warns before following a $LESSOPEN replacement, and follows
-  // anyway; RETURN dismisses the warning during the wait
-  if (files.list[files.index]?.alt) {
-    search.message = 'Warning: command may not work correctly ' +
-      'when file is viewed via LESSOPEN';
-  }
 
   // og marks the pre-follow bottom line for -w before jumping
   if (optShowAttn()) {
