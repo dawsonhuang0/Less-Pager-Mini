@@ -163,8 +163,8 @@ So seed 4 is not a call-site bug: it is the position table half-adopted. Fix = e
 | F69 | `2817` `a1bce6a` | Long prompt and `=` show the column when shifted; `%c` becomes 1-BASED. | **OK** `case 'c': return out + (config.col + 1)` and LONG_PROTO carries `?c (column %c).`. |
 | F70 | `2794` `62d87f4` | `ESC-u` must NOT clear the compiled search string — only hide/unhide the hilites. | **OK** probed `/01⏎ ESC-u ESC-u n`: identical to og, so the pattern survives the toggle and `n` still steps. |
 | F71 | `2785` `57c2728` | Changing a STRING-valued option with `-` must print a confirmation, like numeric and boolean ones do. | **OK** probed `-Pfoo⏎`: identical to og. |
-| F72 | `2805` `dcc567a` | Line-number attribute becomes `use_color ? AT_COLOR_LINENUM : AT_BOLD` with color string `c*`, so `-DN` can REMOVE the bold. | ? |
-| F73 | `2787` `84b407f` | The `-j` ARGUMENT must be kept separate from the computed `jump_sline`, so a resize recomputes it from the original. | ? |
+| F72 | `2805` `dcc567a` | Line-number attribute becomes `use_color ? AT_COLOR_LINENUM : AT_BOLD` with color string `c*`, so `-DN` can REMOVE the bold. | **OK** with `--use-color -N -DNg` both emit `ESC[32m` and NO `ESC[1m`; `-DN+g` (add bold) also agrees. (First attempt used `-DNg` without `--use-color` and both correctly errored "Set --use-color before changing colors" — the resulting diff was a swallowed keystroke, not a colour difference.) |
+| F73 | `2787` `84b407f` | The `-j` ARGUMENT must be kept separate from the computed `jump_sline`, so a resize recomputes it from the original. | **OK** probed `-j.5` both orders — resize then search, and search then resize then `n`: identical to og, so the fractional argument survives and is recomputed at the new height. |
 | F74 | `2793` `bb7b893` | Opening an OSC 8 link by mouse click is disallowed under SECURE. | ? (mouse — blocked on the grouped-write harness) |
 | F75 | `2796` `3e88782` | `sindex_from_sline` clips to sc_height-1, never sc_height (the bottom line is the prompt). | **OK** our `jumpNear` uses `min(max(sline,1), window-1) - 1`. |
 
