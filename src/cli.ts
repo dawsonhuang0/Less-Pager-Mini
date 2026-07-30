@@ -10,7 +10,7 @@ import { openTtyKeyboard } from './tty/keyboard';
 
 import { printVersion } from './features/misc';
 
-import { closeAlt, files as fileList, initFiles, openForCat }
+import { closeAlt, errorText, files as fileList, initFiles, openForCat }
   from './features/files';
 
 import {
@@ -160,29 +160,56 @@ async function main(): Promise<void> {
       initFiles(files);
       let opened = 0;
 
+      // og runs `set_output(1, TRUE)` only AFTER edit_first() finds a
+      // file it can open (main.c:413, moved there by e1fdd8c2). Until
+      // then its output fd is still stderr, so the errors from every
+      // name tried before the first success land on stderr - that is
+      // what keeps "less fifo >out" from writing the complaint INTO
+      // out. Once a file has opened, later errors go to stdout with
+      // the text. Verified against the binary both ways round.
+      const reportOpenError = (message: string): void => {
+        const stream = opened === 0 ? process.stderr : process.stdout;
+        stream.write(message + '\n');
+      };
+
       for (let i = 0; i < files.length; i++) {
         const source = await openForCat(i, process.stdout);
 
         if (!source) {
           // og's edit_ifile error()s and edit_istep moves on to the
           // next name; only a list where NOTHING opens is an error
-          process.stderr.write((search.message || files[i]) + '\n');
+          reportOpenError(search.message || files[i]);
           search.message = '';
           continue;
         }
 
-        opened++;
-
         // a pipe preprocessor has already written its own bytes
         if (source.path !== undefined) {
           const from = source.path;
-          await new Promise<void>((res, rej) => {
-            const rs = fs.createReadStream(from);
-            rs.on('error', rej);
-            rs.on('end', res);
-            rs.pipe(process.stdout, { end: false });
-          });
+
+          try {
+            await new Promise<void>((res, rej) => {
+              const rs = fs.createReadStream(from);
+              rs.on('error', rej);
+              rs.on('end', res);
+              rs.pipe(process.stdout, { end: false });
+            });
+          } catch (error) {
+            // bad_file cannot see this one: stat SUCCEEDS on a file
+            // whose mode denies reading, so og finds out at the open
+            // and reports errno_message(filename) - "%s: %s" with
+            // strerror (os.c:450, used at edit.c:558) - then edit_istep
+            // moves to the next name. Letting the reject reach the
+            // top-level handler printed node's own "Error: EACCES:
+            // permission denied, open 'x'" and abandoned the rest of
+            // the list.
+            reportOpenError(`${files[i]}: ${errorText(error)}`);
+            closeAlt(fileList.list[i]);
+            continue;
+          }
         }
+
+        opened++;
 
         // leaving the file runs $LESSCLOSE, like close_file; quit()
         // does the same for the last one through edit(NULL)
