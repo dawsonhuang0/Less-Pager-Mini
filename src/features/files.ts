@@ -255,9 +255,13 @@ function statGuard(path: string): boolean {
     return false;
   }
 
-  // og refuses terminal devices without -f (edit.c's isatty check)
-  if (stat.isCharacterDevice() && !opt.forceOpen) {
-    search.message = `${path} is a terminal (use -f to open it)`;
+  // bad_file's second guard is S_ISREG, not isatty: EVERY non-regular
+  // file is refused with the same message - devices, fifos, sockets
+  // alike (filename.c:1119). og's "is a terminal" message belongs to a
+  // later, different check (edit.c:582), which only ever sees a
+  // descriptor bad_file did not screen: standard input
+  if (!stat.isFile() && !opt.forceOpen) {
+    search.message = `${path} is not a regular file (use -f to see it)`;
     return false;
   }
 
