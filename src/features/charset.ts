@@ -281,6 +281,32 @@ export function initCharset(): void {
   useCharset('utf-8');
 }
 
+/**
+ * og's omit table (omit.uni): characters DELETED from the output
+ * rather than drawn, "so that we never send them to the terminal.
+ * Terminals do not display these characters consistently, so the
+ * screen content cannot be known after printing them" (023bc640).
+ * 4ad1ce1 then moved emoji modifiers here from the hex display.
+ */
+const OMIT_RANGES: [number, number][] = [
+  [0x00ad, 0x00ad],     // SOFT HYPHEN
+  [0x200d, 0x200d],     // ZERO WIDTH JOINER
+  [0xfe00, 0xfe0f],     // variation selectors
+  [0x1f3fb, 0x1f3ff],   // skin tone modifiers
+  [0x1f9b0, 0x1f9b3],   // hair components
+  [0xe0100, 0xe01ef],   // variation selectors supplement
+];
+
+/** True for a character og omits from the display, like is_omit_char. */
+export function omitChar(code: number): boolean {
+  for (const [lo, hi] of OMIT_RANGES) {
+    if (code >= lo && code <= hi) return true;
+    if (code < lo) break;
+  }
+
+  return false;
+}
+
 /** True for a binary byte in the current charset, like binary_char. */
 export const binaryByte = (byte: number): boolean =>
   byte > 255 || (chardef[byte] & IS_BINARY) !== 0;

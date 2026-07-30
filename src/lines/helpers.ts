@@ -18,7 +18,7 @@ import {
 
 import { colored, attrText } from '../features/color';
 
-import { rawByteOf, binByteText, utfBinText, ubinChar }
+import { rawByteOf, binByteText, utfBinText, ubinChar, omitChar }
   from '../features/charset';
 
 import {
@@ -59,9 +59,18 @@ export function maxSubRow(line: string): number {
 }
 
 // controls, raw-byte markers and unicode binaries all transform
-const CONTROL_REGEX =
-  // eslint-disable-next-line no-control-regex
-  /[\x00-\x08\x0B-\x1F\x7F\t\uE000-\uE0FF\uFFFD\p{Cn}\p{Co}\p{Cs}]/u;
+// og's omit set (U+00AD, U+200D, variation selectors, skin-tone and
+// hair modifiers) is \p{Cf}/\p{Sk}, none of which the classes below
+// cover - so a line carrying only those skipped the transform entirely
+// and shipped them straight to the terminal. They are alternated
+// rather than put in the class: a lone ZWJ or variation selector
+// inside a character class reads as a misleading combined sequence.
+const CONTROL_REGEX = new RegExp(
+  '[\\x00-\\x08\\x0B-\\x1F\\x7F\\t\\uE000-\\uE0FF\\uFFFD\\p{Cn}\\p{Co}\\p{Cs}]' +
+  '|\\u00AD|\\u200D|[\\uFE00-\\uFE0F]' +
+  '|[\\u{1F3FB}-\\u{1F3FF}]|[\\u{1F9B0}-\\u{1F9B3}]|[\\u{E0100}-\\u{E01EF}]',
+  'u'
+);
 
 
 // binary data repeats the same control chars and raw bytes millions
@@ -514,6 +523,28 @@ function transformLine(line: string): string {
       col += entry[1];
       i++;
       continue;
+    }
+
+    // og's is_omit_char (line.c:1373): these are DROPPED entirely, so
+    // they never reach the terminal - only -U (BS_CONTROL) shows them,
+    // as the hex form. A ZWJ left in the stream joins emoji into one
+    // glyph, which is exactly the unpredictable screen content og is
+    // avoiding.
+    if (char >= '\x80') {
+      const point = line.codePointAt(i) ?? 0;
+
+      if (omitChar(point)) {
+        const key = String.fromCodePoint(point);
+
+        if (optBsMode() === 2) {
+          const text = utfBinText(point);
+          out += text;
+          col += text.replace(STYLE_REGEX_G, '').length;
+        }
+
+        i += key.length;
+        continue;
+      }
     }
 
     // a unicode char with no sane display uses $LESSUTFBINFMT
