@@ -796,6 +796,36 @@ export function renderBare(rawContent: string[], buffer: string[]): void {
   }
 }
 
+/**
+ * og's repaint_hilite (search.c:276): every row redrawn IN PLACE -
+ * goto_line, clear_eol, put_line - and then lower_left. It addresses
+ * each row rather than homing once, which matters when a row is wider
+ * than the screen: the terminal wraps it and the following addressed
+ * rows land INSIDE the wrapped text, which is exactly the interleaving
+ * og produces under -r.
+ */
+export function renderHiliteRepaint(
+  rawContent: string[],
+  buffer: string[]
+): void {
+  const rows = screenRows(rawContent, buffer);
+  let out = '';
+
+  for (let i = 0; i < rows.length - 1; i++) {
+    out += CURSOR_TO(i + 1, 1) + CLEAR_LINE + rows[i] + '\n';
+  }
+
+  out += CURSOR_TO(rows.length, 1);
+  process.stdout.write(out);
+
+  // these rows ARE what the screen now shows, so the next paint may
+  // diff against them - og's own table is equally unbothered that the
+  // terminal wrapped a row, and a reset here would cost a full repaint
+  // og never makes
+  prevRows = rows;
+  prevCursorCol = -1;
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole

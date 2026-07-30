@@ -2,6 +2,10 @@ import fs from 'fs';
 
 import { isWindows } from '../tty/platform';
 
+import { onHilitePaint, setHiliteHidden } from '../features/searching';
+import { squishCheck, renderHiliteRepaint } from '../helpers';
+import { fullScreenWidth } from '../options/state';
+
 import { lgetenv, screenFillGrace } from '../startup/environment';
 
 import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
@@ -626,6 +630,28 @@ export async function contentPager(
   session.pendingFirstCmds = startup.firstCmds;
   const everyCmd = getFirstCmd();
   if (everyCmd) session.pendingFirstCmds.push(everyCmd);
+
+  // og paints TWICE before a new pattern's search runs -
+  // repaint_hilite(FALSE) to erase what is on screen, then
+  // hilite_screen() to paint the new matches (search.c:2137, :2147).
+  // Repainting the same rows is invisible until one of them is WIDER
+  // than the screen, which only -r allows: the terminal wraps it and
+  // each paint scrolls, so the count decides where the text lands
+  onHilitePaint((content: string[]) => {
+    if (!content.some((line: string) =>
+      visualWidth(line) > fullScreenWidth())) return;
+
+    // repaint_hilite opens with `if (squished) repaint()`, and a file
+    // whose whole content is one row IS squished - so the erase pass
+    // costs a paint before it even starts
+    squishCheck();
+
+    setHiliteHidden(true);
+    renderHiliteRepaint(content, session.buffer);
+
+    setHiliteHidden(false);
+    renderHiliteRepaint(content, session.buffer);
+  });
 
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);

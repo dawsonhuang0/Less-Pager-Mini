@@ -551,7 +551,18 @@ export function execSearch(
       // whose first act is "if (squished) repaint()" - which is how a
       // short first screen fills with tildes the moment a search
       // runs, whether or not the match moves the view
-      if (optHiliteSearch() || optStatusCol()) unsquish();
+      if (optHiliteSearch() || optStatusCol()) {
+
+        // and og does not just un-squish here, it PAINTS twice before
+        // the search runs: repaint_hilite(FALSE) erases what is on
+        // screen, then hilite_screen() paints the new pattern's
+        // on-screen matches. Both redraw every row. Repainting the
+        // same rows twice is invisible - until a row is wider than
+        // the screen, which only -r allows, and each paint physically
+        // scrolls the terminal
+        hilitePasses(content);
+        unsquish();
+      }
     } else if (!search.regex) {
       search.message = 'No previous regular expression';
       return;
@@ -1789,6 +1800,29 @@ function searchStartPos(
  *  (search.c:281). */
 function unsquish(): void {
   if (mode.INIT) mode.INIT = false;
+}
+
+/**
+ * og's two pre-search paints (search.c:2137 and :2147), which happen
+ * whether the search then succeeds or fails.
+ *
+ * Only worth emitting when a row can be wider than the screen: that is
+ * the one case where painting the same rows again is not a no-op,
+ * because the terminal wraps the row and scrolls everything up.
+ */
+function hilitePasses(content: string[]): void {
+  if (optCtldisp() !== 1) return;
+  hilitePaint?.(content);
+}
+
+// the renderer lives on the other side of an import cycle
+let hilitePaint: ((content: string[]) => void) | null = null;
+
+/** Registers og's pre-search repaint pair. */
+export function onHilitePaint(
+  fn: ((content: string[]) => void) | null
+): void {
+  hilitePaint = fn;
 }
 
 function jumpTo(content: string[], row: number, sub: number = 0): void {
