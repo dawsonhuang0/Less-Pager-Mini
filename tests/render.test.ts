@@ -70,10 +70,13 @@ describe('render', () => {
     config.row = 11;
     render(content, []);
 
-    // one line forward: scroll up 1, redraw only the exposed rows
-    expect(writes[1]).toContain('\x1b[1S');
+    // one line forward: og asks the terminal for no scroll at all -
+    // forw() clears the prompt row, writes the new line THERE, and
+    // the newline ending it scrolls the screen (forwback.c). So the
+    // frame is clear_bot + the exposed line + its newline
+    expect(writes[1]).toContain('\r\x1b[Kline 33\n');
+    expect(writes[1]).not.toContain('\x1b[1S');
     expect(writes[1]).not.toContain('\x1b[H\x1b[K');
-    expect(writes[1]).toContain('line 33');
     expect(writes[1]).not.toContain('line 12\n');
   });
 
@@ -84,9 +87,11 @@ describe('render', () => {
     config.row = 8;
     render(content, []);
 
-    expect(writes[1]).toContain('\x1b[2T');
-    expect(writes[1]).toContain('line 8');
-    expect(writes[1]).toContain('line 9');
+    // back() is the mirror: home, REVERSE INDEX (which scrolls the
+    // screen down), the line, its newline - newest row first
+    expect(writes[1]).toContain('\x1b[H\x1bMline 9\n');
+    expect(writes[1]).toContain('\x1b[H\x1bMline 8\n');
+    expect(writes[1]).not.toContain('\x1b[2T');
     expect(writes[1]).not.toContain('line 20');
   });
 
@@ -223,7 +228,9 @@ describe('render', () => {
     config.row = 11;
     render(content, []);
 
-    expect(writes[1]).toContain('\x1b[24;2H');
+    // a scroll frame parks nothing: og's own newline has left the
+    // cursor on the prompt row, right after the prompt it just wrote
+    expect(writes[1].endsWith(':\x1b[K\x1b[?2026l')).toBe(true);
   });
 });
 
@@ -281,7 +288,7 @@ describe('$LESS_LINES gives up og full_screen', () => {
     config.row = 11;
     render(content, []);
 
-    expect(writes[1]).toContain('\x1b[1S');
+    expect(writes[1]).toContain('\r\x1b[Kline 33\n');
   });
 });
 

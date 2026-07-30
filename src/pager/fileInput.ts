@@ -11,6 +11,7 @@ import {
   dirtyBottomRow,
   markPosClear,
   render,
+  renderBare,
   ringBell,
 } from '../helpers';
 
@@ -775,8 +776,10 @@ export class FileInput implements PagerInput {
     // rows up, currline(BOTTOM) runs after, and the prompt comes
     // last — so the screen always shows the move immediately, with
     // a blank command line while the count runs
-    render(session.content, session.buffer);
-    fs.writeSync(1, '\r' + CLEAR_LINE);
+    // bare: og has not written a prompt at this point either, so
+    // painting one here only to blank it on the next line was two
+    // writes and a flicker that og never emits
+    renderBare(session.content, session.buffer);
 
     let retriedAfterEarlyInterrupt = false;
 

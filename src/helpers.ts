@@ -85,8 +85,6 @@ import {
   TERMINAL_SUSPEND,
   TERMINAL_RESUME,
   VISUAL_BELL,
-  SCROLL_UP,
-  SCROLL_DOWN,
   CURSOR_TO,
   ON_ALTERNATE_SCREEN
 } from './state/constants';
@@ -753,6 +751,24 @@ export function squishCheck(): void {
   render(session.content, session.buffer);
 }
 
+// og's forw()/back() paint their rows and return; currline(BOTTOM)
+// and then prompt() come after, so the command line is BLANK for the
+// whole line-number walk and the prompt is written once, at the end.
+// A caller that has to paint before that walk asks for the bare frame
+// rather than painting a prompt it is about to erase.
+let bareFrame = false;
+
+/** Paints the content with no prompt row, like og mid-command. */
+export function renderBare(rawContent: string[], buffer: string[]): void {
+  bareFrame = true;
+
+  try {
+    render(rawContent, buffer);
+  } finally {
+    bareFrame = false;
+  }
+}
+
 export function render(rawContent: string[], buffer: string[]): void {
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole
@@ -766,9 +782,9 @@ export function render(rawContent: string[], buffer: string[]): void {
   // screenful or the learned length — or as the wait message when
   // the read stalls (pipeFilling(), inlined: importing
   // features/pipe here would run its module body too early)
-  const filling = session.pipeStream !== null &&
+  const filling = bareFrame || (session.pipeStream !== null &&
     session.pipeFirstFill && !session.pipeProbing && !sizeIsKnown() &&
-    !session.pipeWaiting;
+    !session.pipeWaiting);
 
   // getPrompt below re-arms this when the frame bottoms in the true
   // prompt; a fill frame (no prompt row at all) must not inherit it
@@ -1595,9 +1611,6 @@ export function screenRows(
   return content.join('\n').split('\n');
 }
 
-const drawRow = (rows: string[], row: number): string =>
-  CURSOR_TO(row + 1, 1) + CLEAR_LINE + rows[row];
-
 // park the cursor after the prompt row's content, like less's
 // command-line position at the lower left; an open command buffer
 // places it at the editing position instead
@@ -1684,7 +1697,7 @@ function squishFrame(rows: string[], blanks: number): string {
   const bot = content.length ? '' : clearBot();
 
   return syncOn() + '\r' +
-    content.map(row => frameRowEnd(row) ? row + '\r\n' : row).join('') +
+    content.map(row => frameRowEnd(row) ? row + '\n' : row).join('') +
     bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
 }
 
@@ -1767,9 +1780,21 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     if (k < n - 1 && rows[0] === prev[k] && shifted(rows, prev, k)) {
       if (optForwScroll() >= 0 && k > optForwScroll()) return null;
 
-      let frame = syncOn() + SCROLL_UP(k);
-      for (let r = n - 1 - k; r < n; r++) frame += drawRow(rows, r);
-      return frame + parkCursor(rows) + syncOff();
+      // og never asks the terminal to scroll: forw() writes each new
+      // line ON the bottom line - the prompt row, cleared by the
+      // deferred clear_bot the first putchr triggers - and the
+      // NEWLINE ending it scrolls the screen. Then prompt() writes
+      // the prompt where the cursor already sits. Byte for byte:
+      //   \r ESC[K  (line \r\n) x k  prompt ESC[K
+      let frame = syncOn() + clearBot();
+
+      for (let r = n - 1 - k; r < n - 1; r++) frame += rows[r] + '\n';
+
+      // a bare frame's bottom row is the blank command line, and the
+      // row the scroll just brought in is blank already - og writes
+      // nothing for it
+      const bottom = rows[n - 1];
+      return frame + (bottom ? bottom + tailClear(bottom) : '') + syncOff();
     }
 
     return null;
@@ -1782,9 +1807,23 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
   if (k < n - 1 && rows[k] === prev[0] && shifted(prev, rows, k)) {
     if (optBackScroll() >= 0 && k > optBackScroll()) return null;
 
-    let frame = syncOn() + SCROLL_DOWN(k);
-    for (let r = 0; r < k; r++) frame += drawRow(rows, r);
-    return frame + drawRow(rows, n - 1) + parkCursor(rows) + syncOff();
+    // back() is the mirror: home(), add_line() - a REVERSE INDEX,
+    // which scrolls the screen down - then the line and its newline,
+    // once per exposed row, newest first. Afterwards the cursor is
+    // mid-screen, so og addresses the bottom row before its prompt.
+    //   \r ESC[K  (ESC[H ESC M line \r\n) x k  ESC[24;1H \r ESC[K
+    //   prompt ESC[K
+    let frame = syncOn() + clearBot();
+
+    for (let r = k - 1; r >= 0; r--) {
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + '\n';
+    }
+
+    const bottom = rows[n - 1];
+    if (!bottom) return frame + CURSOR_TO(promptRow(rows), 1) + syncOff();
+
+    return frame + CURSOR_TO(promptRow(rows), 1) + clearBot() +
+      bottom + tailClear(bottom) + syncOff();
   }
 
   return null;
