@@ -92,7 +92,7 @@ details of --hilite-target, folded into F33.
 | F48 | `2930` `2c112b7` | `-w`/`-W` must highlight the new line after BACKWARD movement too, not only forward (#729). | ? |
 | F49 | `2942` `28e950f` | `getmark('$')` must place the BEGINNING of the last line on the second-to-bottom row, not the file's end position on the bottom row — otherwise an extra tilde appears (#720). | ? |
 | F50 | `2917` `e1fdd8c` | Errors while opening the input must go to STDERR when stdout is redirected (`less fifo >out` must not write the message into `out`). | **FIX** two bugs. (1) A file whose stat succeeds but whose OPEN fails (mode 000) escaped as node's raw `Error: EACCES: permission denied, open 'x'` from the top-level handler, abandoning the rest of the list; og reports `errno_message()` = `"name: strerror"` and moves on. (2) The stream is positional: og moves `set_output(1, TRUE)` to AFTER `edit_first()` succeeds, so errors before the first successful open go to STDERR and later ones go to STDOUT. Verified against the binary in all four orderings (`noperm`, `noperm good1`, `good1 noperm`, `good1 noperm good2`) — text, stream, ordering and exit code all match. |
-| F51 | `2915`+`2916` | Skip the binary-file check when output is not a tty, but STILL call bin_file so `nread` is set, or `less /proc/x > o` yields an empty file. | ? |
+| F51 | `2915`+`2916` | Skip the binary-file check when output is not a tty, but STILL call bin_file so `nread` is set, or `less /proc/x > o` yields an empty file. | **OK** catted a binary file with stdout redirected: identical bytes to og, no prompt, rc=0. The `/proc` half is Linux-only and untestable here, but our cat path streams to EOF and never consults the stat size, so it cannot hit that failure. Note og's fix is a one-token reorder — `bin_file(f,&nread) && is_tty` — so bin_file always runs for its side effect. |
 | F52 | `2912` `fe4fb0c` | HOME acts like `g`, END like `G`; shift-arrows act like ctrl-arrows; lesskey gains `\kE \kF \kH \kI \kM \kS`; lesskey gains the missing commands `forw-bell-hilite`, `goto-pos`, `osc8-jump`. | **PARTIAL** the `\kE/\kF/\kH/\kI/\kM/\kS` escapes are all in our table; the three lesskey COMMAND names and the HOME/END/shift-arrow bindings are unverified. |
 | F53 | `2911` `155bec4` | `scrsize()` falls back to fd 1 when the `TIOCGWINSZ` ioctl on fd 2 fails (#711). | ? |
 | F54 | `2928` `543eb06` | `-DT` formats tilde lines. | **OK** `color.ts:36` maps `T: 'tilde'`; og's `optfunc.c:669` `case 'T': return AT_COLOR_TILDE`. |
@@ -107,3 +107,23 @@ ours does (`Pattern not found: ${pattern}`) · `2927`/`2926`/`2925` Windows SGR
 message noise and attrmode, N/A · `2924`/`2923`/`2921`/`2918` command-parser
 rewrites and lesskey overrun hardening — fold into F01/F20 · `2922` bc798f8,
 superseded by F46 · `2908` lesstest locale, N/A.
+
+## From commits 2841-2907 (v702..v703 era)
+
+| # | commit | what the message claims | status |
+|---|---|---|---|
+| F56 | `038ccd9` [2907] | `bin_file` must stop its binary check 4 bytes before the end of its 256-byte buffer, or a truncated UTF-8 sequence reads as malformed. | ? |
+| F57 | `18db5ae` [2905] | An EMPTY terminfo capability is treated as undefined (#710). | ? |
+| F58 | `3eb4d40` [2902] | `-z` may take a NEGATIVE value; the blanket ban on negative numeric options was wrong, hence `O_NEGOK`. | **OK** `-z-3` and `-z3` both accepted, matching og. |
+| F59 | `e65b895` [2900] | Clear `ICRNL`/`INLCR` so a lesskey file can give CR and NL different meanings (#703). | ? |
+| F60 | `2db32ef` [2854] | Only `^C`/`^X` may interrupt "Waiting for data" — allowing ANY key meant type-ahead cancelled operations. This REVERTS `23ff6a42`. | ? |
+| F61 | `d70ac51` [2848] | Option errors name the option with its `--` prefix: `There is no --xxx option`, `The --xxx option should not be followed by =`. | **FIX** we BUILT both messages correctly and never printed them when catting — `printStartupError` wrote unconditionally to stdout while og's `error()` uses the current output fd, which is stderr until `set_output(1)`. Verified all four cases against the binary. |
+| F62 | `0c707c9` [2846] | Incremental search must not jump back to the start when that position is NULL_POSITION (a `--pattern` search before the screen exists). | ? |
+| F63 | `513a436` [2844] | `SIGINT` must be able to interrupt the FIRST read from a pipe, by making the handler call `have_read_data()`. | ? |
+
+### Adjudicated without a flag
+`2901` lesstest lesskey isolation, N/A · `2889`/`2868`/`2867`/`2864` C
+type/build cleanups, N/A · `2878`/`2877`/`2876`/`2872`/`2849` Windows console
+resizing and non-tty output, N/A · `2851` term_init_ever crash in --version,
+C-specific · `2847`/`2845`/`2841` the deferred-terminal-init experiment, which
+og REVERTED in 2845 — do not port.

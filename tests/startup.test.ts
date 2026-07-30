@@ -18,6 +18,13 @@ import {
 const stdoutWrite = vi.spyOn(process.stdout, 'write')
   .mockImplementation(() => true);
 
+// og's error() prints through the CURRENT output fd, and main switches
+// that to stdout only once edit_first() has opened a file (main.c:413).
+// Under vitest stdout is not a tty, so a scan error goes to stderr -
+// which is exactly what keeps a diagnostic out of redirected data.
+const stderrWrite = vi.spyOn(process.stderr, 'write')
+  .mockImplementation(() => true);
+
 const ENV_NAMES = [
   'LESS',
   'MORE',
@@ -43,6 +50,7 @@ beforeEach(() => {
   process.env.TERM = 'xterm-256color';
 
   stdoutWrite.mockClear();
+  stderrWrite.mockClear();
   search.message = '';
   search.messageQueue.length = 0;
   startupErrors.count = 0;
@@ -118,7 +126,7 @@ describe('startup option orchestration', () => {
 
     startupInit([]);
 
-    expect(stdoutWrite.mock.calls.map(call => call[0])).toEqual([
+    expect(stderrWrite.mock.calls.map(call => call[0])).toEqual([
       'There is no -Y option ("less --help" for help)\n',
       'Value is required after -P (--prompt)\n',
     ]);
@@ -181,13 +189,39 @@ describe('startup option orchestration', () => {
 });
 
 describe('pre-screen error gate helpers', () => {
-  it('prints one startup error per call', () => {
+  it('prints one startup error per call, on og\'s output fd', () => {
     printStartupError('first');
     printStartupError('second');
 
-    expect(stdoutWrite.mock.calls.map(call => call[0]))
+    // stdout is not a tty here, so these are the catting case: og has
+    // not called set_output(1) yet and the messages land on stderr
+    expect(stderrWrite.mock.calls.map(call => call[0]))
       .toEqual(['first\n', 'second\n']);
+    expect(stdoutWrite).not.toHaveBeenCalled();
     expect(startupErrors.count).toBe(2);
+
+    // ...and on the screen when interactive
+    const descriptor =
+      Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true, configurable: true
+    });
+
+    try {
+      stderrWrite.mockClear();
+      printStartupError('third');
+
+      expect(stdoutWrite.mock.calls.map(call => call[0]))
+        .toEqual(['third\n']);
+      expect(stderrWrite).not.toHaveBeenCalled();
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(process.stdout, 'isTTY', descriptor);
+      } else {
+        delete (process.stdout as { isTTY?: boolean }).isTTY;
+      }
+    }
   });
 
   it('takes one key and pushes the remaining bytes back', async () => {

@@ -132,7 +132,14 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
 
 
 export function printStartupError(message: string): void {
-  process.stdout.write(message + '\n');
+  // og's error() prints through the CURRENT output fd, and main only
+  // switches that to stdout once edit_first() has opened a file
+  // (main.c:413). A scan error therefore lands on stderr whenever we
+  // are catting to a pipe - which is exactly what keeps a diagnostic
+  // out of the redirected data - and on the screen when interactive.
+  const stream = process.stdout.isTTY ? process.stdout : process.stderr;
+
+  stream.write(message + '\n');
   startupErrors.count++;
 }
 
