@@ -151,6 +151,31 @@ async function filePager(filePaths: string[]): Promise<void> {
 
   initFiles(filePaths);
 
+  // og's edit_ifile takes the name "-" from fd0 and keeps it open
+  // (edit.c:516). Ours needs it SEEKABLE to run the block engine, so
+  // standard input spools to a private file once, up front, and the
+  // entry points at it - the same trick pagerPipe already uses for a
+  // bare `cmd | lmn`, now available to a name in a list
+  const dash = files.list.find(entry => entry.path === '-');
+  let dashSpool: PipeSpool | null = null;
+
+  if (dash && !process.stdin.isTTY) {
+    dashSpool = await PipeSpool.create(process.stdin);
+    dash.spoolPath = dashSpool.path;
+    dash.sizeKnown = false;
+    dash.streaming = true;
+  }
+
+  try {
+    return await filePagerBody(startup);
+  } finally {
+    dashSpool?.close();
+  }
+}
+
+async function filePagerBody(
+  startup: ReturnType<typeof startupInit>
+): Promise<void> {
   if (!lgetenv('LESSOPEN')) {
     const streamed = await blockFirstFile(startup);
     if (streamed) return;
@@ -197,10 +222,12 @@ async function blockFirstFile(
   startup: ReturnType<typeof startupInit>
 ): Promise<boolean> {
   const entry = files.list[0];
+  const path = entry.path === '-' ? entry.spoolPath : entry.path;
+  if (path === undefined) return false;
 
   let stat;
   try {
-    stat = fs.statSync(entry.path);
+    stat = fs.statSync(path);
   } catch {
     return false;
   }
@@ -210,7 +237,7 @@ async function blockFirstFile(
   let bf: BlockFile;
 
   try {
-    bf = new BlockFile(entry.path);
+    bf = new BlockFile(path);
   } catch {
     return false;
   }

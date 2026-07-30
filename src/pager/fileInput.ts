@@ -1009,15 +1009,20 @@ export class FileInput implements PagerInput {
   private loadSourceFile(index: number): string[] | null | undefined {
     this.sourceActive();
     const entry = files.list[index];
-    if (!entry || entry.path === '-' || entry.lines || entry.alt) {
-      return undefined;
-    }
+    if (!entry || entry.lines || entry.alt) return undefined;
+
+    // "-" is standard input, which the session spooled to a private
+    // file so it is seekable; everything below then treats it as the
+    // ordinary growing file it now is (og keeps fd0 and buffers it in
+    // ch - the spool is our ch)
+    const path = entry.path === '-' ? entry.spoolPath : entry.path;
+    if (path === undefined) return undefined;
 
     if (this.pending?.index === index) return this.pending.lines;
 
     let stat: fs.Stats;
     try {
-      stat = fs.statSync(entry.path);
+      stat = fs.statSync(path);
     } catch {
       return undefined;
     }
@@ -1026,7 +1031,7 @@ export class FileInput implements PagerInput {
 
     let next: BlockFile;
     try {
-      next = new BlockFile(entry.path);
+      next = new BlockFile(path);
     } catch {
       return undefined;
     }

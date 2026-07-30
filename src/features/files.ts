@@ -76,6 +76,11 @@ interface FileEntry {
   /** A failed pipe preprocessor's message, reported at close like
    *  og's close_altfile (edit.c:288). */
   preprocError?: string;
+  /** Where the "-" entry's spooled standard input lives. og keeps fd0
+   *  open with CH_KEEPOPEN and buffers it in ch; the spool is our ch,
+   *  and it makes the entry an ordinary growing file to everything
+   *  downstream. */
+  spoolPath?: string;
 }
 
 /**
