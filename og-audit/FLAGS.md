@@ -173,3 +173,21 @@ So seed 4 is not a call-site bug: it is the position table half-adopted. Fix = e
 terminal-init experiment and its seven follow-up repairs — og REVERTED the
 whole line in `2845`. Do not port. · `2804` rename, N/A · `2821` LESSNOCONFIG,
 we have it · `2783` negative numeric options, see F58 · `2789` lesstest, N/A.
+
+## From commits 2712-2782 (v700..v701 era)
+
+| # | commit | claim | status |
+|---|---|---|---|
+| F76 | `2760` `db2e844` | og REMOVES replace mode and its commands — "too complicated and risky for a feature that seems to be very rarely used and has never been requested". | **OK by absence** we never had it. Our only `'overwrite'` is the `-o` log-file prompt; og's cmdbuf.c has no `replace` at HEAD either. A chronological port would have built this and then deleted it. |
+| F77 | `2713`+`2722` | HOME becomes `ESC-{` (beginning of LINE), END `ESC-}`, with ctrl/shift variants. | **N/A — SUPERSEDED** by `2912` (`fe4fb0c`), which reverts HOME to `g` and END to `G`. Do not port `2713`. |
+| F78 | `2912` `fe4fb0c` | HOME acts like `g`, END like `G`. | **OK against the SPEC, unverifiable here.** Our pager takes `ESC[H` to the file start, which is `g`. The binary cannot be probed for it: the harness passes no `$TERM`, so og's `setupterm` fails and it has NO special-key bindings — it read `ESC`, `[`, `H` as three keys and opened the HELP screen. Same class of limitation as the mouse sequences. |
+| F79 | `2762` `02858e1` | Marks already in the history file must be written back on exit even WITHOUT `--save-marks`; the option only governs whether NEW marks are saved. | ? |
+| F80 | `2746` `ceac046` | `ESC-u` with an OSC 8 highlight but no search pattern must clear the highlight, update the display, and NOT say "No previous regular expression". | ? |
+| F81 | `2712` `342a086` | `--incsearch` returning to the start line on a non-match must restore the horizontal COLUMN too, not just the line. | ? |
+| F82 | `2782` `cb0d379` | A NEGATIVE `-j` argument is normalized in calc_jump_sline, plus a check that jump_sline stays on screen. | ? |
+
+### Adjudicated without a flag
+`2775` ignaw -> defer_wrap: we already use DEFER_WRAP with og's two-meaning
+`xn` reading · `2779` --form-feed must not stop while repainting · `2769`/`2771`
+Lit indicator · `2766`/`2717`/`2716`/`2715`/`2756` internal/valgrind/compiler
+fixes, N/A · `2732`/`2728`/`2727` man-page formatting, N/A.
