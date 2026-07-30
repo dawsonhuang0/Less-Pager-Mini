@@ -2354,10 +2354,14 @@ function cleanUp(): void {
   // prompt: the quit's clear_bot is that output (output.c:496)
   process.stdout.write(eprPrefix());
 
-  // og's quit() clear_bots the prompt line before deinit; on the
-  // main screen (-X) that's visible: the ":" clears and the shell
-  // prompt overwrites it (--old-bot jumps to the true bottom first)
-  if (!mode.DUMB && optNoInit()) process.stdout.write(clearBot());
+  // og's quit() clear_bots the prompt line before deinit whenever the
+  // session is interactive - `if (interactive()) clear_bot()`
+  // (main.c), with no test for which screen we are on. We used to do
+  // it only under -X, on the reasoning that the alternate screen is
+  // about to vanish anyway, but og's bytes carry it either way and a
+  // capture sees it: the ":" prompt survived into the restored screen.
+  // A dumb terminal has no clear_eol and gets the bare CR below
+  if (!mode.DUMB) process.stdout.write(clearBot());
 
   // --emouse enables tracking without --mouse, so check both;
   // these strings are hardcoded like og's, so dumb gets them too
