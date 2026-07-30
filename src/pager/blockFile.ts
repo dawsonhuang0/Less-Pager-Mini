@@ -43,6 +43,22 @@ export class BlockFile {
   }
 
   /**
+   * Whether a read at `pos` really has nothing left, like og's ch_get
+   * reaching the cached length: "Apparently at end of file. Double-check
+   * the file size in case it has changed" (ch.c:236), and only then
+   * returning EOI.
+   *
+   * This is why og needs no command to follow a growing file - an
+   * ordinary forward scroll past the old end picks up whatever has
+   * been appended. The stat costs nothing until a read is already at
+   * the end, which is exactly when og pays for it too.
+   */
+  atEnd(pos: number): boolean {
+    if (pos < this.size) return false;
+    return this.refreshSize() <= pos;
+  }
+
+  /**
    * The maximum resident blocks: -b caps the pool like og's bufspace
    * (in KB); -B off pins the cap, on lets it grow to a sane ceiling.
    */

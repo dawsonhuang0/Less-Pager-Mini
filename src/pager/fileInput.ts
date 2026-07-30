@@ -457,6 +457,14 @@ export class FileInput implements PagerInput {
           // tilde rows that entry is NULL_POSITION and no bell is
           // rung, even though the end is plainly visible. The screen
           // must be FULL as well as at the end.
+          // og's jump_forw calls ch_end_seek BEFORE the test below
+          // (jump.c:37), and for a seekable file that re-stats the
+          // file: end_pos is the length NOW. A file that grew since
+          // the last paint therefore MOVES rather than belling, and
+          // the end it moves to is the new one
+          const wasSize = this.bf.size;
+          if (this.bf.refreshSize() > wasSize) mode.EOF = false;
+
           const shown = session.lastFilter
             ? session.content.length
             : this.view.visible(config.window - 1).rows.length;
@@ -1791,6 +1799,9 @@ export class FileInput implements PagerInput {
     recordLastPosition();
 
     if (mark.pos === Number.MAX_SAFE_INTEGER) {
+      // the '$' mark is og's other unconditional ch_end_seek
+      // (mark.c:179), so it lands on the file's length NOW
+      this.bf.refreshSize();
       this.view.gotoEnd(config.window);
     } else {
       this.view.gotoPos(mark.pos);

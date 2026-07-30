@@ -156,7 +156,7 @@ export class BigView {
 
       if (rows.length >= count) {
         // content past the bottom row means the end is not shown
-        more = !ended || line.next < this.bf.size;
+        more = !ended || !this.bf.atEnd(line.next);
         endPos = line.next;
         break;
       }
@@ -180,7 +180,7 @@ export class BigView {
     let offset = this.top.offset;
 
     for (let i = 0; i < k; i++) {
-      if (pos >= this.bf.size) return null;
+      if (this.bf.atEnd(pos)) return null;
 
       const line = forwLine(this.bf, pos);
       if (!line) return null;
@@ -224,7 +224,7 @@ export class BigView {
    */
   private hasRowPastBottom(window: number): boolean {
     const at = this.screenPos(window - 1);
-    return at !== null && at.pos < this.bf.size;
+    return at !== null && !this.bf.atEnd(at.pos);
   }
 
   /** Scrolls forward n display rows, like forw(): a plain move
@@ -244,7 +244,7 @@ export class BigView {
 
       if (next !== null) {
         this.top = { pos: this.top.pos, offset: next };
-      } else if (line.next < this.bf.size) {
+      } else if (!this.bf.atEnd(line.next)) {
         this.top = { pos: line.next, offset: 0 };
       } else {
         break;
