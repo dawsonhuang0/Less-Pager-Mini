@@ -2,6 +2,8 @@ import fs from 'fs';
 
 import { hasUngot } from './tty/keyboard';
 
+import { terminalCapability } from './tty/terminal';
+
 import { config, fullScreen, mode } from './state/config';
 
 import { chopLongLines } from './lines/chopLongLines';
@@ -1602,10 +1604,15 @@ function sameRows(a: string[], b: string[]): boolean {
   return true;
 }
 
-// LESS_TERMCAP_SUSPEND/RESUME (v684) replace the strings wrapped
-// around screen updates; our default is the sync-update pair
-const syncOn = (): string => TERMINAL_SUSPEND;
-const syncOff = (): string => TERMINAL_RESUME;
+// og reads these through ltgetstr, so LESS_TERMCAP_SUSPEND and
+// LESS_TERMCAP_RESUME override them (screen.c:1596). They exist
+// because the sequences are not in termcap/terminfo at all. We named
+// them in a comment and then emitted our own pair unconditionally, so
+// the override did nothing; our sync-update pair stays the DEFAULT.
+const syncOn = (): string =>
+  terminalCapability(null, 'SUSPEND') ?? TERMINAL_SUSPEND;
+const syncOff = (): string =>
+  terminalCapability(null, 'RESUME') ?? TERMINAL_RESUME;
 
 function fullFrame(rows: string[]): string {
   const physical = collapseNulRows(rows);
