@@ -1739,6 +1739,14 @@ function dispatchKey(sequence: string): void {
 
     if ((opt.emouse & EMOUSE_HDRAG) && session.lastDragX >= 0 &&
         x !== session.lastDragX) {
+      // every horizontal move re-heads table[TOP] to its line's start
+      // first (decode.c:666), exactly as LSHIFT/RSHIFT and the
+      // horizontal wheel do. It is pos_rehead(FALSE): the hshift
+      // adjustment that -S makes would send the shift to an
+      // unexpected value here (778e15152, which is why the flag
+      // exists at all).
+      posRehead();
+
       // dragging right moves the text right (hshift decreases)
       config.col = Math.max(config.col - (x - session.lastDragX), 0);
       if (mode.INIT) mode.INIT = false;
