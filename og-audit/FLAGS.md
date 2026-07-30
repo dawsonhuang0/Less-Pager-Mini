@@ -245,3 +245,13 @@ comment turns up: the pattern is a spec that PARSES an option and drops it.
 | F101 | `2620` `86b1dc0` | `jump_loc` under `&` filtering must not assume the char after a line's end starts the next DISPLAYED line. | ? — same jump_loc family as seeds 2/3. |
 | F102 | `2616`+`2619` | `forw()` cannot just accept BOTTOM_PLUS_ONE under filtering, and on EOF the final `add_forw_pos` must store the position AFTER the last line, not NULL_POSITION; `forw_line` must return the SCREEN line's start, not the raw line's. | ? — directly relevant to the position-table work. |
 | F103 | `2591`+`2592` | A command must interrupt the initial screen fill, and with `-F` may interrupt `get_one_screen` after 3s / `LESS_SCREENFILL_TIME`. | ? |
+
+## From commits 2557-2587 (v695..v696 era)
+
+| # | commit | claim | status |
+|---|---|---|---|
+| F104 | `2566` `95f1d4d` | `-r` appearing in the `LESS` environment variable is treated as `-R`, because "it is almost always an error to put -r in the LESS environment variable". Command-line `-r` is unaffected. | **OK** probed `LESS=-r` on a styled file: identical to og. Discriminating, because under true `-r` our layout makes the whole line ONE row (fits_on_screen) and the screen would differ wildly; matching og means we take the `-R` path. |
+| F105 | `2576` `bb4df5c` | `match_pattern` on an EMPTY line always returned FALSE, which is wrong for a NON-MATCH (`^N`) search — an empty line does not contain the pattern, so it matches. | **OK** probed `/ ^N aaa ⏎` over a file of alternating blank and non-blank lines: identical to og. |
+| F106 | `2571` `b71a578` | (1) `prep_hilite` must NOT pass the SUBSEARCH bits to match_pattern — all parenthesized groups stay highlighted even when `^S` restricts the SEARCH; (2) a match rejected by SUBSEARCH must not fail the line, the search continues later in it. | **(2) FIXED** in `26ad91d`. **(1) still open**: our highlight path pushes ONLY the `^S` groups' spans, where og highlights every group and merely restricts what the search LANDS on. |
+| F107 | `2569` `9b0fff7` | `ESC-j` / `ESC-k` scroll by FILE lines rather than screen lines. | ? we have newlineForward/newlineBackward; the key bindings are unverified. |
+| F108 | `2580`+`2583`+`2581` | `soft_eof` records where forw_line returned NULL so `(END)` shows under a filter; `back()` must store the previous SCREEN line's start, not the previous FILE line's; forw_line/back_line must set `*p_linepos` even when returning NULL_POSITION. | ? — the `back()` one is directly relevant to the position-table work, alongside F102. |
