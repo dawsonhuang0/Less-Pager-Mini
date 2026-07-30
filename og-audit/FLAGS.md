@@ -152,3 +152,24 @@ FOUR attempts, all reverted: clear before `landMatch`; force a full repaint; cle
 So seed 4 is not a call-site bug: it is the position table half-adopted. Fix = every row's start persisted for the life of the screen with extents derived at paint, done alongside jump_loc's near-target branch. |
 | 5 | 15 | `g` | NOT a near-target miss. The keys before it are `...2d,72,0a` — `-r` is ON, so the whole 11001-byte line is ONE screen row (`fits_on_screen` returns TRUE unconditionally, line.c:842). og ends with a screen of tildes, we show content. Same `-r` family as the styled gate's r-toggle/r-resize, i.e. the linebuf model, not the jump. |
 | 7 | 12 | `u` | under `-r` (toggled 2 keys earlier). Removing `-r` pushes it from step 12 to 24, so also the `-r`/linebuf family. |
+
+## From commits 2783-2839 (v701..v702 era)
+
+| # | commit | claim | status |
+|---|---|---|---|
+| F66 | `2800` `16879fd` | `ESC-f`: like `ESC-F` but on a match it only rings the bell, staying in F mode. | **OK** `keys.ts:287` binds `\x1Bf` -> FOLLOW_BELL; og binds `ESC,'f'` -> A_F_FOREVER_BELL. |
+| F67 | `2795` `03bdeff` | `--autosave`. | **OK** `src/options/autosave.ts` exists. |
+| F68 | `2832`+`2833` | New prompt sequences `%C` (right-edge column), `%W` (longest line on screen), `%Q` (percent %C/%W) and the `?Q` conditional. | **OK** all four present (`prompt.ts` cond `case 'Q'`, expansions `case 'C'`, `case 'W'`, `case 'Q'`). |
+| F69 | `2817` `a1bce6a` | Long prompt and `=` show the column when shifted; `%c` becomes 1-BASED. | **OK** `case 'c': return out + (config.col + 1)` and LONG_PROTO carries `?c (column %c).`. |
+| F70 | `2794` `62d87f4` | `ESC-u` must NOT clear the compiled search string — only hide/unhide the hilites. | **OK** probed `/01⏎ ESC-u ESC-u n`: identical to og, so the pattern survives the toggle and `n` still steps. |
+| F71 | `2785` `57c2728` | Changing a STRING-valued option with `-` must print a confirmation, like numeric and boolean ones do. | **OK** probed `-Pfoo⏎`: identical to og. |
+| F72 | `2805` `dcc567a` | Line-number attribute becomes `use_color ? AT_COLOR_LINENUM : AT_BOLD` with color string `c*`, so `-DN` can REMOVE the bold. | ? |
+| F73 | `2787` `84b407f` | The `-j` ARGUMENT must be kept separate from the computed `jump_sline`, so a resize recomputes it from the original. | ? |
+| F74 | `2793` `bb7b893` | Opening an OSC 8 link by mouse click is disallowed under SECURE. | ? (mouse — blocked on the grouped-write harness) |
+| F75 | `2796` `3e88782` | `sindex_from_sline` clips to sc_height-1, never sc_height (the bottom line is the prompt). | **OK** our `jumpNear` uses `min(max(sline,1), window-1) - 1`. |
+
+### Adjudicated without a flag
+`2801`/`2803`/`2819`/`2820`/`2830`/`2831`/`2835`/`2838`/`2839` are the deferred
+terminal-init experiment and its seven follow-up repairs — og REVERTED the
+whole line in `2845`. Do not port. · `2804` rename, N/A · `2821` LESSNOCONFIG,
+we have it · `2783` negative numeric options, see F58 · `2789` lesstest, N/A.
