@@ -20,6 +20,8 @@ import { gateReturn } from "../tty/keyboard";
 
 import { lgetenv } from '../startup/environment';
 
+import { decodeContent } from './charset';
+
 /** A $LESSOPEN replacement: its lines, byte size and alt file name. */
 export interface AltFile {
   lines: string[];
@@ -187,7 +189,12 @@ export function openAltFile(
   const { cmd, pipes } = resolved;
   const result = shellCmd(cmd, filename === '-' ? input : undefined);
   const bytes = result.stdout ?? Buffer.alloc(0);
-  const output = bytes.toString('utf8');
+
+  // through the charset, like every other input: a byte that is not
+  // valid in it survives as a raw-byte marker for $LESSBINFMT, where
+  // toString('utf8') would have replaced it with U+FFFD and og would
+  // still be showing <FF>
+  const output = decodeContent(bytes);
 
   // latin1 round-trips every byte, so a cat can write it back out
   // exactly as the preprocessor produced it
@@ -215,7 +222,9 @@ export function openAltFile(
     // status only when the file is left (close_altfile, edit.c:288)
     return {
       lines: toLines(output),
-      size: Buffer.byteLength(output),
+      // the pipe's OWN byte count: a marker is wider than the byte it
+      // stands for, so the decoded string cannot be measured for this
+      size: bytes.length,
       alt: '-',
       raw,
       preprocError: preprocStatusMessage(result) ?? undefined,
@@ -227,7 +236,7 @@ export function openAltFile(
   if (!name) return null;
 
   try {
-    const data = fs.readFileSync(name, 'utf8');
+    const data = decodeContent(fs.readFileSync(name));
 
     return {
       lines: toLines(data),
