@@ -112,7 +112,7 @@ superseded by F46 · `2908` lesstest locale, N/A.
 
 | # | commit | what the message claims | status |
 |---|---|---|---|
-| F56 | `038ccd9` [2907] | `bin_file` must stop its binary check 4 bytes before the end of its 256-byte buffer, or a truncated UTF-8 sequence reads as malformed. | ? |
+| F56 | `038ccd9` [2907] | `bin_file` must stop its binary check 4 bytes before the end of its 256-byte buffer, or a truncated UTF-8 sequence reads as malformed. | **OK** built a file with a 4-byte U+1F600 at offset 253 so its tail crosses byte 256: og and we agree, neither treats it as binary. |
 | F57 | `18db5ae` [2905] | An EMPTY terminfo capability is treated as undefined (#710). | ? |
 | F58 | `3eb4d40` [2902] | `-z` may take a NEGATIVE value; the blanket ban on negative numeric options was wrong, hence `O_NEGOK`. | **OK** `-z-3` and `-z3` both accepted, matching og. |
 | F59 | `e65b895` [2900] | Clear `ICRNL`/`INLCR` so a lesskey file can give CR and NL different meanings (#703). | ? |
@@ -127,3 +127,9 @@ type/build cleanups, N/A · `2878`/`2877`/`2876`/`2872`/`2849` Windows console
 resizing and non-tty output, N/A · `2851` term_init_ever crash in --version,
 C-specific · `2847`/`2845`/`2841` the deferred-terminal-init experiment, which
 og REVERTED in 2845 — do not port.
+
+## Found while probing, not from a commit message
+
+| # | evidence | what differs | status |
+|---|---|---|---|
+| F64 | dump of `/tmp/bin1.dat` under `-R` | **Attribute runs are per-character, not per-run.** og emits `ESC[7m ^@^A^B ESC[27m` and `ESC[7m <FF><FE> ESC[27m` — one standout run spanning adjacent same-attribute chars, because put_line/at_switch write a transition only when the attribute CHANGES. We emit `ESC[7m<FF>ESC[m ESC[7m<FE>ESC[m`, one wrap per character, because the transform wraps each representation independently in `colored('ctrl'/'bin', ...)`. | **GAP (cosmetic today)** the emulated screens are IDENTICAL — the pty differ is silent — so nothing is visibly wrong; this is byte-level output parity only. SAME ROOT CAUSE as the reverted representation-clustering work: og keeps attributes in the parallel `linebuf.attr` and emits transitions, we splice escape pairs into the text. Fix it with the linebuf reform, not separately. Note `coalesceOwnRuns` in helpers.ts already does exactly this merging for OVERSTRIKE runs, so the precedent and the shape of the fix exist. |
