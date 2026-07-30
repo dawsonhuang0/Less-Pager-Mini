@@ -1849,6 +1849,23 @@ export function calculateEOF(content: string[]): void {
   const { lastRow, lastSubRow } = getLastRow(content);
   config.endRow = lastRow;
   config.endSubRow = lastSubRow;
+
+  // og answers "is the end displayed" from ONE place - eof_displayed
+  // reads position(BOTTOM_PLUS_ONE) off the position table
+  // (forwback.c:95). We had two answers: this one, derived from
+  // whether the CONTENT ARRAY fits a screen, and the source engine's
+  // own sync(), derived from the file. For a source engine the array
+  // is a materialized window of several screens, so this one is
+  // always "no" and silently overwrote the correct answer.
+  //
+  // Four separate bugs came from that single mismatch before it was
+  // named: --past-eof reaching only one engine (74f75b8), a resize
+  // clearing the flag (e12e089), a horizontal shift not re-deriving
+  // it (728fd51), and G under an & filter (54cd68b). The engine owns
+  // the flag whenever one is attached; the anchors above are still
+  // wanted by both.
+  if (hook.sourceLineCount !== null) return;
+
   mode.EOF = lastRow === 0 && (chopLine() || lastSubRow === 0);
 }
 
