@@ -909,10 +909,15 @@ export function applyPendingHeader(content: string[]): void {
 
   const value = pendingHeader;
   pendingHeader = null;
-  setHeader(value, content);
 
-  config.row = opt.headerStart;
-  config.subRow = 0;
+  // setHeader already lands the view on the header start - through
+  // the clamp for the array-backed core, and through the source
+  // engine's own seek for the block-backed one, which then rebuilds
+  // its window and puts config.row BACK to 0 because the row is an
+  // index into that window, not into the file. Repeating the clamp
+  // here applied the start a second time, on top of the seek: the
+  // screen opened at 2N instead of N
+  setHeader(value, content);
 }
 
 export function setHeader(text: string, content: string[]): void {
@@ -950,6 +955,11 @@ export function setHeader(text: string, content: string[]): void {
     : sourcedLine !== null && sourcedLine !== undefined
       ? sourcedLine - 1
       : config.row;
+
+  // og's set_header: with no header LINES there is no start position
+  // at all (search.c:572 stores NULL_POSITION), so a columns-only
+  // --header=0,C,N must not move the view to line N
+  if (opt.headerLines === 0) opt.headerStart = 0;
 
   // og's O_REPAINT repaints through jump_loc, whose after_header_pos
   // clamps a top above the new header start up to it: the view lands
