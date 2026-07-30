@@ -224,3 +224,13 @@ empty `set: () => {}` or `get: () => ''`:
 
 Hit rate one in six, from a two-minute grep. Worth repeating whenever a stale
 comment turns up: the pattern is a spec that PARSES an option and drops it.
+
+## From commits 2629-2665 (v697..v698 era)
+
+| # | commit | claim | status |
+|---|---|---|---|
+| F93 | `2657` `023bc64` + `2673` `4ad1ce1` | U+00AD (SOFT HYPHEN) and U+200D (ZWJ) are treated as binary so they are NEVER sent to the terminal — "terminals do not display these characters consistently, so the screen content cannot be known after printing them". `2673` then switches emoji modifiers from hex display to outright DELETION as "visually nicer". | **GAP, measured.** og prints `A👨👩👧B softhyphen`; we print `A👨\u200d👩\u200d👧B soft\xadhyphen`. On a real terminal og shows three separate glyphs where we show one joined family emoji. **Our `tests/graphemes.test.ts` asserts the OPPOSITE** ("ZWJ emoji sequences survive wrap/chop boundaries intact"), so that test encodes a behaviour og deliberately rejects — fixing this means changing the test too. Note the pty differ UNDER-detects it: the emulator collapses the zero-width chars, so the row text matched and only the byte stream differed. This is the concrete core of the unread `charset.c` (with F87). |
+| F94 | `2665` `3979f5c` | `--cmd`: like `+` but NOT executed if we exit before the first prompt (short input with -E/-F). | ? |
+| F95 | `2653` `7428955` | With `--incsearch`, every per-character search must start from the position where the search command was FIRST invoked, not the current one, or matches are missed. | ? (pairs with F81) |
+| F96 | `2633` `e66db83` | `^S` sub-search hangs if the pattern matches an empty string — the loop restarts from the same point. | ? — a HANG, worth probing early. |
+| F97 | `2629` `4befc21` | Software-generated aborts use `S_SWINTERRUPT`, not `S_INTERRUPT`, so they do not make less exit under `-K`. | ? (pairs with F88) |
