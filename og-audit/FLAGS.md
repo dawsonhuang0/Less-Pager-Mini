@@ -255,3 +255,14 @@ comment turns up: the pattern is a spec that PARSES an option and drops it.
 | F106 | `2571` `b71a578` | (1) `prep_hilite` must NOT pass the SUBSEARCH bits to match_pattern — all parenthesized groups stay highlighted even when `^S` restricts the SEARCH; (2) a match rejected by SUBSEARCH must not fail the line, the search continues later in it. | **(2) FIXED** in `26ad91d`. **(1) OK by measurement.** I expected a divergence from reading the code (our highlight path pushes only the `^S` groups' spans) but three probes disagree: `^S1` with `(alpha).*(gamma)` matches og plainly, with `--use-color` (where the per-group subsearch colours would show), and with `^S2`. Whatever og does after `prep_hilite` drops the SUBSEARCH bits, the painted result is the same as ours. Reading the code predicted a bug the binary does not have — probe before believing a code-read. |
 | F107 | `2569` `9b0fff7` | `ESC-j` / `ESC-k` scroll by FILE lines rather than screen lines. | ? we have newlineForward/newlineBackward; the key bindings are unverified. |
 | F108 | `2580`+`2583`+`2581` | `soft_eof` records where forw_line returned NULL so `(END)` shows under a filter; `back()` must store the previous SCREEN line's start, not the previous FILE line's; forw_line/back_line must set `*p_linepos` even when returning NULL_POSITION. | ? — the `back()` one is directly relevant to the position-table work, alongside F102. |
+
+## From commits 2530-2556 (v694..v695 era)
+
+| # | commit | claim | status |
+|---|---|---|---|
+| F109 | `2535` `2033efc` | The help screen must mention search case-sensitivity (#406). | **OK — and the WHOLE help screen is verified.** Diffed all 337 lines of `less/less.hlp` against `startup/lessHelp.ts` with overstrike normalised on both sides: only FOUR differences, all deliberate — the "less-pager-mini" branding (x2), our own `--no-shell` entry, and an attribution footer. Every command line, section heading and option description is byte-identical. Worth redoing after any og release. |
+| F110 | `2551` `ecf29c5` | Writing a coloured char into the LAST column on an auto_wrap terminal can colour the whole next line; og sends clear_eol AFTER the colour reset to kill it. | ? — plausible for us too; needs a coloured line exactly at the right edge. |
+| F111 | `2533` `8bdd013` | `0x1b`/`0x9b` count as CSI only when the current charset defines them as control chars (#172). | ? |
+| F112 | `2532` `aba34b8` | The `F` command warns when `LESSOPEN` is in effect, since the script has already exited and further changes will not be seen. | ? |
+| F113 | `2544`+`2547` | A multibyte character used as a COMMAND must accumulate its bytes without `cmd_reset()`, and `len_cmdbuf()>0` is not sufficient to tell whether a command is being entered. | ? |
+| F114 | `2556` `52b2d92` | With `-F` on a short file, do not poll the input - polling eats tty input the user expects to reach the shell. | ? |
