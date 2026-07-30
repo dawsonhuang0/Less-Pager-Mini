@@ -12,7 +12,8 @@ import {
   setShiftCount,
   optClearRepaint,
   chopLine,
-  getSwindow
+  getSwindow,
+  hook
 } from "../options";
 
 import { bottomRow, revealPipeEnd, files, pendingScroll } from "./files";
@@ -783,6 +784,23 @@ export function setHalfWindowBackward(
  *
  * @param buffer - Buffer containing scroll offset.
  */
+/**
+ * og's horizontal shifts all end in screen_trashed(), so the next
+ * make_display repaints and eof_displayed re-reads
+ * position(BOTTOM_PLUS_ONE) from the rebuilt table. That matters
+ * because a shift CHANGES how many rows a line occupies: forw_line is
+ * called with `chop_line() || hshift > 0` (input.c:348), so any
+ * hshift reads lines CHOPPED, one screen row each.
+ *
+ * A source engine derives mode.EOF in its own sync(), and posRehead()
+ * returns early when the top is already at a line start - so without
+ * this the flag kept the value it had while the line was still
+ * folded, and a one-line file read ":" where og says "(END)".
+ */
+function shifted(): void {
+  hook.rebuildContent();
+}
+
 export function setHalfScreenRight(buffer: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
@@ -793,6 +811,7 @@ export function setHalfScreenRight(buffer: string[]): void {
   if (count) setShiftCount(count);
 
   config.col += optShiftCount() || config.halfScreenWidth;
+  shifted();
 }
 
 /**
@@ -811,6 +830,7 @@ export function setHalfScreenLeft(buffer: string[]): void {
 
   config.col -= optShiftCount() || config.halfScreenWidth;
   if (config.col < 0) config.col = 0;
+  shifted();
 }
 
 /**
@@ -835,6 +855,7 @@ export function lastCol(content: string[]): void {
   }
 
   config.col = Math.max(maxWidth - config.screenWidth, 0);
+  shifted();
 }
 
 /**
@@ -843,4 +864,5 @@ export function lastCol(content: string[]): void {
 export function firstCol(): void {
   posRehead();
   config.col = 0;
+  shifted();
 }
