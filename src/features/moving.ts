@@ -284,9 +284,12 @@ export function lineForward(
       moved++;
     }
 
-    // a shifted row can step OVER the anchor; the last screenful is
-    // still where it is
-    if (at > capAt) at = capAt;
+    // a shifted row can step OVER the anchor, and then the last
+    // screenful is still where it is - but only if this move actually
+    // stepped. A top that was ALREADY past the anchor must stay put:
+    // og's forward() bells and returns (forwback.c:481) and never
+    // moves the top BACKWARD to meet the clamp.
+    if (moved > 0 && at > capAt) at = capAt;
 
     // clamped short of the request: the forw read hit EOI — or
     // blocks for the missing lines when the pipe still delivers
