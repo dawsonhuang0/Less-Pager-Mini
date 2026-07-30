@@ -470,7 +470,24 @@ export class FileInput implements PagerInput {
             this.gotoFilteredEnd();
           } else {
             this.view.gotoEnd(config.window);
+
+            // og's jump_loc walks back sindex lines to place the last
+            // one at the bottom; when back_line hits BOF first it
+            // BREAKS and hands the shortfall to forw() as its nblank
+            // argument - "rely on forw() below to draw the required
+            // number of blank lines at the top of the screen"
+            // (jump.c). So a file shorter than the screen ends up at
+            // the BOTTOM under tildes. gotoEnd on its own just clamps
+            // at BOF and leaves the text at the top.
+            const rows = this.view.visible(config.window - 1).rows.length;
+            const blank = Math.max(config.window - 1 - rows, 0);
+
+            if (blank > 0) {
+              this.padTop = blank;
+              this.keepPad = true;
+            }
           }
+
           this.sync();
           this.seam = [];
     markPosClear();
@@ -1147,6 +1164,19 @@ export class FileInput implements PagerInput {
     // never consulted the option at all, so --past-eof stopped dead
     // at the last screenful instead of running on past it.
     if (optPastEof()) clampAtLastScreen = false;
+
+    // og's forward() asks position(BOTTOM_PLUS_ONE) and bells BEFORE
+    // forw() gets a chance to consume anything (forwback.c:481). With
+    // blank rows above BOF and the file's end already on screen there
+    // is no row past the bottom, so the move bells and the blanks
+    // stay put - consuming one of them first would scroll a screen
+    // that og leaves alone.
+    if (clampAtLastScreen && this.padTop > 0 && mode.EOF) {
+      ringBell('eof');
+      this.keepPad = true;
+      this.sync();
+      return;
+    }
 
     // scrolling forward consumes blank rows padded above BOF first,
     // like the array session's lineForward blankTop branch
