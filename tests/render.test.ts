@@ -386,7 +386,11 @@ describe('a width change keeps the top on the same text', () => {
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
 
     lineForward([long], 1);
-    expect(config.screen.length).toBe(0);
+    // og's add_forw_pos drops table[0] and appends the newly drawn row
+    // in one operation, so the table does not shrink - "the entries
+    // were walked off" means the top is no longer the SHORT row
+    // back_line left, not that the table emptied
+    expect(config.screen[0].end - config.screen[0].offset).toBe(w);
     expect(screenRows([long], [])[0])
       .toBe(long.slice(4 * w + 30, 5 * w + 30));
   });

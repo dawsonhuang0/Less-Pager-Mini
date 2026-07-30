@@ -111,11 +111,35 @@ export function setTopOffset(line: string, row: number, at: number): void {
   config.subShift = at - (getLayout(line).rowStart[config.subRow] ?? 0);
 }
 
+/** The row that follows a table entry, or null at end of content. */
+function rowAfter(content: string[], cell: ScreenRow): ScreenRow | null {
+  const layout = getLayout(content[cell.row] ?? '');
+
+  if (cell.end < layout.chars.length) {
+    return {
+      row: cell.row,
+      offset: cell.end,
+      end: rowEndFrom(layout, cell.end),
+    };
+  }
+
+  const row = cell.row + 1;
+  if (row >= content.length) return null;
+
+  const next = getLayout(content[row] ?? '');
+  return { row, offset: 0, end: rowEndFrom(next, 0) };
+}
+
 /**
- * og's add_forw_pos dropping table[0] per row drawn: the entries a
- * backward move prepended are walked off the top before the grid below
- * resumes. Returns how many rows it consumed, and leaves the top on
- * the first entry that remains.
+ * og's add_forw_pos (position.c:63), which forw() calls once per row
+ * DRAWN: it shifts the whole table up and appends the new bottom row
+ * in ONE operation, so the table stays sc_height long and the top
+ * moves BECAUSE of the shift.
+ *
+ * We used to do only the dropping here and let buildScreen extend the
+ * bottom separately. That was harmless while the table held just the
+ * seam, but once it holds every row the two halves disagree about who
+ * owns the bottom and a forward move lands on the wrong line.
  */
 export function screenForward(content: string[], rows: number): number {
   const table = config.screen;
@@ -132,30 +156,21 @@ export function screenForward(content: string[], rows: number): number {
     return 0;
   }
 
-  const used = Math.min(rows, table.length);
-  const rest = table.slice(used);
-  config.screen = rest;
+  let used = 0;
 
-  // the top is the first entry left, or - once they are all walked
-  // off - wherever the last one ended, which is where the grid below
-  // the seam resumes
-  const last = table[used - 1];
-  let row = rest.length ? rest[0].row : last.row;
-  let offset = rest.length ? rest[0].offset : last.end;
+  while (used < rows) {
+    const next = rowAfter(content, table[table.length - 1]);
+    if (next === null) break;
 
-  if (offset >= getLayout(content[row] ?? '').chars.length) {
-    row++;
-    offset = 0;
+    table.shift();
+    table.push(next);
+    used++;
   }
 
-  config.row = row;
-
-  const at = getLayout(content[row] ?? '').rowStart;
-  let sub = 0;
-  while (sub + 1 < at.length && at[sub + 1] <= offset) sub++;
-
-  config.subRow = sub;
-  config.subShift = offset - (at[sub] ?? 0);
+  if (used > 0) {
+    const first = table[0];
+    setTopOffset(content[first.row] ?? '', first.row, first.offset);
+  }
 
   return used;
 }
