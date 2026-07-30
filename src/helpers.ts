@@ -1030,9 +1030,20 @@ export function render(rawContent: string[], buffer: string[]): void {
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
 
+    // og's clear_bot uses line_left() - a bare CR to column 1 of
+    // WHEREVER the cursor is (screen.c) - not an absolute address:
+    // every paint leaves the cursor on the prompt row, so there is
+    // nothing to address. --old-bot is the exception, and clearBot
+    // already carries it. Nor does og park afterwards, since writing
+    // the prompt leaves the cursor exactly where the park would put
+    // it; only an open command line positions inside its own text
+    const bot = rows[rows.length - 1];
+    const opening = forwPrompt ? '' : clearBot();
+    forwPrompt = false;
+
     process.stdout.write(eprPrefix() +
-      CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE +
-      rows[rows.length - 1] + parkCursor(rows));
+      opening + bot + tailClear(bot) +
+      (cmd.active ? parkCursor(rows) : ''));
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
@@ -1148,6 +1159,13 @@ export function clearBot(): string {
   promptAtBottom = true;
   return (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
 }
+
+// og's forw_prompt (forwback.c): forw() sets it after every line it
+// puts, and prompt() then SKIPS clear_bot - "the forward movement
+// guarantees that we're in the right position to display the prompt"
+// (command.c). The row the scroll brought in is blank and the cursor
+// is at its start, so clearing it would only cost bytes
+let forwPrompt = false;
 
 // og's forw_prompt leaves the prompt directly after forward-painted
 // lines, possibly mid-screen; --old-bot's next clear_bot then visibly
@@ -1857,6 +1875,7 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
       // row the scroll just brought in is blank already - og writes
       // nothing for it
       const bottom = rows[n - 1];
+      forwPrompt = !bottom;
       return frame + (bottom ? bottom + tailClear(bottom) : '') + syncOff();
     }
 
