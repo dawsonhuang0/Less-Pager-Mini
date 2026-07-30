@@ -1204,14 +1204,37 @@ function sourceRanges(source: string): [number, number, ColorKind][] {
 function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
   if (!subs.size) return regex.test(text);
 
-  const match = regex.exec(text);
-  if (!match) return false;
+  // og's subsearch_ok (pattern.c): a ^S group fails when `ep[i] ==
+  // sp[i]`, i.e. it must be NON-EMPTY - merely participating is not
+  // enough. And match_pattern does not judge only the first match: it
+  // keeps searching AFTER each one that fails the condition, giving up
+  // when `mlen == 0` because it cannot advance (e66db83 - that guard
+  // is what stopped og hanging on a pattern like `(x*)`).
+  const scan = regex.global
+    ? regex
+    : new RegExp(regex.source, regex.flags + 'g');
 
-  for (const n of subs) {
-    if (match[n] === undefined) return false;
+  let start = 0;
+
+  for (;;) {
+    scan.lastIndex = start;
+
+    const match = scan.exec(text);
+    if (!match) return false;
+
+    let ok = true;
+    for (const n of subs) {
+      const group = match[n];
+      if (group === undefined || group.length === 0) ok = false;
+    }
+
+    if (ok) return true;
+
+    const end = match.index + match[0].length;
+    if (end === start) return false;
+
+    start = end;
   }
-
-  return true;
 }
 
 /**
