@@ -81,7 +81,10 @@ async function main(): Promise<void> {
   // init_cmds precedes argv classification in og, so lesskey #env may
   // define $LESS/$MORE options whose pending argument consumes argv.
   initSecure();
-  if (secureAllow('lesskey')) loadLesskey();
+  // QUIETLY: startupInit parses these again once the session state is
+  // up, and THAT pass is the one whose diagnostics are og's. This one
+  // exists only so the #env lines are in place before argv is split
+  if (secureAllow('lesskey')) loadLesskey(true);
   const argv = process.argv.slice(2);
   const files: string[] = [];
   const optArgs: string[] = [];

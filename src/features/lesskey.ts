@@ -416,7 +416,16 @@ hook.loadLesskeyFile = (path: string): boolean => {
   }
 };
 
-export function loadLesskey(): void {
+// og parses the lesskey files ONCE, in init_cmds, and reports each
+// parse error once. We parse them TWICE for structural reasons: the
+// CLI needs the #env lines before it can classify argv, and the
+// session reset that follows clears the env table, so startupInit has
+// to read them again. Only the second pass is og's - the first is an
+// extra of ours, and it must not repeat the diagnostics.
+let quietParse = false;
+
+export function loadLesskey(quiet: boolean = false): void {
+  quietParse = quiet;
   resetLesskey();
 
   if (actualEnv('LESSNOCONFIG')) return;
@@ -657,9 +666,9 @@ export function parseLesskey(
   text: string,
   filename: string,
   system: boolean = false
-): void {
+): number {
   parsingSystem = system;
-  parseLesskeyText(text, filename);
+  return parseLesskeyText(text, filename);
 }
 
 /**
@@ -673,7 +682,7 @@ export function parseLesskey(
 export function parseLesskeyContent(
   text: string,
   system: boolean = false
-): void {
+): number {
   parsingSystem = system;
   const lines: string[] = [];
   let line = '';
@@ -702,12 +711,13 @@ export function parseLesskeyContent(
   }
 
   if (line) lines.push(line);
-  parseLesskeyText(lines.join('\n'), 'lesskey-content');
+  return parseLesskeyText(lines.join('\n'), 'lesskey-content');
 }
 
-function parseLesskeyText(text: string, filename: string): void {
+function parseLesskeyText(text: string, filename: string): number {
   let section: 'command' | 'edit' | 'var' = 'command';
 
+  parseErrors = 0;
   parseFile = filename;
   lastVarName = '';
   lastVarRaw = '';
@@ -747,10 +757,20 @@ function parseLesskeyText(text: string, filename: string): void {
       parseCmdLine(line, section);
     }
   }
+
+  return parseErrors;
 }
+
+// lesskey_parse.c's `errors` counter: parse_lesskey returns it, and
+// the option handlers turn a non-zero count into their own summary
+// message (optfunc.c opt_ks/opt_kc)
+let parseErrors = 0;
 
 /** Reports a parse problem, like lesskey_parse.c's parse_error. */
 function parseError(message: string): void {
+  parseErrors++;
+  if (quietParse) return;
+
   const text = `${parseFile}: line ${parseLine}: ${message}`;
 
   if (search.message) {

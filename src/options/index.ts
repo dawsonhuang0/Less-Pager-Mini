@@ -1050,14 +1050,24 @@ function applyScanString(
   // --lesskey-src and --lesskey-content parse at startup (opt_ks/kc);
   // -k names the binary lesskey format, which is not supported
   if (spec.names[0] === 'lesskey-content') {
-    // og's parse_lesskey_content: semicolons separate lines
-    parseLesskeyContent(param);
+    // og's parse_lesskey_content: semicolons separate lines. opt_kc
+    // reports a summary of its own when the parse found anything
+    // wrong, on top of the per-line messages (optfunc.c:322)
+    if (parseLesskeyContent(param) !== 0) {
+      optScanError('Error in lesskey content');
+    }
+
     return;
   }
 
   if (spec.names[0] === 'lesskey-src') {
     try {
-      parseLesskey(fs.readFileSync(param, 'utf8'), param);
+      // og's lesskey_src returns the ERROR COUNT, so opt_ks reports
+      // this for a file that parsed badly, not only one it could not
+      // read (optfunc.c:307)
+      if (parseLesskey(fs.readFileSync(param, 'utf8'), param) !== 0) {
+        optScanError(`Cannot use lesskey source file "${param}"`);
+      }
     } catch {
       optScanError(`Cannot use lesskey source file "${param}"`);
     }
