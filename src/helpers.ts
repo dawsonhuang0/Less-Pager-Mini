@@ -392,8 +392,26 @@ function visualBell(): void {
  * @param content - The full array of content lines to format.
  * @returns A formatted string array ready for rendering.
  */
+/**
+ * og's empty_screen(): the position table holds nothing, because forw
+ * never drew a line. A file with no lines is always in that state, and
+ * our content array still carries one synthetic empty line for it.
+ */
+export function noContentDrawn(content: string[]): boolean {
+  return content.length <= 1 && !content[0] &&
+    (files.list[files.index]?.size ?? 0) <= 0;
+}
+
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
+
+  // a file with no lines draws none: og's forw_line EOFs at once, so
+  // the whole screen below is null lines (tildes), not one blank row
+  // and then tildes
+  if (noContentDrawn(content)) {
+    padToEOF(lines);
+    return lines;
+  }
 
   // rows above BOF from a forced back or a bracket jump are og null
   // lines: gline draws them as "~" or "" by the twiddle flag, just
@@ -906,6 +924,23 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (mode.INIT && onAlt && rows.length < config.window) {
     squishBlanks = config.window - collapseNulRows(rows).length;
     rows.unshift(...Array(squishBlanks).fill(''));
+  }
+
+  // og's make_display repaints whenever the position table is EMPTY:
+  // `if (empty_screen()) jump_loc(...)` runs before EVERY prompt
+  // (command.c), and for a file with no lines the table is always
+  // empty. The FIRST paint squishes those null rows away (first_time);
+  // from the second prompt on they are drawn, so an empty file that
+  // showed blank rows shows tildes once any command has run
+  // ...but make_display is called from prompt(), so it only runs when
+  // a TRUE command prompt is being drawn: a search or option prompt
+  // is an MCA loop that never reaches it, and og's screen stays as it
+  // was until the prompt closes
+  if (!firstPaint && mode.INIT && noContentDrawn(rawContent) &&
+      !search.message && !option.pending && !search.input &&
+      !examine.pending && !miscInput.pending && !brackets.pending &&
+      !marks.pending && !mode.BUFFERING && !config.keyPrefix) {
+    mode.INIT = false;
   }
 
   // og's G repaints through its pos_clear even when nothing moved
