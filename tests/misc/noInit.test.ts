@@ -8,8 +8,8 @@ import { initContent } from '../../src/features/files';
 
 import { opt, option } from '../../src/options';
 
-import { render, resetRender, resetDumbPaint, calculateEOF }
-  from '../../src/helpers';
+import { render, resetRender, resetDumbPaint, calculateEOF,
+  resetFirstPaint } from '../../src/helpers';
 
 import { initTerminalCapabilities } from '../../src/state/constants';
 
@@ -173,6 +173,9 @@ describe('a terminal that cannot switch screens', () => {
     calculateEOF(short);
     mode.INIT = true;
     resetRender();
+    // each case is a fresh SESSION: og's first_time is what decides
+    // that the paint follows term_init's lower_left
+    resetFirstPaint();
     written.length = 0;
   });
 

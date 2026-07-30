@@ -751,6 +751,15 @@ export function squishCheck(): void {
   render(session.content, session.buffer);
 }
 
+// og's `first_time` (forwback.c): TRUE until the first forw() has
+// painted, and never set again for the life of the session
+let firstPaintDone = false;
+
+/** Arms og's first_time for a new session. */
+export function resetFirstPaint(): void {
+  firstPaintDone = false;
+}
+
 // og's forw()/back() paint their rows and return; currline(BOTTOM)
 // and then prompt() come after, so the command line is BLANK for the
 // whole line-number walk and the prompt is written once, at the end.
@@ -873,10 +882,28 @@ export function render(rawContent: string[], buffer: string[]): void {
   // -X one: term_init homes only when BOTH "ti" and "te" exist and
   // "NR" does not deny the switch (screen.c:2061), so on a terminal
   // that cannot switch, a short first screen prints at the top.
+  // og's FIRST paint on the alternate screen is always sequential,
+  // whether or not the file fills it: term_init has parked the cursor
+  // on the bottom line and forw() just writes lines, each newline
+  // scrolling the last screenful up. A short file ends up with blank
+  // rows above it - og's "squished" screen - but that is a
+  // consequence of the same paint, not a different one.
+  const onAlt = !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN;
+
+  // og's `first_time`, not "the previous frame is gone": a repaint
+  // mid-session (R, a shell's return, a message wider than the
+  // screen) also starts from no known screen, but og gets there
+  // through repaint() -> forw(), which prints "...skipping..." and
+  // does NOT re-park at the bottom. Only the session's very first
+  // paint follows term_init's lower_left
+  const firstPaint = !firstPaintDone && onAlt;
   let squishBlanks = 0;
 
-  if (mode.INIT && !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN &&
-      rows.length < config.window) {
+  // the pad is the SCREEN MODEL, so it lasts as long as the screen is
+  // squished (og's `squished` flag), not just for the paint that
+  // produced it: the next frame has to diff against the same rows the
+  // terminal is showing
+  if (mode.INIT && onAlt && rows.length < config.window) {
     squishBlanks = config.window - collapseNulRows(rows).length;
     rows.unshift(...Array(squishBlanks).fill(''));
   }
@@ -993,7 +1020,7 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // -c repaints instead of scrolling (og's top_scroll homes; the
   // skipping scroll paint is the !top_scroll default)
-  const frame = (squishBlanks > 0 && !optClearRepaint()
+  const frame = (firstPaint && !optClearRepaint()
     ? squishFrame(rows, squishBlanks)
     : null) ??
     (optClearRepaint() || forceFull
@@ -1016,6 +1043,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   process.stdout.write(epr && frame.startsWith(syncOn())
     ? syncOn() + epr + frame.slice(syncOn().length)
     : epr + frame);
+  firstPaintDone = true;
   prompting = promptPainted;
     promptedInHelp = mode.HELP;
 }

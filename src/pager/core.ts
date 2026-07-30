@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import { isWindows } from '../tty/platform';
+
 import { lgetenv, screenFillGrace } from '../startup/environment';
 
 import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
@@ -263,8 +265,6 @@ import {
   ALTERNATE_CONSOLE_ON,
   ON_ALTERNATE_SCREEN,
   ALTERNATE_CONSOLE_OFF,
-  ALTERNATE_SCROLL_OFF,
-  ALTERNATE_SCROLL_ON,
   KEYPAD_ON,
   KEYPAD_OFF,
   MOUSE_OFF,
@@ -1980,12 +1980,14 @@ function init() {
   // a dumb terminal gets no title, init or keypad strings, like
   // og's empty termcap capabilities
   if (!mode.DUMB) {
-    process.stdout.write(TITLE);
+    // og sets a console title only on WIN32, through SetConsoleTitleW
+    // and to the FILE's name, re-set at every prompt (command.c:967).
+    // On unix it sends nothing at all, so neither do we
+    if (isWindows) process.stdout.write(TITLE);
 
     // -X leaves the init/deinit strings unsent, like less
     if (!optNoInit()) {
       process.stdout.write(ALTERNATE_CONSOLE_ON);
-      process.stdout.write(ALTERNATE_SCROLL_ON);
 
       // og's term_init lower_lefts after switching to the alternate
       // screen (screen.c:2061), which is what makes a short first
@@ -2387,11 +2389,10 @@ function cleanUp(): void {
     if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
     if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_SCROLL_OFF);
       process.stdout.write(ALTERNATE_CONSOLE_OFF);
     }
 
-    process.stdout.write(CONSOLE_TITLE_RESET);
+    if (isWindows) process.stdout.write(CONSOLE_TITLE_RESET);
   } else {
     // og-dumb quits with just lower_left (a bare CR) and no newline,
     // so the shell prompt overwrites the last prompt line

@@ -20,8 +20,6 @@ import { config, mode, DEFAULT_COLUMN, DEFAULT_WINDOW }
 import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
-  ALTERNATE_SCROLL_ON,
-  ALTERNATE_SCROLL_OFF,
   KEYPAD_ON,
   KEYPAD_OFF,
   MOUSE_ON,
@@ -102,7 +100,6 @@ describe('terminal mode transitions', () => {
       MOUSE_OFF + MOUSE_SGR_OFF,
       BRACKETED_PASTE_OFF,
       KEYPAD_OFF,
-      ALTERNATE_SCROLL_OFF,
       ALTERNATE_CONSOLE_OFF,
     ]);
     expect(fake.keyboard.setRawMode).toHaveBeenCalledWith(false);
@@ -141,7 +138,6 @@ describe('terminal mode transitions', () => {
 
     expect(writes()).toEqual([
       ALTERNATE_CONSOLE_ON,
-      ALTERNATE_SCROLL_ON,
       KEYPAD_ON,
       MOUSE_SGR_ON + MOUSE_ON,
       BRACKETED_PASTE_ON,

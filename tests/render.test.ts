@@ -62,10 +62,13 @@ describe('render', () => {
     config.row = 10;
     render(content, []);
 
-    // first frame: full redraw from home, no screen clear
-    expect(writes[0]).toContain('\x1b[H');
+    // og's FIRST paint on the alternate screen homes nowhere:
+    // term_init has parked the cursor on the bottom line and forw()
+    // writes each line followed by a newline, scrolling the first
+    // screenful up into place (screen.c:2061 + forwback.c)
+    expect(writes[0]).not.toContain('\x1b[H');
     expect(writes[0]).not.toContain('\x1b[2J');
-    expect(writes[0]).toContain('line 10');
+    expect(writes[0]).toContain('\rline 10\nline 11\n');
 
     config.row = 11;
     render(content, []);

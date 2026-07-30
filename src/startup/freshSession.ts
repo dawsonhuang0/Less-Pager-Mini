@@ -2,7 +2,7 @@ import { resetConfig, resetMode } from '../state/config';
 
 import { resetOptions } from '../options/state';
 
-import { resetRender, resetDumbPaint } from '../helpers';
+import { resetRender, resetDumbPaint, resetFirstPaint } from '../helpers';
 
 import { resetSearch } from '../features/searching';
 
@@ -32,6 +32,7 @@ export function freshSession(): void {
   resetConfig();
   resetMode();
   resetRender();
+  resetFirstPaint();
   resetDumbPaint();
   resetSearch();
 }

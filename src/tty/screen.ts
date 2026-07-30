@@ -12,8 +12,6 @@ import { freshWindowSize } from './keyboard';
 import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
-  ALTERNATE_SCROLL_ON,
-  ALTERNATE_SCROLL_OFF,
   KEYPAD_ON,
   KEYPAD_OFF,
   MOUSE_ON,
@@ -90,7 +88,6 @@ export function suspendTerminal(): void {
     if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
 
     if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_SCROLL_OFF);
       process.stdout.write(ALTERNATE_CONSOLE_OFF);
     }
   }
@@ -104,7 +101,6 @@ export function enterScreen(): void {
   if (!mode.DUMB) {
     if (!optNoInit()) {
       process.stdout.write(ALTERNATE_CONSOLE_ON);
-      process.stdout.write(ALTERNATE_SCROLL_ON);
     }
 
     if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);

@@ -140,9 +140,6 @@ export let ON_ALTERNATE_SCREEN = true;
 export let ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
-export const ALTERNATE_SCROLL_ON = '\x1b[?1007h';
-export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
-
 // terminfo smkx/rmkx (DECCKM + DECKPAM), like less's keypad init;
 // Apple Terminal converts wheel scrolling to arrow keys in this mode
 export let KEYPAD_ON = '\x1b[?1h\x1b=';
