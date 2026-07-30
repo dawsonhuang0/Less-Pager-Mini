@@ -261,6 +261,7 @@ import {
   CONSOLE_TITLE_END,
   CONSOLE_TITLE_RESET,
   ALTERNATE_CONSOLE_ON,
+  ON_ALTERNATE_SCREEN,
   ALTERNATE_CONSOLE_OFF,
   ALTERNATE_SCROLL_OFF,
   ALTERNATE_SCROLL_ON,
@@ -1985,6 +1986,15 @@ function init() {
     if (!optNoInit()) {
       process.stdout.write(ALTERNATE_CONSOLE_ON);
       process.stdout.write(ALTERNATE_SCROLL_ON);
+
+      // og's term_init lower_lefts after switching to the alternate
+      // screen (screen.c:2061), which is what makes a short first
+      // screen scroll up from the bottom instead of printing at the
+      // top. It guards on both "ti" and "te" existing, the same
+      // condition ON_ALTERNATE_SCREEN carries
+      if (ON_ALTERNATE_SCREEN) {
+        process.stdout.write(CURSOR_TO(config.window, 1));
+      }
     }
 
     if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);

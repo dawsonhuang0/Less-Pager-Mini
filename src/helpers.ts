@@ -857,11 +857,12 @@ export function render(rawContent: string[], buffer: string[]): void {
   // -X one: term_init homes only when BOTH "ti" and "te" exist and
   // "NR" does not deny the switch (screen.c:2061), so on a terminal
   // that cannot switch, a short first screen prints at the top.
+  let squishBlanks = 0;
+
   if (mode.INIT && !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN &&
       rows.length < config.window) {
-    rows.unshift(
-      ...Array(config.window - collapseNulRows(rows).length).fill('')
-    );
+    squishBlanks = config.window - collapseNulRows(rows).length;
+    rows.unshift(...Array(squishBlanks).fill(''));
   }
 
   // og's G repaints through its pos_clear even when nothing moved
@@ -976,7 +977,10 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // -c repaints instead of scrolling (og's top_scroll homes; the
   // skipping scroll paint is the !top_scroll default)
-  const frame = (optClearRepaint() || forceFull
+  const frame = (squishBlanks > 0 && !optClearRepaint()
+    ? squishFrame(rows, squishBlanks)
+    : null) ??
+    (optClearRepaint() || forceFull
     ? null
     : (posClear || unsquished ? null : scrolledFrame(rows, rawContent)) ??
       skippedFrame(rows, rawContent, posClear || unsquished)) ??
@@ -1636,6 +1640,54 @@ const syncOn = (): string =>
 const syncOff = (): string =>
   terminalCapability(null, 'RESUME') ?? TERMINAL_RESUME;
 
+/**
+ * og's squished first paint (forw()'s `first_time && pos ==
+ * NULL_POSITION && !top_scroll`): term_init has already left the
+ * cursor on the BOTTOM line, and put_line writes each line followed by
+ * a newline, so the terminal SCROLLS the short file up into place.
+ *
+ * Nothing is addressed and nothing is cleared. Painting the same
+ * screen row by row from the top lands identically for ordinary text -
+ * which is why the two agreed for so long - but not for content that
+ * moves the cursor itself, and under -r it can: an ESC D in the file
+ * scrolls the terminal too, and only the sequential paint carries that
+ * through the way og does.
+ *
+ * @param rows - The padded window, blanks first, prompt last.
+ * @param blanks - How many leading rows the pad added.
+ */
+function squishFrame(rows: string[], blanks: number): string {
+  // the pad rows are never written - the terminal's own scrolling is
+  // what puts them there - but they are still what a NUL collapse was
+  // measured against, so the physical rows have to be taken the same
+  // way fullFrame takes them
+  const physical = collapseNulRows(rows);
+  nulCollapsed = rows.length - physical.length;
+
+  const bottom = physical[physical.length - 1] ?? '';
+  let content = physical.slice(blanks, -1);
+
+  // og draws one line per line it READ, and a zero-byte file has
+  // none - forw_line returns EOF straight away. Our content array
+  // still carries one synthetic empty row for such a file, and
+  // drawing it would scroll a row og never scrolls
+  if (content.length === 1 && content[0] === '' &&
+      (files.list[files.index]?.size ?? 0) <= 0) {
+    content = [];
+  }
+
+  // og's prompt() skips clear_bot when the last action was a forward
+  // movement, "since the forward movement guarantees that we're in
+  // the right position" (command.c): every drawn line ends with a
+  // newline, so the cursor is already at the start of the prompt row.
+  // With nothing drawn, forw_prompt stays FALSE and the clear runs
+  const bot = content.length ? '' : clearBot();
+
+  return syncOn() + '\r' +
+    content.map(row => frameRowEnd(row) ? row + '\r\n' : row).join('') +
+    bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
+}
+
 function fullFrame(rows: string[]): string {
   const physical = collapseNulRows(rows);
   nulCollapsed = rows.length - physical.length;
@@ -1696,7 +1748,15 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
 
   if (!prev || prev.length !== n || n < 3) return null;
 
-  const delta = topDelta(src, n);
+  // og derives the distance from its position table, which moves with
+  // the file. config.row does the same for the array-backed core, but
+  // the block-backed one moves its WINDOW and leaves config.row at 0,
+  // so topDelta sees nothing and every scroll became a full repaint -
+  // the same screen, so nothing caught it, until a physically drifted
+  // screen (a wrapped prompt under -r) showed the repaint resetting
+  // drift that og carries. The shift is still there to be read off the
+  // rows, and shifted() below proves whichever k we pick.
+  const delta = topDelta(src, n) || shiftDelta(rows, prev, n);
   if (delta === null || delta === 0) return null;
 
   // scrolled forward: new rows show what was k rows lower; -y limits
@@ -1725,6 +1785,27 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     let frame = syncOn() + SCROLL_DOWN(k);
     for (let r = 0; r < k; r++) frame += drawRow(rows, r);
     return frame + drawRow(rows, n - 1) + parkCursor(rows) + syncOff();
+  }
+
+  return null;
+}
+
+/**
+ * The scroll distance implied by the rows themselves: the smallest k
+ * that turns the previous frame into this one. Only consulted when the
+ * top's own arithmetic cannot answer.
+ */
+function shiftDelta(
+  rows: string[],
+  prev: string[],
+  n: number
+): number | null {
+  for (let k = 1; k < n - 1; k++) {
+    if (rows[0] === prev[k] && shifted(rows, prev, k)) return k;
+  }
+
+  for (let k = 1; k < n - 1; k++) {
+    if (rows[k] === prev[0] && shifted(prev, rows, k)) return -k;
   }
 
   return null;
@@ -2067,6 +2148,14 @@ function getPrompt(content: string[]): string {
  * prints those full and lets them trash the screen.
  */
 function clipPrompt(text: string, indent: number = 0): string {
+  // under -r og counts no widths at all: fits_on_screen returns TRUE
+  // outright for ctldisp == OPT_ON ("We're not counting, so say that
+  // everything fits", line.c), so load_line's hshift loop breaks on
+  // its first pass and the prompt is never truncated - it just wraps,
+  // scrolling the screen, which is part of what -r's documented
+  // "display may be messed up" means
+  if (optCtldisp() === 1) return text;
+
   // load_line reserves ONE column of og's sc_width (command.c:1027).
   // sc_width is the terminal's width: the -N/-J gutter is added by
   // plinenum, per content line, and never comes out of the prompt's

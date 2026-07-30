@@ -197,8 +197,16 @@ describe('a terminal that cannot switch screens', () => {
   });
 
   it('still sinks it to the bottom on a switchable terminal', () => {
-    // a 6-row window holding 2 lines and a prompt: og's lower_left
-    // leaves the other 3 above
-    expect(blanksAbove(paint(undefined))).toBe(3);
+    const frame = paint(undefined);
+
+    // og does not PAINT the rows above: term_init has already left
+    // the cursor on the bottom line, and each drawn line's newline
+    // scrolls the short file up into place (forwback.c's squished
+    // first screen). So the frame homes nowhere and writes the
+    // content straight out - which is what carries a cursor-moving
+    // escape through the way og carries it
+    expect(frame).not.toContain('\x1b[H');
+    expect(frame.slice(0, frame.indexOf('a'))).toBe('\x1b[?2026h\r');
+    expect(blanksAbove(frame)).toBe(0);
   });
 });
