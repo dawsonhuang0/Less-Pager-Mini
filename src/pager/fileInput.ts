@@ -220,14 +220,12 @@ export class FileInput implements PagerInput {
       if (!this.sourceActive() || !this.blankGiveUp) return;
 
       // get_scrpos(TOP) scans for the FIRST live entry and repaints
-      // from it at that screen line. The null lines back() drew pushed
-      // those entries down one each, and the add_back_pos before the
-      // loop pushed them one more - so the old top now sits at
-      // nulls + 1, and jump_loc walking back that far from a line at
-      // the beginning of the file hands the shortfall to forw as blank
-      // rows again
+      // from it at that screen line, so the content lands right where
+      // back() stopped drawing null lines - and the entry one row PAST
+      // it (forw's closing add_forw_pos) draws as one more null line
+      // below. Counted off og's own output: 21 tildes, the row, then a
+      // single tilde
       this.blankGiveUp = false;
-      this.padTop += 1;
       this.blankBelow = 0;
       this.keepPad = true;
       this.sync();
