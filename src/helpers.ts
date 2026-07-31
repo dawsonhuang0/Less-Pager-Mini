@@ -907,6 +907,23 @@ export function render(rawContent: string[], buffer: string[]): void {
   }
 
   if (hideHilite) setHiliteHidden(true);
+  // og's make_display repaints whenever the position table is EMPTY:
+  // `if (empty_screen()) jump_loc(...)` runs before EVERY prompt
+  // (command.c), and for a file with no lines the table is always
+  // empty. The FIRST paint squishes those null rows away (first_time);
+  // from the second prompt on they are drawn, so an empty file that
+  // showed blank rows shows tildes once any command has run
+  // ...but make_display is called from prompt(), so it only runs when
+  // a TRUE command prompt is being drawn: a search or option prompt
+  // is an MCA loop that never reaches it, and og's screen stays as it
+  // was until the prompt closes
+  if (firstPaintDone && mode.INIT && noContentDrawn(rawContent) &&
+      !search.message && !option.pending && !search.input &&
+      !examine.pending && !miscInput.pending && !brackets.pending &&
+      !marks.pending && !mode.BUFFERING && !config.keyPrefix) {
+    mode.INIT = false;
+  }
+
   let rows = screenRows(rawContent, buffer, filling);
   if (hideHilite) setHiliteHidden(false);
 
@@ -974,23 +991,6 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (mode.INIT && onAlt && rows.length < config.window) {
     squishBlanks = config.window - collapseNulRows(rows).length;
     rows.unshift(...Array(squishBlanks).fill(''));
-  }
-
-  // og's make_display repaints whenever the position table is EMPTY:
-  // `if (empty_screen()) jump_loc(...)` runs before EVERY prompt
-  // (command.c), and for a file with no lines the table is always
-  // empty. The FIRST paint squishes those null rows away (first_time);
-  // from the second prompt on they are drawn, so an empty file that
-  // showed blank rows shows tildes once any command has run
-  // ...but make_display is called from prompt(), so it only runs when
-  // a TRUE command prompt is being drawn: a search or option prompt
-  // is an MCA loop that never reaches it, and og's screen stays as it
-  // was until the prompt closes
-  if (!firstPaint && mode.INIT && noContentDrawn(rawContent) &&
-      !search.message && !option.pending && !search.input &&
-      !examine.pending && !miscInput.pending && !brackets.pending &&
-      !marks.pending && !mode.BUFFERING && !config.keyPrefix) {
-    mode.INIT = false;
   }
 
   // og's G repaints through its pos_clear even when nothing moved

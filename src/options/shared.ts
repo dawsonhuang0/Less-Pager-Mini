@@ -76,6 +76,11 @@ export const hook = {
    *  from the position table rather than from whatever the last
    *  command left standing. */
   sourceRepaint: null as null | (() => void),
+  /** og's curr_byte(where): the byte at a SCREEN ROW, read off the
+   *  position table. A wrapped line puts several rows in one line, so
+   *  this is not the line's byte - which is what makes %bB and %pB
+   *  land mid-line on a long line. */
+  sourceRowByte: null as null | ((sindex: number) => number | null),
 };
 
 /** Registers the immediate -b pool trim, like og's ch_setbufspace. */

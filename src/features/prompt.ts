@@ -205,6 +205,17 @@ function whereRow(content: string[], where: Where): number {
 }
 
 /**
+ * True when the file has no lines at all, which is og's currline()
+ * returning 0: the position table is empty, so there is no line number
+ * to report. Our content array still carries one synthetic empty line
+ * for such a file.
+ */
+function noLines(content: string[]): boolean {
+  return content.length <= 1 && !content[0] &&
+    (files.list[files.index]?.size ?? 0) <= 0;
+}
+
+/**
  * Evaluates a conditional char, like less's cond().
  */
 function cond(content: string[], out: string, char: string): boolean {
@@ -249,8 +260,13 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'x': return files.list[files.index + 1] !== undefined;
 
     // line numbers are only known while -n keeps them on
+    // og's cond is `linenums && currline(where) != 0` (prompt.c:229):
+    // a line NUMBER of zero means it is not known - which is the state
+    // an empty file is permanently in, since it has no lines at all.
+    // og then takes the ELSE branch of the -M prompt and reports the
+    // byte instead
     case 'l': case 'd':
-      return optLinenums() > 0;
+      return optLinenums() > 0 && !noLines(content);
 
     // the LAST line and page need the input's LENGTH, not merely a
     // finished stream: og's cond is linenums && ch_length() !=
@@ -282,13 +298,33 @@ function protochar(
 ): string {
   const entry = files.list[files.index];
   const next = files.list[files.index + 1];
-  const size = Math.max(entry ? entry.size : 0, 1);
+  // og keeps the real length and guards the DIVISION instead: `%p`
+  // asks `if (pos != NULL_POSITION && len > 0)` and prints "?"
+  // otherwise (prompt.c:396). Clamping the length to 1 made an empty
+  // file report a size of one byte
+  const size = entry ? entry.size : 0;
 
   // pages shrink by the pinned --header lines, like prompt.c's PAGE_NUM
   const pageSize = Math.max(config.window - 1 - optHeader().lines, 1);
   const row = whereRow(content, where);
 
+  // og's position(where) indexes the SCREEN, not the content: TOP is
+  // row 0, BOTTOM is sc_height-2, BOTTOM_PLUS_ONE sc_height-1, MIDDLE
+  // the middle row (position.c). On a wrapped line those are rows
+  // INSIDE a line, which is why %bB and %pB report a mid-line byte
+  const sindex = (): number => {
+    switch (where) {
+      case 'm': return Math.floor((config.window - 1) / 2);
+      case 'b': return config.window - 2;
+      case 'B': return config.window - 1;
+      default: return 0;
+    }
+  };
+
   const absoluteByte = (): number => {
+    const byRow = hook.sourceRowByte?.(sindex());
+    if (byRow !== undefined && byRow !== null) return byRow;
+
     const sourced = hook.sourceBytePosition?.(row);
     return sourced === undefined
       ? byteOffset(content, row) + byteBase()
@@ -374,7 +410,7 @@ function protochar(
       return out + (ntags() ? ntags() : files.list.length);
 
     case 'p':
-      return out + (sizeIsKnown()
+      return out + (sizeIsKnown() && size > 0
         ? percentage(
           Math.min(
             absoluteByte(),

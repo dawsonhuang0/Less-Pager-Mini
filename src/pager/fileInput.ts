@@ -87,6 +87,8 @@ import { BlockFile } from './blockFile';
 
 import { BigView, ViewTop, displayText } from './fileView';
 
+import { sourceLine, sourceIndexAt } from '../lines/helpers';
+
 import { forwLine, backLine, MAX_LINE } from './fileLines';
 
 import { PagerInput } from './input';
@@ -216,6 +218,38 @@ export class FileInput implements PagerInput {
     // repaints through jump_loc - which rebuilds from the position
     // table. Null lines a give-up jump drew are NOT in that table, so
     // they do not survive the repaint the way an nblank pad does
+    // og's curr_byte(where) reads position(where) - a SCREEN ROW's
+    // byte - and walks forward over rows the table has nothing for,
+    // falling back to ch_length (prompt.c). A wrapped line owns
+    // several rows, so the answer is usually mid-line
+    hook.sourceRowByte = sindex => {
+      if (!this.sourceActive()) return null;
+
+      // og reads position(where) FIRST and only then walks forward
+      // over empty rows, so BOTTOM_PLUS_ONE - the last index - is read
+      // rather than skipped
+      for (let k = sindex; k <= config.window - 1; k++) {
+        const at = this.view.screenPos(k);
+        if (at === null) continue;
+
+        const line = forwLine(this.bf, at.pos);
+        if (!line || at.offset <= 0) return at.pos;
+
+        // the offset counts DISPLAY characters; og's table holds a
+        // byte, so it converts through the raw line the display was
+        // built from
+        const shown = displayText(line.text);
+        const raw = sourceLine(shown) ?? shown;
+        const upto = raw === shown
+          ? at.offset
+          : sourceIndexAt(raw, at.offset);
+
+        return at.pos + Buffer.byteLength(raw.slice(0, upto));
+      }
+
+      return this.bf.size;
+    };
+
     hook.sourceRepaint = () => {
       if (!this.sourceActive() || !this.blankGiveUp) return;
 
@@ -257,6 +291,13 @@ export class FileInput implements PagerInput {
 
     this.seekLine(config.row, false);
     this.sync();
+
+    // og's currline(BOTTOM) closes the STARTUP forw() too, so by the
+    // time any command runs the bottom line's number is already known.
+    // Without this the first command to bell - which og answers with a
+    // bell and nothing else - triggered our first resolution, and the
+    // paint that precedes it repainted the screen
+    this.lastResolved = this.view.top.pos + ':' + this.view.top.offset;
   }
 
   /** Marks the spool drain a command started, owning the command
@@ -1033,6 +1074,8 @@ export class FileInput implements PagerInput {
     hook.sourceLineCount = null;
     hook.sourceHeaderRow = null;
     hook.sourceHeaderChanged = null;
+    hook.sourceRowByte = null;
+    hook.sourceRepaint = null;
     this.pending?.bf.close();
     this.bf.close();
   }
