@@ -661,11 +661,13 @@ export class FileInput implements PagerInput {
     const target = this.view.screenPos(jumpSindex());
 
     if (bSub === null && target && target.pos === found) {
+      // og runs jump_loc only `else if (pos != opos)` (search.c), so
+      // a match already sitting on the -j target moves NOTHING - no
+      // jump, and therefore no pos_clear and no repaint. The two
+      // paints hilite_screen already made are the whole of it
       this.shiftMatch(found);
       this.sync();
       recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
-      this.seam = [];
-    markPosClear();
       return;
     }
 

@@ -839,6 +839,11 @@ export function renderHiliteRepaint(
   // og never makes
   prevRows = rows;
   prevCursorCol = -1;
+
+  // the loop stops one row short of the bottom: og's repaint_hilite
+  // never touches the prompt line, which prompt() writes afterwards.
+  // Claiming we painted it would make the next frame skip it
+  dirtyBottomRow();
 }
 
 export function render(rawContent: string[], buffer: string[]): void {

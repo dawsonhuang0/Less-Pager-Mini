@@ -649,7 +649,11 @@ export async function contentPager(
     setHiliteHidden(true);
     renderHiliteRepaint(content, session.buffer);
 
+    // og clears hide_hilite BETWEEN the two paints (search.c:2146),
+    // so the second one already shows the new pattern's matches and
+    // the search itself has nothing left to paint
     setHiliteHidden(false);
+    search.highlight = true;
     renderHiliteRepaint(content, session.buffer);
   });
 
