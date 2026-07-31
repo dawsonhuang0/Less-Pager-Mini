@@ -811,7 +811,22 @@ export function renderHiliteRepaint(
   const rows = screenRows(rawContent, buffer);
   let out = '';
 
-  for (let i = 0; i < rows.length - 1; i++) {
+  // `if (pos == NULL_POSITION) continue;` - og redraws only the rows
+  // that HAVE a position. A tilde past the end of the file and a blank
+  // above the beginning have none, so it never touches them: whatever
+  // the terminal is showing there stays. That is not cosmetic under
+  // -r, where the row above wrapped over them - og leaves the wrapped
+  // remnants alone and we were wiping them with tildes
+  const first = config.blankTop;
+
+  // one row PAST the content still has an entry: forw() closes with
+  // `add_forw_pos(pos, FALSE)`, so the position table always carries
+  // the spot after the last line drawn (og's BOTTOM_PLUS_ONE). Its
+  // forw_line returns NULL, so repaint_hilite draws it as a null line
+  // - one tilde, and only one, however many the screen shows
+  const last = Math.min(rows.length - 1 - padRows + 1, rows.length - 1);
+
+  for (let i = first; i < last; i++) {
     out += CURSOR_TO(i + 1, 1) + CLEAR_LINE + rows[i] + '\n';
   }
 
@@ -2375,11 +2390,19 @@ function visibleBufferLength(bufferLength: number): number {
  *
  * @param lines - The array of formatted lines to pad.
  */
+// how many trailing rows the last frame padded past the end of the
+// file. og needs no such count: those rows simply have no entry in the
+// position table, and everything that walks the screen skips them
+let padRows = 0;
+
 function padToEOF(lines: string[]): void {
+  padRows = 0;
+
   // og's gline draws a null line as "~" or "" by the twiddle flag, so
   // -~ pads with blank rows and the prompt keeps the bottom line
   if (!mode.INIT && config.window - lines.length > 1) {
     const rows = config.window - lines.length - 1;
+    padRows = rows;
 
     // one self-contained row per tilde, like the blankTop pad above
     // and like og attributing every null line it draws. A single
