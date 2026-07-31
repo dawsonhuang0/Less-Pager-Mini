@@ -9,7 +9,8 @@ import { getLayout } from "./lineLayout";
 
 import { highlightLine } from "../features/searching";
 
-import { optRscroll, optRscrollAttr, optHeader } from "../options";
+import { optRscroll, optRscrollAttr, optHeader, optCtldisp }
+  from "../options";
 
 import { colored } from "../features/color";
 
@@ -156,6 +157,17 @@ function chop(
   placeholder: boolean = true,
   seam: string = ''
 ): void {
+  // og chops inside `if (backchars > 0)` - the branch pappend enters
+  // only when a char DOES NOT FIT (input.c:231) - and under -r
+  // fits_on_screen answers TRUE for everything, so nothing ever fails
+  // to fit. The horizontal shift still applies, since store_char skips
+  // while cshift < hshift whatever ctldisp says, but nothing is cut
+  // off - and with nothing cut off there is no rscroll marker
+  if (optCtldisp() === 1) {
+    width = Number.MAX_SAFE_INTEGER;
+    marker = false;
+  }
+
   // --rscroll=- disables the marker: the text keeps the last column
   marker = marker && optRscroll() !== '';
 
