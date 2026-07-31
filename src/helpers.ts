@@ -1726,6 +1726,15 @@ export function screenRows(
     return content.join('\n').split('\n');
   }
 
+  // og's lclear leaves rows it never redraws: back() drew fewer null
+  // lines than the screen holds, and what is under them is the
+  // CLEARED screen, not a tilde
+  if (config.blankBelow > 0) {
+    const keep = Math.max(content.length - config.blankBelow, 0);
+    content.length = keep;
+    while (content.length < config.window - 1) content.push('');
+  }
+
   const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;

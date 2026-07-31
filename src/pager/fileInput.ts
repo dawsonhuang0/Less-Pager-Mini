@@ -116,6 +116,9 @@ export class FileInput implements PagerInput {
 
   /** The layout generation this.seam's extents were measured under. */
   private seamLayout = -1;
+
+  /** Rows at the bottom left blank by og's lclear. */
+  private blankBelow = 0;
   private pending: {
     index: number,
     bf: BlockFile,
@@ -1683,6 +1686,16 @@ export class FileInput implements PagerInput {
     const want = Math.max(target, floor);
     const pos = this.findLinePosition(want);
 
+    // og's onscreen() compares BYTE positions, and its top under -r is
+    // a byte part-way into the line. Ours is that line's start plus an
+    // offset, so a target at the line's beginning looks equal to the
+    // top when og would call it strictly before - and og's give-up
+    // branch below is what answers that case
+    const before = pos !== null && (pos < this.view.top.pos ||
+      (pos === this.view.top.pos && this.view.top.offset > 0));
+
+    if (before && this.blankBack(pos)) return;
+
     // og's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
     // scrolls instead of repainting when the line is already on screen
     if (pos !== null && this.jumpNear(pos, jumpSindex() + 1)) {
@@ -1691,10 +1704,73 @@ export class FileInput implements PagerInput {
       return;
     }
 
+    // og's jump_loc, for a target BEFORE the screen, walks FORWARD
+    // from it looking for a row that reaches the current top - and if
+    // that walk runs off the end of the file first, it gives up,
+    // lclear()s and back()s from the target with force (jump.c:353).
+    // From the beginning of the file back() has nowhere to go, so it
+    // draws a screenful of NULL LINES: the content is pushed off and
+    // tildes are all that is left. -r is what makes the walk fail,
+    // because the whole file is a single row
     this.seekLine(want, true);
     this.sync();
     this.seam = [];
     markPosClear();
+  }
+
+  /**
+   * og's give-up branch: true when the forward walk from `pos` cannot
+   * reach the current top, leaving the screen null lines.
+   */
+  private blankBack(pos: number): boolean {
+    const top = this.view.top;
+    let at = { pos, offset: 0 };
+    let ended = false;
+
+    // og walks forward by DISPLAY ROWS - `pos = forw_line(pos,
+    // &linepos, NULL)` once per screen line - and takes the scroll
+    // shortcut the moment a row's start reaches the old top. Only a
+    // walk that runs off the END of the file first leaves pos
+    // NULL_POSITION, and that is the case back() then fills with null
+    // lines. Everything else repaints normally
+    for (let rows = 0; rows < config.window - 1; rows++) {
+      if (at.pos > top.pos ||
+          (at.pos === top.pos && at.offset >= top.offset)) {
+        return false;
+      }
+
+      const line = forwLine(this.bf, at.pos);
+      if (!line) { ended = true; break; }
+
+      const next = this.view.nextRowOffset(line.text, at.offset);
+
+      if (next !== null) {
+        at = { pos: at.pos, offset: next };
+      } else if (line.next < this.bf.size) {
+        at = { pos: line.next, offset: 0 };
+      } else {
+        ended = true;
+        break;
+      }
+    }
+
+    if (!ended) return false;
+
+    // og's back() stops when the entries the OLD table still holds
+    // reach the bottom two slots - add_back_pos shifts them down one
+    // per null line drawn - so it draws sc_height-1 minus however many
+    // there were. The rest of the screen keeps what lclear left: blank
+    const entries = this.view.visible(config.window - 1).rows.length + 1;
+    const nulls = Math.max(config.window - 1 - entries, 0);
+
+    this.view.top = { pos, offset: 0 };
+    this.padTop = nulls;
+    this.blankBelow = config.window - 1 - nulls;
+    this.keepPad = true;
+    this.sync();
+    this.seam = [];
+    markPosClear();
+    return true;
   }
 
   private seekLine(target: number, bell: boolean): void {
@@ -2287,7 +2363,12 @@ export class FileInput implements PagerInput {
     // the top's line, so it survives that and is simply re-anchored
     this.publishSeam();
     // scroll moves carry their over-BOF pad; any jump clears it
-    if (!this.keepPad) this.padTop = 0;
+    if (!this.keepPad) {
+      this.padTop = 0;
+      this.blankBelow = 0;
+    }
+
+    config.blankBelow = this.blankBelow;
     this.keepPad = false;
     config.blankTop = this.padTop;
 

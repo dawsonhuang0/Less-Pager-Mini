@@ -37,6 +37,10 @@ export interface Config {
   // Blank rows displayed above the beginning of the content, like less
   // padding the top when a jump target lands near BOF (jump_loc/forw)
   blankTop: number;
+  /** Rows at the BOTTOM the screen was cleared to and never redrawn -
+   *  og's jump_loc lclear()ing and then back()ing fewer null lines
+   *  than the screen holds. Blank, not tildes: nothing drew them. */
+  blankBelow: number;
 
   // Last row & subRow without exceeding EOF
   endRow: number;
