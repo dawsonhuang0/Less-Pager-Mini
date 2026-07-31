@@ -205,6 +205,29 @@ function whereRow(content: string[], where: Where): number {
 }
 
 /**
+ * og's prutfchar over a whole string: ESC spells "ESC", an ASCII
+ * control character takes caret notation, and everything else stands
+ * for itself (charset.c). This is what %f and %F are passed through.
+ */
+function printableName(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (!/[\x00-\x1F\x7F]/.test(name)) return name;
+
+  let out = '';
+
+  for (const char of name) {
+    const code = char.codePointAt(0) ?? 0;
+
+    if (code === 0x1B) out += 'ESC';
+    else if (code < 0x20) out += '^' + String.fromCharCode(code ^ 0x40);
+    else if (code === 0x7F) out += '^?';
+    else out += char;
+  }
+
+  return out;
+}
+
+/**
  * True when the file has no lines at all, which is og's currline()
  * returning 0: the position table is empty, so there is no line number
  * to report. Our content array still carries one synthetic empty line
@@ -378,8 +401,15 @@ function protochar(
       // EDIT_PGM is "vi" on unix and "edit" on Windows (defines.wn)
       return out + (lgetenv('VISUAL') || lgetenv('EDITOR') || EDIT_PGM);
 
-    case 'f': return out + (entry ? entry.path : '?');
-    case 'F': return out + (entry ? path.basename(entry.path) : '?');
+    // og converts ONLY the file name to printable form, and it does so
+    // while BUILDING the prompt - ap_estr(..., TRUE) for %f and %F,
+    // ap_str for everything else (prompt.c:337, bf14bc4a). That is a
+    // different conversion from the one the draw applies: prutfchar
+    // renders a tab as ^I, where the line machinery would expand it to
+    // the next tab stop
+    case 'f': return out + (entry ? printableName(entry.path) : '?');
+    case 'F':
+      return out + (entry ? printableName(path.basename(entry.path)) : '?');
     case 'g': return out + (entry ? shellQuote(entry.path) : '?');
 
     case 'G':
