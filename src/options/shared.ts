@@ -71,6 +71,11 @@ export const hook = {
   sourceHeaderRow: null as null | (() => number | undefined),
   /** Moves a seekable source when --header changes its absolute start. */
   sourceHeaderChanged: null as null | ((start: number) => void),
+  /** og's screen_trashed for an O_REPAINT option: the next
+   *  make_display repaints through jump_loc, which rebuilds the screen
+   *  from the position table rather than from whatever the last
+   *  command left standing. */
+  sourceRepaint: null as null | (() => void),
 };
 
 /** Registers the immediate -b pool trim, like og's ch_setbufspace. */
@@ -603,6 +608,7 @@ export function applyGutter(content: string[]): void {
   // :605, :613) - so og trashes the screen and the next make_display
   // repaints it, pos_clear and all
   markFullRepaint();
+  hook.sourceRepaint?.();
 }
 
 // re-derives displayed content after -s/-x/-r change its shape

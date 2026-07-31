@@ -119,6 +119,9 @@ export class FileInput implements PagerInput {
 
   /** Rows at the bottom left blank by og's lclear. */
   private blankBelow = 0;
+
+  /** The pad came from jump_loc's give-up branch, not from nblank. */
+  private blankGiveUp = false;
   private pending: {
     index: number,
     bf: BlockFile,
@@ -209,6 +212,27 @@ export class FileInput implements PagerInput {
     hook.sourceHeaderRow = () => this.sourceActive()
       ? this.headerRow
       : undefined;
+    // og's O_REPAINT toggle trashes the screen, and make_display then
+    // repaints through jump_loc - which rebuilds from the position
+    // table. Null lines a give-up jump drew are NOT in that table, so
+    // they do not survive the repaint the way an nblank pad does
+    hook.sourceRepaint = () => {
+      if (!this.sourceActive() || !this.blankGiveUp) return;
+
+      // get_scrpos(TOP) scans for the FIRST live entry and repaints
+      // from it at that screen line. The null lines back() drew pushed
+      // those entries down one each, and the add_back_pos before the
+      // loop pushed them one more - so the old top now sits at
+      // nulls + 1, and jump_loc walking back that far from a line at
+      // the beginning of the file hands the shortfall to forw as blank
+      // rows again
+      this.blankGiveUp = false;
+      this.padTop += 1;
+      this.blankBelow = 0;
+      this.keepPad = true;
+      this.sync();
+    };
+
     hook.sourceHeaderChanged = start => {
       if (!this.sourceActive()) return;
       this.seekLine(start, false);
@@ -1763,9 +1787,15 @@ export class FileInput implements PagerInput {
     const entries = this.view.visible(config.window - 1).rows.length + 1;
     const nulls = Math.max(config.window - 1 - entries, 0);
 
-    this.view.top = { pos, offset: 0 };
+    // the top does NOT move: og's backward branch add_back_pos's the
+    // walk's end - NULL_POSITION here - and lets back() draw null
+    // lines over the screen, while the entries for the OLD top stay in
+    // the table, shifted down. A later repaint reads one back out of
+    // it (get_scrpos scans from the top for the first live entry), so
+    // the content returns to where it was, not to the jump's target
     this.padTop = nulls;
     this.blankBelow = config.window - 1 - nulls;
+    this.blankGiveUp = true;
     this.keepPad = true;
     this.sync();
     this.seam = [];
