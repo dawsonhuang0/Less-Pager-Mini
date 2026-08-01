@@ -410,6 +410,25 @@ export function pipeMarkKey(content: string[], key: string): boolean {
     return false;
   }
 
+  // og special-cases '.' -- and the newline that just became one --
+  // as "pipe current screen": it takes the ':' and ';' marks TOGETHER
+  // (command.c:2426) and hands pipe_pos both, so the two-mark branch
+  // pipes exactly the visible rows. It is not the single '.' mark,
+  // which is only the top line: reading it as one piped a single line
+  // where og pipes the whole screen.
+  if (pipeMark.stage === '' && c === '.') {
+    const top = markRow(content, ':');
+    const bot = markRow(content, ';');
+    if (top === null || bot === null) return abort();
+
+    pipeMark.char = c;
+    pipeMark.rows = [top, bot];
+    pipeMark.pending = false;
+    pipeMark.stage = '';
+    startMiscInput('|');
+    return true;
+  }
+
   const row = markRow(content, c);
   if (row === null) return abort();
 
