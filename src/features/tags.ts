@@ -8,6 +8,8 @@ import { shellQuote } from "./prompt";
 
 import { lgetenv } from '../startup/environment';
 
+import { secureAllow } from './secure';
+
 /** One tag match, like tags.c's struct tag. */
 export interface Tag {
   file: string;
@@ -57,6 +59,39 @@ export function resetTags(): void {
 // $LESS arrives before the pager registers, so it stays pending
 let tagJumpHook: (() => void) | null = null;
 let pendingJump = false;
+
+// og's opt_t INIT stores the tag and defers: "Do the rest in main()".
+// main.c looks it up at line 408, once every option has been scanned, so
+// -t and -T work in either order.
+let pendingTag: string | null = null;
+
+/** Records a startup -t, to be resolved once option scanning ends. */
+export function setPendingTag(name: string): void {
+  pendingTag = name;
+}
+
+/** Is a startup -t waiting? (og: tagoption != NULL) */
+export function hasPendingTag(): boolean {
+  return pendingTag !== null;
+}
+
+/**
+ * Resolves a startup -t, the way main.c does after scan_option: look the
+ * tag up and ask the pager to jump, reporting og's message on failure.
+ */
+export function resolvePendingTag(): string | null {
+  const name = pendingTag;
+  pendingTag = null;
+  if (name === null) return null;
+
+  if (!secureAllow('tags')) return 'tags support is not available';
+
+  const error = findTag(name);
+  if (error) return error;
+
+  requestTagJump();
+  return null;
+}
 
 /** Asks the pager to jump to the current tag. */
 export function requestTagJump(): void {

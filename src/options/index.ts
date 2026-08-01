@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import { setPendingTag } from '../features/tags';
+
 import { opt } from './state';
 
 
@@ -1085,6 +1087,17 @@ function applyScanString(
       optScanError(`Cannot use lesskey file "${param}"`);
     }
 
+    return;
+  }
+
+  // -t only RECORDS the tag at startup: og's opt_t INIT is
+  // `tagoption = save(s)` with the comment "Do the rest in main()",
+  // and main.c looks the tag up at line 408, after every option has
+  // been scanned. Doing it here instead made the lookup depend on
+  // argument order -- `-t tag -T file` could not see the -T yet and
+  // failed with "No tags file", while og handles either order.
+  if (spec.letter === 't') {
+    setPendingTag(param.replace(/^[ \t]+/, ''));
     return;
   }
 

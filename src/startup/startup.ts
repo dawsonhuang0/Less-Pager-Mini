@@ -27,6 +27,8 @@ import { lockLibraryShell } from './invocation';
 
 import { resetOsc8 } from '../features/osc8';
 
+import { resolvePendingTag } from '../features/tags';
+
 // error() calls before the screen initializes, counted for og's
 // main errmsgs gate ("Press RETURN to continue" before the screen
 // erases them)
@@ -102,6 +104,13 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
 
   // a still-dangling string/number option reports now (og nopendopt)
   flushPendopt();
+
+  // og's main.c looks up a startup -t HERE (line 408), after every
+  // option has been scanned, which is why `-t tag -T file` works there
+  // in either order. opt_t's INIT only records the tag: "Do the rest in
+  // main()".
+  const tagError = resolvePendingTag();
+  if (tagError) search.message = tagError;
 
   // the scan is over: nothing the AMBIENT environment supplied may
   // hand shell escapes back to a library call, though the caller's
