@@ -76,6 +76,11 @@ export const hook = {
    *  from the position table rather than from whatever the last
    *  command left standing. */
   sourceRepaint: null as null | (() => void),
+  /** Raw bytes between two absolute file positions, like og's
+   *  pipe_data reading ch.c between spos and epos. The pipe needs the
+   *  FILE, not the materialized window: session.content holds only the
+   *  rows currently spooled. */
+  sourceReadRange: null as null | ((from: number, to: number) => Buffer | null),
   /** og's curr_byte(where): the byte at a SCREEN ROW, read off the
    *  position table. A wrapped line puts several rows in one line, so
    *  this is not the line's byte - which is what makes %bB and %pB

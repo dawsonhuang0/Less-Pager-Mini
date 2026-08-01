@@ -49,7 +49,7 @@ import { editCommand, prExpand } from './features/prompt';
 import { secureAllow } from './features/secure';
 
 import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
-  jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE } from './options';
+  jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';
 
 import {
   CONSOLE_CLEAR,
@@ -475,6 +475,25 @@ export function runShell(
  * - Like less's A_PIPE, the command is taken literally: no `!!`, `%`
  *   or `#` expansion; a leading `^P` suppresses the done message.
  */
+/**
+ * The raw file bytes behind local rows [lo, hi), when the session is
+ * backed by a seekable source. Returns null for an in-memory session,
+ * where session.content IS the file.
+ */
+function sourceRangeText(lo: number, hi: number): string | null {
+  if (!hook.sourceBytePosition || !hook.sourceReadRange) return null;
+
+  const from = hook.sourceBytePosition(lo);
+  const to = hook.sourceBytePosition(hi);
+  if (from === null || from === undefined ||
+      to === null || to === undefined || to <= from) {
+    return null;
+  }
+
+  const buf = hook.sourceReadRange(from, to);
+  return buf === null ? null : buf.toString('latin1');
+}
+
 export function runPipe(cmd: string): void {
   let doneMsg: string | null = '|done';
 
@@ -503,7 +522,15 @@ export function runPipe(cmd: string): void {
     hi = row + 1;
   }
 
-  const text = session.content.slice(lo, hi).join('\n') + '\n';
+  // og's pipe_data reads the FILE between two positions (lsystem.c),
+  // which is why it can pipe 200 lines while showing 23. session.content
+  // is only the spooled window -- piping from it sent whatever happened
+  // to be materialized, so "|$" delivered 72 lines of a 200 line file.
+  // The source hooks already carry both halves: a row's absolute byte
+  // (falling back to the file size past the window) and the block file's
+  // own ranged read.
+  const text = sourceRangeText(lo, hi) ??
+    session.content.slice(lo, hi).join('\n') + '\n';
   runShell(cmd, doneMsg, text);
 }
 

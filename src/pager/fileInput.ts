@@ -211,6 +211,11 @@ export class FileInput implements PagerInput {
     hook.sourceLineCount = () => this.sourceActive()
       ? this.lineCount()
       : undefined;
+    // og's pipe_data reads the file between two positions; the block
+    // file already does exactly that read
+    hook.sourceReadRange = (from, to) => this.sourceActive() && to > from
+      ? this.bf.readRange(from, to - from)
+      : null;
     hook.sourceHeaderRow = () => this.sourceActive()
       ? this.headerRow
       : undefined;
@@ -1072,6 +1077,7 @@ export class FileInput implements PagerInput {
     hook.sourceLineNumber = null;
     hook.sourceBytePosition = null;
     hook.sourceLineCount = null;
+    hook.sourceReadRange = null;
     hook.sourceHeaderRow = null;
     hook.sourceHeaderChanged = null;
     hook.sourceRowByte = null;
