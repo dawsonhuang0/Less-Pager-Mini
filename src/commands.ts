@@ -407,7 +407,13 @@ export function runShell(
   // only lsystem hides a "-" command; pipe_data always echoes
   if (input === undefined && cmd.startsWith('-')) {
     cmd = cmd.slice(1);
-    if (endPrompt) process.stdout.write(endPrompt + clearBot());
+    // The clear is NOT conditional on --end-prompt. og clears this
+    // line in cmd_exec(), before the command runs at all, so the
+    // typed "!-cmd" is gone whatever lsystem then decides to print;
+    // lsystem's "-" rule only suppresses the echoed copy. Skipping
+    // it left the typed line on screen and the shell's own output
+    // landed on the end of it: "!-echo quietquiet".
+    process.stdout.write(endPrompt + clearBot());
   } else {
     // like lsystem's clear_bot + "!cmd" + newline: the expanded
     // command shows on the pager's bottom line, so the shell screen
