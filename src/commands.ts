@@ -615,4 +615,13 @@ export function applyFilter(): void {
   config.subRow = 0;
   config.blankTop = 0;
   calculateEOF(session.content);
+
+  // og's set_filter_pattern ends with screen_trashed() (search.c), and
+  // a trashed screen is answered by repaint(): the screen comes back
+  // top-anchored with tilde fill. A short filtered result was instead
+  // left in the SQUISHED layout of a first paint -- blank rows above,
+  // the matching lines pushed to the bottom -- because nothing cleared
+  // mode.INIT, which is what repaint() undoes (the same unsquish the
+  // r/^L/^R repaints and repaint_hilite do).
+  if (mode.INIT) mode.INIT = false;
 }
