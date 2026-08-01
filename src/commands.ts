@@ -480,10 +480,14 @@ export function runShell(
  * backed by a seekable source. Returns null for an in-memory session,
  * where session.content IS the file.
  */
-function sourceRangeText(lo: number, hi: number): string | null {
+function sourceRangeText(
+  lo: number,
+  hi: number,
+  fromFileStart: boolean = false
+): string | null {
   if (!hook.sourceBytePosition || !hook.sourceReadRange) return null;
 
-  const from = hook.sourceBytePosition(lo);
+  const from = fromFileStart ? 0 : hook.sourceBytePosition(lo);
   const to = hook.sourceBytePosition(hi);
   if (from === null || from === undefined ||
       to === null || to === undefined || to <= from) {
@@ -522,6 +526,32 @@ export function runPipe(cmd: string): void {
     hi = row + 1;
   }
 
+  // og compares POSITIONS, not rows: '^' is byte 0 of the FILE, which
+  // after any scrolling is genuinely before the top of the screen, so og
+  // takes its "mark before the top line" branch and pipes byte 0 through
+  // the bottom of the screen. Our marks resolve to LOCAL rows and local
+  // row 0 is the top of the spooled WINDOW, so once the window slid that
+  // comparison could never fire and |^ piped a single line. '^' and '$'
+  // are the two file-absolute marks; the rest are screen-relative and the
+  // row arithmetic below is right for them.
+  if (pipeMark.rows.length === 1 && pipeMark.char === '^' &&
+      hook.sourceBytePosition && hook.sourceReadRange) {
+    const topByte = hook.sourceBytePosition(config.row);
+
+    if (typeof topByte === 'number' && topByte > 0) {
+      const endByte = hook.sourceBytePosition(bottomRow(session.content) + 1);
+
+      if (typeof endByte === 'number' && endByte > 0) {
+        const buf = hook.sourceReadRange(0, endByte);
+
+        if (buf !== null) {
+          runShell(cmd, doneMsg, buf.toString('latin1'));
+          return;
+        }
+      }
+    }
+  }
+
   // og's pipe_data reads the FILE between two positions (lsystem.c),
   // which is why it can pipe 200 lines while showing 23. session.content
   // is only the spooled window -- piping from it sent whatever happened
@@ -529,7 +559,10 @@ export function runPipe(cmd: string): void {
   // The source hooks already carry both halves: a row's absolute byte
   // (falling back to the file size past the window) and the block file's
   // own ranged read.
-  const text = sourceRangeText(lo, hi) ??
+  // '^' is the start of the FILE wherever it appears, including as one
+  // of the two marks of a "||" range.
+  const fromFileStart = pipeMark.char === '^' || pipeMark.char2 === '^';
+  const text = sourceRangeText(lo, hi, fromFileStart) ??
     session.content.slice(lo, hi).join('\n') + '\n';
   runShell(cmd, doneMsg, text);
 }

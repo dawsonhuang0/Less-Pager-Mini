@@ -432,7 +432,8 @@ export function pipeMarkKey(content: string[], key: string): boolean {
   const row = markRow(content, c);
   if (row === null) return abort();
 
-  if (pipeMark.stage !== 'second') pipeMark.char = c;
+  if (pipeMark.stage === 'second') pipeMark.char2 = c;
+  else pipeMark.char = c;
   return took(row);
 }
 
