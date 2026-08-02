@@ -2,7 +2,7 @@ import { strWidth } from 'char-width';
 
 import { config } from '../state/config';
 
-import { getLayout } from './lineLayout';
+import { getLayout, stylesOpen } from './lineLayout';
 
 import {
   chopLine,
@@ -775,9 +775,7 @@ export function visualWidth(line: string): number {
  * @returns The line with styles guaranteed closed.
  */
 export function withReset(line: string): string {
-  const i = line.lastIndexOf(STYLE_RESET);
-  const tail = i === -1 ? line : line.slice(i + STYLE_RESET.length);
-  return STYLE_REGEX.test(tail) ? line + STYLE_RESET : line;
+  return stylesOpen(line) ? line + STYLE_RESET : line;
 }
 
 const segmenter = new Intl.Segmenter();

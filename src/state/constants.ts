@@ -223,7 +223,12 @@ export function initTerminalCapabilities(): void {
   const reset = terminalCapability('sgr0', 'me') ?? '\x1b[m';
   STYLE_RESET = reset;
   INVERSE_ON = terminalCapability('smso', 'so') ?? '\x1b[7m';
-  INVERSE_OFF = terminalCapability('rmso', 'se') ?? reset;
+  // og reads rmso from the terminfo database; terminalCapability only
+  // consults LESS_TERMCAP_*/$TERMCAP, so the lookup always misses and
+  // the fallback IS the answer on every ordinary terminal. og's is
+  // ESC[27m there (xterm's rmso), not a full reset -- matching the
+  // ANSI default the other capabilities already fall back to
+  INVERSE_OFF = terminalCapability('rmso', 'se') ?? '\x1b[27m';
   BOLD_ON = terminalCapability('bold', 'md') ?? '\x1b[1m';
   BOLD_OFF = reset;
   UNDERLINE_ON = terminalCapability('smul', 'us') ?? '\x1b[4m';
