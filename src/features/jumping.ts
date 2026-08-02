@@ -800,8 +800,18 @@ function goMark(content: string[], char: string, sline: number): void {
         return;
       }
 
-      // an unset last mark means the beginning of the file, like less
-      mark = quoteMark ?? { file: files.index, row: 0, subRow: 0, sline: 1 };
+      // og's gomark sets an unset last mark to ch_zero() at jump_sline
+      // (mark.c:340) -- POSITION zero, the beginning of the file. Ours
+      // built a synthetic row 0 and let the code below fill its
+      // position in from the window, where row 0 is the current top:
+      // after any scrolling `''` jumped to where it already was
+      mark = quoteMark ?? {
+        file: files.index,
+        row: 0,
+        subRow: 0,
+        sline: jumpSindex() + 1,
+        pos: 0,
+      };
       break;
 
     default:

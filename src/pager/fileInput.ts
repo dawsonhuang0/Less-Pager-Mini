@@ -280,7 +280,7 @@ export class FileInput implements PagerInput {
       activate: index => this.activateSourceFile(index),
     });
     onSourceFollow({
-      pinEnd: () => this.pinFollowEnd(),
+      pinEnd: entering => this.pinFollowEnd(entering),
       refresh: () => this.refreshFollow(),
     });
     onSourceTagJump(tag => this.jumpTag(tag));
@@ -365,6 +365,8 @@ export class FileInput implements PagerInput {
         this.bf.refreshSize();
 
         if (jump.kind === 'end') {
+          // jump_forw's own lastmark, once the length is known
+          recordLastPosition();
           if (session.lastFilter) this.gotoFilteredEnd();
           else this.view.gotoEnd(config.window);
         } else if (jump.kind === 'position') {
@@ -411,6 +413,8 @@ export class FileInput implements PagerInput {
         this.pendingJump = null;
         this.endDrain();
         if (jump.kind === 'end') {
+          // jump_forw's own lastmark, once the length is known
+          recordLastPosition();
           if (session.lastFilter) this.gotoFilteredEnd();
           else this.view.gotoEnd(config.window);
         } else if (jump.kind === 'percent') {
@@ -550,6 +554,15 @@ export class FileInput implements PagerInput {
             ringBell('eof');
             return true;
           }
+
+          // jump_forw calls lastmark() itself, right here: after the
+          // eof_bell test and before pos_clear, because "lastmark will
+          // be called later by jump_loc, but it fails because the
+          // position table has been cleared" (jump.c:51). Ours never
+          // did, so after G the ' mark was still unset -- '' did not
+          // come back to where G left, and |' piped one line where og
+          // pipes the whole file
+          recordLastPosition();
 
           if (session.lastFilter) {
             this.gotoFilteredEnd();
@@ -1188,7 +1201,69 @@ export class FileInput implements PagerInput {
     }
   }
 
-  private pinFollowEnd(): boolean {
+  /**
+   * jump_loc's lastmark, in positions.
+   *
+   * A jump only records the last mark when it had to REPAINT. Both of
+   * jump_loc's branches walk from the target towards the screen first,
+   * and either returns early -- "Surprise! The desired line is close
+   * enough to the current screen that we can just scroll there after
+   * all" -- before reaching the lastmark() below the loop (jump.c:294,
+   * jump.c:347). Recording unconditionally instead made `''` twice in
+   * a row land in two different places from og, because our first jump
+   * left a mark og's scroll never wrote.
+   *
+   * @param pos - The position being jumped to.
+   * @param sindex - 0-based screen row the target will be placed on.
+   */
+  private jumpLastMark(pos: number, sindex: number): void {
+    const top = this.view.screenPos(0);
+    const tpos = top === null ? null : top.pos;
+
+    if (tpos === null || pos >= tpos) {
+      // after the screen: back the target up towards position(BOTTOM)
+      const bottom = this.view.screenPos(config.window - 1);
+      const bpos = bottom === null ? null : bottom.pos;
+      let at = pos;
+
+      for (let n = 0; n < sindex; n++) {
+        if (bpos !== null && at <= bpos) return; /* scroll */
+
+        const prev = backLine(this.bf, at);
+        if (!prev) break;
+        at = prev.start;
+      }
+    } else {
+      // before the screen: walk forward and see if we reach the top
+      let at = pos;
+
+      for (let n = sindex; n < config.window - 1; n++) {
+        const line = forwLine(this.bf, at);
+        if (!line) break;
+        if (at >= tpos) return; /* scroll */
+        at = line.next;
+      }
+    }
+
+    recordLastPosition();
+  }
+
+  /**
+   * jump_loc's lastmark for F's entry jump.
+   *
+   * og's F is forw_loop, which opens with jump_forw_buffered ->
+   * jump_line_loc(end-1, sc_height-1) -> jump_loc. The ticks that
+   * follow are forw(1), not a jump, so only the entry can mark.
+   */
+  private followLastMark(): void {
+    // jump_line_loc(end-1) is the line containing the last byte
+    const pos = backLine(this.bf, this.bf.size)?.start ?? null;
+    if (pos === null) return;
+
+    this.jumpLastMark(pos, config.window - 2);
+  }
+
+  private pinFollowEnd(entering: boolean): boolean {
     if (!this.sourceActive()) return false;
 
     // F on a pipe reads to the true end and keeps reading, like
@@ -1198,6 +1273,8 @@ export class FileInput implements PagerInput {
     this.bf.refreshSize();
     const entry = files.list[this.fileIndex];
     if (entry) entry.size = this.bf.size;
+
+    if (entering) this.followLastMark();
 
     if (session.lastFilter) {
       this.gotoFilteredEnd();
@@ -1217,7 +1294,7 @@ export class FileInput implements PagerInput {
   }
 
   private refreshFollow(): boolean {
-    return this.pinFollowEnd();
+    return this.pinFollowEnd(false);
   }
 
   private jumpTag(tag: Tag): boolean {
@@ -1974,17 +2051,21 @@ export class FileInput implements PagerInput {
       return false;
     }
 
-    recordLastPosition();
-
     if (mark.pos === Number.MAX_SAFE_INTEGER) {
       // the '$' mark is og's other unconditional ch_end_seek
       // (mark.c:179), so it lands on the file's length NOW
       this.bf.refreshSize();
+      const end = backLine(this.bf, this.bf.size)?.start;
+      if (end !== undefined) this.jumpLastMark(end, config.window - 2);
       this.view.gotoEnd(config.window);
     } else {
-      this.view.gotoPos(mark.pos);
       const line = sline || mark.sline;
       const sindex = Math.min(Math.max(line, 1), config.window - 1) - 1;
+
+      // gomark hands jump_loc the mark's position and screen line, and
+      // jump_loc decides for itself whether this is worth a lastmark
+      this.jumpLastMark(mark.pos, sindex);
+      this.view.gotoPos(mark.pos);
       this.view.lineBackward(sindex);
     }
 

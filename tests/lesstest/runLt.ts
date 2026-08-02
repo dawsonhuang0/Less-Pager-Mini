@@ -28,6 +28,12 @@ export interface LtResult {
   steps: number;
   compared: number;
   mismatches: LtMismatch[];
+  /**
+   * The screen as text after each step, index 0 being startup, so
+   * step n is screens[n+1]. A recording compares whole cell grids;
+   * this is for tests that assert on one line of one screen.
+   */
+  screens: string[][];
 }
 
 /** Renders a cell row's attributes for reports, "." for none. */
@@ -81,7 +87,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   const screen = new LtScreen(lt.width, lt.height,
     'LESS_TERMCAP_xn' in lt.env);
   const result: LtResult = { steps: lt.steps.length, compared: 0,
-    mismatches: [] };
+    mismatches: [], screens: [] };
 
   // embedded test files land in a scratch directory
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lt-'));
@@ -224,6 +230,8 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   stdin.off = () => process.stdin;
 
   const checkStep = (step: number, key: string): void => {
+    result.screens.push(screen.cells.map(rowText));
+
     const expected = step < 0 ? lt.firstScreen : lt.steps[step].screen;
     if (!expected) return;
 

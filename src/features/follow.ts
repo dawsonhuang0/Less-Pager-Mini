@@ -59,7 +59,7 @@ export const follow = {
 
 interface SourceFollowHooks {
   /** Pins the active source to its current physical end. */
-  pinEnd(): boolean;
+  pinEnd(entering: boolean): boolean;
   /** Refreshes the source after pollFollow observed new bytes. */
   refresh(): boolean;
 }
@@ -291,7 +291,7 @@ export function beginFollow(kind: FollowKind): void {
   // og's forw_loop enters through jump_forw_buffered: re-entering
   // F while already at the end rings the at-end bell (jump_loc's
   // back(0) hitting eof_bell); the first F just moves there
-  if (!sourceFollowHooks?.pinEnd()) lastLine(session.content, 0);
+  if (!sourceFollowHooks?.pinEnd(true)) lastLine(session.content, 0);
   session.followTimer = setInterval(followTick, 50);
 }
 
@@ -300,7 +300,7 @@ export function beginFollow(kind: FollowKind): void {
  * forw_loop's jump_forw_buffered.
  */
 export function pinToEnd(): void {
-  if (sourceFollowHooks?.pinEnd()) return;
+  if (sourceFollowHooks?.pinEnd(false)) return;
 
   // short content that grew needs its over-BOF pad re-derived even
   // when the top position is unchanged (row 0 while under a screen)
