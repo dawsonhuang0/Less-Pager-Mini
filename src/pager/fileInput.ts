@@ -1484,6 +1484,33 @@ export class FileInput implements PagerInput {
     this.sync();
   }
 
+  /**
+   * A batch of lines narrowed to the ones the active display filter
+   * accepts, with their positions, or null when the filter itself gave
+   * up (an interrupted or too-complex pattern).
+   *
+   * Four places walked a batch off disk and then applied the mask to
+   * it: forward and backward for "the next accepted line", forward and
+   * backward for a search. All four spelled the mask out again.
+   *
+   * @param lines - The batch as read.
+   * @param positions - The byte position of each line in the batch.
+   */
+  private acceptedBatch(
+    lines: string[],
+    positions: number[]
+  ): { lines: string[], positions: number[] } | null {
+    if (!session.lastFilter) return { lines, positions };
+
+    const mask = filterLineMask(lines, session.lastFilter);
+    if (!mask) return null;
+
+    return {
+      lines: lines.filter((_, i) => mask[i]),
+      positions: positions.filter((_, i) => mask[i]),
+    };
+  }
+
   /** og's to_newline scroll (forwback.c:302): rows reveal at the
    *  bottom edge until `lines` of them end their file line, wrap
    *  continuations riding free; the top may land mid-wrap. */
@@ -1580,13 +1607,10 @@ export class FileInput implements PagerInput {
       }
 
       if (!lines.length) break;
-      const mask = session.lastFilter
-        ? filterLineMask(lines, session.lastFilter)
-        : lines.map(() => true);
-      if (!mask) return null;
 
-      const at = mask.indexOf(true);
-      if (at >= 0) return positions[at];
+      const batch = this.acceptedBatch(lines, positions);
+      if (!batch) return null;
+      if (batch.positions.length) return batch.positions[0];
     }
 
     return null;
@@ -1608,13 +1632,10 @@ export class FileInput implements PagerInput {
       }
 
       if (!lines.length) break;
-      const mask = session.lastFilter
-        ? filterLineMask(lines, session.lastFilter)
-        : lines.map(() => true);
-      if (!mask) return null;
 
-      const at = mask.indexOf(true);
-      if (at >= 0) return positions[at];
+      const batch = this.acceptedBatch(lines, positions);
+      if (!batch) return null;
+      if (batch.positions.length) return batch.positions[0];
     }
 
     return null;
@@ -2112,15 +2133,11 @@ export class FileInput implements PagerInput {
       }
 
       if (!lines.length) break;
-      let candidates = lines;
-      let candidatePositions = positions;
 
-      if (session.lastFilter) {
-        const mask = filterLineMask(lines, session.lastFilter);
-        if (!mask) return 'stop';
-        candidates = lines.filter((_, i) => mask[i]);
-        candidatePositions = positions.filter((_, i) => mask[i]);
-      }
+      const batch = this.acceptedBatch(lines, positions);
+      if (!batch) return 'stop';
+      const candidates = batch.lines;
+      const candidatePositions = batch.positions;
 
       const hit = scanSearchBatch(candidates, state);
       if (hit === 'stop') return 'stop';
@@ -2152,15 +2169,11 @@ export class FileInput implements PagerInput {
       }
 
       if (!lines.length) break;
-      let candidates = lines;
-      let candidatePositions = positions;
 
-      if (session.lastFilter) {
-        const mask = filterLineMask(lines, session.lastFilter);
-        if (!mask) return 'stop';
-        candidates = lines.filter((_, i) => mask[i]);
-        candidatePositions = positions.filter((_, i) => mask[i]);
-      }
+      const batch = this.acceptedBatch(lines, positions);
+      if (!batch) return 'stop';
+      const candidates = batch.lines;
+      const candidatePositions = batch.positions;
 
       const hit = scanSearchBatch(candidates, state);
       if (hit === 'stop') return 'stop';
