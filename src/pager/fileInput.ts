@@ -12,6 +12,7 @@ import {
   calculateEOF,
   dirtyBottomRow,
   markPosClear,
+  markBackPaint,
   render,
   renderBare,
   ringBell,
@@ -1932,7 +1933,27 @@ export class FileInput implements PagerInput {
     const before = pos !== null && (pos < this.view.top.pos ||
       (pos === this.view.top.pos && this.view.top.offset > 0));
 
-    if (before && this.blankBack(pos)) return;
+    // og's jump_loc splits three ways for a target above the screen;
+    // only the last of them repaints, and none of them pos_clears
+    let farBack = false;
+
+    if (before && pos !== null) {
+      const walk = this.backWalk(pos, jumpSindex());
+
+      if (walk === 'scroll') {
+        // og's back(nline, tpos, TRUE, ...): the same scroll a k runs,
+        // forced, with add_back_pos keeping the seam it exposes
+        this.backward(this.scrollRows, true);
+        return;
+      }
+
+      if (walk === 'blank') {
+        this.blankBack();
+        return;
+      }
+
+      farBack = true;
+    }
 
     // og's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
     // scrolls instead of repainting when the line is already on screen
@@ -1977,7 +1998,12 @@ export class FileInput implements PagerInput {
     this.sync();
     this.seam = [];
 
+    // og's far backward branch lclear()s and back()s: the screen is
+    // cleared and repainted upward, but the position table survives,
+    // so the paint still knows it went BACKWARD. pos_clear belongs to
+    // the forward/skipping path only
     if (contiguous) noteScrollRows(config.window - 1);
+    else if (farBack) markBackPaint();
     else markPosClear();
   }
 
@@ -1987,28 +2013,39 @@ export class FileInput implements PagerInput {
   }
 
   /**
-   * og's give-up branch: true when the forward walk from `pos` cannot
-   * reach the current top, leaving the screen null lines.
+   * og's jump_loc branch for a target BEFORE the screen (jump.c:353).
+   *
+   * - `scroll`: the walk reached the old top within a screenful, so og
+   *   says "Surprise! ... we can just scroll there after all" and runs
+   *   back(nline, tpos) - a forced backward SCROLL, no lclear and no
+   *   pos_clear. `rows` is og's nline: sindex plus the display-row
+   *   distance from the target to the old top.
+   * - `blank`: the walk ran off the END of the file first, so back()
+   *   draws null lines over the screen.
+   * - `far`: neither - the walk used up a screenful without arriving.
+   *   og lclear()s and back()s a whole screen from where the walk
+   *   stopped, which lands the same top the fall-through seek does.
    */
-  private blankBack(pos: number): boolean {
+  private backWalk(pos: number, sindex: number): 'scroll' | 'blank' | 'far' {
     const top = this.view.top;
     let at = { pos, offset: 0 };
-    let ended = false;
+    let steps = 0;
 
     // og walks forward by DISPLAY ROWS - `pos = forw_line(pos,
     // &linepos, NULL)` once per screen line - and takes the scroll
     // shortcut the moment a row's start reaches the old top. Only a
     // walk that runs off the END of the file first leaves pos
     // NULL_POSITION, and that is the case back() then fills with null
-    // lines. Everything else repaints normally
-    for (let rows = 0; rows < config.window - 1; rows++) {
+    // lines
+    for (; steps < config.window - 1 - sindex; steps++) {
       if (at.pos > top.pos ||
           (at.pos === top.pos && at.offset >= top.offset)) {
-        return false;
+        this.scrollRows = sindex + steps;
+        return 'scroll';
       }
 
       const line = forwLine(this.bf, at.pos);
-      if (!line) { ended = true; break; }
+      if (!line) return 'blank';
 
       const next = this.view.nextRowOffset(line.text, at.offset);
 
@@ -2017,12 +2054,21 @@ export class FileInput implements PagerInput {
       } else if (line.next < this.bf.size) {
         at = { pos: line.next, offset: 0 };
       } else {
-        ended = true;
-        break;
+        return 'blank';
       }
     }
 
-    if (!ended) return false;
+    return 'far';
+  }
+
+  // og's nline from the walk above, handed to back()
+  private scrollRows = 0;
+
+  /**
+   * og's give-up branch: back() from nowhere draws null lines, the
+   * content is pushed off and the rows below keep what lclear left.
+   */
+  private blankBack(): boolean {
 
     // og's back() stops when the entries the OLD table still holds
     // reach the bottom two slots - add_back_pos shifts them down one

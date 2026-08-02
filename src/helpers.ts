@@ -592,6 +592,7 @@ export function resetRender(): void {
   forwPrompt = false;
   promptAtBottom = false;
   posClearPending = false;
+  backPaintPending = false;
 
   // the frame's own carried state: a freeze, a collapse drift or a
   // stale prevInit left behind by the PREVIOUS session would decide
@@ -1044,6 +1045,8 @@ export function render(rawContent: string[], buffer: string[]): void {
   // visibly, so the identical-rows shortcut below must not eat it
   const posClear = posClearPending;
   posClearPending = false;
+  const backPaint = backPaintPending;
+  backPaintPending = false;
 
 
   // nothing changed (e.g. scrolling against BOF/EOF): leave the screen
@@ -1106,7 +1109,8 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (scrollMode()) {
     nulCollapsed = 0;
     const frame =
-      scrollFrame(prevRows, rows, pipeFill, rawContent, posClear, buffer);
+      scrollFrame(prevRows, rows, pipeFill, rawContent, posClear, buffer,
+        backPaint);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(eprPrefix() + frame);
@@ -1521,6 +1525,18 @@ let prevInitAlt = false;
  */
 export const screenPainted = (): boolean => contentPainted;
 
+/**
+ * Marks the next paint as og's jump_loc far-BACKWARD branch: lclear()
+ * then back(sc_height-1) from the target (jump.c:353), a cleared
+ * screen painted upward through home + reverse index.
+ */
+export function markBackPaint(): void {
+  backPaintPending = true;
+}
+
+// set by markBackPaint, consumed by the next render
+let backPaintPending = false;
+
 /** Marks the next paint as og's pos_clear'd jump (G). */
 export function markPosClear(): void {
   posClearPending = true;
@@ -1572,14 +1588,21 @@ function scrollFrame(
   open: boolean = false,
   src: string[] = [],
   posClear: boolean = false,
-  buffer: string[] = []
+  buffer: string[] = [],
+  backPaint: boolean = false
 ): string {
   const effRow = config.row - config.blankTop;
 
   // og's pos_clear'd G never looks like a backward jump: the empty
-  // position table sends jump_loc down the forward/skipping path
-  const backJump = !posClear && prevTopRow >= 0 && (effRow < prevTopRow ||
-    (effRow === prevTopRow && config.subRow < prevTopSub));
+  // position table sends jump_loc down the forward/skipping path.
+  //
+  // config.row is a row of the MATERIALIZED WINDOW, not of the file,
+  // so for a source engine whose window slid under the jump it says 0
+  // on both sides and the comparison cannot see the direction at all.
+  // backPaint is the engine naming og's branch outright.
+  const backJump = !posClear && (backPaint ||
+    (prevTopRow >= 0 && (effRow < prevTopRow ||
+      (effRow === prevTopRow && config.subRow < prevTopSub))));
 
   // the display-row distance the top advanced, like og comparing
   // pos against position(BOTTOM_PLUS_ONE): a full-screenful move
@@ -1599,6 +1622,11 @@ function scrollFrame(
 
   // the engine's own count, when config.row could not say
   if (forwDist <= 0 && scrolledRows > 0) forwDist = scrolledRows;
+
+  // a backward move reports itself negative; a whole screenful back
+  // shares NO row with the frame before it, so nothing else can name
+  // the distance og's back() still walks row by row
+  const backDist = scrolledRows < 0 ? -scrolledRows : 0;
   scrolledRows = 0;
 
   prevTopRow = effRow;
@@ -1758,9 +1786,20 @@ function scrollFrame(
     // the previous frame's CONTENT rows rather than all of them
     const backBase = promptless ? prev.slice(0, -1) : prev;
 
+    // a whole-screen scroll is one row further on a bare frame,
+    // whose last row is content rather than the prompt
+    const span = promptless ? last + 1 : last;
+
     if (backBase.length === rows.length) {
-      for (let k = 1; k < last; k++) {
-        if (rows[k] === backBase[0] && shifted(backBase, rows, k)) {
+      for (let k = 1; k <= span; k++) {
+        // at k === span the two frames share no row at all, so only
+        // the engine's count can prove the scroll; below that the
+        // rows themselves still have to agree
+        const overlap = k < span
+          ? rows[k] === backBase[0] && shifted(backBase, rows, k)
+          : k === backDist;
+
+        if (overlap) {
           // -h caps the scroll: og's back() sets do_repaint and
           // repaint() paints forward with the skipping marker —
           // never the far-backward clear + reverse paint
@@ -1816,11 +1855,15 @@ function scrollFrame(
   // lclear + back)
   if (backJump && !capped) {
     let frame = clearBot() + CLEAR_SCREEN;
-    for (let i = last - 1; i >= 0; i--) {
+
+    // a bare frame's last row is CONTENT, so back() paints it too -
+    // counting from `last - 1` there dropped og's topmost row
+    for (let i = (promptless ? last : last - 1); i >= 0; i--) {
       frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
     }
 
-    return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
+    frame += CURSOR_TO(config.window, 1) + clearBot();
+    return promptless ? frame : frame + bot;
   }
 
   // forward far jumps and repaints print og's skipping marker over
