@@ -590,6 +590,7 @@ export function resetRender(): void {
   scrollOpen = false;
   scrollPrefix = null;
   forwPrompt = false;
+  prevMca = false;
   promptAtBottom = false;
   posClearPending = false;
   backPaintPending = false;
@@ -1097,7 +1098,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   if (mode.DUMB) {
     // the collapse is implemented for the addressable paints only
     nulCollapsed = 0;
-    const frame = dumbFrame(prevRows, rows);
+    const frame = dumbFrame(prevRows, rows, buffer, posClear);
     prevRows = rows;
     process.stdout.write(eprPrefix() + frame);
     prompting = promptPainted;
@@ -1208,27 +1209,59 @@ export function render(rawContent: string[], buffer: string[]): void {
  *   prompt, letting the terminal scroll.
  * - Anything else repaints behind the dumb `clear` of two newlines.
  */
-function dumbFrame(prev: string[] | null, rows: string[]): string {
+function dumbFrame(
+  prev: string[] | null,
+  rows: string[],
+  buffer: string[] = [],
+  posClear: boolean = false
+): string {
   const plain = rows.map(row => row.replace(STYLE_REGEX_G, ''));
   const last = plain.length - 1;
 
-  if (prev && prev.length === plain.length) {
+  // og's start_mca has run for a command line that was already open,
+  // so this key is a cmd_ichar echo; the engine's own scroll count is
+  // the only proof of a whole-screenful advance, which shares no row
+  // with the frame before it
+  const wasMca = prevMca;
+  prevMca = mcaOpen(buffer);
+  const forwDist = scrolledRows;
+  scrolledRows = 0;
+
+  // og's pos_clear'd repaint redraws whole even when nothing moved,
+  // so the incremental shapes below must not swallow it
+  if (prev && !posClear && prev.length === plain.length) {
     const prevPlain = prev.map(row => row.replace(STYLE_REGEX_G, ''));
 
     let same = 0;
     while (same < last && plain[same] === prevPlain[same]) same++;
 
     // only the bottom (prompt) line changed: og's prompt() skips
-    // clear_bot after a forward paint, which is all this CR is
+    // clear_bot after a forward paint, which is all this CR is -
+    // except that start_mca clear_bots unconditionally, and the
+    // characters after it are cmd_ichar echoes (clear_eol is empty
+    // here, so a typed "5" goes out as just "5 \b 5")
     if (same === last) {
+      const head = cmdInsertEcho(plain[last], buffer);
+
+      if (head !== null) {
+        const c = plain[last].slice(head.length);
+        const echo = CLEAR_LINE + c + '\b' + c;
+        forwPrompt = false;
+        return wasMca ? echo : '\r' + head + echo;
+      }
+
       const opening = forwPrompt ? '' : '\r';
       forwPrompt = false;
       return opening + plain[last];
     }
 
-    // scrolled forward: the old rows moved up by k
-    for (let k = 1; k < last; k++) {
-      if (plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)) {
+    // scrolled forward: the old rows moved up by k. At k === last
+    // the frames share no row at all and only the engine's count can
+    // name the distance og's forw still writes line by line
+    for (let k = 1; k <= last; k++) {
+      if (k < last
+        ? plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)
+        : k === forwDist) {
         // og's forw sets forw_prompt after every line it puts
         // (forwback.c:368), so the prompt that follows skips
         // clear_bot - here a bare CR, since dumb has no "el". A frame
@@ -1251,11 +1284,23 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
   dumbHomePending = false;
   dumbPainted = true;
 
+  // a dumb terminal cannot reverse-scroll, so EVERY paint that gets
+  // here is og's forw() - through repaint() for a backward move - and
+  // forw sets forw_prompt after every line it puts
+  forwPrompt = !plain[last];
+
   return (repaint ? '\r' : '') +
     (repaint && (clearHome || fullScreen())
       ? (clearHome ? '\n\n|\b^' : '...skipping...\n')
       : '') +
     joinDumb(plain);
+}
+
+/** True while any of og's mca prompts owns the command line. */
+function mcaOpen(buffer: string[]): boolean {
+  return mcaBare() || cmd.active || buffer.length > 0 ||
+    !!marks.pending || !!pipeMark.pending || !!brackets.pending ||
+    !!option.pending || !!examine.pending || !!miscInput.pending;
 }
 
 /** True when -X keeps the pager on the main screen with og's
@@ -1272,6 +1317,10 @@ export function clearBot(): string {
   promptAtBottom = true;
   return (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
 }
+
+// whether the PREVIOUS scroll-mode frame already had a command line
+// open, so this one's keystroke is a cmd_ichar echo and not start_mca
+let prevMca = false;
 
 // og's forw_prompt (forwback.c): forw() sets it after every line it
 // puts, and prompt() then SKIPS clear_bot - "the forward movement
@@ -1660,6 +1709,11 @@ function scrollFrame(
   const wasOpen = scrollOpen;
   scrollOpen = open;
 
+  // whether a command line was ALREADY open in the previous frame:
+  // og's start_mca has run for it, so this key is only an echo
+  const wasMca = prevMca;
+  prevMca = mcaOpen(buffer);
+
   // the frame before this one carried no prompt row
   const wasBare = prevBare;
   prevBare = bareFrame;
@@ -1746,9 +1800,14 @@ function scrollFrame(
           const c = rows[last].slice(head.length);
           const echo = CLEAR_LINE + c + '\b' + c;
 
-          // og repaints the prompt only when it CHANGED (the status
-          // line giving way to ":"); a second digit is the echo alone
-          return prev[last] === head ? echo : clearBot() + head + echo;
+          // og's start_mca runs when the command line OPENS, not per
+          // character, so the FIRST key of an mca carries clear_bot
+          // and the prompt string and the rest are the echo alone.
+          // Comparing the prompt TEXT instead was right for a second
+          // digit ("1" -> ":1" -> ":12") and wrong whenever the main
+          // prompt already read ":" - a second N g dropped og's
+          // "\r ESC[K :" entirely.
+          return wasMca ? echo : clearBot() + head + echo;
         }
 
         return clearBot() + bot;

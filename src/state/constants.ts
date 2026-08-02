@@ -219,8 +219,12 @@ export function initTerminalCapabilities(): void {
   CURSOR_HOME = terminalCapability('home', 'ho') ?? '\x1b[H';
   cursorToCapability = terminalCapability('cup', 'cm') ??
     '\x1b[%i%p1%d;%p2%dH';
-  CLEAR_LINE = terminalCapability('el', 'ce') ?? '\x1b[K';
-  CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '\x1b[J';
+  // og does NOT guess at "el"/"ed": a terminal without them gets the
+  // empty string and missing_cap (screen.c:1613, :1618), so nothing at
+  // all is written where the clear would go. Guessing ESC[K put the
+  // one escape sequence a dumb terminal ever saw into its output.
+  CLEAR_LINE = terminalCapability('el', 'ce') ?? '';
+  CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '';
   CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\x1b[H\x1b[2J';
   REVERSE_INDEX = terminalCapability('ri', 'sr') ?? '\x1bM';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
