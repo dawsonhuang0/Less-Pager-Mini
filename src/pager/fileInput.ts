@@ -376,7 +376,7 @@ export class FileInput implements PagerInput {
         this.clampHeader();
         this.sync();
         this.seam = [];
-    markPosClear();
+        markPosClear();
       }
     }
 
@@ -424,7 +424,7 @@ export class FileInput implements PagerInput {
         }
         this.clampHeader();
         this.seam = [];
-    markPosClear();
+        markPosClear();
         moved = true;
       }
     }
@@ -573,7 +573,7 @@ export class FileInput implements PagerInput {
 
           this.sync();
           this.seam = [];
-    markPosClear();
+          markPosClear();
         }
         return true;
       case 'PERCENT_LINE':
@@ -594,7 +594,7 @@ export class FileInput implements PagerInput {
         this.clampHeader();
         this.sync();
         this.seam = [];
-    markPosClear();
+        markPosClear();
         return true;
       case 'GO_POS':
         this.discoverEnd();
@@ -608,7 +608,7 @@ export class FileInput implements PagerInput {
         this.clampHeader();
         this.sync();
         this.seam = [];
-    markPosClear();
+        markPosClear();
         return true;
       case 'OSC8_FORWARD':
         this.findOsc8(1, count || 1);
@@ -637,7 +637,7 @@ export class FileInput implements PagerInput {
           this.view.lineBackward(jumpSindex());
           this.sync();
           this.seam = [];
-    markPosClear();
+          markPosClear();
         }
         return true;
       case 'CURLY_BRACKET_RIGHT':
@@ -2316,7 +2316,7 @@ export class FileInput implements PagerInput {
           this.view.lineBackward(jumpSindex());
           this.sync();
           this.seam = [];
-    markPosClear();
+          markPosClear();
         }
 
         return;
@@ -2348,7 +2348,7 @@ export class FileInput implements PagerInput {
       this.view.top = { pos, offset: 0 };
       this.view.lineBackward(jumpSindex());
       this.seam = [];
-    markPosClear();
+      markPosClear();
     }
 
     // sync resolves the selection's current row itself (the og
