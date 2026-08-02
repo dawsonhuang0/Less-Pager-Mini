@@ -646,6 +646,11 @@ let frozenFrame = false;
 // whether any real (unfrozen) paint has happened
 let contentPainted = false;
 
+// og's first_time: set while the FIRST screen of output is printing
+// and cleared at the end of forw(). It gates the skipping marker,
+// which og never shows on the screen it is drawing first.
+let firstOutput = true;
+
 // the unlatching repaint is og's make_display with top_scroll forced,
 // which a dumb terminal shows as clear+home instead of "...skipping"
 let frozenHome = false;
@@ -969,6 +974,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   // frozen frame is prompt() returning early, which paints nothing.
   // The blank seed under an ungot startup key is exactly that, so it
   // must not count as a paint.
+  firstOutput = !contentPainted;
   if (!frozenFrame) contentPainted = true;
 
   if (frozenFrame && squishMessage) {
@@ -1810,7 +1816,7 @@ function scrollFrame(
   // command's clear_bot. The rows still print without a full screen,
   // only the marker goes (forwback.c:272)
   return (prefix ?? clearBot()) +
-    (fullScreen() ? '...skipping...\n' : '') + body +
+    (fullScreen() && !firstOutput ? '...skipping...\n' : '') + body +
     (promptless ? '' : bot);
 }
 
@@ -2188,7 +2194,9 @@ function skippedFrame(
 
   // og's G paints skipping through its pos_clear no matter the
   // direction or distance — the position table looks empty
-  let marker = '...skipping...\n';
+  // og prints the marker only when it is NOT drawing the first
+  // screen of output (forwback.c:272 tests !first_time)
+  let marker = firstOutput ? '' : '...skipping...\n';
 
   if (!posClear) {
     if (prevTopRow < 0 || config.blankTop) return null;
