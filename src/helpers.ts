@@ -1227,6 +1227,11 @@ function dumbFrame(
   const forwDist = scrolledRows;
   scrolledRows = 0;
 
+  // a repaint that carries its own opening (jump_loc's lclear before
+  // back()) writes that instead of the bare clear_bot CR
+  const prefix = scrollPrefix;
+  scrollPrefix = null;
+
   // og's pos_clear'd repaint redraws whole even when nothing moved,
   // so the incremental shapes below must not swallow it
   if (prev && !posClear && prev.length === plain.length) {
@@ -1289,7 +1294,7 @@ function dumbFrame(
   // forw sets forw_prompt after every line it puts
   forwPrompt = !plain[last];
 
-  return (repaint ? '\r' : '') +
+  return (prefix ?? (repaint ? '\r' : '')) +
     (repaint && (clearHome || fullScreen())
       ? (clearHome ? '\n\n|\b^' : '...skipping...\n')
       : '') +
@@ -1302,6 +1307,19 @@ function mcaOpen(buffer: string[]): boolean {
     !!marks.pending || !!pipeMark.pending || !!brackets.pending ||
     !!option.pending || !!examine.pending || !!miscInput.pending;
 }
+
+/**
+ * og's get_back_scroll (forwback.c:535): zero when the terminal can
+ * neither add a line nor reverse-index (no_back_scroll, so every
+ * backward movement repaints), -h when it is set, a whole screen
+ * minus two under -c, where every repaint starts a new screen anyway,
+ * and no limit at all otherwise.
+ */
+export const backScrollCap = (): number =>
+  !REVERSE_INDEX ? 0
+    : optBackScroll() >= 0 ? optBackScroll()
+      : optClearRepaint() ? config.window - 2
+        : 10000;
 
 /** True when -X keeps the pager on the main screen with og's
  *  scroll-model painting (a dumb terminal keeps its own painter). */
@@ -1526,6 +1544,18 @@ export function noteScrollRows(n: number): void {
 /** Marks the next scroll-mode paint as a fresh screen entry. */
 export function screenEntered(): void {
   scrollPrefix = '';
+}
+
+/**
+ * og's jump_loc far-backward branch clearing before back():
+ * cmd_exec's clear_bot for the command, then `if (!top_scroll)
+ * lclear(); else home();` (jump.c:353). back() repaints from there
+ * when a whole screen exceeds get_back_scroll, and the repaint brings
+ * no clear_bot of its own.
+ */
+export function markFarBackClear(): void {
+  scrollPrefix = clearBot() +
+    (optClearRepaint() ? CURSOR_HOME : CLEAR_SCREEN);
 }
 
 /** Marks the next scroll-mode paint as a bare re-edit repaint. */
@@ -1837,6 +1867,11 @@ function scrollFrame(
         break;
       }
 
+      // -c: forw() starts a NEW screen for a move of a screenful or
+      // more (top_scroll && n >= sc_height-1, forwback.c:247), so it
+      // never scrolls that far - it clears and homes instead
+      if (optClearRepaint() && appended.length >= config.window - 1) break;
+
       if (promptless) {
         return clearBot() +
           rows.slice(overlap).map(r => r + rowEnd(r)).join('');
@@ -1848,7 +1883,7 @@ function scrollFrame(
     // an exact-screenful advance: og-contiguous by position (the new
     // top is the old BOTTOM_PLUS_ONE), and exempt from -y since
     // "repainting itself involves scrolling forward a screenful"
-    if (forwDist === prev.length - 1 &&
+    if (forwDist === prev.length - 1 && !optClearRepaint() &&
         rows.length === (promptless ? prev.length - 1 : prev.length)) {
       if (promptless) {
         return clearBot() + rows.map(r => r + rowEnd(r)).join('');
@@ -1878,10 +1913,12 @@ function scrollFrame(
           : k === backDist;
 
         if (overlap) {
-          // -h caps the scroll: og's back() sets do_repaint and
-          // repaint() paints forward with the skipping marker —
-          // never the far-backward clear + reverse paint
-          if (optBackScroll() >= 0 && k > optBackScroll()) {
+          // og's get_back_scroll caps it: -h when set, a screen minus
+          // two under -c, and no limit otherwise (forwback.c:535).
+          // Past the cap back() sets do_repaint and repaint() paints
+          // forward with the skipping marker — never the far-backward
+          // clear + reverse paint
+          if (k > backScrollCap()) {
             capped = true;
             break;
           }
@@ -1918,15 +1955,20 @@ function scrollFrame(
   const body = (promptless ? rows : rows.slice(0, last))
     .map(r => r + rowEnd(r)).join('');
 
+  // -c and the freeze-unlatching make_display (top_scroll forced)
+  // clear and paint forward, like og's forw calling clear() + home().
+  // The FIRST paint has no command behind it, so no clear_bot either -
+  // term_init has just scrolled a whole screen in
+  if (clearHome) {
+    // a bare frame's rows ARE the body; appending bot printed its
+    // last content row a second time
+    return (repaint ? prefix ?? clearBot() : '') +
+      CLEAR_SCREEN + CURSOR_HOME + body + (promptless ? '' : bot);
+  }
+
   // the first paint prints in place behind term_init's line_left CR,
   // which termInitTail has already written
   if (!repaint) return body + bot;
-
-  // -c and the freeze-unlatching make_display (top_scroll forced)
-  // clear and paint forward, like og's forw calling clear() + home()
-  if (clearHome) {
-    return (prefix ?? clearBot()) + CLEAR_SCREEN + CURSOR_HOME + body + bot;
-  }
 
   // a backward far jump clear_bots (cmd_exec), clears, and paints
   // the rows in reverse through home + reverse index (jump_loc's

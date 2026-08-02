@@ -216,7 +216,11 @@ export function initTerminalCapabilities(): void {
 
   TERMINAL_SUSPEND = terminalCapability('SUSPEND', 'SUSPEND') ?? SYNC_ON;
   TERMINAL_RESUME = terminalCapability('RESUME', 'RESUME') ?? SYNC_OFF;
-  CURSOR_HOME = terminalCapability('home', 'ho') ?? '\x1b[H';
+  // og's fallbacks are text, not ANSI guesses: sc_home is
+  // cheaper(home, cup(0,0), "|\b^") and sc_clear is "\n\n" with
+  // missing_cap (screen.c:1626, :1680). A terminal that has neither
+  // gets those, which is exactly what its dumb painter draws
+  CURSOR_HOME = terminalCapability('home', 'ho') ?? '|\b^';
   cursorToCapability = terminalCapability('cup', 'cm') ??
     '\x1b[%i%p1%d;%p2%dH';
   // og does NOT guess at "el"/"ed": a terminal without them gets the
@@ -225,8 +229,12 @@ export function initTerminalCapabilities(): void {
   // one escape sequence a dumb terminal ever saw into its output.
   CLEAR_LINE = terminalCapability('el', 'ce') ?? '';
   CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '';
-  CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\x1b[H\x1b[2J';
-  REVERSE_INDEX = terminalCapability('ri', 'sr') ?? '\x1bM';
+  CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\n\n';
+  // og's sc_addline is "al" or "ri", whichever is cheaper, and EMPTY
+  // when the terminal has neither - which sets no_back_scroll and
+  // forces a repaint on every backward movement (screen.c:1707)
+  REVERSE_INDEX = terminalCapability('ill', 'al') ??
+    terminalCapability('ri', 'sr') ?? '';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
   // og reads sgr0 from terminfo; this lookup only sees

@@ -3,7 +3,7 @@ import { keyboard } from './keyboard';
 import { config, mode, setFullScreen } from '../state/config';
 
 import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
-  reserveGutter, hook } from '../options';
+  optClearRepaint, reserveGutter, hook } from '../options';
 
 import { resetRender, screenEntered } from '../helpers';
 
@@ -142,6 +142,13 @@ export function enterScreen(): void {
  * not the first output.
  */
 export function termInitTail(): void {
+  // with -c og instead scrolls a whole screen in, so the first paint
+  // has the terminal to itself without losing any scrollback
+  if (optClearRepaint()) {
+    process.stdout.write('\n'.repeat(Math.max(config.window - 1, 0)));
+    return;
+  }
+
   process.stdout.write('\r');
 }
 

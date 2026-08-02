@@ -13,6 +13,8 @@ import {
   dirtyBottomRow,
   markPosClear,
   markBackPaint,
+  markFarBackClear,
+  backScrollCap,
   render,
   renderBare,
   ringBell,
@@ -78,6 +80,7 @@ import {
   optHowSearch,
   optNoSearchHeaders,
   optPastEof,
+  optForwScroll,
   optStopOnFormFeed,
 } from '../options';
 
@@ -1442,6 +1445,16 @@ export class FileInput implements PagerInput {
     }
 
     if ((moved || want < rows) && mode.INIT) mode.INIT = false;
+
+    // -y: og's forw() decides do_repaint from the REQUESTED count the
+    // same way back() does - `forw_scroll >= 0 && n > forw_scroll &&
+    // n != sc_height-1` (forwback.c:243), the screenful exempt "since
+    // repainting itself involves scrolling forward a screenful"
+    if (moved && optForwScroll() >= 0 && rows > optForwScroll() &&
+        rows !== config.window - 1) {
+      markPosClear();
+    }
+
     this.keepPad = true;
     noteScrollRows(moved);
     this.sync();
@@ -1554,9 +1567,18 @@ export class FileInput implements PagerInput {
     // TOP row (forwback.c:444) -- the mirror of the forward stop
     if (optStopOnFormFeed()) rows = this.ffCapBack(rows);
 
+    // og's back() decides do_repaint from the REQUESTED count, before
+    // it moves anything (`n > get_back_scroll()`, forwback.c:397), so
+    // a `b` that ran into the top of the file still repaints under -c
+    // or -h - but only if it moved at all: nothing moved is
+    // `if (nlines == 0) eof_bell(); else if (do_repaint) repaint();`
+    const doRepaint = rows > backScrollCap();
+
     const moved = session.lastFilter
       ? this.filteredBackward(rows)
       : this.fileBackward(rows);
+
+    if (moved && doRepaint) markPosClear();
 
     // og's forced back (K, ESC-b) keeps revealing null lines above
     // the beginning, capped one short of an empty screen — file
@@ -2002,9 +2024,22 @@ export class FileInput implements PagerInput {
     // cleared and repainted upward, but the position table survives,
     // so the paint still knows it went BACKWARD. pos_clear belongs to
     // the forward/skipping path only
-    if (contiguous) noteScrollRows(config.window - 1);
-    else if (farBack) markBackPaint();
-    else markPosClear();
+    // og's far backward branch lclear()s and back()s a whole screen -
+    // and back() itself repaints when that exceeds get_back_scroll
+    // (-c, -h), which pos_clears and paints FORWARD instead
+    if (contiguous) {
+      noteScrollRows(config.window - 1);
+    } else if (farBack && config.window - 1 <= backScrollCap()) {
+      markBackPaint();
+    } else {
+      // og's far backward branch lclear()s - home()s under -c - before
+      // back(), and back() then repaints because a whole screen
+      // exceeds get_back_scroll. That clear stands where a command's
+      // clear_bot would otherwise be
+      if (farBack) markFarBackClear();
+
+      markPosClear();
+    }
   }
 
   /** og's empty_screen(): nothing has been painted yet. */
