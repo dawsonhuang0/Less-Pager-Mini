@@ -590,7 +590,7 @@ export function resetRender(): void {
   scrollOpen = false;
   scrollPrefix = null;
   forwPrompt = false;
-  prevMca = false;
+  prevMca = '';
   promptAtBottom = false;
   posClearPending = false;
   backPaintPending = false;
@@ -1222,8 +1222,9 @@ function dumbFrame(
   // so this key is a cmd_ichar echo; the engine's own scroll count is
   // the only proof of a whole-screenful advance, which shares no row
   // with the frame before it
-  const wasMca = prevMca;
-  prevMca = mcaOpen(buffer);
+  const now = mcaOpen(buffer);
+  const wasMca = now !== '' && prevMca === now;
+  prevMca = now;
   const forwDist = scrolledRows;
   scrolledRows = 0;
 
@@ -1250,7 +1251,7 @@ function dumbFrame(
 
       if (head !== null) {
         const c = plain[last].slice(head.length);
-        const echo = CLEAR_LINE + c + '\b' + c;
+        const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
         forwPrompt = false;
         return wasMca ? echo : '\r' + head + echo;
       }
@@ -1301,11 +1302,24 @@ function dumbFrame(
     joinDumb(plain);
 }
 
-/** True while any of og's mca prompts owns the command line. */
-function mcaOpen(buffer: string[]): boolean {
-  return mcaBare() || cmd.active || buffer.length > 0 ||
-    !!marks.pending || !!pipeMark.pending || !!brackets.pending ||
-    !!option.pending || !!examine.pending || !!miscInput.pending;
+/**
+ * WHICH of og's mca prompts owns the command line, or "" for none.
+ *
+ * The identity matters, not just the fact: start_mca runs again for
+ * every new mca, so a `5` that opens the digit prompt and then an ESC
+ * that opens the A_PREFIX one both carry clear_bot and their prompt
+ * string - even though a command line was open the whole time.
+ */
+function mcaOpen(buffer: string[]): string {
+  if (config.keyPrefix) return 'prefix';
+  if (cmd.active) return 'cmd';
+  if (marks.pending) return 'mark';
+  if (pipeMark.pending) return 'pipe';
+  if (brackets.pending) return 'bracket';
+  if (option.pending) return 'option';
+  if (examine.pending) return 'examine';
+  if (miscInput.pending) return 'misc';
+  return buffer.length > 0 ? 'digit' : '';
 }
 
 /**
@@ -1336,9 +1350,9 @@ export function clearBot(): string {
   return (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
 }
 
-// whether the PREVIOUS scroll-mode frame already had a command line
-// open, so this one's keystroke is a cmd_ichar echo and not start_mca
-let prevMca = false;
+// WHICH mca the previous scroll-mode frame had open, so this one's
+// keystroke is a cmd_ichar echo and not another start_mca
+let prevMca = '';
 
 // og's forw_prompt (forwback.c): forw() sets it after every line it
 // puts, and prompt() then SKIPS clear_bot - "the forward movement
@@ -1659,12 +1673,14 @@ export function markPosClear(): void {
  */
 function cmdInsertEcho(row: string, buffer: string[]): string | null {
   // a digit prefix goes through og's mca number mode, which is the
-  // same cmd_char path as a prompt's own text
-  const typed = cmd.active ? cmdText() : buffer.join('');
-  if (!typed) return null;
+  // same cmd_char path as a prompt's own text; a held A_PREFIX
+  // character is inserted as its prchar REPRESENTATION, so what was
+  // echoed is "ESC" and not one byte
+  const c = config.keyPrefix
+    ? prChar(config.keyPrefix.slice(-1))
+    : (cmd.active ? cmdText() : buffer.join('')).slice(-1);
 
-  const c = typed.slice(-1);
-  if (!row.endsWith(c)) return null;
+  if (!c || !row.endsWith(c)) return null;
 
   return row.slice(0, -c.length);
 }
@@ -1739,10 +1755,11 @@ function scrollFrame(
   const wasOpen = scrollOpen;
   scrollOpen = open;
 
-  // whether a command line was ALREADY open in the previous frame:
-  // og's start_mca has run for it, so this key is only an echo
-  const wasMca = prevMca;
-  prevMca = mcaOpen(buffer);
+  // whether the SAME command line was already open in the previous
+  // frame: og's start_mca has run for it, so this key is only an echo
+  const nowMca = mcaOpen(buffer);
+  const wasMca = nowMca !== '' && prevMca === nowMca;
+  prevMca = nowMca;
 
   // the frame before this one carried no prompt row
   const wasBare = prevBare;
@@ -1828,7 +1845,7 @@ function scrollFrame(
 
         if (head !== null) {
           const c = rows[last].slice(head.length);
-          const echo = CLEAR_LINE + c + '\b' + c;
+          const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
 
           // og's start_mca runs when the command line OPENS, not per
           // character, so the FIRST key of an mca carries clear_bot

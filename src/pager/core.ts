@@ -1950,30 +1950,15 @@ function dispatchKey(sequence: string): void {
       return;
     }
 
-    // like less: leading ESCs are pending and unechoed (one normally,
-    // three when a number is being entered, where digit mode's
-    // editchar loop swallows them); further ones echo as literal
-    // "ESC", a third literal is invalid and resets to one (the
-    // " ESC" <-> " ESCESC" cycle), and any number of pending ESCs
-    // still decodes as a single ESC prefix
-    const absorb = session.buffer.length ? 3 : 1;
-
-    if (session.escCount - absorb >= 2) {
-      // " ESCESC" resets to " ESC" silently
-      session.escCount = absorb + 1;
-    } else {
-      session.escCount++;
-      const literals = session.escCount - absorb;
-
-      // og rings when the second literal lands (" ESC" -> " ESCESC")
-      // and when the first lands after swallowed digit-mode input
-      if (literals === 2 || (literals === 1 && absorb === 3)) {
-        ringBell();
-      }
-    }
-
-    config.keyPrefix =
-      '\x1B'.repeat(Math.max(session.escCount - absorb, 0) + 1);
+    // og's A_PREFIX (command.c:2499): an incomplete command opens an
+    // mca with the " " prompt and echoes the character through
+    // cmd_char "so the user knows what's going on", and every later
+    // held character echoes the same way from the top of the loop.
+    // EVERY ESC shows, from the first - there is no unechoed leading
+    // one, no " ESC"/" ESCESC" cycle and no bell. (The old model had
+    // all three; none of them appears in og's bytes.)
+    session.escCount++;
+    config.keyPrefix = '\x1B'.repeat(session.escCount);
     render(session.content, session.buffer);
   } else {
     // og-dumb echoes the terminating key into the pending ESC line
@@ -1987,6 +1972,15 @@ function dispatchKey(sequence: string): void {
 
     const seq = session.userSeq +
       (session.escCount ? '\x1B' + session.key : session.key);
+
+    // og reads one byte at a time, and every byte of an INCOMPLETE
+    // command echoes into an mca opened with the " " prompt
+    // (A_PREFIX, command.c:2499) before the action is looked up at
+    // all - the terminating byte included. Our reader hands the whole
+    // sequence over at once, so the echo is replayed here; og's bytes
+    // are the same either way (measured: an arrow key chunked and
+    // byte-by-byte produce identical output).
+    echoPrefix(seq);
 
     // lesskey #command bindings run before the built-in table; the
     // canonical key serves the key-sensitive actions and the extra
@@ -2065,6 +2059,23 @@ function dispatchKey(sequence: string): void {
     act(action);
     session.escCount = 0;
   }
+}
+
+/**
+ * og's A_PREFIX echo for a multi-byte key sequence: " " for the mca,
+ * then each byte through cmd_char as its prchar representation.
+ */
+function echoPrefix(seq: string): void {
+  if (mode.DUMB || seq.length < 2) return;
+
+  const held = config.keyPrefix;
+
+  for (let i = 1; i <= seq.length; i++) {
+    config.keyPrefix = seq.slice(0, i);
+    render(session.content, session.buffer);
+  }
+
+  config.keyPrefix = held;
 }
 
 function init() {
