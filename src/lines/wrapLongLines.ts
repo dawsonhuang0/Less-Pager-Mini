@@ -46,7 +46,8 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     // per-row plinestart from base_pos; -w and --status-line
     // highlight the row in standout
     lines.push(decorated
-      ? gutterFor(content, cell.row) + highlightRow(text, cell.row, at)
+      ? gutterFor(content, cell.row, cell.offset, cell.end) +
+        highlightRow(text, cell.row, at)
       : text);
   }
 }

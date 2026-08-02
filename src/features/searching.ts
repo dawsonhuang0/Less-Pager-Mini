@@ -1,3 +1,6 @@
+import { getLayout } from '../lines/lineLayout';
+import { visualWidth } from '../lines/helpers';
+
 import fs from 'fs';
 import vm from 'vm';
 
@@ -1982,7 +1985,12 @@ export function lineMatches(line: string): boolean {
  * @param line - The raw content line.
  * @param row - The content row, for the -g current-match gate.
  */
-export function statusColChar(line: string, row: number): string {
+export function statusColChar(
+  line: string,
+  row: number,
+  from?: number,
+  to?: number
+): string {
   // the status column reads the same hilite list, built without
   // SRCH_NO_MATCH (search.c:2319)
   if (!search.regex || !globalRegex) return '';
@@ -2006,12 +2014,31 @@ export function statusColChar(line: string, row: number): string {
 
   if (!ranges.length) return '';
 
-  // wrapped lines display every part, so a match is always visible
-  if (!chopLine() && !config.col) return '*';
+  // og decides this per SCREEN ROW, from the range of characters that
+  // row actually shows: is_hilited_attr(disp_pos, edisp_pos)
+  // (input.c:64). A wrapped line's continuation row whose range holds
+  // no match gets no marker -- we marked every row of the line.
+  if (!chopLine() && !config.col) {
+    if (from === undefined || to === undefined) return '*';
+
+    // the row's span is in layout clusters; the matches above are in
+    // characters of the same style-stripped line, so convert
+    const chars = getLayout(line).chars;
+    const start = chars.slice(0, from).join('').length;
+    const stop = chars.slice(0, to).join('').length;
+
+    return ranges.some(r => r.start < stop && r.end > start) ? '*' : '';
+  }
 
   // og compares hilite positions against the displayed range; char
   // indexes stand in for columns here
   const left = config.col;
+
+  // og's disp_pos is NULL_POSITION when the shift has carried the
+  // whole line off the screen, and init_status_col then sets no
+  // attribute at all (input.c:45): with nothing visible there is no
+  // marker, not a "match lies to the left" arrow
+  if (visualWidth(text) <= left) return '';
   const right = config.col + config.screenWidth;
   const before = ranges.some(r => r.start < left);
   const after = ranges.some(r => r.end > right);

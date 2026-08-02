@@ -190,10 +190,15 @@ export function inputToString(
  *
  * @param content - Display lines.
  * @param row - The content row of this display row.
+ * @param from - Cluster index where this screen row starts in the line.
+ * @param to - Where it ends. og's status column asks whether a match
+ *   falls in THIS row's range, so a wrapped line's rows differ.
  */
 export function gutterFor(
   content: string[],
-  row: number
+  row: number,
+  from?: number,
+  to?: number
 ): string {
   let gutter = '';
 
@@ -219,7 +224,7 @@ export function gutterFor(
 
       // a search match overrides, like set_status_col after
       // plinestart: '*' visible, '<'/'>' chopped away, '=' both
-      const match = statusColChar(content[row], row);
+      const match = statusColChar(content[row], row, from, to);
 
       if (match) {
         char = match;
