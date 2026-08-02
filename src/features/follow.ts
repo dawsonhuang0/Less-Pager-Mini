@@ -26,10 +26,10 @@ import { lineMatches } from './searching';
 import { optShowAttn } from '../options';
 
 /** The three F flavors, like less's A_F_FOREVER/_BELL/_UNTIL_HILITE. */
-export type FollowKind = 'forever' | 'bell' | 'hilite';
+type FollowKind = 'forever' | 'bell' | 'hilite';
 
 /** What one follow poll found. */
-export type FollowPoll =
+type FollowPoll =
   /** No new data. */
   | { kind: 'idle' }
   /** New complete lines; the first extends a partial last line. */
@@ -299,7 +299,7 @@ export function beginFollow(kind: FollowKind): void {
  * Jumps to the end of the file without the at-end bell, like
  * forw_loop's jump_forw_buffered.
  */
-export function pinToEnd(): void {
+function pinToEnd(): void {
   if (sourceFollowHooks?.pinEnd(false)) return;
 
   // short content that grew needs its over-BOF pad re-derived even
@@ -315,7 +315,7 @@ export function pinToEnd(): void {
  * reopens a rotated file under --follow-name, and leaves the wait on
  * --exit-follow-on-close.
  */
-export function followTick(): void {
+function followTick(): void {
   const result = pollFollow();
   if (result.kind === 'idle' || session.exited) return;
 
@@ -371,7 +371,7 @@ export function followTick(): void {
  * Reopens a rotated file under --follow-name and keeps following,
  * like og's screen_trashed=2 reopen after curr_ifile_changed.
  */
-export function rotateFollow(): void {
+function rotateFollow(): void {
   const kind = follow.active as FollowKind;
 
   // og's reopen (screen_trashed=2) never leaves forw_loop: the

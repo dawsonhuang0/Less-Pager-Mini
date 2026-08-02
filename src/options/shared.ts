@@ -105,7 +105,7 @@ export function onTrimBufSpace(fn: () => void): void {
 export const endPrompts: (string | null)[] = [null, null, null];
 
 /** Default search modifiers set by --search-options. */
-export const defSearchType = {
+const defSearchType = {
   pastEof: false,
   fromStart: false,
   keep: false,
@@ -123,7 +123,7 @@ export const EMOUSE_VDRAG = 8;
 export const EMOUSE_LCLICK = 16;
 export const EMOUSE_RCLICK = 32;
 
-export const EMOUSE_DEFS: [string, number][] = [
+const EMOUSE_DEFS: [string, number][] = [
   ['hscroll', EMOUSE_HSCROLL],
   ['vscroll', EMOUSE_VSCROLL],
   ['hdrag', EMOUSE_HDRAG],
@@ -359,7 +359,7 @@ export function checkModelines(lines: string[]): void {
 }
 
 /** Parses one line for less:/vim:/vi:/ex: modelines. */
-export function checkModeline(line: string): void {
+function checkModeline(line: string): void {
   for (const pgm of ['less:', 'vim:', 'vi:', 'ex:']) {
     let from = 0;
 
@@ -385,7 +385,7 @@ export function checkModeline(line: string): void {
   }
 }
 
-export function modelineOptions(text: string, endChar: string): void {
+function modelineOptions(text: string, endChar: string): void {
   if (endChar) {
     const end = text.indexOf(endChar);
     if (end >= 0) text = text.slice(0, end);
@@ -422,7 +422,7 @@ export function vlinenumAbsolute(absolute: number): number {
 }
 
 /** Rounded n*frac/1,000,000, like og's muldiv on a fraction. */
-export const mulFrac = (n: number, frac: number): number =>
+const mulFrac = (n: number, frac: number): number =>
   Math.round(n * frac / 1000000);
 
 export { fullScreenWidth } from "./state";

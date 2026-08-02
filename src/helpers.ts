@@ -397,7 +397,7 @@ function visualBell(): void {
  * never drew a line. A file with no lines is always in that state, and
  * our content array still carries one synthetic empty line for it.
  */
-export function noContentDrawn(content: string[]): boolean {
+function noContentDrawn(content: string[]): boolean {
   return content.length <= 1 && !content[0] &&
     (files.list[files.index]?.size ?? 0) <= 0;
 }

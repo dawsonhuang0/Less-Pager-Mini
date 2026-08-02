@@ -191,7 +191,7 @@ export function startBrackets(forward: boolean, n: number): void {
  * @param content - Full content lines.
  * @param key - Raw key input following `ESC-^F` / `ESC-^B`.
  */
-export type BracketFinder = (
+type BracketFinder = (
   open: string,
   close: string,
   forward: boolean,
@@ -473,7 +473,7 @@ export function marksFileSpliced(at: number, delta: 1 | -1): void {
 
 /** Removes a restored mark, like clrmark clearing file_marks "so
  *  save_marks doesn't save it to history file". */
-export function dropFileMark(char: string): void {
+function dropFileMark(char: string): void {
   fileMarks = fileMarks.filter(f => f.char !== char);
 }
 
@@ -1104,7 +1104,7 @@ export function markPos(
  * @param subRow - Target sub-row of the jump.
  * @param sindex - 0-based screen row the target will be placed on.
  */
-export function saveLastPosition(
+function saveLastPosition(
   content: string[],
   row: number,
   subRow: number,

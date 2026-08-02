@@ -128,8 +128,8 @@ export const CURSOR_TO = (row: number, col: number): string =>
 
 // synchronized output (mode 2026): supporting terminals render the
 // whole frame atomically; others ignore it
-export const SYNC_ON = '\x1b[?2026h';
-export const SYNC_OFF = '\x1b[?2026l';
+const SYNC_ON = '\x1b[?2026h';
+const SYNC_OFF = '\x1b[?2026l';
 
 /** True while the pager owns a switchable alternate screen, like og
  *  testing sc_init and sc_deinit before it homes to the lower left. */
@@ -176,7 +176,6 @@ export let BOLD_OFF = '\x1b[m';
 export let UNDERLINE_ON = '\x1B[4m';
 export let UNDERLINE_OFF = '\x1B[24m';
 
-export let TILDE = BOLD_ON + '~' + BOLD_OFF;
 export let END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
 
 /** Rebuilds every terminal string that this pager consumes. */
@@ -229,6 +228,5 @@ export function initTerminalCapabilities(): void {
   BOLD_OFF = reset;
   UNDERLINE_ON = terminalCapability('smul', 'us') ?? '\x1b[4m';
   UNDERLINE_OFF = terminalCapability('rmul', 'ue') ?? reset;
-  TILDE = BOLD_ON + '~' + BOLD_OFF;
   END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
 }

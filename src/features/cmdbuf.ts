@@ -14,7 +14,7 @@ import { ringBell } from "../helpers";
  */
 
 /** cmd_char results, like CC_OK / CC_QUIT / CC_ERROR / CC_PASS. */
-export type CmdResult = 'ok' | 'quit' | 'error' | 'pass';
+type CmdResult = 'ok' | 'quit' | 'error' | 'pass';
 
 /** Line-editing actions, like decode.c's EC_ codes. */
 type EditAction =
@@ -310,7 +310,7 @@ export function cmdRight(): void {
 }
 
 /** Moves the cursor left one cluster, like cmd_left. */
-export function cmdLeft(): void {
+function cmdLeft(): void {
   if (cmd.cur <= 0) return;
 
   const width = stepWidth(cmd.steps[cmd.cur - 1]);

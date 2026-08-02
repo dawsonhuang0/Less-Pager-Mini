@@ -18,7 +18,7 @@ const isNl = (b: number | undefined): boolean => b === 0x0A || b === 0x0D;
  *  every split segment costs a transform+layout per visible row). */
 export const MAX_LINE = 1 << 16;
 
-export interface ForwLine {
+interface ForwLine {
   text: string;
   /** Start of the next line (past the newline), or the file size. */
   next: number;
@@ -26,7 +26,7 @@ export interface ForwLine {
   split: boolean;
 }
 
-export interface BackLine {
+interface BackLine {
   text: string;
   /** Start position of the returned line. */
   start: number;

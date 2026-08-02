@@ -83,7 +83,7 @@ function ffCapForward(content: string[], offset: number): number {
  * @param content - Full content lines.
  * @param cond - The og per-command show_attn condition.
  */
-export function setAttnForward(content: string[], cond: boolean): void {
+function setAttnForward(content: string[], cond: boolean): void {
   config.attnRow = -1;
   if (!cond) return;
 
@@ -98,7 +98,7 @@ export function setAttnForward(content: string[], cond: boolean): void {
  *
  * @param cond - The og per-command show_attn condition.
  */
-export function setAttnBackward(cond: boolean): void {
+function setAttnBackward(cond: boolean): void {
   config.attnRow = -1;
   if (!cond) return;
 

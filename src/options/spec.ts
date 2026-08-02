@@ -1,4 +1,4 @@
-export type OptionType = 'bool' | 'triple' | 'number' | 'string' | 'novar';
+type OptionType = 'bool' | 'triple' | 'number' | 'string' | 'novar';
 
 export interface OptionSpec {
   /** Short flag letter; the upper-case letter selects a triple's

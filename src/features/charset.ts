@@ -174,10 +174,6 @@ const userTables: Record<'w' | 'b' | 'c' | 'p' | 'd', CodeRange[]> = {
 const inTable = (code: number, table: CodeRange[]): boolean =>
   table.some(r => code >= r.first && code <= r.last);
 
-/** True when a user range forces the printable class. */
-export const userPrintable = (code: number): boolean =>
-  inTable(code, userTables.p);
-
 /** True when a user range forces the wide class. */
 export const userWide = (code: number): boolean =>
   inTable(code, userTables.w);
@@ -412,7 +408,7 @@ function wellFormed(data: Buffer, at: number, len: number): boolean {
 }
 
 /** The private-use page carrying raw undecodable bytes. */
-export const RAW_BYTE_BASE = 0xE000;
+const RAW_BYTE_BASE = 0xE000;
 
 /** The raw byte carried by a private-use marker, or -1. */
 export function rawByteOf(char: string): number {

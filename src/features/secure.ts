@@ -7,7 +7,7 @@ import { ambientEnv, lgetenv } from '../startup/environment';
  * LESSSECURE set nothing is allowed except what $LESSSECURE_ALLOW
  * names, and $LESSSECURE_DISALLOW subtracts from either state.
  */
-export type SecureFeature =
+type SecureFeature =
   | 'edit' | 'examine' | 'glob' | 'history' | 'lesskey' | 'lessopen'
   | 'logfile' | 'osc8' | 'pipe' | 'shell' | 'stop' | 'tags';
 

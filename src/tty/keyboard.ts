@@ -134,7 +134,7 @@ export function hasUngot(): boolean {
  */
 // how the last gateReturn ended: a dismissing key, an ungot command
 // key, or og's lwinch resize longjmp
-export type GateRelease = 'dismiss' | 'unget' | 'winch';
+type GateRelease = 'dismiss' | 'unget' | 'winch';
 let gateKind: GateRelease = 'dismiss';
 
 /** The last gate's release kind. */

@@ -814,7 +814,7 @@ function stateOf(spec: OptionSpec): number {
 // ---------------------------------------------------------------------
 
 /** What the $LESS scan tells the pager to do at startup. */
-export interface StartupCmds {
+interface StartupCmds {
   /** `+`/`-p` commands replayed at the first file, in order. */
   firstCmds: string[];
   /** True when `-?`/`--help` pages the help file first (og's dohelp). */

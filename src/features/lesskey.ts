@@ -23,7 +23,7 @@ import { secureAllow } from './secure';
  * key-sensitive actions (`-`/`_`), and the "extra" input string fed
  * after the action, like lesskey's A_EXTRA.
  */
-export interface UserBinding {
+interface UserBinding {
   action: Actions | undefined;
   key?: string;
   extra?: string;

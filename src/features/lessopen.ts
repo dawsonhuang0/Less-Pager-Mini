@@ -23,7 +23,7 @@ import { lgetenv } from '../startup/environment';
 import { decodeContent } from './charset';
 
 /** A $LESSOPEN replacement: its lines, byte size and alt file name. */
-export interface AltFile {
+interface AltFile {
   lines: string[];
   size: number;
   /** `-` for pipe preprocessors, the temp file name otherwise. */
@@ -40,7 +40,7 @@ export interface AltFile {
 /** What a cat session gets back: the alt name for $LESSCLOSE, plus a
  *  file to copy when the replacement is one. Nothing to copy means
  *  the bytes already went out (or the "||" form found it empty). */
-export interface AltStream {
+interface AltStream {
   alt: string;
   path?: string;
   empty?: boolean;
