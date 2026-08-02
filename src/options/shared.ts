@@ -672,8 +672,15 @@ export function prChar(char: string): string {
   const code = char.charCodeAt(0);
 
   if (code === 0x1B) return 'ESC';
-  if (code < 0x20) return '^' + String.fromCharCode(code + 0x40);
-  if (code === 0x7F) return '^?';
+
+  // og XORs with 0100 rather than adding it (charset.c:548). For
+  // 0x00-0x1F the two agree, but DEL only becomes "^?" under the XOR:
+  // 0x7F ^ 0x40 is 0x3F. There were two copies of this function and
+  // the other one, using <0x20, printed a raw DEL
+  if (code < 0x20 || code === 0x7F) {
+    return '^' + String.fromCharCode(code ^ 0x40);
+  }
+
   return char;
 }
 

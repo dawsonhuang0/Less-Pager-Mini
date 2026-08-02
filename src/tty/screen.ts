@@ -72,10 +72,13 @@ export function detectedDimensions(): [number, number] {
 }
 
 /**
- * Leaves the alternate screen and raw mode so a child process can use
- * the terminal, like less de-initializing before running a command.
+ * The escape sequences that undo enterScreen, like og's term_deinit.
+ *
+ * Both ways out of the screen need these in this order, and they were
+ * written twice: here and inline in the quit path. Two copies of an
+ * exit path is how one of them silently stops matching og.
  */
-export function suspendTerminal(): void {
+export function leaveScreenCodes(): void {
   // og's mouse and paste strings are hardcoded, not termcap: even
   // a dumb terminal receives them when the options are on
   if (optMouse() || opt.emouse) {
@@ -91,6 +94,14 @@ export function suspendTerminal(): void {
       process.stdout.write(ALTERNATE_CONSOLE_OFF);
     }
   }
+}
+
+/**
+ * Leaves the alternate screen and raw mode so a child process can use
+ * the terminal, like less de-initializing before running a command.
+ */
+export function suspendTerminal(): void {
+  leaveScreenCodes();
 
   keyboard().setRawMode(false);
   keyboard().pause();

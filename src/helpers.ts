@@ -37,6 +37,7 @@ import {
   optHiliteTarget,
   jumpSindex,
   optIntrChar,
+  prChar,
   optEndPrompt,
   gutterWidth,
   fullScreenWidth,
@@ -2363,14 +2364,7 @@ function clipPrompt(text: string, indent: number = 0): string {
  *
  * @param char - Single character to render.
  */
-function prChar(char: string): string {
-  const code = char.charCodeAt(0);
 
-  if (code === 0x1B) return 'ESC';
-  if (code < 0x20) return '^' + String.fromCharCode(code ^ 0x40);
-
-  return char;
-}
 
 /**
  * Trims the buffer to fit within the screen width.

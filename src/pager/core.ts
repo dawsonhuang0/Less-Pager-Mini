@@ -28,7 +28,8 @@ import { session, resetSession, deriveContent, shellReserveLines }
 import { startupInit, printStartupError, startupErrors, warnReturn }
   from "../startup/startup";
 
-import { calculateDimensions, suspendTerminal, enterScreen }
+import { calculateDimensions, suspendTerminal, enterScreen,
+  leaveScreenCodes }
   from "../tty/screen";
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
@@ -181,7 +182,6 @@ import {
   optQuitAtEof,
   optWheelLines,
   optQuitOnIntr,
-  optMouse,
   optIncrSearch,
   optNoPaste,
   optRedrawOnQuit,
@@ -269,12 +269,7 @@ import {
   CONSOLE_TITLE_RESET,
   ALTERNATE_CONSOLE_ON,
   ON_ALTERNATE_SCREEN,
-  ALTERNATE_CONSOLE_OFF,
   KEYPAD_ON,
-  KEYPAD_OFF,
-  MOUSE_OFF,
-  MOUSE_SGR_OFF,
-  BRACKETED_PASTE_OFF,
   CLEAR_LINE,
   BOLD_ON,
   BOLD_OFF,
@@ -2513,23 +2508,12 @@ function cleanUp(): void {
   // A dumb terminal has no clear_eol and gets the bare CR below
   if (!mode.DUMB) process.stdout.write(clearBot());
 
-  // --emouse enables tracking without --mouse, so check both;
-  // these strings are hardcoded like og's, so dumb gets them too
-  if (optMouse() || opt.emouse) {
-    process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
-  }
+  // mouse, paste, keypad and the alternate screen, in og's order --
+  // the same sequences suspendTerminal sends, and shared with it so
+  // the two ways out of the screen cannot drift apart
+  leaveScreenCodes();
 
-  // --no-paste turned bracketed paste markers on
-  if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
-
-  // a dumb terminal never received the termcap-backed codes
   if (!mode.DUMB) {
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
-
-    if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_CONSOLE_OFF);
-    }
-
     if (isWindows) process.stdout.write(CONSOLE_TITLE_RESET);
   } else {
     // og-dumb quits with just lower_left (a bare CR) and no newline,
