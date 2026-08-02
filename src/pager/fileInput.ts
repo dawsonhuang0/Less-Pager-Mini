@@ -52,10 +52,9 @@ import {
   scanSearchBatch,
   search,
   searchInterrupted,
+  shiftVisibleText,
   stripStyles,
 } from '../features/searching';
-
-import { strWidth } from 'char-width';
 
 import { consumeInterrupt } from '../tty/keyboard';
 
@@ -70,10 +69,8 @@ import {
   opt,
   optHeader,
   optHowSearch,
-  optMatchShift,
   optNoSearchHeaders,
   optPastEof,
-  optRscroll,
 } from '../options';
 
 import { setOsc8Display, transformContent }
@@ -811,38 +808,14 @@ export class FileInput implements PagerInput {
    * wrapped long lines bottom-jump instead (bottomSub).
    */
   private shiftMatch(linePos: number): void {
-    const regex = search.regex;
-    if (!chopLine() || !regex) return;
+    // the guards come first so a line is not read off disk for a
+    // search that cannot shift anyway
+    if (!chopLine() || !search.regex) return;
 
     const line = linePos < this.bf.size ? forwLine(this.bf, linePos) : null;
     if (!line) return;
 
-    const text = stripStyles(displayText(line.text));
-    const match = regex.exec(text);
-    if (!match) return;
-
-    const startCol = strWidth(text.slice(0, match.index));
-    const endCol = startCol + strWidth(match[0]);
-    // the marker column only exists while --rscroll is enabled
-    // (search.c:641: sc_width - (rscroll_char ? 1 : 0))
-    const swidth = config.screenWidth - (optRscroll() ? 1 : 0);
-    let newCol: number;
-
-    if (endCol < swidth) {
-      // the whole match fits the unshifted screen
-      newCol = 0;
-    } else if (startCol > config.col && endCol < config.col + swidth) {
-      // already visible; leave the shift unchanged
-      newCol = config.col;
-    } else {
-      const eolCol = strWidth(text) - swidth;
-
-      newCol = startCol >= eolCol
-        ? eolCol
-        : startCol < optMatchShift() ? 0 : startCol - optMatchShift();
-    }
-
-    config.col = Math.max(newCol, 0);
+    shiftVisibleText(stripStyles(displayText(line.text)));
   }
 
   restoreSearchOrigin(): void {

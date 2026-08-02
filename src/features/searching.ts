@@ -1906,9 +1906,28 @@ function jumpBottom(content: string[], row: number, sub: number): void {
  * columns from the left edge.
  */
 function shiftVisible(content: string[], row: number): void {
+  shiftVisibleText(stripStyles(content[row]));
+}
+
+/**
+ * shift_visible on a line's DISPLAY text.
+ *
+ * Both engines run this, and differ only in where the text comes from:
+ * a row of session.content, or a line read from the seekable source.
+ * Everything after that -- og's four-way choice of new hshift -- was
+ * written out twice, identically.
+ *
+ * og reaches here only with a real match in hand (sp[0] and ep[0] are
+ * non-NULL, search.c:1745), which under an inverted search they never
+ * are: the line "matches" precisely because the pattern did not. The
+ * invert test below says that up front; falling through to a null exec
+ * says the same thing one step later.
+ *
+ * @param text - The line as displayed, styles already stripped.
+ */
+export function shiftVisibleText(text: string): void {
   if (!chopLine() || !search.regex || search.invert) return;
 
-  const text = stripStyles(content[row]);
   const match = search.regex.exec(text);
   if (!match) return;
 
