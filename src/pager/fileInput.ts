@@ -1933,10 +1933,37 @@ export class FileInput implements PagerInput {
     // draws a screenful of NULL LINES: the content is pushed off and
     // tildes are all that is left. -r is what makes the walk fail,
     // because the whole file is a single row
+    // og's jump_back errors when find_pos cannot place the line and
+    // does not move at all (jump.c:117). We fell through to a clamped
+    // seek, so N g past the end of the file landed on the last screen
+    // instead of reporting. A still-spooling source is not "past the
+    // end" yet -- its length is not known -- so it keeps the old path.
+    if (pos === null && !this.spoolAlive() && want > 0) {
+      search.message = `Cannot seek to line number ${want + 1}`;
+      return;
+    }
+
+    // og's forw() pos_clears -- and prints "...skipping..." -- only
+    // when the target is NOT contiguous with what is displayed:
+    // `if (pos != position(BOTTOM_PLUS_ONE) || empty_screen())`
+    // (forwback.c:259). A jump landing exactly on the row after the
+    // bottom is an ordinary forward screenful, and og scrolls it. We
+    // cleared for every jump, so 10g on a nine-row screen printed the
+    // marker and repainted where og simply scrolled on.
+    const contiguous = pos !== null && !this.emptyScreen() &&
+      pos === this.view.visible(config.window - 1).endPos;
+
     this.seekLine(want, true);
     this.sync();
     this.seam = [];
-    markPosClear();
+
+    if (contiguous) noteScrollRows(config.window - 1);
+    else markPosClear();
+  }
+
+  /** og's empty_screen(): nothing has been painted yet. */
+  private emptyScreen(): boolean {
+    return this.view.visible(config.window - 1).rows.length === 0;
   }
 
   /**
