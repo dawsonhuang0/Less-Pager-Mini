@@ -1339,7 +1339,26 @@ function filledRow(row: string): boolean {
 }
 
 function tailClear(row: string): string {
+  if (mcaBare()) return '';
   return filledRow(row) ? '' : CLEAR_LINE;
+}
+
+/**
+ * True while an open command line still reads exactly as og's
+ * start_mca left it: clear_bot, clear_cmd, cmd_putstr(prompt), and
+ * nothing after (command.c:196).
+ *
+ * The trailing clear_eol on the bottom row belongs to prompt()'s
+ * put_line, which writes the MAIN prompt, or to cmd_repaint's
+ * per-character echo (cmdbuf.c:520) - never to opening a command
+ * line. We sent one anyway, so every mca prompt cost a stray ESC[K.
+ */
+function mcaBare(): boolean {
+  if (cmd.active) return cmdText() === '';
+  if (marks.pending) return true;
+  if (pipeMark.pending) return !pipeMark.num;
+  if (brackets.pending) return !brackets.chars;
+  return false;
 }
 
 /**

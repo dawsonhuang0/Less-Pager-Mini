@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { ringBell } from "../helpers";
+import { ringBell, markPosClear } from "../helpers";
 import { maxSubRow, isAscii, isStyled } from "../lines/helpers";
 
 import { getLayout } from "../lines/lineLayout";
@@ -675,9 +675,17 @@ export function marksKey(content: string[], key: string): void {
     setMark(content, char, pending === 'M', marks.n);
   } else if (pending === "'") {
     goMark(content, char, marks.n);
+    return;
   } else if (pending === 'c') {
     clearMark(char);
   }
+
+  // og's A_SETMARK and A_CLRMARK both end in repaint() (command.c:2374,
+  // :2386) - pos_clear plus jump_loc from the top, so the screen is
+  // redrawn whole behind the skipping marker even though nothing moved.
+  // Only the erase/newline keys break out before it, and A_GOMARK has
+  // no repaint at all. We redrew the prompt row alone.
+  markPosClear();
 }
 
 /**
