@@ -41,34 +41,56 @@ const isFormFeed = (line: string): boolean =>
   line.startsWith('\f') || line.startsWith(INVERSE_ON + '^L');
 
 /**
+ * A cursor over display rows, parked on the bottom row of the screen.
+ *
+ * og's two forward-looking commands both start at the bottom edge and
+ * step on from there -- the form-feed cap looking for the first
+ * incoming \f line, newlineForward counting rows that end a file line
+ * -- so both the walk down to the bottom and the stepping itself were
+ * written out twice.
+ *
+ * @param content - Full content lines.
+ */
+function bottomWalk(content: string[]): {
+  row: number;
+  subRow: number;
+  advance(): boolean;
+} {
+  const walk = {
+    row: config.row,
+    subRow: config.subRow,
+
+    advance(): boolean {
+      if (walk.subRow < maxSubRow(content[walk.row])) {
+        walk.subRow++;
+        return true;
+      }
+
+      if (walk.row + 1 >= content.length) return false;
+      walk.row++;
+      walk.subRow = 0;
+      return true;
+    },
+  };
+
+  let steps = Math.max(config.window - 2 - config.blankTop, 0);
+  while (steps > 0 && walk.advance()) steps--;
+
+  return walk;
+}
+
+/**
  * Caps a forward scroll at og's --form-feed stop: forw() checks each
  * newly printed bottom line (forwback.c:366) and breaks with the \f
  * line as the LAST visible row on screen.
  */
 function ffCapForward(content: string[], offset: number): number {
-  let r = config.row;
-  let s = config.subRow;
-  let steps = Math.max(config.window - 2 - config.blankTop, 0);
-
-  const advance = (): boolean => {
-    if (s < maxSubRow(content[r])) {
-      s++;
-      return true;
-    }
-
-    if (r + 1 >= content.length) return false;
-    r++;
-    s = 0;
-    return true;
-  };
-
-  // find the current bottom display row
-  while (steps > 0 && advance()) steps--;
+  const walk = bottomWalk(content);
 
   // the first incoming row that STARTS a \f line caps the move there
   for (let k = 1; k <= offset; k++) {
-    if (!advance()) break;
-    if (s === 0 && isFormFeed(content[r])) return k;
+    if (!walk.advance()) break;
+    if (walk.subRow === 0 && isFormFeed(content[walk.row])) return k;
   }
 
   return offset;
@@ -568,35 +590,18 @@ export function newlineForward(content: string[], offset: number): void {
   // reveal from BOTTOM_PLUS_ONE and only ones ending their file line
   // decrement the count — wrap continuations ride free — so convert
   // the file-line count into the screen rows forw() would scroll
-  let r = config.row;
-  let s = config.subRow;
-  let steps = Math.max(config.window - 2 - config.blankTop, 0);
-
-  const advance = (): boolean => {
-    if (s < maxSubRow(content[r])) {
-      s++;
-      return true;
-    }
-
-    if (r + 1 >= content.length) return false;
-    r++;
-    s = 0;
-    return true;
-  };
-
-  // find the current bottom display row
-  while (steps > 0 && advance()) steps--;
+  const walk = bottomWalk(content);
 
   let rows = 0;
 
   for (let n = offset; n > 0; ) {
-    if (!advance()) {
+    if (!walk.advance()) {
       // a forced move keeps revealing a null row per remaining line
       if (optPastEof()) rows += n;
       break;
     }
     rows++;
-    if (s === maxSubRow(content[r])) n--;
+    if (walk.subRow === maxSubRow(content[walk.row])) n--;
   }
 
   if (rows) lineForward(content, rows);
