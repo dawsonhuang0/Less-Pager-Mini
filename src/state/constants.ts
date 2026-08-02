@@ -220,7 +220,11 @@ export function initTerminalCapabilities(): void {
   REVERSE_INDEX = terminalCapability('ri', 'sr') ?? '\x1bM';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
-  const reset = terminalCapability('sgr0', 'me') ?? '\x1b[m';
+  // og reads sgr0 from terminfo; this lookup only sees
+  // LESS_TERMCAP_*/$TERMCAP, so the fallback is what every ordinary
+  // terminal gets. xterm's sgr0 -- and screen's, and tmux's -- is
+  // "\E(B\E[m": the SGR reset preceded by designating ASCII as G0
+  const reset = terminalCapability('sgr0', 'me') ?? '\x1b(B\x1b[m';
   STYLE_RESET = reset;
   INVERSE_ON = terminalCapability('smso', 'so') ?? '\x1b[7m';
   // og reads rmso from the terminfo database; terminalCapability only

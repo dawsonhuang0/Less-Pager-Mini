@@ -442,7 +442,12 @@ function transformLine(line: string, ctldispOverride?: number): string {
     // sentinel back to a real ESC in every ctldisp mode — og keeps
     // these attrs out-of-band, so only DATA escapes caret
     if (char === OWN_STYLE) {
-      const seq = /^\[[0-9;]*m/.exec(line.slice(i + 1));
+      // CSI SGR, or a charset designation: terminfo's sgr0 is
+      // "\E(B\E[m" on xterm and its relatives, so a reset WE emit
+      // carries an ESC ( B that is not a CSI at all. Matching only
+      // the CSI form left that sentinel unswapped, and the binary
+      // renderer below then drew it as <U+E100> with "(B" beside it
+      const seq = /^(?:\[[0-9;]*m|[()][A-Za-z0-9])/.exec(line.slice(i + 1));
 
       if (seq) {
         out += '\x1b' + seq[0];
