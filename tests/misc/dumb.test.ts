@@ -52,8 +52,9 @@ describe('dumb terminal rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // the first paint prints directly, like og's initial forw
-    expect(frame.startsWith('\rd1')).toBe(true);
+    // the first paint prints directly, like og's initial forw,
+    // behind the CR term_init has already written
+    expect(frame.startsWith('d1')).toBe(true);
 
     // no cursor addressing or attribute escapes at all
     expect(frame).not.toContain('\x1B');

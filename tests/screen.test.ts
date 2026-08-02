@@ -141,6 +141,8 @@ describe('terminal mode transitions', () => {
       KEYPAD_ON,
       MOUSE_SGR_ON + MOUSE_ON,
       BRACKETED_PASTE_ON,
+      // og's term_init ends by parking the cursor at column 1
+      '\r',
     ]);
     expect(hook.screenActive).toBe(true);
   });
@@ -150,7 +152,9 @@ describe('terminal mode transitions', () => {
 
     enterScreen();
 
-    expect(writes()).toEqual([]);
+    // term_init's closing line_left is not a capability: og runs it
+    // whatever the terminal is (screen.c:2071)
+    expect(writes()).toEqual(['\r']);
     expect(hook.screenActive).toBe(true);
   });
 });

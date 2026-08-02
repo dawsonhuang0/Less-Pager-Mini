@@ -29,7 +29,7 @@ import { startupInit, printStartupError, startupErrors, warnReturn }
   from "../startup/startup";
 
 import { calculateDimensions, suspendTerminal, enterScreen,
-  leaveScreenCodes }
+  leaveScreenCodes, termInitTail }
   from "../tty/screen";
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
@@ -2148,6 +2148,7 @@ function init() {
   hook.screenActive = true;
   applyMouse();
   applyBracketedPaste();
+  termInitTail();
 
   // SIGTERM/SIGHUP quit cleanly, restoring the terminal like og's
   // terminate() calling quit(15); an external SIGINT acts like the

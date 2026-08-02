@@ -123,9 +123,26 @@ export function enterScreen(): void {
 
   if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
 
+  termInitTail();
+
   hook.screenActive = true;
   resetRender();
   screenEntered();
+}
+
+/**
+ * The last thing og's term_init does (screen.c:2071): park the cursor
+ * at the start of the line.
+ *
+ * It belongs to the TERMINAL setup, not to the paint that happens to
+ * come next, and the difference shows the moment something else comes
+ * first: a `+cmd` is ungotten before the first prompt, so og echoes
+ * the command behind this CR and paints afterwards. Folding the CR
+ * into the first frame instead lost it whenever the first frame was
+ * not the first output.
+ */
+export function termInitTail(): void {
+  process.stdout.write('\r');
 }
 
 export function calculateDimensions(): void {

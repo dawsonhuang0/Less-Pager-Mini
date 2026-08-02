@@ -59,8 +59,9 @@ describe('-X main-screen rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og's term_init line_left, then the lines scroll naturally
-    expect(frame.startsWith('\rx1\n')).toBe(true);
+    // term_init's line_left already left the cursor at column 1,
+    // so the paint itself just writes the lines and lets them scroll
+    expect(frame.startsWith('x1\n')).toBe(true);
     expect(frame).not.toContain('\x1B[H');
     expect(frame).not.toContain('\x1B[1;1H');
     expect(frame).not.toContain('\x1B[?2026');
@@ -209,7 +210,7 @@ describe('a terminal that cannot switch screens', () => {
     // content straight out - which is what carries a cursor-moving
     // escape through the way og carries it
     expect(frame).not.toContain('\x1b[H');
-    expect(frame.slice(0, frame.indexOf('a'))).toBe('\x1b[?2026h\r');
+    expect(frame.slice(0, frame.indexOf('a'))).toBe('\x1b[?2026h');
     expect(blanksAbove(frame)).toBe(0);
   });
 });

@@ -68,7 +68,7 @@ describe('render', () => {
     // screenful up into place (screen.c:2061 + forwback.c)
     expect(writes[0]).not.toContain('\x1b[H');
     expect(writes[0]).not.toContain('\x1b[2J');
-    expect(writes[0]).toContain('\rline 10\nline 11\n');
+    expect(writes[0]).toContain('line 10\nline 11\n');
 
     config.row = 11;
     render(content, []);

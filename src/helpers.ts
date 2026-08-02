@@ -589,6 +589,7 @@ export function resetRender(): void {
   prevTopSub = 0;
   scrollOpen = false;
   scrollPrefix = null;
+  forwPrompt = false;
   promptAtBottom = false;
   posClearPending = false;
 
@@ -1213,12 +1214,22 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
     let same = 0;
     while (same < last && plain[same] === prevPlain[same]) same++;
 
-    // only the bottom (prompt) line changed
-    if (same === last) return '\r' + plain[last];
+    // only the bottom (prompt) line changed: og's prompt() skips
+    // clear_bot after a forward paint, which is all this CR is
+    if (same === last) {
+      const opening = forwPrompt ? '' : '\r';
+      forwPrompt = false;
+      return opening + plain[last];
+    }
 
     // scrolled forward: the old rows moved up by k
     for (let k = 1; k < last; k++) {
       if (plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)) {
+        // og's forw sets forw_prompt after every line it puts
+        // (forwback.c:368), so the prompt that follows skips
+        // clear_bot - here a bare CR, since dumb has no "el". A frame
+        // carrying its own prompt row has already spent it
+        forwPrompt = !plain[last];
         return '\r' + joinDumb(plain.slice(last - k));
       }
     }
@@ -1228,14 +1239,15 @@ function dumbFrame(prev: string[] | null, rows: string[]): string {
   // full paint is repaint()'s non-contiguous forw, which without
   // top_scroll prints "...skipping..." — only -c or a trashed
   // make_display (top_scroll forced) clears with two newlines and
-  // hardcopy home's visible |-overstruck-^ marker ("|\b^"); every
-  // paint leads with lower_left's bare CR
+  // hardcopy home's visible |-overstruck-^ marker ("|\b^"); a later
+  // paint leads with lower_left's bare CR, the first one leans on the
+  // one term_init has already written
   const repaint = prev !== null || dumbPainted;
   const clearHome = optClearRepaint() || dumbHomePending;
   dumbHomePending = false;
   dumbPainted = true;
 
-  return '\r' +
+  return (repaint ? '\r' : '') +
     (repaint && (clearHome || fullScreen())
       ? (clearHome ? '\n\n|\b^' : '...skipping...\n')
       : '') +
@@ -1441,7 +1453,7 @@ export function noteScrollRows(n: number): void {
 
 /** Marks the next scroll-mode paint as a fresh screen entry. */
 export function screenEntered(): void {
-  scrollPrefix = '\r';
+  scrollPrefix = '';
 }
 
 /** Marks the next scroll-mode paint as a bare re-edit repaint. */
@@ -1789,8 +1801,9 @@ function scrollFrame(
   const body = (promptless ? rows : rows.slice(0, last))
     .map(r => r + rowEnd(r)).join('');
 
-  // the first paint prints in place behind term_init's line_left CR
-  if (!repaint) return '\r' + body + bot;
+  // the first paint prints in place behind term_init's line_left CR,
+  // which termInitTail has already written
+  if (!repaint) return body + bot;
 
   // -c and the freeze-unlatching make_display (top_scroll forced)
   // clear and paint forward, like og's forw calling clear() + home()
@@ -1999,7 +2012,8 @@ function squishFrame(rows: string[], blanks: number): string {
   // With nothing drawn, forw_prompt stays FALSE and the clear runs
   const bot = content.length ? '' : clearBot();
 
-  return syncOn() + '\r' +
+  // no leading CR: term_init already parked the cursor there
+  return syncOn() +
     content.map(row => frameRowEnd(row) ? row + '\n' : row).join('') +
     bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
 }
