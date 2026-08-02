@@ -1583,6 +1583,48 @@ function dropPattern(): void {
 }
 
 /**
+ * Walks every line under og's interruptible slice budget, calling
+ * `step` for each, and reports how the walk ended.
+ *
+ * filterLines and filterLineMask differ only in what they do per line
+ * -- keep it, or record a boolean -- and both wrote out the same
+ * deadline, the same 1024-step check and the same "Pattern too
+ * complex" handling.
+ *
+ * @param lines - Full content lines.
+ * @param step - Called with each line and its index.
+ * @returns guardedSlices' own verdict: 'done', 'stop' (interrupted),
+ *          or 'complex' (filters dropped and the message set here).
+ */
+function slicedWalk(
+  lines: string[],
+  step: (line: string, at: number) => void
+): 'done' | 'stop' | 'complex' {
+  let at = 0;
+
+  const outcome = guardedSlices(() => {
+    const deadline = Date.now() + 100;
+    let steps = 0;
+
+    while (at < lines.length) {
+      step(lines[at], at);
+      at++;
+
+      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
+    }
+
+    return true;
+  });
+
+  if (outcome === 'complex') {
+    search.filters = [];
+    search.message = 'Pattern too complex';
+  }
+
+  return outcome;
+}
+
+/**
  * Applies a `&` display filter in the same guarded slices as a search.
  *
  * @param lines - Full content lines.
@@ -1595,29 +1637,12 @@ export function filterLines(
   filter: (line: string) => boolean
 ): string[] | null {
   const kept: string[] = [];
-  let at = 0;
 
-  const outcome = guardedSlices(() => {
-    const deadline = Date.now() + 100;
-    let steps = 0;
-
-    while (at < lines.length) {
-      if (filter(lines[at])) kept.push(lines[at]);
-      at++;
-
-      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
-    }
-
-    return true;
+  const outcome = slicedWalk(lines, line => {
+    if (filter(line)) kept.push(line);
   });
 
-  if (outcome === 'complex') {
-    search.filters = [];
-    search.message = 'Pattern too complex';
-    return null;
-  }
-
-  if (outcome === 'stop') return null;
+  if (outcome !== 'done') return null;
   return kept;
 }
 
@@ -1630,29 +1655,12 @@ export function filterLineMask(
   filter: (line: string) => boolean
 ): boolean[] | null {
   const mask = new Array<boolean>(lines.length);
-  let at = 0;
 
-  const outcome = guardedSlices(() => {
-    const deadline = Date.now() + 100;
-    let steps = 0;
-
-    while (at < lines.length) {
-      mask[at] = filter(lines[at]);
-      at++;
-
-      if ((++steps & 0x3FF) === 0 && Date.now() > deadline) return false;
-    }
-
-    return true;
+  const outcome = slicedWalk(lines, (line, at) => {
+    mask[at] = filter(line);
   });
 
-  if (outcome === 'complex') {
-    search.filters = [];
-    search.message = 'Pattern too complex';
-    return null;
-  }
-
-  return outcome === 'stop' ? null : mask;
+  return outcome === 'done' ? mask : null;
 }
 
 // the last synchronous interrupt poll, at most one per ~100ms of scan
