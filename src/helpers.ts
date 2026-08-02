@@ -49,7 +49,7 @@ import { prExpand, prProto, hProto, wProto } from './features/prompt';
 
 import { colored } from './features/color';
 
-import { cmd, cmdCol, cmdDisplay } from './features/cmdbuf';
+import { cmd, cmdCol, cmdDisplay, cmdText } from './features/cmdbuf';
 
 import { follow } from './features/follow';
 
@@ -1083,7 +1083,8 @@ export function render(rawContent: string[], buffer: string[]): void {
   // -X stays on the main screen, where og's real paint model shows
   if (scrollMode()) {
     nulCollapsed = 0;
-    const frame = scrollFrame(prevRows, rows, pipeFill, rawContent, posClear);
+    const frame =
+      scrollFrame(prevRows, rows, pipeFill, rawContent, posClear, buffer);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(eprPrefix() + frame);
@@ -1488,6 +1489,29 @@ export function markPosClear(): void {
 }
 
 /**
+ * og's cmd_ichar echo (cmdbuf.c:520): the inserted character is not
+ * painted as part of a rewritten row. cmd_repaint clear_eols at the
+ * insertion point and prints the tail from there, backs the cursor up
+ * to where it was, and cmd_right then RE-PRINTS the character to
+ * advance over it -- so a typed "5" goes out as "5 \b 5".
+ *
+ * @param row - The command line as it will read after the keystroke.
+ * @returns The row up to the inserted character, or null when this is
+ *          not a plain insertion.
+ */
+function cmdInsertEcho(row: string, buffer: string[]): string | null {
+  // a digit prefix goes through og's mca number mode, which is the
+  // same cmd_char path as a prompt's own text
+  const typed = cmd.active ? cmdText() : buffer.join('');
+  if (!typed) return null;
+
+  const c = typed.slice(-1);
+  if (!row.endsWith(c)) return null;
+
+  return row.slice(0, -c.length);
+}
+
+/**
  * Paints like og on the main screen for -X (no-init): og never
  * redraws frames in place — forw() prints the new lines and lets the
  * terminal scroll, back() inserts rows with home + reverse index
@@ -1503,7 +1527,8 @@ function scrollFrame(
   rows: string[],
   open: boolean = false,
   src: string[] = [],
-  posClear: boolean = false
+  posClear: boolean = false,
+  buffer: string[] = []
 ): string {
   const effRow = config.row - config.blankTop;
 
@@ -1617,7 +1642,21 @@ function scrollFrame(
     if (prev.length === rows.length) {
       let same = 0;
       while (same < last && rows[same] === prev[same]) same++;
-      if (same === last) return clearBot() + bot;
+
+      if (same === last) {
+        const head = cmdInsertEcho(rows[last], buffer);
+
+        if (head !== null) {
+          const c = rows[last].slice(head.length);
+          const echo = CLEAR_LINE + c + '\b' + c;
+
+          // og repaints the prompt only when it CHANGED (the status
+          // line giving way to ":"); a second digit is the echo alone
+          return prev[last] === head ? echo : clearBot() + head + echo;
+        }
+
+        return clearBot() + bot;
+      }
     }
 
     // forward: the old content rows survive shifted up by k (k = 0
