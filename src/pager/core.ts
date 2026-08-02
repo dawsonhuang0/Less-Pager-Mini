@@ -72,6 +72,7 @@ import {
   lastScreen,
   clearBot,
   markBareRepaint,
+  dirtyBottomRow,
   markPosClear,
   eprPrefix
 } from "../helpers";
@@ -1537,6 +1538,15 @@ function dispatchKey(sequence: string): void {
   }
 
   search.message = search.messageQueue.shift() ?? '';
+
+  // og's error() ends get_return with lower_left() + clear_eol()
+  // (output.c:731): the message row is addressed absolutely and
+  // cleared the moment the key arrives, before whatever the key then
+  // does repaints. We left it to the repaint alone.
+  if (hadMessage && !search.message && !mode.DUMB) {
+    process.stdout.write(CURSOR_TO(config.window, 1) + CLEAR_LINE);
+    dirtyBottomRow();
+  }
 
   // RETURN and space only dismiss a pending message; other keys are
   // reprocessed as commands, like less's get_return

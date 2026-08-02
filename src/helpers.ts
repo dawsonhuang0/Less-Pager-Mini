@@ -1644,6 +1644,11 @@ function scrollFrame(
       while (same < last && rows[same] === prev[same]) same++;
 
       if (same === last) {
+        // og's error() clear_bots itself (output.c:722), on top of the
+        // clear_bot cmd_exec already did for the command that failed:
+        // its bytes carry TWO before a message, and we carried one
+        if (search.message) return clearBot() + clearBot() + bot;
+
         const head = cmdInsertEcho(rows[last], buffer);
 
         if (head !== null) {
