@@ -121,9 +121,15 @@ export let DEFER_WRAP = true;
 export let CLEAR_SCREEN = '\x1b[H\x1b[2J';
 export let REVERSE_INDEX = '\x1bM';
 
-let cursorToCapability = '\x1b[%p1%d;%p2%dH';
+// terminfo's cup takes ZERO-based coordinates and carries %i to add
+// the one the escape wants -- xterm's is "\E[%i%p1%d;%p2%dH". Our
+// callers count from 1, so the conversion happens here and the
+// fallback carries %i too, keeping one contract either way. Without
+// it, a database-supplied cup incremented an already-1-based row and
+// addressed line 11 of a ten-line screen.
+let cursorToCapability = '\x1b[%i%p1%d;%p2%dH';
 export const CURSOR_TO = (row: number, col: number): string =>
-  formatTerminalCapability(cursorToCapability, row, col);
+  formatTerminalCapability(cursorToCapability, row - 1, col - 1);
 
 // synchronized output (mode 2026): supporting terminals render the
 // whole frame atomically; others ignore it
@@ -212,7 +218,7 @@ export function initTerminalCapabilities(): void {
   TERMINAL_RESUME = terminalCapability('RESUME', 'RESUME') ?? SYNC_OFF;
   CURSOR_HOME = terminalCapability('home', 'ho') ?? '\x1b[H';
   cursorToCapability = terminalCapability('cup', 'cm') ??
-    '\x1b[%p1%d;%p2%dH';
+    '\x1b[%i%p1%d;%p2%dH';
   CLEAR_LINE = terminalCapability('el', 'ce') ?? '\x1b[K';
   CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '\x1b[J';
   CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\x1b[H\x1b[2J';

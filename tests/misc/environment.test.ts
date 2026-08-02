@@ -180,7 +180,13 @@ describe('dynamic terminal capability families', () => {
     expect(CLEAR_LINE).toBe('<clear>');
     expect(MOUSE_ON).toBe('<mouse>');
     expect(BRACKETED_PASTE_ON).toBe('<paste>');
-    expect(CURSOR_TO(2, 3)).toBe('<3,4>');
+    // CURSOR_TO counts rows and columns from 1, as its callers do
+    // (CURSOR_TO(config.window, 1) is the bottom row). terminfo's cup
+    // counts from 0 and carries %i to add the one the escape needs, so
+    // the conversion happens in CURSOR_TO: row 2 goes in as 1 and %i
+    // brings it back. Asserting <3,4> here encoded the double count
+    // that addressed line 11 of a ten-line screen.
+    expect(CURSOR_TO(2, 3)).toBe('<2,3>');
     expect(VISUAL_BELL).toBe('<flash>');
   });
 

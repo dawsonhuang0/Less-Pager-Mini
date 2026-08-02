@@ -1,3 +1,5 @@
+import { tgetent, tgetflag, tgetnum, tgetstr } from './terminfo';
+
 import fs from 'fs';
 
 import { actualEnv, lgetenv, sessionEnv, terminalEnv }
@@ -140,10 +142,52 @@ export function terminalCapability(
   if (termcap !== null) {
     const value = lgetenv(`LESS_TERMCAP_${termcap}`);
     if (value) return value;
-    return inlineTermcap(termcap);
+
+    // a $TERMCAP entry answers next, and a CANCELED capability there
+    // (the empty string) is an answer: it suppresses what follows
+    const inline = inlineTermcap(termcap);
+    if (inline !== undefined) return inline;
+  }
+
+  // and then the terminal's own strings. og links curses and calls
+  // tgetstr, so this is the tier that normally answers; without it
+  // every caller fell through to its own hardcoded default
+  if (terminfo !== null) {
+    loadTerminfo();
+    const value = tgetstr(terminfo);
+    if (value !== null) return stripPadding(value);
   }
 
   return undefined;
+}
+
+/**
+ * Drops a terminfo padding spec, the way og's tputs does at speed 0.
+ *
+ * A database string may carry "$<100/>" -- xterm's flash does -- which
+ * is an instruction to tputs, not output. og calls
+ * setupterm(term, -1, NULL), leaving ospeed 0, so tputs emits no
+ * padding at all and the capability goes out bare. Passing the spec
+ * through would print "$<100/>" on the screen.
+ */
+function stripPadding(value: string): string {
+  return value.replace(/\$<[0-9.]*[*/]*>/g, '');
+}
+
+// tgetent is og's one-time load at init; doing it on first use keeps
+// the $TERM lookup after the environment tiers have been set up
+let terminfoLoaded = false;
+
+/** Loads the compiled entry for $TERM, once, like og's tgetent. */
+function loadTerminfo(): void {
+  if (terminfoLoaded) return;
+  terminfoLoaded = true;
+  tgetent(terminalEnv() ?? null);
+}
+
+/** Forgets the loaded entry, so a fresh session re-reads $TERM. */
+export function resetTerminfo(): void {
+  terminfoLoaded = false;
 }
 
 export function terminalNumber(
@@ -151,9 +195,20 @@ export function terminalNumber(
   termcap: string | null
 ): number | undefined {
   const value = terminalCapability(terminfo, termcap);
-  if (value === undefined) return undefined;
-  const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? undefined : parsed;
+
+  if (value !== undefined) {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? undefined : parsed;
+  }
+
+  // likewise, a number lives in its own section
+  if (terminfo !== null) {
+    loadTerminfo();
+    const num = tgetnum(terminfo);
+    if (num >= 0) return num;
+  }
+
+  return undefined;
 }
 
 export function terminalFlag(
@@ -161,7 +216,17 @@ export function terminalFlag(
   termcap: string | null
 ): boolean | undefined {
   const value = terminalCapability(terminfo, termcap);
-  return value === undefined ? undefined : value !== '' && value !== '0';
+  if (value !== undefined) return value !== '' && value !== '0';
+
+  // a boolean lives in the database's flag section, which tgetstr
+  // cannot see
+  if (terminfo !== null) {
+    loadTerminfo();
+    const flag = tgetflag(terminfo);
+    if (flag >= 0) return flag !== 0;
+  }
+
+  return undefined;
 }
 
 /** Small tparm/tgoto subset covering less's row/column capabilities. */

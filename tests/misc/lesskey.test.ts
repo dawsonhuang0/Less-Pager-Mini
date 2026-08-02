@@ -79,10 +79,34 @@ describe('#command bindings', () => {
   });
 
   it('resolves \\k special key names to terminal sequences', () => {
-    parse('\\ku forw-line\n\\kD forw-screen');
+    // og resolves \ku through the ku/kcuu1 capability, so the answer
+    // is whatever the TERMINAL says -- on xterm that is ESC O A, not
+    // ESC [ A, and og really does ignore ESC [ A (measured against
+    // less/less). Pin the capability so this asserts the RESOLUTION
+    // rather than whichever terminfo entry the machine happens to have
+    process.env.LESS_TERMCAP_ku = '\x1B[A';
 
-    expect(userBinding('\x1B[A')?.action).toBe('LINE_FORWARD');
-    expect(userBinding('\x1B[6~')?.action).toBe('WINDOW_FORWARD');
+    try {
+      parse('\\ku forw-line\n\\kD forw-screen');
+
+      expect(userBinding('\x1B[A')?.action).toBe('LINE_FORWARD');
+      expect(userBinding('\x1B[6~')?.action).toBe('WINDOW_FORWARD');
+    } finally {
+      delete process.env.LESS_TERMCAP_ku;
+    }
+  });
+
+  it('takes a \\k sequence from the terminal, not a built-in guess', () => {
+    process.env.LESS_TERMCAP_ku = '\x1BOA';
+
+    try {
+      parse('\\ku forw-line');
+
+      expect(userBinding('\x1BOA')?.action).toBe('LINE_FORWARD');
+      expect(userBinding('\x1B[A')).toBeUndefined();
+    } finally {
+      delete process.env.LESS_TERMCAP_ku;
+    }
   });
 
   it('reports an invalid \\k name like og', () => {
