@@ -7,3 +7,5 @@ coverage/
 *.log
 .env
 .DS_Store
+# the og-fidelity port lives in its own repo
+new-src/
