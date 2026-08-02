@@ -860,9 +860,17 @@ export function render(rawContent: string[], buffer: string[]): void {
   // screenful or the learned length — or as the wait message when
   // the read stalls (pipeFilling(), inlined: importing
   // features/pipe here would run its module body too early)
-  const filling = bareFrame || (session.pipeStream !== null &&
+  const pipeFill = session.pipeStream !== null &&
     session.pipeFirstFill && !session.pipeProbing && !sizeIsKnown() &&
-    !session.pipeWaiting);
+    !session.pipeWaiting;
+
+  // Both shapes omit the prompt row, so both build their rows the
+  // same way -- but only the PIPE one appends, and scrollFrame's
+  // "open" means append-only. A bare frame is an ordinary paint that
+  // happens to carry no prompt, and passing it as open sent every
+  // seekable scroll down the append path, which then repainted the
+  // whole screen when the rows did not append.
+  const filling = bareFrame || pipeFill;
 
   // getPrompt below re-arms this when the frame bottoms in the true
   // prompt; a fill frame (no prompt row at all) must not inherit it
@@ -1059,7 +1067,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   // -X stays on the main screen, where og's real paint model shows
   if (scrollMode()) {
     nulCollapsed = 0;
-    const frame = scrollFrame(prevRows, rows, filling, rawContent, posClear);
+    const frame = scrollFrame(prevRows, rows, pipeFill, rawContent, posClear);
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(eprPrefix() + frame);
@@ -1379,6 +1387,20 @@ let scrollPrefix: string | null = null;
 // whether the last scroll-mode frame was still squished (mode.INIT)
 let prevInit = false;
 
+// whether the previous scroll-mode frame was a bare (promptless) one
+let prevBare = false;
+
+// Display rows the last move covered. og reads this off its position
+// table; the array-backed core reads it off config.row. The
+// block-backed one can do neither -- it advances its WINDOW and
+// leaves config.row where it was -- so it reports the distance here.
+let scrolledRows = 0;
+
+/** The block engine reporting how far its last move scrolled. */
+export function noteScrollRows(n: number): void {
+  scrolledRows = n;
+}
+
 /** Marks the next scroll-mode paint as a fresh screen entry. */
 export function screenEntered(): void {
   scrollPrefix = '\r';
@@ -1490,6 +1512,10 @@ function scrollFrame(
     forwDist += config.subRow;
   }
 
+  // the engine's own count, when config.row could not say
+  if (forwDist <= 0 && scrolledRows > 0) forwDist = scrolledRows;
+  scrolledRows = 0;
+
   prevTopRow = effRow;
   prevTopSub = config.subRow;
 
@@ -1501,6 +1527,10 @@ function scrollFrame(
 
   const wasOpen = scrollOpen;
   scrollOpen = open;
+
+  // the frame before this one carried no prompt row
+  const wasBare = prevBare;
+  prevBare = bareFrame;
 
   // a clearBot() in any shape below overrides this to the bottom row
   promptAtBottom = rows.length >= config.window;
@@ -1547,12 +1577,26 @@ function scrollFrame(
   const last = rows.length - 1;
   const bot = rows[last] + tailClear(rows[last]) + scrollPark(rows);
 
+  // A bare frame carries no prompt row, so its LAST row is content:
+  // it ends with a newline like the others, and the shapes below
+  // compare against the previous frame's content rows only.
+  const promptless = bareFrame;
+
   // a -h-capped backward scroll repaints forward, like og's back()
   let capped = false;
 
   // og's G pos_clears: the overlap shapes below assume a live
   // position table and must not swallow its skipping repaint
   if (prev && !wasOpen && !unsquished && !posClear) {
+    // The bare frame just painted these content rows and left the
+    // cursor on the fresh bottom line; og writes the prompt there and
+    // nothing else (forw, then currline, then prompt). Reprinting the
+    // content here is what doubled every scrolled line.
+    if (wasBare && !bareFrame && rows.length === prev.length + 1 &&
+        prefixEqual(prev, rows)) {
+      return bot;
+    }
+
     // only the bottom (prompt) line changed: og's clear_bot + reprint
     if (prev.length === rows.length) {
       let same = 0;
@@ -1566,7 +1610,7 @@ function scrollFrame(
     // terminal scroll (forw)
     for (let k = 0; k < prev.length - 1; k++) {
       const overlap = prev.length - 1 - k;
-      if (overlap >= last) continue;
+      if (promptless ? overlap > last : overlap >= last) continue;
 
       let ok = true;
       for (let i = 0; i < overlap; i++) {
@@ -1583,22 +1627,36 @@ function scrollFrame(
         break;
       }
 
+      if (promptless) {
+        return clearBot() +
+          rows.slice(overlap).map(r => r + rowEnd(r)).join('');
+      }
+
       return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
     // an exact-screenful advance: og-contiguous by position (the new
     // top is the old BOTTOM_PLUS_ONE), and exempt from -y since
     // "repainting itself involves scrolling forward a screenful"
-    if (forwDist === prev.length - 1 && rows.length === prev.length) {
+    if (forwDist === prev.length - 1 &&
+        rows.length === (promptless ? prev.length - 1 : prev.length)) {
+      if (promptless) {
+        return clearBot() + rows.map(r => r + rowEnd(r)).join('');
+      }
+
       const appended = rows.slice(0, last);
       return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
     // backward: k rows scrolled in at the top; og back()'s home +
     // reverse index per line, then lower_left before the prompt
-    if (prev.length === rows.length) {
+    // a bare frame is one row shorter, so its rows line up against
+    // the previous frame's CONTENT rows rather than all of them
+    const backBase = promptless ? prev.slice(0, -1) : prev;
+
+    if (backBase.length === rows.length) {
       for (let k = 1; k < last; k++) {
-        if (rows[k] === prev[0] && shifted(prev, rows, k)) {
+        if (rows[k] === backBase[0] && shifted(backBase, rows, k)) {
           // -h caps the scroll: og's back() sets do_repaint and
           // repaint() paints forward with the skipping marker —
           // never the far-backward clear + reverse paint
@@ -1613,6 +1671,8 @@ function scrollFrame(
             frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
           }
 
+          if (promptless) return frame + CURSOR_TO(config.window, 1);
+
           return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
         }
       }
@@ -1626,7 +1686,11 @@ function scrollFrame(
   dumbPainted = true;
   scrollPrefix = null;
 
-  const body = rows.slice(0, last).map(r => r + rowEnd(r)).join('');
+  // a bare frame's last row is content, so it ends with a newline
+  // like every other row -- the prompt row it would otherwise be
+  // does not scroll, and the skipping marker then survived on screen
+  const body = (promptless ? rows : rows.slice(0, last))
+    .map(r => r + rowEnd(r)).join('');
 
   // the first paint prints in place behind term_init's line_left CR
   if (!repaint) return '\r' + body + bot;
@@ -1655,7 +1719,8 @@ function scrollFrame(
   // command's clear_bot. The rows still print without a full screen,
   // only the marker goes (forwback.c:272)
   return (prefix ?? clearBot()) +
-    (fullScreen() ? '...skipping...\n' : '') + body + bot;
+    (fullScreen() ? '...skipping...\n' : '') + body +
+    (promptless ? '' : bot);
 }
 
 /**

@@ -29,6 +29,8 @@ import { ffCapForward, isFormFeed } from '../features/moving';
 
 import { maxSubRow } from '../lines/helpers';
 
+import { noteScrollRows } from '../helpers';
+
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
 
@@ -111,6 +113,7 @@ export class FileInput implements PagerInput {
   private positions: number[] = [];
   private lineAnchors = [{ pos: 0, num: 0 }];
   private lineScanAborted = false;
+  private lineScanMessaged = false;
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
   private selectedOscStart = -1;
@@ -850,6 +853,7 @@ export class FileInput implements PagerInput {
     // writes and a flicker that og never emits
     renderBare(session.content, session.buffer);
 
+    this.lineScanMessaged = false;
     let retriedAfterEarlyInterrupt = false;
 
     for (;;) {
@@ -878,9 +882,16 @@ export class FileInput implements PagerInput {
       fs.writeSync(1, '\r' + CLEAR_LINE);
     }
 
-    // the blank and any mid-scan message bypassed the renderer: the
-    // prompt row must repaint, like og's prompt() after the walk
-    dirtyBottomRow();
+    // A mid-scan message or the retry's blank bypassed the renderer,
+    // so the row they landed on must repaint. When the walk was
+    // silent -- the ordinary case -- nothing was written, and
+    // dirtying anyway destroyed the record of the bottom row the
+    // bare frame HAD painted: the next frame then printed that line
+    // a second time, which is why every scroll went out twice.
+    if (this.lineScanMessaged || retriedAfterEarlyInterrupt ||
+        opt.linenums === 0) {
+      dirtyBottomRow();
+    }
   }
 
   /** Continues a forward search that ran out of spooled bytes. */
@@ -1411,6 +1422,7 @@ export class FileInput implements PagerInput {
 
     if ((moved || want < rows) && mode.INIT) mode.INIT = false;
     this.keepPad = true;
+    noteScrollRows(moved);
     this.sync();
   }
 
@@ -1537,6 +1549,7 @@ export class FileInput implements PagerInput {
       ringBell('eof');
     }
 
+    noteScrollRows(-moved);
     this.keepPad = true;
     this.sync();
   }
@@ -2074,6 +2087,7 @@ export class FileInput implements PagerInput {
 
       if (!messaged && Date.now() - started >= 2000) {
         messaged = true;
+        this.lineScanMessaged = true;
         fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
           'Calculating line numbers... (interrupt to abort)' + INVERSE_OFF);
       }
