@@ -210,7 +210,6 @@ function whereRow(content: string[], where: Where): number {
  * for itself (charset.c). This is what %f and %F are passed through.
  */
 function printableName(name: string): string {
-  // eslint-disable-next-line no-control-regex
   if (!/[\x00-\x1F\x7F]/.test(name)) return name;
 
   let out = '';

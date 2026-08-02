@@ -1088,7 +1088,6 @@ function endFirstCmd(): void {
 // across reads - a slow link does it, and lesstest feeds byte by
 // byte - so an incomplete tail has to wait here too rather than
 // being dispatched as separate keys.
-// eslint-disable-next-line no-control-regex
 const PARTIAL_SEQUENCE = /\x1b(?:\[[\x20-\x3f]*|O)?$/;
 
 let heldKeyBytes = '';
@@ -1873,7 +1872,6 @@ function dispatchKey(sequence: string): void {
   // (hdrag/vdrag), a same-row release sets the mouse mark '#', and
   // a right-click release jumps to it
   const click = !session.escCount &&
-    // eslint-disable-next-line no-control-regex
     /^\x1b\[<(0|2|32);(\d+);(\d+)([Mm])/.exec(session.key);
 
   if (click && click[1] === '32' &&

@@ -1300,7 +1300,6 @@ export class FileInput implements PagerInput {
       while (at < this.bf.size) {
         const line = forwLine(this.bf, at);
         if (!line) break;
-        // eslint-disable-next-line no-control-regex
         const plain = line.text.replace(/\x1B\[[0-9;]*m/g, '');
 
         if (plain.startsWith(pattern) &&

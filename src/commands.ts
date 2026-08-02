@@ -676,7 +676,6 @@ export function runMiscInput(
   }
 
   // ^P prefixed commands still join the history bare, like og
-  // eslint-disable-next-line no-control-regex
   const bare = text.replace(/^\x10/, '');
 
   if (kind === '!') {

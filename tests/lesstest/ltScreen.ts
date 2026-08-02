@@ -231,7 +231,6 @@ export class LtScreen {
 
     if (next !== '[') return at + 2;
 
-    // eslint-disable-next-line no-control-regex
     const match = /^\x1B\[([?<]?)([\d;]*)([A-Za-z~])/.exec(data.slice(at));
     if (!match) return at + 2;
 

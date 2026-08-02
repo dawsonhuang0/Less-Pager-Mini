@@ -149,7 +149,6 @@ describe('header line overlay', () => {
 
       const boundary = formatContent(content)[1];
       const underline = boundary.indexOf(UNDERLINE_ON);
-      // eslint-disable-next-line no-control-regex
       const plain = (line: string): string => line.replace(/\x1B\[[\d;]*m/g, '');
 
       expect(underline).toBeGreaterThan(0);
@@ -187,7 +186,6 @@ describe('header line overlay', () => {
     config.row = 1;
 
     const lines = formatContent(helpContent);
-    // eslint-disable-next-line no-control-regex
     const plain = (line: string): string => line.replace(/\x1B\[[\d;]*m/g, '');
 
     expect(plain(lines[0])).toBe('');

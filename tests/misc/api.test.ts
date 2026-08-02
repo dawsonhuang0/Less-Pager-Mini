@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import pager, { PagerConfig } from '../../src/index';
@@ -208,9 +211,6 @@ describe('pager(input, options, envVars) API', () => {
   });
 
   it('keeps PagerEnv covering every env consumer in the source', () => {
-    const fs = require('fs') as typeof import('fs');
-    const path = require('path') as typeof import('path');
-
     const names = new Set<string>();
     const prefixes = new Set<string>();
 

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "gen:options": "tsx scripts/genOptionTypes.ts",
-    "lint": "eslint src",
+    "lint": "eslint src tests scripts",
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "prepare": "husky"

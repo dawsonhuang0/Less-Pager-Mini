@@ -34,7 +34,6 @@ export const resetOsc8 = (): void => { setSelectedOsc8(null); };
 /** Extracts complete OSC 8 open/text/close pairs from materialized lines. */
 export function osc8Links(lines: string[], param?: string): Osc8Link[] {
   const links: Osc8Link[] = [];
-  // eslint-disable-next-line no-control-regex
   const sequence = /\x1b\]8;([^;\x07]*);([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
 
   for (let row = 0; row < lines.length; row++) {

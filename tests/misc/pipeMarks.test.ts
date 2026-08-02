@@ -35,12 +35,10 @@ import { search } from '../../src/features/searching';
 import { initContent, files } from '../../src/features/files';
 
 import {
-  Mark,
   marksKey,
   onSourceMarks,
   resetMarks,
   startSetMark,
-  startGoMark,
   recordLastPosition
 } from '../../src/features/jumping';
 

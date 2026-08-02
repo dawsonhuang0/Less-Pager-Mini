@@ -177,7 +177,6 @@ export function tagRow(content: string[]): number | null {
 
   for (let row = 0; row < content.length; row++) {
     // og strips ANSI before matching under -R (our native mode)
-    // eslint-disable-next-line no-control-regex
     const line = content[row].replace(/\x1B\[[0-9;]*m/g, '');
 
     if (

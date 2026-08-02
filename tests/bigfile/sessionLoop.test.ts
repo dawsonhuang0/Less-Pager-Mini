@@ -526,8 +526,9 @@ describe('unified file command loop', () => {
       expect(output).toContain('No previous file');
       // the running package's own version, so a release bump does
       // not fail a test about the V command
-      const { version } = require('../../package.json') as
-        { version: string };
+      const { version } = JSON.parse(
+        fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')
+      ) as { version: string };
 
       expect(output).toContain(`less-pager-mini ${version}`);
     }, 20000);

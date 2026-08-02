@@ -96,10 +96,8 @@ let charCache = new Map<string, [string, number]>();
 // under --use-color) while the escape bytes pass through as AT_ANSI,
 // and the selected link additionally hilites (line.c:880-886); the
 // selection coordinates arrive via setter to keep imports one-way
-/* eslint-disable no-control-regex */
 const OSC8_SEQ_G = /\x1b\]8;[^;\x07\x1b]*;([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
 const OSC8_ONE = /\x1b\]8;[^;\x07\x1b]*;[^\x07\x1b]*(?:\x07|\x1b\\)/g;
-/* eslint-enable no-control-regex */
 
 let osc8SelectedAt: { row: number, start: number } | null = null;
 
@@ -153,7 +151,6 @@ function styleOsc8Line(
 ): string {
   OSC8_SEQ_G.lastIndex = 0;
 
-  // eslint-disable-next-line no-control-regex
   const own = (code: string): string => code.replace(/\x1b/g, OWN_STYLE);
 
   let out = '';
@@ -651,7 +648,6 @@ function transformLine(line: string, ctldispOverride?: number): string {
  */
 function ownAttr(attr: 'bold' | 'underline'): { on: string, off: string } {
   const [on, off] = attrText(attr, '\x00')
-    // eslint-disable-next-line no-control-regex
     .replace(/\x1b/g, OWN_STYLE)
     .split('\x00');
 
@@ -728,7 +724,6 @@ const OWN_STYLE = '\uE100';
 
 function procBackspaces(line: string): string {
   const own = (kind: 'bold' | 'underline', c: string): string =>
-    // eslint-disable-next-line no-control-regex
     attrText(kind, c).replace(/\x1b/g, OWN_STYLE);
 
   // og's do_append order: an identical pair is bold FIRST (so _\b_
@@ -736,13 +731,11 @@ function procBackspaces(line: string): string {
   // underlines - X\b_ keeps the PREVIOUS char (line.c "we replace
   // prev_ch, but we keep its attributes" branch is only for
   // non-underscore overstrikes)
-  /* eslint-disable no-control-regex */
   const out = line
     .replace(/(.)\x08\1/g, (_, c: string) => own('bold', c))
     .replace(/_\x08(.)/g, (_, c: string) => own('underline', c))
     .replace(/(.)\x08_/g, (_, c: string) => own('underline', c))
     .replace(/.\x08(.)/g, '$1');
-  /* eslint-enable no-control-regex */
 
   return coalesceOwnRuns(out);
 }
@@ -760,12 +753,10 @@ export function visualWidth(line: string): number {
   if (line.includes('\x08')) {
     // og's pwidth counts a raw -u backspace as -1 (-2 after a wide
     // char): measuring the overprinted result gives the same sum
-    /* eslint-disable no-control-regex */
     while (/[^\x08]\x08/.test(line)) {
       line = line.replace(/[^\x08]\x08/g, '');
     }
     line = line.replace(/\x08/g, '');
-    /* eslint-enable no-control-regex */
   }
 
   return isAscii(line) ? line.length : strWidth(line);

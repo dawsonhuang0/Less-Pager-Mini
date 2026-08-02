@@ -1274,11 +1274,9 @@ export function matchesSearchLine(line: string): boolean {
   // carriage return drops (CVT_CRLF) before matching, each under
   // its own display-mode gate
   if (ops.bs) {
-    /* eslint-disable no-control-regex */
     while (/[^\x08]\x08/.test(text)) {
       text = text.replace(/[^\x08]\x08/g, '');
     }
-    /* eslint-enable no-control-regex */
   }
 
   if (ops.crlf && text.endsWith('\r')) text = text.slice(0, -1);
@@ -1311,7 +1309,6 @@ function skipColumns(text: string, cols: number): string {
 }
 
 const isAsciiText = (text: string): boolean =>
-  // eslint-disable-next-line no-control-regex
   /^[\x00-\x7F]*$/.test(text);
 
 /**
@@ -1994,11 +1991,9 @@ export function statusColChar(line: string, row: number): string {
   let text = stripStyles(line);
 
   // the same cvt_text as matching: overstrikes collapse, CR drops
-  /* eslint-disable no-control-regex */
   while (/[^\x08]\x08/.test(text)) {
     text = text.replace(/[^\x08]\x08/g, '');
   }
-  /* eslint-enable no-control-regex */
   if (text.endsWith('\r')) text = text.slice(0, -1);
 
   const ranges: { start: number, end: number }[] = [];
