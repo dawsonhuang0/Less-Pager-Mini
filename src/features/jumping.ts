@@ -986,7 +986,15 @@ export function markRow(content: string[], char: string): number | null {
   let mark: Mark | undefined;
 
   if (char === "'") {
-    mark = quoteMark ?? { file: files.index, row: 0, subRow: 0, sline: 1 };
+    // markpos has no ch_zero() fallback -- that one belongs to gomark.
+    // An unset LASTMARK still has m_ifile == NULL_IFILE, so markpos's
+    // "not in current file" test fires and the pipe aborts (mark.c:376)
+    if (!quoteMark) {
+      search.message = 'Mark not in current file';
+      return null;
+    }
+
+    mark = quoteMark;
   } else {
     if (!MARK_LETTER_REGEX.test(char)) {
       search.message = `Invalid mark letter ${char}`;
@@ -1007,6 +1015,73 @@ export function markRow(content: string[], char: string): number | null {
   }
 
   return Math.min(mark.row, content.length - 1);
+}
+
+/**
+ * A line number as a byte POSITION, like less's find_pos -- which is
+ * what get_pipe_pos returns for its `|line number: ` entry.
+ *
+ * @param lineNum - 1-based line number.
+ * @returns The position, or undefined when this input has none.
+ */
+export function linePos(lineNum: number): number | null | undefined {
+  return sourceMarkHooks?.linePosition(lineNum);
+}
+
+/**
+ * Resolves a mark character to its byte POSITION, like less's markpos.
+ *
+ * og's marks ARE positions: a mark holds an scrpos, and markpos hands
+ * pipe_pos the raw m_scrpos.pos. Ours hold a local row as well, and a
+ * row is only meaningful while the window that produced it is still
+ * mapped -- once it slides, the same row names different bytes. Every
+ * caller that compares one mark against another (the pipe) has to work
+ * in positions for that reason.
+ *
+ * @param content - Full content lines.
+ * @param char - Mark letter or predefined mark.
+ * @returns The byte position, or undefined when this input has none.
+ */
+export function markPos(
+  content: string[],
+  char: string
+): number | undefined {
+  if (!hook.sourceBytePosition) return undefined;
+
+  // og's position(sindex) indexes the SCREEN: TOP is row 0 and BOTTOM
+  // is sc_height-2, so on a wrapped line both are bytes INSIDE a line.
+  // sourceRowByte is that table; the content row is the fallback.
+  const screenByte = (sindex: number, row: number): number | undefined => {
+    const byRow = hook.sourceRowByte?.(sindex);
+    if (byRow !== undefined && byRow !== null) return byRow;
+    return hook.sourceBytePosition?.(row) ?? undefined;
+  };
+
+  switch (char) {
+    // ch_zero()
+    case '^': return 0;
+
+    // og seeks to the end and backs up a line. The byte before EOF is
+    // the same pipe range: pipe_data copies through its argument and
+    // then finishes the line, so both spellings reach EOF.
+    case '$': {
+      const end = hook.sourceBytePosition(content.length);
+      if (end === null || end === undefined) return undefined;
+      return Math.max(end - 1, 0);
+    }
+
+    case '.': case ':': return screenByte(0, config.row);
+    case ';': return screenByte(
+      config.window - 2, lastVisiblePosition(content).row);
+  }
+
+  const mark = char === "'" ? quoteMark : userMarks.get(char);
+
+  // markpos reports "Mark not in current file" and returns
+  // NULL_POSITION; the caller has already reported through markRow, so
+  // an unusable mark just falls back to the row path here.
+  if (!mark || mark.file !== files.index) return undefined;
+  return mark.pos;
 }
 
 /**

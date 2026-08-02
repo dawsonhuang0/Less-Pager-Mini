@@ -20,7 +20,7 @@ import { search } from "./searching";
 
 import { files, fexpand, expandHomeEnv } from "./files";
 
-import { markRow } from "./jumping";
+import { markRow, markPos, linePos } from "./jumping";
 
 import { ringBell } from "../helpers";
 
@@ -113,6 +113,8 @@ export const pipeMark = {
   num: '',
   /** Resolved rows: [first] or [first, second]. */
   rows: [] as number[],
+  /** The same marks as og POSITIONs, when the input is seekable. */
+  positions: [] as (number | undefined)[],
 };
 
 /**
@@ -318,6 +320,7 @@ export function startPipe(): void {
   pipeMark.lineMode = false;
   pipeMark.num = '';
   pipeMark.rows = [];
+  pipeMark.positions = [];
 }
 
 /**
@@ -347,9 +350,10 @@ export function pipeMarkKey(content: string[], key: string): boolean {
   }
 
   // a resolved row advances || to its next mark, or opens the prompt
-  const took = (row: number): boolean => {
+  const took = (row: number, pos?: number): boolean => {
     if (pipeMark.stage === 'first') {
       pipeMark.rows = [row];
+      pipeMark.positions = [pos];
       pipeMark.stage = 'second';
       pipeMark.lineMode = false;
       pipeMark.num = '';
@@ -357,6 +361,7 @@ export function pipeMarkKey(content: string[], key: string): boolean {
     }
 
     pipeMark.rows.push(row);
+    pipeMark.positions.push(pos);
     pipeMark.pending = false;
     pipeMark.stage = '';
     startMiscInput('|');
@@ -379,12 +384,21 @@ export function pipeMarkKey(content: string[], key: string): boolean {
       const lnum = parseInt(pipeMark.num, 10);
       pipeMark.num = '';
 
-      if (!lnum || lnum > content.length) {
+      // og calls find_pos(lnum) and complains only when THAT fails.
+      // session.content is the spooled window rather than the file, so
+      // it bounds the line number only when there is no seekable
+      // source to ask -- bounding by it always rejected every line
+      // below the screen, and "|" ^N "100" piped nothing at all.
+      const pos = lnum ? linePos(lnum) : undefined;
+
+      if (!lnum || pos === null ||
+          (pos === undefined && lnum > content.length)) {
         search.message = 'Invalid line number';
         return abort();
       }
 
-      return took(lnum - 1);
+      // get_pipe_pos returns find_pos(lnum) -- a position, not a row
+      return took(Math.min(lnum - 1, content.length - 1), pos);
     }
 
     if (c === '\x03' || key.startsWith('\x1B')) return abort();
@@ -423,6 +437,7 @@ export function pipeMarkKey(content: string[], key: string): boolean {
 
     pipeMark.char = c;
     pipeMark.rows = [top, bot];
+    pipeMark.positions = [markPos(content, ':'), markPos(content, ';')];
     pipeMark.pending = false;
     pipeMark.stage = '';
     startMiscInput('|');
@@ -434,7 +449,7 @@ export function pipeMarkKey(content: string[], key: string): boolean {
 
   if (pipeMark.stage === 'second') pipeMark.char2 = c;
   else pipeMark.char = c;
-  return took(row);
+  return took(row, markPos(content, c));
 }
 
 /**

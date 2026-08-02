@@ -34,7 +34,7 @@ import { search, repeatSearch, execFilter, SearchFinder }
   from './features/searching';
 
 import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition,
-  marksFileSpliced }
+  marksFileSpliced, markPos }
   from './features/jumping';
 
 import { stepTag, tagRow, currTagFile, jumpSourceTag }
@@ -498,6 +498,50 @@ function sourceRangeText(
   return buf === null ? null : buf.toString('latin1');
 }
 
+/**
+ * og's pipe_data: the file bytes from spos through epos INCLUSIVE, then
+ * whatever is left of that last line.
+ *
+ * The inclusive bound is why "|^" at the very top of a file pipes one
+ * line rather than none: the copy takes byte 0 and the finish-the-line
+ * loop takes the rest of it.
+ */
+function pipeData(spos: number, epos: number): string | null {
+  if (!hook.sourceReadRange) return null;
+
+  // og's loop is `while (spos++ <= epos)`, which never runs when the
+  // range is inverted, leaving c == EOI -- so the finish-line loop
+  // does not run either and nothing is piped
+  if (epos < spos) return '';
+
+  const buf = hook.sourceReadRange(spos, epos + 1);
+  let text = buf === null ? '' : buf.toString('latin1');
+
+  // "Finish up the last line." og stops when the last byte it read was
+  // a newline, so a range ending mid-line is extended, not truncated
+  if (!text.endsWith('\n')) {
+    const CHUNK = 64 * 1024;
+    let at = epos + 1;
+
+    for (;;) {
+      const more = hook.sourceReadRange(at, at + CHUNK);
+      if (more === null || more.length === 0) break;
+
+      const s = more.toString('latin1');
+      const nl = s.indexOf('\n');
+      if (nl >= 0) {
+        text += s.slice(0, nl + 1);
+        break;
+      }
+
+      text += s;
+      at += more.length;
+    }
+  }
+
+  return text;
+}
+
 export function runPipe(cmd: string): void {
   let doneMsg: string | null = '|done';
 
@@ -507,6 +551,46 @@ export function runPipe(cmd: string): void {
   }
 
   if (!pipeMark.rows.length) return;
+
+  // og's pipe_pos, on POSITIONS. A mark in og IS a position, so the
+  // "is this mark above the screen?" test is a byte comparison against
+  // position(TOP). Ours also carry a local row, and a row stops meaning
+  // anything once the window slides -- which is why a mark set at the
+  // top and then piped from the bottom of a big file compared as if it
+  // were still on screen and delivered a single line.
+  const positions = pipeMark.positions;
+
+  if (hook.sourceBytePosition && hook.sourceReadRange &&
+      positions.length === pipeMark.rows.length &&
+      positions.every(p => p !== undefined)) {
+    const [mpos1, mpos2] = positions as number[];
+    // position(TOP), falling back to ch_zero() as og does
+    const tpos = markPos(session.content, ':') ?? 0;
+    const bpos = markPos(session.content, ';');
+
+    let spos: number;
+    let epos: number | undefined;
+
+    if (mpos2 !== undefined) {
+      spos = Math.min(mpos1, mpos2);
+      epos = Math.max(mpos1, mpos2);
+    } else if (mpos1 < tpos) {
+      spos = mpos1;
+      epos = bpos;
+    } else {
+      spos = tpos;
+      epos = mpos1;
+    }
+
+    if (epos !== undefined) {
+      const piped = pipeData(spos, epos);
+
+      if (piped !== null) {
+        runShell(cmd, doneMsg, piped);
+        return;
+      }
+    }
+  }
 
   // v707 pipe_pos: || pipes exactly between its two marks (last
   // line completed); a single mark before the screen pipes down to
@@ -526,32 +610,9 @@ export function runPipe(cmd: string): void {
     hi = row + 1;
   }
 
-  // og compares POSITIONS, not rows: '^' is byte 0 of the FILE, which
-  // after any scrolling is genuinely before the top of the screen, so og
-  // takes its "mark before the top line" branch and pipes byte 0 through
-  // the bottom of the screen. Our marks resolve to LOCAL rows and local
-  // row 0 is the top of the spooled WINDOW, so once the window slid that
-  // comparison could never fire and |^ piped a single line. '^' and '$'
-  // are the two file-absolute marks; the rest are screen-relative and the
-  // row arithmetic below is right for them.
-  if (pipeMark.rows.length === 1 && pipeMark.char === '^' &&
-      hook.sourceBytePosition && hook.sourceReadRange) {
-    const topByte = hook.sourceBytePosition(config.row);
-
-    if (typeof topByte === 'number' && topByte > 0) {
-      const endByte = hook.sourceBytePosition(bottomRow(session.content) + 1);
-
-      if (typeof endByte === 'number' && endByte > 0) {
-        const buf = hook.sourceReadRange(0, endByte);
-
-        if (buf !== null) {
-          runShell(cmd, doneMsg, buf.toString('latin1'));
-          return;
-        }
-      }
-    }
-  }
-
+  // Below is the row path, for a mark that resolved to no position at
+  // all -- a non-seekable stdin, where session.content is the whole of
+  // what was read and a row is the only address there is.
   // og's pipe_data reads the FILE between two positions (lsystem.c),
   // which is why it can pipe 200 lines while showing 23. session.content
   // is only the spooled window -- piping from it sent whatever happened
