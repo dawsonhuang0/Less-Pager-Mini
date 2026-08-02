@@ -25,6 +25,10 @@ import {
   pipeDraining,
 } from '../features/files';
 
+import { ffCapForward, isFormFeed } from '../features/moving';
+
+import { maxSubRow } from '../lines/helpers';
+
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
 
@@ -71,6 +75,7 @@ import {
   optHowSearch,
   optNoSearchHeaders,
   optPastEof,
+  optStopOnFormFeed,
 } from '../options';
 
 import { setOsc8Display, transformContent }
@@ -1376,6 +1381,12 @@ export class FileInput implements PagerInput {
       }
     }
 
+    // og's forw() stops after printing a line that starts with \f, so
+    // the form feed ends up the LAST visible row (forwback.c:366).
+    // The array session caps the move for that; the byte-position
+    // engine never did, so --form-feed simply had no effect here
+    if (optStopOnFormFeed()) want = ffCapForward(session.content, want);
+
     const moved = session.lastFilter
       ? this.filteredForward(want, clampAtLastScreen)
       : this.view.lineForward(
@@ -1437,6 +1448,48 @@ export class FileInput implements PagerInput {
     config.screen = [];
   }
 
+  /**
+   * How far a backward move may go before a form feed stops it.
+   *
+   * og's back() breaks after printing a line that starts with \f, so
+   * the form feed ends up the TOP row (forwback.c:444).
+   *
+   * The array session answers this from session.content, which is the
+   * whole file there. Here it is only the materialized window -- on a
+   * backward move that is the visible rows and nothing above them --
+   * so the walk goes back through the FILE a line at a time instead.
+   *
+   * @param rows - Display rows the move wants.
+   * @returns The rows it may actually take.
+   */
+  private ffCapBack(rows: number): number {
+    // steps within the top's own line come first, and og stops once
+    // that line's FIRST row is the one on top
+    const topLine = forwLine(this.bf, this.view.top.pos);
+    let taken = topLine
+      ? this.view.subRowAt(displayText(topLine.text), this.view.top.offset)
+      : 0;
+
+    if (taken > 0 && topLine && isFormFeed(displayText(topLine.text))) {
+      return Math.min(taken, rows);
+    }
+
+    let pos = this.view.top.pos;
+
+    while (taken < rows) {
+      const prev = backLine(this.bf, pos);
+      if (!prev) break;
+
+      pos = prev.start;
+      const text = displayText(prev.text);
+      taken += maxSubRow(text) + 1;
+
+      if (isFormFeed(text)) return Math.min(taken, rows);
+    }
+
+    return rows;
+  }
+
   /** Re-expresses the seam in the row indices this paint will use. */
   private publishSeam(): void {
     // a seam cell is an EXTENT, measured under the layout that was in
@@ -1463,6 +1516,10 @@ export class FileInput implements PagerInput {
 
     // --past-eof forces every backward scroll, like og's back()
     if (optPastEof()) force = true;
+
+    // og's back() breaks after printing a \f line, leaving it as the
+    // TOP row (forwback.c:444) -- the mirror of the forward stop
+    if (optStopOnFormFeed()) rows = this.ffCapBack(rows);
 
     const moved = session.lastFilter
       ? this.filteredBackward(rows)

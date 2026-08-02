@@ -37,7 +37,7 @@ import { INVERSE_ON } from "../state/constants";
  * Whether a display line is a form feed line, for --form-feed: the raw
  * `\f` (-r) or its caret rendering.
  */
-const isFormFeed = (line: string): boolean =>
+export const isFormFeed = (line: string): boolean =>
   line.startsWith('\f') || line.startsWith(INVERSE_ON + '^L');
 
 /**
@@ -84,13 +84,49 @@ function bottomWalk(content: string[]): {
  * newly printed bottom line (forwback.c:366) and breaks with the \f
  * line as the LAST visible row on screen.
  */
-function ffCapForward(content: string[], offset: number): number {
+export function ffCapForward(content: string[], offset: number): number {
   const walk = bottomWalk(content);
 
   // the first incoming row that STARTS a \f line caps the move there
   for (let k = 1; k <= offset; k++) {
     if (!walk.advance()) break;
     if (walk.subRow === 0 && isFormFeed(content[walk.row])) return k;
+  }
+
+  return offset;
+}
+
+/**
+ * How far a backward move may go before a form feed stops it.
+ *
+ * og's back() prints each newly exposed line at the TOP and breaks
+ * after one that starts with \f (forwback.c:444), so the form feed
+ * ends up the first visible row. Jumps pass do_stop_on_form_feed
+ * FALSE and never stop.
+ *
+ * @param content - Full content lines.
+ * @param offset - Display rows the move wants.
+ * @returns The rows it may actually take.
+ */
+export function ffCapBackward(content: string[], offset: number): number {
+  let r = config.row;
+  let s = config.subRow;
+
+  const retreat = (): boolean => {
+    if (s > 0) {
+      s--;
+      return true;
+    }
+
+    if (r <= 0) return false;
+    r--;
+    s = maxSubRow(content[r]);
+    return true;
+  };
+
+  for (let k = 1; k <= offset; k++) {
+    if (!retreat()) break;
+    if (s === 0 && isFormFeed(content[r])) return k;
   }
 
   return offset;
