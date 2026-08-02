@@ -70,11 +70,6 @@ export function setPendingTag(name: string): void {
   pendingTag = name;
 }
 
-/** Is a startup -t waiting? (og: tagoption != NULL) */
-export function hasPendingTag(): boolean {
-  return pendingTag !== null;
-}
-
 /**
  * Resolves a startup -t, the way main.c does after scan_option: look the
  * tag up and ask the pager to jump, reporting og's message on failure.

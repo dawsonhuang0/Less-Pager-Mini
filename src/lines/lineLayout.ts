@@ -86,47 +86,6 @@ export function getLayout(line: string): LineLayout {
   return layout;
 }
 
-/**
- * Emits one wrapped row of a line as a string.
- *
- * - Codes anchored exactly at the row start belong to the previous row's
- *   tail, except on row 0 where leading codes are emitted inline.
- *
- * @param layout - The line's layout.
- * @param row - Wrapped row index to emit.
- * @returns The row content including inline ANSI codes.
- */
-export function emitRow(layout: LineLayout, row: number): string {
-  const start = layout.rowStart[row];
-  const end = row + 1 < layout.rowStart.length
-    ? layout.rowStart[row + 1]
-    : layout.chars.length;
-
-  const parts: string[] = [];
-  let k = firstCode(layout, row === 0 ? start : start + 1);
-  let width = 0;
-
-  for (let c = start; c < end; c++) {
-    while (k < layout.codeIdx.length && layout.codeIdx[k] <= c) {
-      parts.push(layout.codes[k]);
-      k++;
-    }
-
-    // a space run swallowed by --wordwrap stays off the screen
-    if (width + layout.widths[c] > config.screenWidth) break;
-
-    parts.push(layout.chars[c]);
-    width += layout.widths[c];
-  }
-
-  while (k < layout.codeIdx.length && layout.codeIdx[k] <= end) {
-    parts.push(layout.codes[k]);
-    k++;
-  }
-
-  return parts.join('');
-}
-
 function buildLayout(line: string): LineLayout {
   const chars: string[] = [];
   const widths: number[] = [];
@@ -486,21 +445,4 @@ function buildRowStarts(chars: string[], widths: number[]): number[] {
   }
 
   return rowStart;
-}
-
-function firstCode(layout: LineLayout, threshold: number): number {
-  const { codeIdx } = layout;
-  let lo = 0, hi = codeIdx.length;
-
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-
-    if (codeIdx[mid] < threshold) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-
-  return lo;
 }

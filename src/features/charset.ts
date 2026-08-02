@@ -79,9 +79,6 @@ let utfBinFmt = '<U+%04lX>';
 let binAttrKind: 'bold' | 'blink' | 'standout' | 'underline' | 'normal' =
   'standout';
 
-/** True when the charset is UTF-8, like utf_mode. */
-export const optUtfMode = (): boolean => utfMode;
-
 /**
  * Parses a chardef description, like ichardef: digits repeat the next
  * class char (`.` normal, `c` control, `b` binary), and the last

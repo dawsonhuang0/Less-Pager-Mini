@@ -22,11 +22,6 @@ import { ScreenRow } from './screenTable';
  * only say where the screen begins, never that.
  */
 
-/** og's pos_clear: the table is empty and the paint rebuilds it. */
-export function screenClear(): void {
-  config.screen = [];
-}
-
 /**
  * Where the row containing `offset` begins.
  *

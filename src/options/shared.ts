@@ -170,9 +170,6 @@ export const optQuitOnIntr = (): boolean => opt.quitOnIntr > 0;
 /** True when -F quits a file that fits on the first screen. */
 export const optQuitIfOneScreen = (): boolean => opt.quitIfOneScreen > 0;
 
-/** Prompt style of -m/-M (0 short, 1 medium, 2 long). */
-export const optPrType = (): number => opt.prType;
-
 /** The prompt style used for display: more mode defaults to medium
  *  and -m selects short, like og's pr_string type mapping. */
 export const displayPrType = (): number =>

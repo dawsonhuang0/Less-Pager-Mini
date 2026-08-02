@@ -122,8 +122,6 @@ export let DEFER_WRAP = true;
 export let CLEAR_SCREEN = '\x1b[H\x1b[2J';
 export let REVERSE_INDEX = '\x1bM';
 
-export const SCROLL_UP = (n: number): string => `\x1b[${n}S`;
-export const SCROLL_DOWN = (n: number): string => `\x1b[${n}T`;
 let cursorToCapability = '\x1b[%p1%d;%p2%dH';
 export const CURSOR_TO = (row: number, col: number): string =>
   formatTerminalCapability(cursorToCapability, row, col);
@@ -160,9 +158,6 @@ export let BRACKETED_PASTE_OFF = '\x1b[?2004l';
 export let TERMINAL_SUSPEND = SYNC_ON;
 export let TERMINAL_RESUME = SYNC_OFF;
 export let VISUAL_BELL: string | null = null;
-
-export const SCROLL_UP_REGEX = /^\x1b\[<64;.*?M/;
-export const SCROLL_DOWN_REGEX = /^\x1b\[<65;.*?M/;
 
 export let STYLE_RESET = '\x1b[0m';
 
