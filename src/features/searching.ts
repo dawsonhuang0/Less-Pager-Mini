@@ -1814,12 +1814,14 @@ function unsquish(): void {
  * og's two pre-search paints (search.c:2137 and :2147), which happen
  * whether the search then succeeds or fails.
  *
- * Only worth emitting when a row can be wider than the screen: that is
- * the one case where painting the same rows again is not a no-op,
- * because the terminal wraps the row and scrolls everything up.
+ * `if (hilite_search || status_col) repaint_hilite(FALSE)` - and
+ * hilite_search is OPT_ONPLUS by default, which is truthy - so both
+ * run for every new pattern on every terminal. They were gated on -r
+ * on the theory that repainting the same rows is otherwise a no-op:
+ * true on the SCREEN, but repaint_hilite ADDRESSES each row where an
+ * ordinary paint scrolls, so the bytes differ for every search.
  */
 function hilitePasses(content: string[]): void {
-  if (optCtldisp() !== 1) return;
   hilitePaint?.(content);
 }
 

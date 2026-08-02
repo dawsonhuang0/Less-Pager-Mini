@@ -630,13 +630,13 @@ export async function contentPager(
   // og paints TWICE before a new pattern's search runs -
   // repaint_hilite(FALSE) to erase what is on screen, then
   // hilite_screen() to paint the new matches (search.c:2137, :2147).
-  // Repainting the same rows is invisible until one of them is WIDER
-  // than the screen, which only -r allows: the terminal wraps it and
-  // each paint scrolls, so the count decides where the text lands
+  // Neither is conditional: hilite_search is OPT_ONPLUS by default,
+  // which is truthy. This used to run only when a row was WIDER than
+  // the screen, on the theory that repainting the same rows is
+  // otherwise invisible - true on the SCREEN, but repaint_hilite
+  // ADDRESSES each row (goto_line, clear_eol, put_line) where an
+  // ordinary paint scrolls, so the bytes differ for every search
   onHilitePaint((content: string[]) => {
-    if (!content.some((line: string) =>
-      visualWidth(line) > fullScreenWidth())) return;
-
     // repaint_hilite opens with `if (squished) repaint()`, and a file
     // whose whole content is one row IS squished - so the erase pass
     // costs a paint before it even starts
