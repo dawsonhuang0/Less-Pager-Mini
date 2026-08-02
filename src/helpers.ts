@@ -577,6 +577,7 @@ let prevRows: string[] | null = null;
  */
 export function resetRender(): void {
   prevRows = null;
+  contentPainted = false;
   prevCursorCol = -1;
   prevTopRow = -1;
   prevTopKnown = false;
@@ -641,6 +642,9 @@ let prevCursorCol = -1;
 // trashed screen — repeated toggles keep the stale rows until a
 // render with no message and no option prompt open finally repaints
 let frozenFrame = false;
+
+// whether any real (unfrozen) paint has happened
+let contentPainted = false;
 
 // the unlatching repaint is og's make_display with top_scroll forced,
 // which a dumb terminal shows as clear+home instead of "...skipping"
@@ -961,6 +965,12 @@ export function render(rawContent: string[], buffer: string[]): void {
   // whole screen (marker, tildes and all) and only then writes the
   // message over the bottom line, so the stale squished rows the
   // freeze would restore must not come back
+  // og's position table stays empty until make_display paints; a
+  // frozen frame is prompt() returning early, which paints nothing.
+  // The blank seed under an ungot startup key is exactly that, so it
+  // must not count as a paint.
+  if (!frozenFrame) contentPainted = true;
+
   if (frozenFrame && squishMessage) {
     frozenFrame = false;
     frozenHome = false;
@@ -1481,6 +1491,17 @@ let posClearPending = false;
 // whether the last alt-mode frame was still squished (mode.INIT),
 // mirroring scrollFrame's prevInit for the -X painter
 let prevInitAlt = false;
+
+/**
+ * Whether anything has been painted yet.
+ *
+ * og's position table is empty until the first make_display, and a
+ * forward move asks position(BOTTOM_PLUS_ONE) before anything else --
+ * with no table there is no row past the bottom, so it bells rather
+ * than moving. That only happens before the FIRST paint: a key ungot
+ * at the startup gate runs while prompt() is still skipping.
+ */
+export const screenPainted = (): boolean => contentPainted;
 
 /** Marks the next paint as og's pos_clear'd jump (G). */
 export function markPosClear(): void {

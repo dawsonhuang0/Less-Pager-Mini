@@ -29,7 +29,7 @@ import { ffCapForward, isFormFeed } from '../features/moving';
 
 import { maxSubRow } from '../lines/helpers';
 
-import { noteScrollRows } from '../helpers';
+import { noteScrollRows, screenPainted } from '../helpers';
 
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
@@ -1331,7 +1331,11 @@ export class FileInput implements PagerInput {
     return true;
   }
 
-  private forward(rows: number, clampAtLastScreen: boolean): void {
+  private forward(
+    rows: number,
+    clampAtLastScreen: boolean,
+    viaJump: boolean = false
+  ): void {
     // og's forward() opens with `if (past_eof) force = TRUE`
     // (forwback.c:479), so --past-eof turns EVERY forward move into a
     // forced one and the last-screenful clamp simply does not apply.
@@ -1346,6 +1350,23 @@ export class FileInput implements PagerInput {
     // is no row past the bottom, so the move bells and the blanks
     // stay put - consuming one of them first would scroll a screen
     // that og leaves alone.
+    // og's forward() asks position(BOTTOM_PLUS_ONE) BEFORE anything
+    // else, and an empty position table has no row past the bottom to
+    // move to: it eof_bells and returns (forwback.c:481, where
+    // empty_lines is true for a screen nothing has painted). A key
+    // ungot at the startup gate runs before the first paint, so og
+    // bells on it and paints the FIRST screen afterwards -- we moved.
+    // The guard is og's COMMAND-level forward() (forwback.c:481). A
+    // jump does not come through there: jump_loc calls forw() itself,
+    // forced, and paints from the target -- which is why +5g works on
+    // a screen nothing has drawn yet while a bare j on the same screen
+    // only bells.
+    if (!viaJump && !screenPainted()) {
+      ringBell('eof');
+      this.sync();
+      return;
+    }
+
     if (clampAtLastScreen && this.padTop > 0 && mode.EOF) {
       ringBell('eof');
       this.keepPad = true;
@@ -1882,7 +1903,7 @@ export class FileInput implements PagerInput {
     const delta = nline - sindex;
 
     if (delta > 0) {
-      this.forward(delta, false);
+      this.forward(delta, false, true);
     } else if (delta < 0) {
       this.backwardFrom(-delta, true);
     } else {
