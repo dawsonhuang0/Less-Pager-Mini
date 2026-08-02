@@ -1887,6 +1887,12 @@ export class FileInput implements PagerInput {
     } else if (delta < 0) {
       this.backwardFrom(-delta, true);
     } else {
+      // og scrolls by the difference either way, so a target already
+      // sitting on its own -j line is back(0): the loop never runs,
+      // nlines stays 0 and back() eof_bells (forwback.c:388). g at
+      // the top of the file is exactly that case, and we repainted
+      // the screen for it instead
+      ringBell('eof');
       this.sync();
     }
 
@@ -1910,9 +1916,12 @@ export class FileInput implements PagerInput {
 
     // og's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
     // scrolls instead of repainting when the line is already on screen
+    // og's onscreen branch just scrolls and returns (jump.c:251): the
+    // position table stays live, and pos_clear belongs to the far
+    // branch below. Clearing it here sent an ordinary short jump down
+    // the skipping repaint instead of a scroll.
     if (pos !== null && this.jumpNear(pos, jumpSindex() + 1)) {
       this.seam = [];
-      markPosClear();
       return;
     }
 

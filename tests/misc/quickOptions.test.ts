@@ -88,12 +88,13 @@ describe('bells like og lbell/eof_bell/vbell', () => {
     scan('-Q');
     writeSpy.mockClear();
 
+    // og runs the terminfo flash through tputs having called
+    // setupterm(term, -1, NULL), so ospeed is 0 and the padding in
+    // "\E[?5h$<100/>\E[?5l" emits nothing: both halves go out
+    // together. Captured from less/less under -Q on a real pty.
     ringBell();
     expect(writeSpy).not.toHaveBeenCalledWith('\x07');
-    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h');
-
-    vi.advanceTimersByTime(100);
-    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5l');
+    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
   });
 
   it('flashes at eof under -q and rate limits to one per second', () => {
@@ -101,15 +102,17 @@ describe('bells like og lbell/eof_bell/vbell', () => {
     writeSpy.mockClear();
 
     ringBell('eof');
-    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h');
+    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
 
+    // the one-per-second gate silences the FLASH, not cmd_exec's
+    // clear_bot: og emits that for the command either way
     writeSpy.mockClear();
     ringBell('eof');
-    expect(writeSpy).not.toHaveBeenCalled();
+    expect(writeSpy).not.toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
 
     vi.setSystemTime(clock + 2_000);
     ringBell('eof');
-    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h');
+    expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
   });
 
   it('beeps at eof without -q', () => {
@@ -121,8 +124,11 @@ describe('bells like og lbell/eof_bell/vbell', () => {
     scan('-q --no-vbell');
     writeSpy.mockClear();
 
+    // --no-vbell drops the flash; the clear_bot the command already
+    // owed still goes out, as it does for every bell path
     ringBell('eof');
-    expect(writeSpy).not.toHaveBeenCalled();
+    expect(writeSpy).not.toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
+    expect(writeSpy).not.toHaveBeenCalledWith('\x07');
   });
 });
 

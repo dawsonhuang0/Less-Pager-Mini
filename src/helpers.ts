@@ -341,6 +341,23 @@ export function resetBellTimer(): void {
 export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   const quiet = optQuiet();
 
+  // og's clear_bot before a bell comes from cmd_exec, which runs when
+  // a COMMAND executes (command.c:124), so it goes out whether or not
+  // eof_bell's one-per-second gate then lets the bell through: the
+  // gate silences the bell, never the clear. A bell raised while the
+  // command line is still being edited (an invalid mark letter, a
+  // completion with no match) is lbell alone -- no command ran.
+  const prefix = eprPrefix() + (kind === 'eof' ? clearBot() : '');
+
+  if (prefix) {
+    process.stdout.write(prefix);
+
+    // the clear wiped the prompt row without going through a frame,
+    // so the next paint must write it again rather than dedupe it --
+    // og's prompt() runs every command loop, after cmd_exec cleared
+    dirtyBottomRow();
+  }
+
   if (kind === 'eof') {
     const now = Math.floor(Date.now() / 1000);
     if (now === lastEofBell) return;
@@ -357,13 +374,7 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
     return;
   }
 
-  // og's cmd_exec runs clear_bot before EVERY command, and its
-  // first putchr carries a pending --end-prompt marker; the bell
-  // only sounds after (command.c:124, forwback.c:56). We compress
-  // the clear away normally, but a firing marker makes it real:
-  // og's bytes are epr + clear_bot + bell
-  const epr = eprPrefix();
-  process.stdout.write(epr ? epr + clearBot() + '\x07' : '\x07');
+  process.stdout.write('\x07');
 }
 
 /**
@@ -380,8 +391,13 @@ function visualBell(): void {
     process.stdout.write((epr ? epr + clearBot() : '') + VISUAL_BELL);
     return;
   }
-  process.stdout.write((epr ? epr + clearBot() : '') + '\x1B[?5h');
-  setTimeout(() => process.stdout.write('\x1B[?5l'), 100);
+  // og's flash is the terminfo capability run through tputs, and it
+  // passes setupterm(term, -1, NULL) so ospeed is 0 and the padding
+  // in "\E[?5h$<100/>\E[?5l" emits nothing: og's bytes are the two
+  // halves back to back. Deferring the second half by a timer also
+  // meant a pager that quit first never sent it, leaving the terminal
+  // in reverse video.
+  process.stdout.write((epr ? epr + clearBot() : '') + '\x1B[?5h\x1B[?5l');
 }
 
 /**
@@ -1671,7 +1687,12 @@ function scrollFrame(
             frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
           }
 
-          if (promptless) return frame + CURSOR_TO(config.window, 1);
+          // og lower_lefts and THEN clear_bots before the prompt on a
+          // backward scroll (the forward one lands on a fresh line
+          // the newline already cleared, so it needs no clear)
+          if (promptless) {
+            return frame + CURSOR_TO(config.window, 1) + clearBot();
+          }
 
           return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
         }
