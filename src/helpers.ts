@@ -1572,6 +1572,16 @@ export function markFarBackClear(): void {
     (optClearRepaint() ? CURSOR_HOME : CLEAR_SCREEN);
 }
 
+/**
+ * og's DO_SEARCH (command.c:1973): a repeated search runs
+ * `mca_search(); cmd_exec();` first, so the search prompt is written
+ * over the command line and then cleared away again before anything
+ * is painted - a visible "/" flash on every n and N.
+ */
+export function markSearchFlash(label: string): void {
+  scrollPrefix = clearBot() + label + clearBot();
+}
+
 /** Marks the next scroll-mode paint as a bare re-edit repaint. */
 export function markBareRepaint(prefix: string = ''): void {
   scrollPrefix = prefix;
@@ -1810,6 +1820,15 @@ function scrollFrame(
   const last = rows.length - 1;
   const bot = rows[last] + tailClear(rows[last]) + scrollPark(rows);
 
+  // How this frame OPENS. Normally cmd_exec's clear_bot for the
+  // command that ran; but something may have positioned the cursor
+  // there already - a repaint_hilite pass addresses the bottom row
+  // itself, and jump_loc's far-back branch lclear()s - and then og
+  // sends nothing at all
+  const prefix = scrollPrefix;
+  scrollPrefix = null;
+  const opening = (): string => prefix ?? clearBot();
+
   // A bare frame carries no prompt row, so its LAST row is content:
   // it ends with a newline like the others, and the shapes below
   // compare against the previous frame's content rows only.
@@ -1839,7 +1858,17 @@ function scrollFrame(
         // og's error() clear_bots itself (output.c:722), on top of the
         // clear_bot cmd_exec already did for the command that failed:
         // its bytes carry TWO before a message, and we carried one
-        if (search.message) return clearBot() + clearBot() + bot;
+        // og's error() clear_bots itself (output.c:722), on top of
+        // the one cmd_exec did for the command that failed - unless
+        // something already positioned the cursor there, which is
+        // what a repaint_hilite pass leaves behind
+        if (search.message) {
+
+          // and no clear_eol after it: error() ends at the text, and
+          // the lower_left + clear_eol that follows belongs to
+          // get_return (output.c:731), which sends its own
+          return opening() + clearBot() + rows[last] + scrollPark(rows);
+        }
 
         const head = cmdInsertEcho(rows[last], buffer);
 
@@ -1857,6 +1886,9 @@ function scrollFrame(
           return wasMca ? echo : clearBot() + head + echo;
         }
 
+        // NOT opening(): a carried prefix belongs to the PAINT that
+        // follows it, and og still clear_bots for the prompt when the
+        // search moved nothing at all
         return clearBot() + bot;
       }
     }
@@ -1890,11 +1922,11 @@ function scrollFrame(
       if (optClearRepaint() && appended.length >= config.window - 1) break;
 
       if (promptless) {
-        return clearBot() +
+        return opening() +
           rows.slice(overlap).map(r => r + rowEnd(r)).join('');
       }
 
-      return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
+      return opening() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
     // an exact-screenful advance: og-contiguous by position (the new
@@ -1903,11 +1935,11 @@ function scrollFrame(
     if (forwDist === prev.length - 1 && !optClearRepaint() &&
         rows.length === (promptless ? prev.length - 1 : prev.length)) {
       if (promptless) {
-        return clearBot() + rows.map(r => r + rowEnd(r)).join('');
+        return opening() + rows.map(r => r + rowEnd(r)).join('');
       }
 
       const appended = rows.slice(0, last);
-      return clearBot() + appended.map(r => r + rowEnd(r)).join('') + bot;
+      return opening() + appended.map(r => r + rowEnd(r)).join('') + bot;
     }
 
     // backward: k rows scrolled in at the top; og back()'s home +
@@ -1941,7 +1973,7 @@ function scrollFrame(
           }
 
           // og's cmd_exec clear_bots before back() starts inserting
-          let frame = clearBot();
+          let frame = opening();
           for (let i = k - 1; i >= 0; i--) {
             frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
           }
@@ -1961,10 +1993,8 @@ function scrollFrame(
 
   const repaint = prev !== null || dumbPainted;
   const clearHome = optClearRepaint() || dumbHomePending;
-  const prefix = scrollPrefix;
   dumbHomePending = false;
   dumbPainted = true;
-  scrollPrefix = null;
 
   // a bare frame's last row is content, so it ends with a newline
   // like every other row -- the prompt row it would otherwise be

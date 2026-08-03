@@ -3,7 +3,8 @@ import fs from 'fs';
 import { isWindows } from '../tty/platform';
 
 import { onHilitePaint, setHiliteHidden } from '../features/searching';
-import { squishCheck, renderHiliteRepaint } from '../helpers';
+import { squishCheck, renderHiliteRepaint, markSearchFlash }
+  from '../helpers';
 import { fullScreenWidth } from '../options/state';
 
 import { lgetenv, screenFillGrace } from '../startup/environment';
@@ -651,6 +652,11 @@ export async function contentPager(
     setHiliteHidden(false);
     search.highlight = true;
     renderHiliteRepaint(content, session.buffer);
+
+    // repaint_hilite ends by addressing the bottom row itself, so
+    // whatever the search paints next starts there - no clear_bot,
+    // which is otherwise how a command's paint opens
+    markBareRepaint();
   });
 
   // -t from $LESS queued a tag jump before the pager could run it
@@ -840,18 +846,24 @@ const acts: Record<Actions, () => void> = {
   },
   SEARCH_FORWARD: () => startSearch('/', bufferToNum(session.buffer) || 1),
   SEARCH_BACKWARD: () => startSearch('?', bufferToNum(session.buffer) || 1),
-  REPEAT_SEARCH: () => repeatSearch(
-    session.content,
-    bufferToNum(session.buffer) || 1,
-    false,
-    request => pagerInput?.search(request) ?? false
-  ),
-  REVERSE_SEARCH: () => repeatSearch(
-    session.content,
-    bufferToNum(session.buffer) || 1,
-    true,
-    request => pagerInput?.search(request) ?? false
-  ),
+  REPEAT_SEARCH: () => {
+    searchFlash(false);
+    repeatSearch(
+      session.content,
+      bufferToNum(session.buffer) || 1,
+      false,
+      request => pagerInput?.search(request) ?? false
+    );
+  },
+  REVERSE_SEARCH: () => {
+    searchFlash(true);
+    repeatSearch(
+      session.content,
+      bufferToNum(session.buffer) || 1,
+      true,
+      request => pagerInput?.search(request) ?? false
+    );
+  },
   HIGHLIGHT_TOGGLE: () => toggleHighlight(),
   CLEAR_SEARCH: () => clearHighlight(),
   // og's A_FILTER has no helpfile guard: the & prompt opens in
@@ -2076,6 +2088,17 @@ function echoPrefix(seq: string): void {
   }
 
   config.keyPrefix = held;
+}
+
+/** og's `search_type = last_search_type; mca_search(); cmd_exec();` */
+function searchFlash(reverse: boolean): void {
+  if (!search.regex) return;
+
+  const dir = reverse
+    ? (search.lastDir === 1 ? -1 : 1)
+    : search.lastDir;
+
+  markSearchFlash(dir === 1 ? '/' : '?');
 }
 
 function init() {

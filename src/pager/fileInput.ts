@@ -774,6 +774,17 @@ export class FileInput implements PagerInput {
       };
       this.view.lineBackward(config.window - 2);
     } else {
+      // og's search ends in jump_loc(pos, jump_sline) (search.c), so a
+      // match that is ALREADY DISPLAYED is scrolled to rather than
+      // repainted - the same near-target branch a `g` takes
+      if (this.jumpNear(found, jumpSindex() + 1)) {
+        this.shiftMatch(found);
+        this.sync();
+        recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
+        this.seam = [];
+        return;
+      }
+
       this.view.top = { pos: found, offset: 0 };
       this.view.lineBackward(jumpSindex());
     }
