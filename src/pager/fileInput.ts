@@ -774,14 +774,49 @@ export class FileInput implements PagerInput {
       };
       this.view.lineBackward(config.window - 2);
     } else {
-      // og's search ends in jump_loc(pos, jump_sline) (search.c), so a
-      // match that is ALREADY DISPLAYED is scrolled to rather than
-      // repainted - the same near-target branch a `g` takes
-      if (this.jumpNear(found, jumpSindex() + 1)) {
+      // og's search ends in jump_loc(pos, jump_sline) (search.c), so
+      // the landing takes exactly the branches a `g` does: a match
+      // ALREADY DISPLAYED is scrolled to, one just above the screen
+      // is scrolled back to, and only a far one repaints
+      const done = (): void => {
         this.shiftMatch(found);
         this.sync();
         recordSearchMatch(Math.max(this.positions.indexOf(found), 0));
         this.seam = [];
+      };
+
+      // under a filter the rows this walk produces are not the rows
+      // on screen, the same reason jumpNear declines one
+      const before = !session.lastFilter && this.padTop === 0 &&
+        (found < this.view.top.pos ||
+          (found === this.view.top.pos && this.view.top.offset > 0));
+
+      if (before) {
+        const walk = this.backWalk(found, jumpSindex());
+
+        if (walk === 'scroll') {
+          this.backward(this.scrollRows, true);
+          done();
+          return;
+        }
+
+        if (walk === 'blank') {
+          this.blankBack();
+          done();
+          return;
+        }
+
+        this.view.top = { pos: found, offset: 0 };
+        this.view.lineBackward(jumpSindex());
+        done();
+
+        if (config.window - 1 <= backScrollCap()) markBackPaint();
+        else { markFarBackClear(); markPosClear(); }
+        return;
+      }
+
+      if (this.jumpNear(found, jumpSindex() + 1)) {
+        done();
         return;
       }
 

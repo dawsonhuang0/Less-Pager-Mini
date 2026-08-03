@@ -590,6 +590,7 @@ export function resetRender(): void {
   scrollOpen = false;
   scrollPrefix = null;
   forwPrompt = false;
+  keepPrevRows = false;
   prevMca = '';
   promptAtBottom = false;
   posClearPending = false;
@@ -1112,7 +1113,8 @@ export function render(rawContent: string[], buffer: string[]): void {
     const frame =
       scrollFrame(prevRows, rows, pipeFill, rawContent, posClear, buffer,
         backPaint);
-    prevRows = rows;
+    if (!keepPrevRows) prevRows = rows;
+    keepPrevRows = false;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
     process.stdout.write(eprPrefix() + frame);
     prompting = promptPainted;
@@ -1349,6 +1351,9 @@ export function clearBot(): string {
   promptAtBottom = true;
   return (optOldBot() ? CURSOR_TO(config.window, 1) : '\r') + CLEAR_LINE;
 }
+
+// set by a frame that wrote nothing: the caller keeps the old rows
+let keepPrevRows = false;
 
 // WHICH mca the previous scroll-mode frame had open, so this one's
 // keystroke is a cmd_ichar echo and not another start_mca
@@ -1847,6 +1852,26 @@ function scrollFrame(
     if (wasBare && !bareFrame && rows.length === prev.length + 1 &&
         prefixEqual(prev, rows)) {
       return bot;
+    }
+
+    // and the mirror: a bare frame whose rows the screen already
+    // shows has nothing to draw. og's forw()/back() write only the
+    // rows they scroll in, so a command that moved NOTHING - a failed
+    // search, say - paints nothing before its line-number walk. The
+    // length mismatch alone would otherwise send it to a full repaint
+    if (bareFrame && prev.length === rows.length + 1 &&
+        prefixEqual(rows, prev)) {
+      // and it does not spend the opening either: whatever carried it
+      // is still waiting for the paint that follows. Nor does it count
+      // as "a bare frame just painted these rows" - it left the cursor
+      // where it was, so the prompt after it still needs its clear_bot
+      scrollPrefix = prefix;
+      prevBare = false;
+
+      // the screen still shows the frame BEFORE this one, so that is
+      // what the next frame has to diff against
+      keepPrevRows = true;
+      return '';
     }
 
     // only the bottom (prompt) line changed: og's clear_bot + reprint
