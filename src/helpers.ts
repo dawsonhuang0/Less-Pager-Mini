@@ -710,6 +710,9 @@ export function markHiliteErase(): void {
 /** True while such a repaint is still owed. */
 export const hiliteRepaintPending = (): boolean => hiliteRepaintPending_;
 
+/** Whether a repaint is armed and waiting for a true prompt. */
+export const fullRepaintArmed = (): boolean => fullRepaintPending;
+
 export function freezeFrame(homeOnUnfreeze: boolean = false): void {
   frozenFrame = true;
   frozenHome = homeOnUnfreeze;

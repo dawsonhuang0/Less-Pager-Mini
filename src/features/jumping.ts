@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { ringBell, markPosClear } from "../helpers";
+import { ringBell, markPosClear, markFullRepaint } from "../helpers";
 import { maxSubRow, isAscii, isStyled } from "../lines/helpers";
 
 import { getLayout } from "../lines/lineLayout";
@@ -11,7 +11,7 @@ import { search } from "./searching";
 
 import { files, lineBase, byteBase } from "./files";
 
-import { chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
+import { prChar, chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
   optPermaMarks, optAutosaveAction, hook } from "../options";
 
 import { saveHistory, touchMarks } from "../startup/histfile";
@@ -660,6 +660,12 @@ export function marksKey(content: string[], key: string): void {
   const pending = marks.pending;
   marks.pending = '';
 
+  // og's getcc returns 0 when an interrupt cleared it, and A_SETMARK
+  // hands that to setmark, so og answers ^C here with "Invalid mark
+  // letter ^@" rather than cancelling. Reproducing it needs more than
+  // the letter: og's trashed-screen repaint runs BEFORE the message
+  // and draws no rows at all, because the pending S_INTERRUPT aborts
+  // forw()'s paint loop through ABORT_SIGS. Not modelled; we cancel.
   if (key === '\x03' || key.startsWith('\x1B')) return;
 
   const char = key[0];
@@ -685,7 +691,12 @@ export function marksKey(content: string[], key: string): void {
   // redrawn whole behind the skipping marker even though nothing moved.
   // Only the erase/newline keys break out before it, and A_GOMARK has
   // no repaint at all. We redrew the prompt row alone.
-  markPosClear();
+  //
+  // setmark's own error() comes FIRST and blocks in get_return, so a
+  // rejected mark letter shows its message over the old screen and
+  // the repaint runs when the RETURN dismisses it
+  if (search.message) markFullRepaint();
+  else markPosClear();
 }
 
 /**
@@ -703,7 +714,7 @@ function setMark(
   lineNum: number
 ): void {
   if (!MARK_LETTER_REGEX.test(char)) {
-    search.message = `Invalid mark letter ${char}`;
+    search.message = `Invalid mark letter ${prChar(char)}`;
     return;
   }
 

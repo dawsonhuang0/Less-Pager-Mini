@@ -59,6 +59,8 @@ import {
   freezeFrame,
   unfreezeFrame,
   markFullRepaint,
+  fullRepaintArmed,
+  markClearHome,
   markHiliteRepaint,
   markHiliteErase,
   hiliteRepaintPending,
@@ -1474,20 +1476,56 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // ctrl-C at the top level clears the & filter, like og's
-  // u_interrupt calling set_filter_pattern(NULL)
-  if (
-    session.key === '\x03' && !search.input && !option.pending &&
-    !examine.pending && !marks.pending && !brackets.pending &&
-    !miscInput.pending && search.filters.length
-  ) {
-    search.filters = [];
-    session.content = deriveContent();
-    pagerInput?.rebuild();
-    calculateEOF(session.content);
+  // og's u_interrupt (signal.c:41) is a SIGNAL handler, so it runs
+  // whatever the pager was doing: it lbell()s and calls
+  // set_filter_pattern(NULL, 0) - which drops any & filter and, at
+  // its end, screen_trashed() UNCONDITIONALLY (search.c). The next
+  // prompt therefore repaints through make_display with top_scroll
+  // forced: clear, home, redraw. We only cleared the filter, and only
+  // when there was one, and never repainted. It does NOT return: a
+  // command line still cancels below, exactly as og's ABORT_SIGS does
+  // ...but not while something is already WAITING on the interrupt:
+  // F, a pipe drain and a pending scroll each read it as their own
+  // stop signal below, ring their own bell and repaint their own way
+  if (session.key === '\x03' && !follow.active && !session.pipeDrainTo &&
+      !pendingScroll.rows && !session.pipeWaiting) {
     ringBell();
-    render(session.content, session.buffer);
-    return;
+
+    if (search.filters.length) {
+      search.filters = [];
+      session.content = deriveContent();
+      pagerInput?.rebuild();
+      calculateEOF(session.content);
+    }
+
+    // repaint() is pos_clear + jump_loc (jump.c:124), and
+    // make_display forces top_scroll for a trashed screen
+    // (command.c:865), so the paint clears and homes
+    // the mca's number goes with it: og's command loop starts the
+    // next iteration from cmd_reset, and the interrupt never reaches
+    // an action that could consume the count
+    session.buffer.length = 0;
+
+    markFullRepaint();
+    markPosClear();
+    markClearHome();
+
+    // make_display's repaint is not a command's paint: no cmd_exec
+    // ran, so nothing clear_bots in front of it
+    markBareRepaint();
+
+    // og's getcc_clear (signal.c:299) throws the interrupt away, so
+    // no command runs behind it. A command LINE still has to cancel,
+    // which the branches below do, but an idle ^C ends here - it was
+    // ringing a second bell through the unbound-key path
+    const idle = !search.input && !option.pending && !examine.pending &&
+      !marks.pending && !brackets.pending && !miscInput.pending &&
+      !pipeMark.pending && !config.keyPrefix;
+
+    if (idle) {
+      render(session.content, session.buffer);
+      return;
+    }
   }
 
   // ^Z suspends like og's psignals S_STOP: the tty driver would
@@ -1557,6 +1595,16 @@ function dispatchKey(sequence: string): void {
   if (hadMessage && !search.message && !mode.DUMB) {
     process.stdout.write(CURSOR_TO(config.window, 1) + CLEAR_LINE);
     dirtyBottomRow();
+
+    // get_return RETURNS into the rest of the command that errored -
+    // A_SETMARK's repaint(), say - and only then is the ungotten key
+    // re-read. A repaint armed behind the message runs here, before
+    // whatever that key does
+    if (fullRepaintArmed()) {
+      markPosClear();
+      markBareRepaint();
+      render(session.content, session.buffer);
+    }
   }
 
   // RETURN and space only dismiss a pending message; other keys are
