@@ -352,7 +352,16 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   // gate silences the bell, never the clear. A bell raised while the
   // command line is still being edited (an invalid mark letter, a
   // completion with no match) is lbell alone -- no command ran.
-  const prefix = eprPrefix() + (kind === 'eof' ? clearBot() : '');
+  // og's clear_bot comes from cmd_exec, so a bell that a COMMAND
+  // raised carries one and a bell raised while the command line is
+  // still being edited does not. A completed two-key command has
+  // already left cmd_exec's clear waiting as the frame's opening -
+  // there is no frame after this bell, so it goes out here
+  const carried = scrollPrefix;
+  if (carried !== null) scrollPrefix = null;
+
+  const prefix = eprPrefix() +
+    (carried ?? (kind === 'eof' ? clearBot() : ''));
 
   if (prefix) {
     process.stdout.write(prefix);

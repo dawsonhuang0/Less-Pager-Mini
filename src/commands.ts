@@ -64,6 +64,12 @@ import {
  * position, and restores the target's saved position.
  */
 export function switchToFile(target: number): boolean {
+  // og's edit_ifile returns at once for the file it already has open
+  // (edit.c:465), so re-selecting the current file - `:x` with one
+  // file, `:e` on the same name - re-reads nothing and repaints
+  // nothing. We re-edited it, which showed the fresh-file prompt again
+  if (target === files.index) return true;
+
   const lines = loadFile(target);
 
   if (!lines) {

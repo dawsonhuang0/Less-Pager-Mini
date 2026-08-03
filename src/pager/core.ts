@@ -1760,6 +1760,16 @@ function dispatchKey(sequence: string): void {
       return;
     }
 
+    // the built-in prefix already echoed itself when it opened; og
+    // echoes the byte that COMPLETES it the same way (A_PREFIX,
+    // command.c:2499) before the pair is looked up
+    echoPrefix(prefix + session.key, prefix.length + 1);
+
+    // og's DO the command: the mca completing runs cmd_exec(), whose
+    // clear_bot opens whatever the command then writes - a paint, or
+    // just a bell
+    markBareRepaint(clearBot());
+
     const user = userBinding(prefix + session.key);
 
     if (user) {
@@ -1779,10 +1789,9 @@ function dispatchKey(sequence: string): void {
     // (the ":" entries live in the same cmd_decode tables); the
     // prefix ages out WITH the cascade — leaving it set would feed
     // every re-dispatched piece back into this branch forever
-    if (
-      action === undefined && !userStop() && session.key.length > 1 &&
-      !mode.DUMB
-    ) {
+    // og's cmd_decode tail-matches whatever the pair accumulated,
+    // one byte or several: "^X q" runs the tail `q` and quits
+    if (action === undefined && !userStop() && !mode.DUMB) {
       config.keyPrefix = '';
 
       for (const piece of tailCascade(prefix + session.key)) {
@@ -2077,12 +2086,12 @@ function dispatchKey(sequence: string): void {
  * og's A_PREFIX echo for a multi-byte key sequence: " " for the mca,
  * then each byte through cmd_char as its prchar representation.
  */
-function echoPrefix(seq: string): void {
+function echoPrefix(seq: string, from: number = 1): void {
   if (mode.DUMB || seq.length < 2) return;
 
   const held = config.keyPrefix;
 
-  for (let i = 1; i <= seq.length; i++) {
+  for (let i = from; i <= seq.length; i++) {
     config.keyPrefix = seq.slice(0, i);
     render(session.content, session.buffer);
   }
