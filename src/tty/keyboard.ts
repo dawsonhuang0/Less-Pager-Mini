@@ -29,13 +29,76 @@ let ttyFd: number | null = null;
 /** The keyboard's file descriptor, for synchronous interrupt polls. */
 export const keyboardFd = (): number => ttyFd ?? 0;
 
-export function openTtyKeyboard(): boolean {
-  // og's ttyin.c opens "CON" on Windows, /dev/tty elsewhere
-  const device = process.platform === 'win32' ? 'CONIN$' : '/dev/tty';
-
+/** Opens a device by name, or -1. */
+function openDevice(path: string): number {
   try {
-    const fd = fs.openSync(device, 'r');
+    return fs.openSync(path, 'r');
+  } catch {
+    return -1;
+  }
+}
+
+/** Makes an open descriptor the keyboard. */
+function attach(fd: number): boolean {
+  try {
     stream = new tty.ReadStream(fd);
+    ttyFd = fd;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function openTtyKeyboard(): boolean {
+  // og's ttyin.c opens "CON" on Windows
+  if (process.platform === 'win32') {
+    const con = openDevice('CONIN$');
+    return con >= 0 && attach(con);
+  }
+
+  // og's open_tty (ttyin.c:67) tries THREE things in order and cannot
+  // come away empty:
+  //
+  //   1. ttyname(2) - the device STDERR is on - opened afresh
+  //   2. "/dev/tty"
+  //   3. failing both, file descriptor 2 itself
+  //
+  // Only the second needs a controlling terminal, and we had only the
+  // second: a session that has none (setsid, some CI runners and
+  // container shells) got no keyboard at all where less has one.
+  // "/dev/fd/2" reopens exactly what ttyname(2) names.
+  let fd = tty.isatty(2) ? openDevice('/dev/fd/2') : -1;
+
+  if (fd < 0) fd = openDevice('/dev/tty');
+
+  // og takes fd 2 here unconditionally, terminal or not: raw_mode's
+  // tcsetattr simply fails on it and getchr finds out one read later,
+  // at EOF. That is not a dead end - it is how less still PAINTS its
+  // first screen before it gives up
+  if (fd >= 0) return attach(fd);
+  if (tty.isatty(2)) return attach(2);
+
+  return attachPlain(2);
+}
+
+/**
+ * Takes a descriptor that is NOT a terminal as the keyboard, which is
+ * og's last resort (fd 2, ttyin.c:71).
+ *
+ * Node's tty.ReadStream refuses a non-tty fd, so the descriptor is
+ * wrapped in the same shape with the terminal calls as the no-ops
+ * they effectively are there - og's raw_mode on such an fd fails and
+ * is ignored. Reading it yields EOF, which is the point.
+ */
+function attachPlain(fd: number): boolean {
+  try {
+    const plain = fs.createReadStream('', { fd, autoClose: false });
+    const shim = plain as unknown as tty.ReadStream;
+
+    shim.isTTY = false;
+    shim.setRawMode = () => shim;
+
+    stream = shim;
     ttyFd = fd;
     return true;
   } catch {

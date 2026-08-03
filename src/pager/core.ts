@@ -687,6 +687,17 @@ export async function contentPager(
   // a half-read escape sequence never outlives its session
   heldKeyBytes = '';
   keyboard().on('data', keyHandler);
+
+  // og's getchr on an exhausted keyboard: "EOF on the tty means there
+  // is no more keyboard input. Don't loop forever waiting for a byte
+  // which cannot arrive" - quit(QUIT_ERROR) (ttyin.c:220). It happens
+  // AFTER the first screen is painted, which is why less with no
+  // terminal to read still shows you the file and then leaves
+  keyboard().once('end', () => {
+    if (session.exited) return;
+    process.exitCode = 1;
+    session.exit();
+  });
   // deferred fill keys replay through the same handler
   session.feedKeys = data => keyHandler(Buffer.from(data));
 

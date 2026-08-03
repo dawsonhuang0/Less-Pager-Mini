@@ -144,6 +144,14 @@ async function main(): Promise<void> {
   setCliOptions(optArgs);
 
   const stdoutTty = process.stdout.isTTY === true;
+
+  // og's whole mode turns on isatty(1) alone (main.c:259), and its
+  // keyboard NEVER comes from fd 0: open_getchr goes through
+  // open_tty's cascade whatever stdin is (ttyin.c:67, :138). Taking
+  // stdin when it happened to be a terminal was our own shortcut, and
+  // it showed: with no controlling terminal and stderr redirected, og
+  // runs out of cascade and quits while we read the pty on stdin and
+  // carried on.
   const stdinTty = process.stdin.isTTY === true;
 
   if (!stdoutTty) {
@@ -255,10 +263,7 @@ async function main(): Promise<void> {
   }
 
   if (files.length) {
-    // a piped stdin alongside files still needs a keyboard
-    if (!stdinTty && !openTtyKeyboard()) {
-      usageError('cannot open terminal');
-    }
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
     await pager(files, { 'examine-file': true });
@@ -267,11 +272,8 @@ async function main(): Promise<void> {
 
   if (wantsHelp) {
     // `lmn --help` with no files pages the help file alone, like
-    // og's dohelp making FAKE_HELPFILE the only input (a piped
-    // stdin is ignored, but still needs the /dev/tty keyboard)
-    if (!stdinTty && !openTtyKeyboard()) {
-      usageError('cannot open terminal');
-    }
+    // og's dohelp making FAKE_HELPFILE the only input
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
     await pager(help.join('\n'));
@@ -281,9 +283,7 @@ async function main(): Promise<void> {
   if (sawTag) {
     // -t supplies the file itself: the queued tag jump opens the
     // file containing the tag, like og's main editing the tag file
-    if (!stdinTty && !openTtyKeyboard()) {
-      usageError('cannot open terminal');
-    }
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
     await pager('');

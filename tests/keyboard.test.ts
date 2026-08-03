@@ -153,14 +153,18 @@ describe('self SIGINT bookkeeping', () => {
 });
 
 describe('tty opening and dimensions', () => {
-  it('reports a missing controlling terminal without changing stdin', () => {
+  it('falls back to fd 2 when no terminal can be opened', () => {
+    // og's open_tty tries ttyname(2), then "/dev/tty", then fd 2
+    // itself, terminal or not (ttyin.c:67) - it cannot come away
+    // empty, which is what lets less paint its first screen before
+    // getchr finds the EOF and quits
     vi.spyOn(fs, 'openSync').mockImplementation(() => {
       throw new Error('no tty');
     });
 
-    expect(openTtyKeyboard()).toBe(false);
-    expect(keyboard()).toBe(process.stdin);
-    expect(keyboardFd()).toBe(0);
+    expect(openTtyKeyboard()).toBe(true);
+    expect(keyboard()).not.toBe(process.stdin);
+    expect(keyboardFd()).toBe(2);
   });
 
   it('falls back to Node window size when /dev/tty is unavailable', () => {
