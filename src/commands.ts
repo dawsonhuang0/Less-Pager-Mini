@@ -296,9 +296,23 @@ export function runExamine(): void {
     return;
   }
 
-  let insertAt = files.index + 1;
-  let firstGood = -1;
-  let lastGood = -1;
+  // og's edit_list EDITS each name in turn (edit.c:728), and edit()
+  // is `edit_ifile(get_ifile(filename, curr_ifile))`: the new ifile
+  // is inserted after the CURRENT one, and then becomes current. So
+  // the insertion point follows along, and a name already in the
+  // list drags it BACKWARD to wherever that name already sits.
+  //
+  // That is what puts the first globbed name last: ":e *.txt" over
+  // an open a1.txt inserts UP.txt after a1, makes it current, then
+  // meets a1.txt itself - which exists, so current jumps back to
+  // index 0 - and every later name lands after a1, ahead of UP.
+  let current = files.index;
+
+  // og keeps good_filename as a NAME, not a position, and resolves
+  // it again at the end (edit.c) - which it has to, because a later
+  // name that fails to open del_ifile()s an entry and shifts every
+  // index after it
+  let goodName: string | null = null;
   const errors: string[] = [];
 
   for (const name of names) {
@@ -306,7 +320,7 @@ export function runExamine(): void {
     let inserted = false;
 
     if (at < 0) {
-      at = insertAt;
+      at = current + 1;
       files.list.splice(at, 0, {
         path: name,
         lines: null,
@@ -331,7 +345,9 @@ export function runExamine(): void {
           switchToFile(target);
         };
 
-        if (inserted) insertAt++;
+        // the query has not been answered yet, so edit_ifile has not
+        // reached its `curr_ifile = ifile` - the insertion point
+        // stays where it was
         continue;
       }
 
@@ -342,19 +358,22 @@ export function runExamine(): void {
         search.message = '';
       }
 
-      if (inserted) {
-        files.list.splice(at, 1);
-        marksFileSpliced(at, -1);
-      }
+      // og's edit_error del_ifile()s the entry unconditionally
+      // (edit.c) - a name that was already in the list and now
+      // cannot be opened is dropped from it too
+      files.list.splice(at, 1);
+      marksFileSpliced(at, -1);
+      if (at <= current) current--;
       continue;
     }
 
-    if (inserted) insertAt++;
-    if (firstGood < 0) firstGood = at;
-    lastGood = at;
+    // edit_ifile ends with `curr_ifile = ifile`: this file is now
+    // the one the next insertion goes after
+    current = at;
+    if (goodName === null) goodName = name;
   }
 
-  if (errors.length && firstGood >= 0) {
+  if (errors.length && goodName !== null) {
     // og's error() runs squish_check (output.c:720): a squished
     // short first paint repaints the OLD file top-anchored, tildes
     // and all, before the message shows
@@ -368,15 +387,31 @@ export function runExamine(): void {
     freezeFrame();
   }
 
-  if (firstGood >= 0) {
+  if (goodName !== null) {
     search.message = '';
 
-    // og's edit_list skips the final re-edit when the first good
-    // name is already current (edit_ifile returns early on
-    // curr_ifile): a lone :e of the current file is a no-op
-    if (firstGood !== files.index || lastGood !== firstGood) {
-      switchToFile(firstGood);
+    // og closes with `if (get_ifile(good_filename, curr_ifile) ==
+    // curr_ifile) return 0; reedit_ifile(save); return
+    // edit(good_filename);` - it can skip the re-edit because its
+    // own loop already EDITED each name and left curr_ifile on the
+    // last one. Ours only validates with loadFile, so the switch it
+    // skips is the one we still owe; switchToFile's own
+    // already-current guard covers og's early return.
+    const target = files.list.findIndex(entry => entry.path === goodName);
+
+    // og's loop left curr_ifile on the LAST name it edited, so when
+    // that is not good_filename the closing edit() is a real switch:
+    // new_file goes TRUE and the file it leaves becomes '#'. Ours
+    // only validated, so a "switch" back to the file we never left
+    // has to record both for itself - which is why ":e {a1,b2}.txt"
+    // over a1 shows og's new-file prompt while ":e a1.txt" does not.
+    if (target >= 0 && target === files.index && current !== target &&
+        files.list[current]) {
+      setPreviousPath(files.list[current].path);
+      files.newFile = true;
     }
+
+    if (target >= 0) switchToFile(target);
   } else if (errors.length && files.index >= 0) {
     // og's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with

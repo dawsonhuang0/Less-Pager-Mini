@@ -297,9 +297,12 @@ describe('examine expansion', () => {
     expect(expandExamineList('with\\ space three'))
       .toEqual(['with space', 'three']);
 
-    // quotes opened mid-word group but stay literal, like og
-    // splitting first and unquoting only a leading quote
-    expect(expandExamineList('pre"a b"')).toEqual(['pre"a b"']);
+    // a quote opened mid-word groups the space AND is consumed.
+    // shell_unquote alone would keep it - it only strips a LEADING
+    // quote - but it never sees the word first: init_textlist hands
+    // the still-quoted word to lglob, and the SHELL strips it there.
+    // Measured on less/less: `:e pre"a b"` reports `prea b`.
+    expect(expandExamineList('pre"a b"')).toEqual(['prea b']);
   });
 
   it('globs patterns and sorts, falling back to the raw name', () => {

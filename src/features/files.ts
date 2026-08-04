@@ -579,7 +579,10 @@ export function examineKey(key: string): 'run' | 'pending' | 'cancel' {
 export function expandExamineList(text: string): string[] {
   const names: string[] = [];
 
-  for (const word of splitWords(fexpand(text))) {
+  // the word keeps its quotes here: og hands the quoted word to
+  // lglob and shell_unquotes what comes back (edit.c:728), which is
+  // the only reason a name with spaces survives the shell
+  for (const word of splitWordsRaw(fexpand(text))) {
     names.push(...glob(expandHomeEnv(word)));
   }
 
@@ -626,6 +629,18 @@ export function fexpand(text: string): string {
  * word for unquoteWord, like og deferring to shell_unquote.
  */
 function splitWords(text: string): string[] {
+  return splitWordsRaw(text).map(unquoteWord);
+}
+
+/**
+ * og's init_textlist (edit.c:63): unquoted spaces become word
+ * separators and NOTHING ELSE CHANGES - the quotes stay on the word.
+ *
+ * That is what carries a name with spaces safely through lglob: the
+ * still-quoted word goes to the shell, which honours the quotes and
+ * hands back one name. shell_unquote runs afterwards, on the result.
+ */
+function splitWordsRaw(text: string): string[] {
   const { open, close } = optQuotes();
   const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
 
@@ -665,7 +680,7 @@ function splitWords(text: string): string[] {
   }
 
   if (word) words.push(word);
-  return words.map(unquoteWord);
+  return words;
 }
 
 /**
@@ -723,8 +738,7 @@ export function expandHomeEnv(word: string): string {
 }
 
 /**
- * Expands shell glob metacharacters (`*`, `?`, `[...]`) against the
- * filesystem, sorted like the shell.
+ * Expands a filename pattern, like lglob.
  *
  * - A pattern matching nothing is returned as-is, like less trying to
  *   open the raw filename when the glob does not expand.
@@ -732,36 +746,37 @@ export function expandHomeEnv(word: string): string {
  * @param pattern - The pattern to expand.
  */
 export function glob(pattern: string): string[] {
+  // og's caller shell_unquotes whatever lglob hands back, expanded
+  // or not, so every path out of here owes an unquoted name
+  const plain = unquoteWord(pattern);
+
   // like lglob: expansion is disabled under LESSSECURE
-  if (!secureAllow('glob')) return [pattern];
+  if (!secureAllow('glob')) return [plain];
 
-  if (!/[*?[]/.test(pattern)) return [pattern];
-
-  // A configured LESSECHO replaces the helper executable exactly as
-  // in filename.c. The shell expands the pattern; lessecho quotes the
-  // resulting names so init_textlist can recover spaces safely.
-  const lessecho = lgetenv('LESSECHO');
-  if (lessecho) {
-    const { open, close } = optQuotes();
-    const escape = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
-    const metas = lgetenv('LESSMETACHARS') ?? DEF_METACHARS;
-    const flags = [
-      `-p0x${(open.charCodeAt(0) || 0).toString(16)}`,
-      `-d0x${(close.charCodeAt(0) || 0).toString(16)}`,
-      `-e${shellQuote(escape || '-')}`,
-      ...[...metas].map(char => `-n0x${char.charCodeAt(0).toString(16)}`),
-    ].join(' ');
-    // $LESSECHO names a program: a --no-shell session runs none
-    const [shell, args] = shellArgv(`${lessecho} ${flags} -- ${pattern}`);
-    const result = optNoShell()
-      ? { stdout: '' } as ReturnType<typeof spawnSync>
-      : spawnSync(shell, args, { encoding: 'utf8' });
-    const text = typeof result.stdout === 'string' ? result.stdout.trim() : '';
-    if (text) return splitWords(text);
+  // og's lglob on unix does NOT glob. It hands the pattern to $SHELL
+  // and lets the shell expand it (filename.c:750, the HAVE_POPEN
+  // branch); glob(3) appears exactly once in all of less, guarded by
+  // `#if MSDOS_COMPILER==DJGPPC` (lglob.h:34).
+  //
+  // That is why "[[:upper:]]*" and "{a,b}" expand in og, and why no
+  // in-process implementation can match it: the answer depends on
+  // WHICH shell the user runs, down to the setopts its startup file
+  // applies to a non-interactive one.
+  //
+  // There is no fast path for a pattern without metacharacters
+  // either - og shells out for every name it is given.
+  if (!isWindows && !optNoShell()) {
+    const expanded = shellExpand(pattern);
+    return expanded !== null && expanded.length ? expanded : [plain];
   }
 
-  const absolute = pattern.startsWith('/');
-  const segments = pattern.split('/').filter(Boolean);
+  // Windows has no such delegation: og walks the directory itself
+  // through _findfirst/_findnext (lglob.h:61), which is DOS wildcard
+  // matching - "*" and "?" only, case-insensitive, no bracket
+  // expressions. The walk below is neither that nor the shell; it is
+  // the one place left where we still answer for ourselves.
+  const absolute = plain.startsWith('/');
+  const segments = plain.split('/').filter(Boolean);
   let candidates = [absolute ? '/' : ''];
 
   for (const segment of segments) {
@@ -795,7 +810,63 @@ export function glob(pattern: string): string[] {
   }
 
   const matches = candidates.filter(name => fs.existsSync(name));
-  return matches.length ? matches : [pattern];
+  return matches.length ? matches : [plain];
+}
+
+/**
+ * og's lglob shell pipeline (filename.c:750): build a command, run it
+ * through `$SHELL -c`, read back the names the shell expanded.
+ *
+ * og runs `lessecho`, whose entire job is to quote those names so
+ * init_textlist can split them on spaces again. We prefer the real
+ * binary where it exists, so a user's $LESSECHO is honoured and the
+ * quoting round trip is og's own. Where it is missing - og simply
+ * fails to expand at all then - the same shell reports the same names
+ * NUL-delimited instead, which needs no quoting to survive.
+ *
+ * @param pattern - The pattern, passed to the shell unquoted.
+ * @returns The expanded names, or null when the shell produced none.
+ */
+function shellExpand(pattern: string): string[] | null {
+  // og: $LESSECHO, else LIBEXECDIR/lessecho, else "lessecho" on PATH
+  const lessecho = lgetenv('LESSECHO') || 'lessecho';
+  const { open, close } = optQuotes();
+  const escape = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
+  const metas = lgetenv('LESSMETACHARS') ?? DEF_METACHARS;
+  const flags = [
+    `-p0x${(open.charCodeAt(0) || 0).toString(16)}`,
+    `-d0x${(close.charCodeAt(0) || 0).toString(16)}`,
+    `-e${shellQuote(escape || '-')}`,
+    ...[...metas].map(char => `-n0x${char.charCodeAt(0).toString(16)}`),
+  ].join(' ');
+
+  const quoted = runShell(`${lessecho} ${flags} -- ${pattern}`);
+  if (quoted !== null) return splitWords(quoted);
+
+  // no lessecho here. `for f in <pattern>` is the same expansion the
+  // same shell would have done for it, and NUL keeps a name with
+  // spaces whole - which is the only thing lessecho's quoting buys
+  const raw = runShell(`for f in ${pattern}; do printf '%s\\0' "$f"; done`);
+  if (raw === null) return null;
+
+  return raw.split('\0').filter(name => name !== '');
+}
+
+/** One command through the shell, like og's shellcmd + readfd. */
+function runShell(cmd: string): string | null {
+  const [shell, args] = shellArgv(cmd);
+
+  try {
+    const result = spawnSync(shell, args, { encoding: 'utf8' });
+    const text = typeof result.stdout === 'string' ? result.stdout : '';
+
+    // og: `if (*gfilename == '\0') { return (filename); }` - no
+    // output means the name comes back unexpanded
+    return text.replace(/\n+$/, '') || null;
+  } catch {
+    // og: `if (fd == NULL) return (filename)` - the pipe never opened
+    return null;
+  }
 }
 
 function joinPath(base: string, segment: string): string {

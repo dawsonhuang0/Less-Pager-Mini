@@ -172,6 +172,11 @@ const keys: Record<string, Actions> = {
   '\x7F': 'DEL_BUFFER', // delete
 
   // examine a new file
+  // og binds all three of E, :e and ^X^V to A_EXAMINE
+  // (decode.c:168). Without the bare E the key fell through to the
+  // unbound-key path and every character of the filename after it
+  // ran as a COMMAND - "Eb2.txt" executed b, 2, ., t, x, t.
+  'E': 'OPEN_FILE', // E
   ':e': 'OPEN_FILE', // :e
 
   // (*) examine the (N-th) next file from the command line
