@@ -18,7 +18,7 @@ import { optNoHistDups, optAutosaveAction } from "../options";
 
 import { search } from "./searching";
 
-import { files, fexpand, expandHomeEnv } from "./files";
+import { files, fexpand, expandHomeEnv, glob } from "./files";
 
 import { markRow, markPos, linePos } from "./jumping";
 
@@ -524,7 +524,15 @@ export function logFileTarget(
   text: string,
   force: boolean = false
 ): 'write' | 'ask' | null {
-  const name = expandHomeEnv(fexpand(text.trim()));
+  // opt_o's TOGGLE runs the answer through lglob + shell_unquote
+  // (optfunc.c:147) - the same shell expansion `:e` gets, so
+  // "s out*.log" over an existing out1.log asks to overwrite it
+  // instead of creating a file called "out*.log". Its INIT case is
+  // a bare save(), which is why the command-line -o does NOT expand.
+  //
+  // lglob returns every match space-separated and shell_unquote
+  // takes the lot as one name, so several matches join, like -T.
+  const name = glob(expandHomeEnv(fexpand(text.trim()))).join(' ');
   if (!name) return null;
 
   const entry = files.list[files.index];
