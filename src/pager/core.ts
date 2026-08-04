@@ -230,6 +230,7 @@ import {
   getFirstCmd,
   overwriteKey,
   writeLogFile,
+  logFileName,
   versionMessage,
   printVersion,
   takeStartupLog,
@@ -1782,7 +1783,18 @@ function dispatchKey(sequence: string): void {
 
     if (answer === 'overwrite' || answer === 'append') {
       writeLogFile(session.content, answer === 'append');
+    } else if (answer === 'none') {
+      // og's 'D' just `return`s from use_logfile, straight back into
+      // opt_o's TOGGLE and on to toggle_option, which prints the
+      // option's own message like every other toggle. With no log
+      // opened that is _o's "No log file" (optfunc.c).
+      search.message = logFileName()
+        ? `Log file "${logFileName()}"`
+        : 'No log file';
     } else if (answer === 'quit') {
+      // og quits from INSIDE query(), before it has repainted
+      // anything: the warning it asked with is still the last thing
+      // on the screen. Painting here wipes it.
       session.exit();
       return;
     }

@@ -586,7 +586,12 @@ export function overwriteKey(
       overwrite.pending = false;
       return 'none';
 
-    case 'Q': case 'q':
+    // UPPERCASE ONLY. The quit does not come from use_logfile's
+    // switch at all - that has no 'Q' case - but from query() itself,
+    // which ends `if (c == 'Q') quit(QUIT_OK);` (output.c:786). A
+    // lowercase q reaches the switch, misses every case and re-asks
+    // like any other stray key.
+    case 'Q':
       overwrite.pending = false;
       return 'quit';
   }

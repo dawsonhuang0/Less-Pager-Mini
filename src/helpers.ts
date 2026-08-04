@@ -1514,6 +1514,15 @@ function revRowEnd(row: string): string {
 // -X can't address the prompt row absolutely (the screen may have
 // started mid-terminal and never filled)
 function scrollPark(rows: string[]): string {
+  // og's query() (output.c:786) closes with lower_left(), so the
+  // cursor leaves a y/n question parked on the BOTTOM row and not on
+  // the question. Everything that clear_bots next lands there: the
+  // quit path's, so the question survives on screen, and a re-asked
+  // query's, so it prints below instead of overwriting the first.
+  if (overwrite.pending || binaryConfirm.pending) {
+    return CURSOR_TO(config.window, 1);
+  }
+
   if (!cmd.active) return '';
 
   const plain = rows[rows.length - 1].replace(STYLE_REGEX_G, '');

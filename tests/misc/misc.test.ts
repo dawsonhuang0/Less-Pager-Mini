@@ -147,8 +147,15 @@ describe('log file (s / -o)', () => {
     expect(fs.readFileSync(fresh, 'utf8'))
       .toBe(content.join('\n') + '\ntail\n');
 
+    // UPPERCASE only. use_logfile's switch has no 'Q' case at all -
+    // the quit comes from query() itself, `if (c == 'Q')
+    // quit(QUIT_OK)` (output.c:786) - so a lowercase q reaches the
+    // switch, misses every case and re-asks. Measured on less/less.
     overwrite.pending = true;
-    expect(overwriteKey('q')).toBe('quit');
+    expect(overwriteKey('q')).toBe('pending');
+
+    overwrite.pending = true;
+    expect(overwriteKey('Q')).toBe('quit');
   });
 });
 
