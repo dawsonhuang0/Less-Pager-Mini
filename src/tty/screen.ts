@@ -1,5 +1,5 @@
 import { keyboard } from './keyboard';
-import { putstr, flush } from './output';
+import { putstr } from './output';
 
 import { config, mode, setFullScreen } from '../state/config';
 

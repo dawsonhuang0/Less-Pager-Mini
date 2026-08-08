@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { putstr, flush } from './tty/output';
+import { putstr } from './tty/output';
 
 import { shellArgv } from './tty/platform';
 

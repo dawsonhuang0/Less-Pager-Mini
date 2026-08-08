@@ -1,6 +1,6 @@
 
 import { opt } from './state';
-import { putstr, flush } from '../tty/output';
+import { putstr } from '../tty/output';
 
 import { config, mode } from "../state/config";
 
@@ -44,6 +44,9 @@ export const hook = {
   rebuildContent: (() => {}) as () => void,
   /** og's O_HL_REPAINT: re-highlight NOW, under the option's message. */
   hiliteRepaint: ((() => {}) as () => void),
+  /** Rebuilds the compiled pattern, for when the ENGINE changed under
+   *  it (--use-js-regexp) rather than the pattern or its case. */
+  recompilePattern: (() => {}) as () => void,
   hiliteErase: ((() => {}) as () => void),
   /** Reads the top row's character offset, returning a function that
    *  restores it once the width has changed (og's table[TOP]). */

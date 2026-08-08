@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fs from 'fs';
-import { putstr, flush } from './tty/output';
+import { putstr } from './tty/output';
 import path from 'path';
 
 import { isWindows } from './tty/platform';

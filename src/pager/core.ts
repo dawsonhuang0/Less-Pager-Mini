@@ -1252,7 +1252,18 @@ function keyHandlerKeys(data: Buffer): void {
     text = filterPaste(text);
   }
 
-  for (const sequence of splitKeys(text)) handleKey(sequence);
+  // one write per COMMAND, which is og's granularity: cmd_exec flushes
+  // before each command runs (command.c:128), so a burst of forty keys
+  // reaches the terminal as forty paints and scrolls smoothly. Holding
+  // the whole chunk back instead would be one jump at the end — the
+  // buffer is there to stop a single command arriving in fragments,
+  // not to merge commands together.
+  for (const sequence of splitKeys(text)) {
+    handleKey(sequence);
+    flush();
+
+    if (session.exited) break;
+  }
 
   // keys the interrupt poll queued during a blocking search run
   // now, like og's command loop draining the ungot queue — except
