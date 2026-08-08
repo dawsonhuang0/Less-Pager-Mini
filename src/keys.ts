@@ -57,25 +57,66 @@ export const kentSequence = (): string =>
 export function getAction(key: string): Actions | undefined {
   if (key.startsWith('\x1b[<64;')) return 'LINE_BACKWARD';
   if (key.startsWith('\x1b[<65;')) return 'LINE_FORWARD';
-  if (keys[key]) return keys[key];
 
-  const terminalKeys: Array<[string, string, string, Actions]> = [
-    ['kcuf1', 'kr', '\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
-    ['kcub1', 'kl', '\x1b[D', 'SET_HALF_SCREEN_LEFT'],
-    ['kcuu1', 'ku', '\x1b[A', 'LINE_BACKWARD'],
-    ['kcud1', 'kd', '\x1b[B', 'LINE_FORWARD'],
-    ['kpp', 'kP', '\x1b[5~', 'WINDOW_BACKWARD'],
-    ['knp', 'kN', '\x1b[6~', 'WINDOW_FORWARD'],
-    ['khome', 'kh', '\x1b[H', 'FIRST_LINE'],
-    ['kend', '@7', '\x1b[F', 'LAST_LINE'],
-    ['kf1', 'k1', '\x1bOP', 'HELP'],
-  ];
+  return boundKeys()[key];
+}
 
-  for (const [ti, tc, fallback, action] of terminalKeys) {
-    if (key === (terminalCapability(ti, tc) ?? fallback)) return action;
+/**
+ * The special keys, each named by the capability og reads for it
+ * (special_key_str, screen.c:1218).
+ *
+ * A special key is EXACTLY what this terminal says it is and nothing
+ * else. og reserves a slot per key in its command table and fills it
+ * from terminfo; when the capability is missing it writes "\377"
+ * instead (decode.c:390) — a byte no key produces, so the key is
+ * simply unbound. There is no hardcoded arrow anywhere in og, and a
+ * second spelling of one is an ordinary unknown sequence: echoed to
+ * the prompt and belled.
+ *
+ * So DON'T add "\x1b[B" as a fallback. Every common TERM (xterm,
+ * screen, tmux, vt100) reports kcud1=\EOB, because og sends smkx/ESC=
+ * and the keypad answers in application mode; a terminal with no
+ * kcud1 at all — TERM=dumb — is meant to have no arrow keys.
+ */
+const SPECIAL_KEYS: Array<[string, string, Actions]> = [
+  ['kcuf1', 'kr', 'SET_HALF_SCREEN_RIGHT'],
+  ['kcub1', 'kl', 'SET_HALF_SCREEN_LEFT'],
+  ['kcuu1', 'ku', 'LINE_BACKWARD'],
+  ['kcud1', 'kd', 'LINE_FORWARD'],
+  ['kpp', 'kP', 'WINDOW_BACKWARD'],
+  ['knp', 'kN', 'WINDOW_FORWARD'],
+  ['khome', 'kh', 'FIRST_LINE'],
+  ['kend', '@7', 'LAST_LINE'],
+  ['kf1', 'k1', 'HELP'],
+];
+
+let bound: Record<string, Actions> | null = null;
+
+/**
+ * The one command table, terminfo strings included.
+ *
+ * og has a single cmdtable that already HOLDS each special key's real
+ * bytes, so the same table answers both a direct lookup and
+ * cmd_match's tail scan. Keeping the terminfo keys in a list beside
+ * the table would hide them from [[tailDecode]], and an arrow would
+ * stop resolving the moment it arrived behind a stray ESC.
+ */
+function boundKeys(): Record<string, Actions> {
+  if (bound) return bound;
+
+  bound = { ...keys };
+
+  for (const [ti, tc, action] of SPECIAL_KEYS) {
+    const seq = terminalCapability(ti, tc);
+    if (seq) bound[seq] = action;
   }
 
-  return undefined;
+  return bound;
+}
+
+/** Drops the cached table, for a TERM change between sessions. */
+export function resetBoundKeys(): void {
+  bound = null;
 }
 
 /**
@@ -102,7 +143,7 @@ function tailDecode(buf: string): string | 'prefix' | 'invalid' {
   let matchLen = 0;
   let result: string | 'prefix' | 'invalid' = 'invalid';
 
-  for (const entry of Object.keys(keys)) {
+  for (const entry of Object.keys(boundKeys())) {
     const t = tailMatch(buf, entry);
     if (t === 0 || t < matchLen) continue;
 
@@ -250,8 +291,6 @@ const keys: Record<string, Actions> = {
   '\x0E': 'LINE_FORWARD', // ^N
   '\x0D': 'LINE_FORWARD', // CR
   '\x0A': 'LINE_FORWARD', // LF
-  '\x1B[B': 'LINE_FORWARD', // ARROW DOWN
-  '\x1BOB': 'LINE_FORWARD', // ARROW DOWN (SS3 / application mode)
 
   // (*) backward one line (or (N) lines)
   '\x79': 'LINE_BACKWARD', // y
@@ -259,8 +298,6 @@ const keys: Record<string, Actions> = {
   '\x6B': 'LINE_BACKWARD', // k
   '\x0B': 'LINE_BACKWARD', // ^K
   '\x10': 'LINE_BACKWARD', // ^P
-  '\x1B[A': 'LINE_BACKWARD', // ARROW UP
-  '\x1BOA': 'LINE_BACKWARD', // ARROW UP (SS3 / application mode)
 
   // (*) forward one window (or (N) lines)
   '\x66': 'WINDOW_FORWARD', // f
@@ -313,13 +350,9 @@ const keys: Record<string, Actions> = {
 
   // (*) right one half screen width (or (N) positions)
   '\x1B)': 'SET_HALF_SCREEN_RIGHT', // ESC-)
-  '\x1B[C': 'SET_HALF_SCREEN_RIGHT', // RIGHT ARROW
-  '\x1BOC': 'SET_HALF_SCREEN_RIGHT', // RIGHT ARROW (SS3 / application mode)
 
   // (*) left one half screen width (or (N) positions)
   '\x1B(': 'SET_HALF_SCREEN_LEFT', // ESC-(
-  '\x1B[D': 'SET_HALF_SCREEN_LEFT', // LEFT ARROW
-  '\x1BOD': 'SET_HALF_SCREEN_LEFT', // LEFT ARROW (SS3 / application mode)
 
   // right to last column displayed
   '\x1B}': 'LAST_COL', // ESC-}

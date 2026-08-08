@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 
 import { getAction, splitKeys, tailCascade } from '../src/keys';
+import { terminalCapability } from '../src/tty/terminal';
+import type { Actions } from '../src/state/types';
 
 it('valid keys should have their corresponding event as result', () => {
   // ':' alone is a command prefix, not a key: its combos map instead
@@ -39,11 +41,31 @@ it('maps SGR mouse scroll sequences to line movement', () => {
   expect(getAction('\x1b[<65;10;20M')).toBe('LINE_FORWARD');
 });
 
-it('maps arrow keys to movement actions', () => {
-  expect(getAction('\x1B[A')).toBe('LINE_BACKWARD');
-  expect(getAction('\x1B[B')).toBe('LINE_FORWARD');
-  expect(getAction('\x1B[C')).toBe('SET_HALF_SCREEN_RIGHT');
-  expect(getAction('\x1B[D')).toBe('SET_HALF_SCREEN_LEFT');
+it('binds arrow keys to what terminfo says, like og', () => {
+  // og fills each special key's slot from terminfo (special_key_str,
+  // screen.c:1218) and writes "\377" when the capability is missing
+  // (decode.c:390), so a SECOND spelling of an arrow is an ordinary
+  // unknown key: echoed to the prompt and belled. Measured against
+  // less/less on a pty: ESC O B scrolls, ESC [ B rings the bell.
+  const arrows: Array<[string, string, Actions]> = [
+    ['kcud1', 'kd', 'LINE_FORWARD'],
+    ['kcuu1', 'ku', 'LINE_BACKWARD'],
+    ['kcuf1', 'kr', 'SET_HALF_SCREEN_RIGHT'],
+    ['kcub1', 'kl', 'SET_HALF_SCREEN_LEFT'],
+  ];
+
+  for (const [ti, tc, action] of arrows) {
+    const seq = terminalCapability(ti, tc);
+
+    // whatever this terminal reports is the binding...
+    if (seq) expect(getAction(seq)).toBe(action);
+
+    // ...and the CSI spelling is bound only if terminfo named it,
+    // which no common TERM does — they all report the SS3 form
+    const csi = '\x1B[' + { kcud1: 'B', kcuu1: 'A', kcuf1: 'C', kcub1: 'D' }[ti];
+    if (seq !== csi) expect(getAction(csi)).toBeUndefined();
+  }
+
   expect(getAction('\x1B[1;5C')).toBe('LAST_COL');
   expect(getAction('\x1B[1;5D')).toBe('FIRST_COL');
 });
