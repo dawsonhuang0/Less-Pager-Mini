@@ -584,10 +584,17 @@ let prevRows: string[] | null = null;
 /**
  * Forgets the previously rendered frame, forcing the next render to redraw
  * the whole screen. Call when entering a fresh screen (session start).
+ *
+ * @param keepPainted - keep the "something has been drawn" flag, og's
+ *   !first_time. og clears the position table on every content swap
+ *   (pos_clear) but sets first_time only at STARTUP and for
+ *   redraw_on_quit (main.c:592) — swapping in the help file is an
+ *   ordinary edit(), so the "...skipping..." marker still prints
+ *   (forwback.c:272). Clearing it here suppressed that marker.
  */
-export function resetRender(): void {
+export function resetRender(keepPainted = false): void {
   prevRows = null;
-  contentPainted = false;
+  if (!keepPainted) contentPainted = false;
   prevCursorCol = -1;
   prevTopRow = -1;
   prevTopKnown = false;

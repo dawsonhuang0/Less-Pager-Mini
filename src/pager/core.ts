@@ -2510,7 +2510,10 @@ function exitHelp(): boolean {
   // repaint prints bare — the q never reaches the file's screen as
   // a clear_bot
   mode.INIT = false;
-  resetRender();
+  // quitting help is another edit(), not a new session: og's
+  // first_time stays false, so the file's screen comes back with
+  // "...skipping..." (forwback.c:272)
+  resetRender(true);
   markBareRepaint();
 
   return true;
@@ -2630,7 +2633,10 @@ function prepareHelp(): void {
     helpGateUngot = false;
     freezeFrame();
   } else {
-    resetRender();
+    // the swap is a fresh screen, but NOT a fresh session: og's
+    // first_time stays false through edit(), so the incoming screen
+    // still prints "...skipping..."
+    resetRender(true);
   }
 }
 
