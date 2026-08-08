@@ -193,6 +193,47 @@ function streamingWait(owed: number, moved: boolean): boolean {
  * @param offset - Number of lines/subrows to move forward.
  * @param ignoreEOF - If true, ignores EOF clamp (optional).
  */
+/**
+ * Display rows between the top and the EOF anchor, 0 once it is
+ * reached — the count og's forward() would have let forw() draw.
+ *
+ * Walks with the same two primitives as the clamped loop below
+ * (nextRowOffset within a line, row++ between them) rather than
+ * counting whole-line rows, because a top part-way into a row makes
+ * its line paint fewer rows than its boundary grid holds.
+ */
+function rowsToAnchor(content: string[]): number {
+  const capRow = config.endRow;
+  const capAt = rowOffsetOf(content[capRow] ?? '', config.endSubRow);
+
+  let row = config.row;
+  let at = topOffsetOf(content);
+  let rows = 0;
+
+  // -1 for a top already PAST the anchor, which is not the same as 0
+  // ("standing on it"). Conflating them is what let the wheel walk
+  // off the end: 0 has to clamp hard, while past-the-anchor means the
+  // anchor tells us nothing — it is stale, or was never computed —
+  // and clamping to it would freeze the move instead.
+  if (row > capRow || (row === capRow && at > capAt)) return -1;
+
+  while (row < content.length &&
+         (row < capRow || (row === capRow && at < capAt))) {
+    const next = nextRowOffset(content[row] ?? '', at);
+
+    if (next !== null) {
+      at = next;
+    } else {
+      row++;
+      at = 0;
+    }
+
+    rows++;
+  }
+
+  return rows;
+}
+
 export function lineForward(
   content: string[],
   offset: number,
@@ -299,9 +340,33 @@ export function lineForward(
 
   // forw walks the entries a backward move prepended before the grid
   // below resumes: add_forw_pos drops table[0] each row (position.c)
-  offset -= screenForward(content, offset);
+  //
+  // add_forw_pos is dumb in og too — it records a row that forw()
+  // already DECIDED to draw, and forward() bells at EOF before forw()
+  // ever runs (forwback.c:481). So the anchor is the caller's job:
+  // screenForward walks until the CONTENT runs out, which slides the
+  // top to the last line and reveals tildes. It only bites after a
+  // backward move, since that is what leaves a table for it to
+  // consume and what clears mode.EOF's early return above.
+  //
+  // The cap is exact, zero included. Letting a zero distance mean "no
+  // cap" was the whole bug in another dress: a wheel sends ONE row
+  // per press, screenForward consumed it, and `offset <= 0` returned
+  // below before the clamp ran or mode.EOF was set — so every further
+  // press walked one more row past the anchor.
+  const toAnchor = ignoreEOF ? -1 : rowsToAnchor(content);
+
+  offset -= screenForward(content,
+    toAnchor < 0 ? offset : Math.min(offset, toAnchor));
   if (offset <= 0) {
     if (mode.INIT) mode.INIT = false;
+
+    // the table walk can land exactly ON the anchor, and og's
+    // eof_displayed answers from the position table the moment the
+    // last line is on screen — without this the next press finds
+    // mode.EOF still false and steps past it
+    if (!ignoreEOF && rowsToAnchor(content) === 0) mode.EOF = true;
+
     return;
   }
 
