@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { putstr, flush } from '../tty/output';
 import { Readable } from 'stream';
 
 import { lgetenv, screenFillGrace } from '../startup/environment';
@@ -196,14 +197,18 @@ async function filePagerBody(
 
     if (!lines && binaryConfirm.request) {
       binaryConfirm.request = false;
-      process.stdout.write(
+      putstr(
         `"${files.list[i].path}" may be a binary file.  See it anyway? `
       );
+
+      // the question must be on screen before we block on the answer,
+      // like og flushing at every prompt that calls getcc
+      flush();
 
       const answer = await warnReturn();
       keyboard().setRawMode(false);
       keyboard().pause();
-      process.stdout.write('\n');
+      putstr('\n');
 
       if (answer === 'y' || answer === 'Y') {
         files.list[i].everOpened = true;
@@ -256,14 +261,14 @@ async function blockFirstFile(
   const n = head.length;
 
   if (!opt.forceOpen && keyboard().isTTY && binFile(head)) {
-    process.stdout.write(
+    putstr(
       `"${entry.path}" may be a binary file.  See it anyway? `
     );
 
     const answer = await warnReturn();
     keyboard().setRawMode(false);
     keyboard().pause();
-    process.stdout.write('\n');
+    putstr('\n');
 
     if (answer !== 'y' && answer !== 'Y') {
       bf.close();

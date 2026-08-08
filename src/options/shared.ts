@@ -1,5 +1,6 @@
 
 import { opt } from './state';
+import { putstr, flush } from '../tty/output';
 
 import { config, mode } from "../state/config";
 
@@ -640,7 +641,7 @@ export function applyMouse(): void {
   if (!want && !mouseApplied) return;
 
   mouseApplied = want;
-  process.stdout.write(want
+  putstr(want
     ? MOUSE_SGR_ON + MOUSE_ON
     : MOUSE_OFF + MOUSE_SGR_OFF);
 }
@@ -662,7 +663,7 @@ export function applyBracketedPaste(): void {
   if (!want && !pasteApplied) return;
 
   pasteApplied = want;
-  process.stdout.write(
+  putstr(
     want ? BRACKETED_PASTE_ON : BRACKETED_PASTE_OFF
   );
 }

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { putstr, flush } from '../tty/output';
 import path from 'path';
 
 import { secureAllow } from "./secure";
@@ -643,7 +644,7 @@ export function versionMessage(): void {
  * INIT printing and quitting before the pager starts.
  */
 export function printVersion(): void {
-  process.stdout.write(versionString() + '\n');
+  putstr(versionString() + '\n');
 }
 
 function versionString(): string {

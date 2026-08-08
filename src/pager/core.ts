@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { putstr, flush } from '../tty/output';
 
 import { isWindows } from '../tty/platform';
 
@@ -501,7 +502,7 @@ export async function contentPager(
       wrapLongLines(session.content, rows);
     }
 
-    process.stdout.write(rows.join('\n') + '\n');
+    putstr(rows.join('\n') + '\n');
     return;
   }
 
@@ -512,9 +513,9 @@ export async function contentPager(
 
   // messages set after the scan (a forced open's read error) still
   async function logQuery(prompt: string): Promise<string> {
-    process.stdout.write(prompt);
+    putstr(prompt);
     const answer = await warnReturn();
-    process.stdout.write('\n');
+    putstr('\n');
 
     // og's query() quits on a capital Q only (output.c:808)
     if (answer === 'Q') {
@@ -580,9 +581,9 @@ export async function contentPager(
   // key other than RETURN or space to become the first command
   if (startupErrors.count > 0) {
     startupErrors.count = 0;
-    process.stdout.write('Press RETURN to continue ');
+    putstr('Press RETURN to continue ');
     const answer = await warnReturn();
-    process.stdout.write('\n');
+    putstr('\n');
 
     // ^C is og's READ_INTR at get_return: swallowed, not ungot
     if (answer && answer !== '\x0D' && answer !== '\x0A' &&
@@ -687,6 +688,7 @@ export async function contentPager(
 
   // a half-read escape sequence never outlives its session
   heldKeyBytes = '';
+
   keyboard().on('data', keyHandler);
 
   // og's getchr on an exhausted keyboard: "EOF on the tty means there
@@ -743,6 +745,12 @@ export async function contentPager(
       if (session.exited) break;
       handleKey(sequence);
     }
+
+    // the startup paint is the one screen no keypress produced, so
+    // the command loop's flush never covers it: without this the
+    // pager sits on a blank terminal, prompt and all, until the
+    // first key arrives and pushes the buffer out
+    flush();
   });
   cleanUp();
 }
@@ -1118,7 +1126,28 @@ const PARTIAL_SEQUENCE = /\x1b(?:\[[\x20-\x3f]*|O)?$/;
 
 let heldKeyBytes = '';
 
+/**
+ * og's flush point, and the only one the command loop needs.
+ *
+ * og buffers everything a command emits and flushes when it is about
+ * to make the user wait (cmd_exec, command.c:128). Returning from
+ * here IS that moment: the chunk is fully processed and we go back to
+ * waiting on the tty. One write per input chunk, so a key that echoes
+ * five fragments draws once instead of five times.
+ *
+ * The finally matters more than the call: keyHandlerKeys returns
+ * early in a dozen places, and a path that skipped the flush would
+ * leave the screen stale until the next keypress.
+ */
 function keyHandler(data: Buffer): void {
+  try {
+    keyHandlerKeys(data);
+  } finally {
+    flush();
+  }
+}
+
+function keyHandlerKeys(data: Buffer): void {
   let text = heldKeyBytes + data.toString();
   heldKeyBytes = '';
 
@@ -1151,6 +1180,7 @@ function keyHandler(data: Buffer): void {
       return;
     }
   }
+
 
   // og's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
   // foreground group, killing a pipe's writer along the way — the
@@ -1454,7 +1484,7 @@ function dispatchKey(sequence: string): void {
   // become the next command (get_return)
   if (session.shellPause) {
     if (session.shellPause === 'shell') {
-      process.stdout.write('\n');
+      putstr('\n');
       enterScreen();
     } else {
       resetRender();
@@ -1605,7 +1635,7 @@ function dispatchKey(sequence: string): void {
   // cleared the moment the key arrives, before whatever the key then
   // does repaints. We left it to the repaint alone.
   if (hadMessage && !search.message && !mode.DUMB) {
-    process.stdout.write(CURSOR_TO(config.window, 1) + CLEAR_LINE);
+    putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE);
     dirtyBottomRow();
 
     // get_return RETURNS into the rest of the command that errored -
@@ -2057,7 +2087,7 @@ function dispatchKey(sequence: string): void {
     // as caret notation before the sequence resolves; without clear
     // caps the echo stays behind as leftovers, like og
     if (mode.DUMB && session.escCount && session.key.length === 1) {
-      process.stdout.write(session.key < ' ' || session.key === '\x7F'
+      putstr(session.key < ' ' || session.key === '\x7F'
         ? '^' + String.fromCharCode((session.key.charCodeAt(0) + 0x40) & 0x7F)
         : session.key);
     }
@@ -2238,11 +2268,11 @@ function init() {
     // og sets a console title only on WIN32, through SetConsoleTitleW
     // and to the FILE's name, re-set at every prompt (command.c:967).
     // On unix it sends nothing at all, so neither do we
-    if (isWindows) process.stdout.write(TITLE);
+    if (isWindows) putstr(TITLE);
 
     // -X leaves the init/deinit strings unsent, like less
     if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_CONSOLE_ON);
+      putstr(ALTERNATE_CONSOLE_ON);
 
       // og's term_init lower_lefts after switching to the alternate
       // screen (screen.c:2061), which is what makes a short first
@@ -2250,11 +2280,11 @@ function init() {
       // top. It guards on both "ti" and "te" existing, the same
       // condition ON_ALTERNATE_SCREEN carries
       if (ON_ALTERNATE_SCREEN) {
-        process.stdout.write(CURSOR_TO(config.window, 1));
+        putstr(CURSOR_TO(config.window, 1));
       }
     }
 
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
+    if (!optNoKeypad()) putstr(KEYPAD_ON);
   }
 
   // mouse tracking and bracketed paste enable with the screen,
@@ -2620,7 +2650,7 @@ function cleanUp(): void {
 
   // og's putchr fires --end-prompt on the first output after the
   // prompt: the quit's clear_bot is that output (output.c:496)
-  process.stdout.write(eprPrefix());
+  putstr(eprPrefix());
 
   // og's quit() clear_bots the prompt line before deinit whenever the
   // session is interactive - `if (interactive()) clear_bot()`
@@ -2629,7 +2659,7 @@ function cleanUp(): void {
   // about to vanish anyway, but og's bytes carry it either way and a
   // capture sees it: the ":" prompt survived into the restored screen.
   // A dumb terminal has no clear_eol and gets the bare CR below
-  if (!mode.DUMB) process.stdout.write(clearBot());
+  if (!mode.DUMB) putstr(clearBot());
 
   // mouse, paste, keypad and the alternate screen, in og's order --
   // the same sequences suspendTerminal sends, and shared with it so
@@ -2637,11 +2667,11 @@ function cleanUp(): void {
   leaveScreenCodes();
 
   if (!mode.DUMB) {
-    if (isWindows) process.stdout.write(CONSOLE_TITLE_RESET);
+    if (isWindows) putstr(CONSOLE_TITLE_RESET);
   } else {
     // og-dumb quits with just lower_left (a bare CR) and no newline,
     // so the shell prompt overwrites the last prompt line
-    process.stdout.write('\r');
+    putstr('\r');
   }
 
   // --redraw-on-quit leaves the last screen on the main display,
@@ -2652,7 +2682,11 @@ function cleanUp(): void {
   // never sets (the last screen already sits on the main display)
   const screen =
     optRedrawOnQuit() && !mode.DUMB && !optNoInit() ? lastScreen() : null;
-  if (screen) process.stdout.write(screen.slice(0, -1).join('\n') + '\n');
+  if (screen) putstr(screen.slice(0, -1).join('\n') + '\n');
+
+  // og's term_deinit is the last flush of the session: nothing may
+  // still be sitting in the buffer once the terminal is restored
+  flush();
 
   process.title = session.processTitle;
   hook.screenActive = false;

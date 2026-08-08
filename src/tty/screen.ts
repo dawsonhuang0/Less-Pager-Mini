@@ -1,4 +1,5 @@
 import { keyboard } from './keyboard';
+import { putstr, flush } from './output';
 
 import { config, mode, setFullScreen } from '../state/config';
 
@@ -82,16 +83,16 @@ export function leaveScreenCodes(): void {
   // og's mouse and paste strings are hardcoded, not termcap: even
   // a dumb terminal receives them when the options are on
   if (optMouse() || opt.emouse) {
-    process.stdout.write(MOUSE_OFF + MOUSE_SGR_OFF);
+    putstr(MOUSE_OFF + MOUSE_SGR_OFF);
   }
 
-  if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_OFF);
+  if (optNoPaste()) putstr(BRACKETED_PASTE_OFF);
 
   if (!mode.DUMB) {
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_OFF);
+    if (!optNoKeypad()) putstr(KEYPAD_OFF);
 
     if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_CONSOLE_OFF);
+      putstr(ALTERNATE_CONSOLE_OFF);
     }
   }
 }
@@ -111,17 +112,17 @@ export function suspendTerminal(): void {
 export function enterScreen(): void {
   if (!mode.DUMB) {
     if (!optNoInit()) {
-      process.stdout.write(ALTERNATE_CONSOLE_ON);
+      putstr(ALTERNATE_CONSOLE_ON);
     }
 
-    if (!optNoKeypad()) process.stdout.write(KEYPAD_ON);
+    if (!optNoKeypad()) putstr(KEYPAD_ON);
   }
 
   if (optMouse() || opt.emouse) {
-    process.stdout.write(MOUSE_SGR_ON + MOUSE_ON);
+    putstr(MOUSE_SGR_ON + MOUSE_ON);
   }
 
-  if (optNoPaste()) process.stdout.write(BRACKETED_PASTE_ON);
+  if (optNoPaste()) putstr(BRACKETED_PASTE_ON);
 
   termInitTail();
 
@@ -145,11 +146,11 @@ export function termInitTail(): void {
   // with -c og instead scrolls a whole screen in, so the first paint
   // has the terminal to itself without losing any scrollback
   if (optClearRepaint()) {
-    process.stdout.write('\n'.repeat(Math.max(config.window - 1, 0)));
+    putstr('\n'.repeat(Math.max(config.window - 1, 0)));
     return;
   }
 
-  process.stdout.write('\r');
+  putstr('\r');
 }
 
 export function calculateDimensions(): void {

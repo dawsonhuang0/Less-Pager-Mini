@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { putstr, flush } from './tty/output';
 
 import { hasUngot } from './tty/keyboard';
 
@@ -364,7 +365,7 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
     (carried ?? (kind === 'eof' ? clearBot() : ''));
 
   if (prefix) {
-    process.stdout.write(prefix);
+    putstr(prefix);
 
     // the clear wiped the prompt row without going through a frame,
     // so the next paint must write it again rather than dedupe it --
@@ -388,7 +389,7 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
     return;
   }
 
-  process.stdout.write('\x07');
+  putstr('\x07');
 }
 
 /**
@@ -402,7 +403,7 @@ function visualBell(): void {
   // cmd_exec's clear_bot precedes the flash too when a marker fires
   const epr = eprPrefix();
   if (VISUAL_BELL !== null) {
-    process.stdout.write((epr ? epr + clearBot() : '') + VISUAL_BELL);
+    putstr((epr ? epr + clearBot() : '') + VISUAL_BELL);
     return;
   }
   // og's flash is the terminfo capability run through tputs, and it
@@ -411,7 +412,7 @@ function visualBell(): void {
   // halves back to back. Deferring the second half by a timer also
   // meant a pager that quit first never sent it, leaving the terminal
   // in reverse video.
-  process.stdout.write((epr ? epr + clearBot() : '') + '\x1B[?5h\x1B[?5l');
+  putstr((epr ? epr + clearBot() : '') + '\x1B[?5h\x1B[?5l');
 }
 
 /**
@@ -832,6 +833,9 @@ export function resetFirstPaint(): void {
 // rather than painting a prompt it is about to erase.
 let bareFrame = false;
 
+
+
+
 /** Paints the content with no prompt row, like og mid-command. */
 export function renderBare(rawContent: string[], buffer: string[]): void {
   bareFrame = true;
@@ -878,7 +882,7 @@ export function renderHiliteRepaint(
   }
 
   out += CURSOR_TO(rows.length, 1);
-  process.stdout.write(out);
+  putstr(out);
 
   // these rows ARE what the screen now shows, so the next paint may
   // diff against them - og's own table is equally unbothered that the
@@ -1074,7 +1078,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     // for real; end_pr_string skips the help file
     if (promptPainted && !mode.HELP && optEndPrompt() !== null) {
       const bot = rows[rows.length - 1];
-      process.stdout.write(eprPrefix() + (scrollMode()
+      putstr(eprPrefix() + (scrollMode()
         ? clearBot() + bot + tailClear(bot) + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE + bot +
           parkCursor(rows)));
@@ -1087,7 +1091,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     // with --old-bot the first reprint after a forw_prompt visibly
     // jumps it from mid-screen to the bottom row, stale copy behind
     if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
-      process.stdout.write(eprPrefix() +
+      putstr(eprPrefix() +
         clearBot() + rows[rows.length - 1] +
           tailClear(rows[rows.length - 1]) + scrollPark(rows)
       );
@@ -1100,7 +1104,7 @@ export function render(rawContent: string[], buffer: string[]): void {
       prevCursorCol = col;
       // -X owns no absolute rows: rewrite the prompt line in place
       // and backspace to the editing position, like og's cmdbuf
-      process.stdout.write(eprPrefix() + (scrollMode()
+      putstr(eprPrefix() + (scrollMode()
         ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), col)));
     }
@@ -1113,7 +1117,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     nulCollapsed = 0;
     const frame = dumbFrame(prevRows, rows, buffer, posClear);
     prevRows = rows;
-    process.stdout.write(eprPrefix() + frame);
+    putstr(eprPrefix() + frame);
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
@@ -1128,7 +1132,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     if (!keepPrevRows) prevRows = rows;
     keepPrevRows = false;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
-    process.stdout.write(eprPrefix() + frame);
+    putstr(eprPrefix() + frame);
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
@@ -1158,7 +1162,7 @@ export function render(rawContent: string[], buffer: string[]): void {
     const opening = forwPrompt ? '' : clearBot();
     forwPrompt = false;
 
-    process.stdout.write(eprPrefix() +
+    putstr(eprPrefix() +
       opening + bot + tailClear(bot) +
       (cmd.active ? parkCursor(rows) : ''));
     prompting = promptPainted;
@@ -1203,7 +1207,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   // terminal that isolates the ?2026 batch would otherwise drop
   // SGR state written just before it
   const epr = eprPrefix();
-  process.stdout.write(epr && frame.startsWith(syncOn())
+  putstr(epr && frame.startsWith(syncOn())
     ? syncOn() + epr + frame.slice(syncOn().length)
     : epr + frame);
   firstPaintDone = true;
@@ -2601,6 +2605,7 @@ function getPrompt(content: string[]): string {
   // only the branches below that paint og's display_prompt re-arm
   // the --end-prompt marker
   promptPainted = false;
+
 
   // during a pipe drain og leaves the command line blank for G and
   // shows ierror's interruptible note for % (jump.c/output.c), and

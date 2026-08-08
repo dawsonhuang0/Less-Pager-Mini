@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'fs';
+import { putstr, flush } from './tty/output';
 import path from 'path';
 
 import { isWindows } from './tty/platform';
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
   if (!stdoutTty) {
     // not a terminal: copy input to output, like og's cat_file loop;
     // --help makes the help file the first input
-    if (wantsHelp) process.stdout.write(help.join('\n') + '\n');
+    if (wantsHelp) putstr(help.join('\n') + '\n');
 
     if (files.length) {
       // og reaches the cat loop through its ordinary startup: the

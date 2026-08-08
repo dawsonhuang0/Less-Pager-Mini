@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { putstr, flush } from './tty/output';
 
 import { shellArgv } from './tty/platform';
 
@@ -454,12 +455,12 @@ export function runShell(
     // lsystem's "-" rule only suppresses the echoed copy. Skipping
     // it left the typed line on screen and the shell's own output
     // landed on the end of it: "!-echo quietquiet".
-    process.stdout.write(endPrompt + clearBot());
+    putstr(endPrompt + clearBot());
   } else {
     // like lsystem's clear_bot + "!cmd" + newline: the expanded
     // command shows on the pager's bottom line, so the shell screen
     // gets only output
-    process.stdout.write(endPrompt + clearBot() + '!' + cmd + '\n');
+    putstr(endPrompt + clearBot() + '!' + cmd + '\n');
   }
 
   suspendTerminal();
@@ -490,9 +491,9 @@ export function runShell(
     // its done message waits at the bottom of a blank pager screen
     if (input !== undefined) {
       enterScreen();
-      process.stdout.write(CONSOLE_CLEAR);
-      process.stdout.write(CURSOR_TO(config.window, 1));
-      process.stdout.write(
+      putstr(CONSOLE_CLEAR);
+      putstr(CURSOR_TO(config.window, 1));
+      putstr(
         INVERSE_ON + doneMsg + '  (press RETURN)' + INVERSE_OFF
       );
       session.shellPause = 'pager';
@@ -501,7 +502,7 @@ export function runShell(
 
     // like lsystem: the done message waits on the shell screen so the
     // command's output stays visible until a keypress
-    process.stdout.write(doneMsg + '  (press RETURN)');
+    putstr(doneMsg + '  (press RETURN)');
     session.shellPause = 'shell';
     return;
   }

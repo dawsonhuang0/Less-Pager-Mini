@@ -6,6 +6,7 @@ import pager from '../../src/index';
 
 import { LtFile } from './ltFile';
 import { LtScreen, Cell } from './ltScreen';
+import { flush } from '../../src/tty/output';
 
 /** One screen mismatch in a replayed session. */
 export interface LtMismatch {
@@ -230,6 +231,12 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   stdin.off = () => process.stdin;
 
   const checkStep = (step: number, key: string): void => {
+    // the pager buffers its output like og's obuf and hands it over
+    // when it is about to wait for a key; this harness drives it
+    // without that wait, so the screen is only current once the
+    // buffer has been emptied into the emulator
+    flush();
+
     result.screens.push(screen.cells.map(rowText));
 
     const expected = step < 0 ? lt.firstScreen : lt.steps[step].screen;
