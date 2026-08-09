@@ -267,6 +267,66 @@ export function openStyleAt(line: string, index: number): string {
   return out;
 }
 
+// One line's display text, remembered.
+//
+// og transforms a line's bytes ONCE, as forw_line pappends them into
+// linebuf, and never goes back to them. The stream engine has to ask
+// the same question repeatedly instead - how long is this line, where
+// does the row at this offset end, which sub-row is this - and each
+// answer went back through the whole transform. Walking a screen of
+// rows inside ONE 64K line therefore scanned those 64K about twenty
+// times over, for every keypress; on a file of very long lines a
+// trackpad flick left the pager unresponsive for minutes.
+let shownCache = new Map<string, string>();
+let shownSig = '';
+const SHOWN_CACHE_LIMIT = 4096;
+
+/** What the transform depends on, so a changed option drops the memo. */
+function displaySignature(): string {
+  const sel = osc8SelectedAt;
+
+  return [
+    optCtldisp(), optProcBackspace(), optBsMode(), optProcReturn(),
+    optProcTab(), nextTabStop(0), nextTabStop(1),
+    sel ? `${sel.row}:${sel.start}` : '-',
+    ansiEndChars(), ansiMidChars(), ansiOscChars(),
+  ].join('|');
+}
+
+/**
+ * The display text of a single line, the transform memoized.
+ *
+ * transformContent still runs unmemoized over a screen's worth of
+ * lines: it is called once per frame there, and the -s squeeze it
+ * applies depends on the lines around each one, which a per-line memo
+ * cannot see.
+ */
+export function displayLine(raw: string): string {
+  const sig = displaySignature();
+
+  if (sig !== shownSig) {
+    shownCache = new Map();
+    shownSig = sig;
+  }
+
+  const hit = shownCache.get(raw);
+
+  if (hit !== undefined) {
+    // the source map has its own limit and may have been dropped
+    // since; the record of where a display line came from has to
+    // outlive this memo, or a search would hilite the wrong columns
+    if (hit !== raw) sourceLines.set(hit, raw);
+    return hit;
+  }
+
+  const shown = transformContent([raw])[0] ?? '';
+
+  if (shownCache.size >= SHOWN_CACHE_LIMIT) shownCache.clear();
+  shownCache.set(raw, shown);
+
+  return shown;
+}
+
 export function transformContent(lines: string[]): string[] {
   charCache = new Map();
 

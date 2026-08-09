@@ -5,7 +5,7 @@ import { forwLine, backLine, lastLineStart } from './fileLines';
 import { config } from '../state/config';
 import { chopLine } from '../options';
 
-import { transformContent } from '../lines/helpers';
+import { displayLine } from '../lines/helpers';
 
 import { getLayout, rowEndFrom, LineLayout } from '../lines/lineLayout';
 
@@ -36,7 +36,7 @@ export interface ViewTop {
 
 /** A line's display text: the normal content transform per line. */
 export function displayText(raw: string): string {
-  return transformContent([raw])[0] ?? '';
+  return displayLine(raw);
 }
 
 export class BigView {

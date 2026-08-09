@@ -32,12 +32,59 @@ interface BackLine {
   start: number;
 }
 
+// og builds a line's linebuf ONCE, reading its bytes through
+// ch_forw_get's buffered blocks, and every row of that line is then
+// drawn out of the buffer it already holds. Ours rebuilds the decoded
+// string from scratch on each call, and a screen walk asks for the
+// same line once per display row it covers - twenty-odd times inside
+// one long line, per keypress, each time decoding and allocating
+// another 64K copy. Remembering the last few lines makes the repeats
+// free, and hands back the same string OBJECT, so the transform and
+// layout memos keyed on it hit instead of re-hashing 64K.
+const lineMemo = new WeakMap<BlockFile, {
+  size: number,
+  squeeze: boolean,
+  lines: Map<number, ForwLine>,
+}>();
+
+const LINE_MEMO_LIMIT = 64;
+
 /**
  * Reads the line starting at `pos`, like forw_line.
+ *
+ * The result is shared with the other callers reading the same
+ * position, so it must be treated as read-only.
  */
 export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   if (pos >= bf.size) return null;
 
+  const squeeze = optSqueeze();
+  let memo = lineMemo.get(bf);
+
+  // a growing file (a spool, an -F follow) can turn what was the last
+  // line into the start of a longer one, and -s changes which lines
+  // fold together, so neither can be answered from the old memo
+  if (!memo || memo.size !== bf.size || memo.squeeze !== squeeze) {
+    memo = { size: bf.size, squeeze, lines: new Map() };
+    lineMemo.set(bf, memo);
+  }
+
+  const hit = memo.lines.get(pos);
+  if (hit) return hit;
+
+  const line = readForwLine(bf, pos, squeeze);
+
+  if (memo.lines.size >= LINE_MEMO_LIMIT) memo.lines.clear();
+  memo.lines.set(pos, line);
+
+  return line;
+}
+
+function readForwLine(
+  bf: BlockFile,
+  pos: number,
+  squeeze: boolean
+): ForwLine {
   const nl = bf.findNewline(pos, MAX_LINE);
 
   if (nl < 0) {
@@ -57,7 +104,7 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   // og's forw_line under -s: a blank line skips down to the last
   // contiguous blank and pretends to be it (input.c:325), so the
   // run displays as this one line
-  if (optSqueeze() && nl === pos) {
+  if (squeeze && nl === pos) {
     while (next < bf.size && isNl(bf.readRange(next, 1)[0])) next++;
   }
 
