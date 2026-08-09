@@ -846,7 +846,7 @@ export class FileInput implements PagerInput {
     const m = regex.exec(plain);
     if (!m) return null;
 
-    const end = m.index + m[0].length;
+    const end = m.end;
     const sheight = config.window - jumpSindex();
 
     if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
@@ -2624,7 +2624,31 @@ export class FileInput implements PagerInput {
    * are retained at the front so the shared overlay renderer can continue
    * to paint them after a distant seek.
    */
+  /**
+   * og's delayed_msg (linenum.c:229) applied to the work a scroll
+   * does: nothing for LONGTIME, then the loop names itself with
+   * ierror's suffix (output.c:767).
+   *
+   * og leaves the command line BLANK while a command runs - cmd_exec
+   * clear_bots before the walk (command.c:267) and prompt() writes
+   * ":" only when it returns - so a long scroll shows an empty bottom
+   * line and no sign of life. This fills that gap; it is not og's,
+   * but the clock and the wording are.
+   */
+  private noteLongWork(started: number): void {
+    if (this.workNoted || Date.now() - started < 2000) return;
+
+    this.workNoted = true;
+    fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+      'Searching... (interrupt to abort)' + INVERSE_OFF);
+    search.bottomClobbered = true;
+  }
+
+  private workNoted = false;
+
   private sync(): void {
+    const syncStarted = Date.now();
+    this.workNoted = false;
     const header = optHeader();
     const raw: string[] = [];
     const positions: number[] = [];
@@ -2753,8 +2777,12 @@ export class FileInput implements PagerInput {
         : null);
     }
 
+    this.noteLongWork(syncStarted);
+
     session.fullContent = raw;
     session.content = deriveContent();
+
+    this.noteLongWork(syncStarted);
 
     // transformContent may squeeze blank header rows; measure the same
     // prefix rather than assuming raw and display indexes are identical.
