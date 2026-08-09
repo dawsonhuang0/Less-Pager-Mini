@@ -821,7 +821,19 @@ export function squishCheck(): void {
   if (!mode.INIT || optOldBot()) return;
 
   mode.INIT = false;
-  render(session.content, session.buffer);
+
+  // og's squish_check IS repaint() and nothing else (forwback.c:121),
+  // and repaint -> jump_loc -> forw paints ROWS: it writes no prompt,
+  // because prompt() runs at the top of the command loop and error()
+  // is about to clear_bot and put its message on that line anyway
+  // (output.c:719-722). Painting our prompt row here put an "(END)"
+  // on the wire that og never sends.
+  //
+  // It brings no clear_bot of its own either: cmd_exec already sent
+  // one for the command that got here, and error() sends the next.
+  scrollPrefix = '';
+
+  renderBare(session.content, session.buffer);
 }
 
 // og's `first_time` (forwback.c): TRUE until the first forw() has
