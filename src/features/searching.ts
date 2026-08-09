@@ -111,6 +111,9 @@ interface SearchState {
   history: string[];
   /** Transient status message shown at the prompt. */
   message: string;
+  /** execSearch already wrote og's cmd_exec clear_bot for this
+   *  command, so the next frame opens with nothing. */
+  cmdExecOpened: boolean;
   /** Follow-up messages shown as each one is dismissed, like less's
    *  consecutive blocking error() calls. */
   messageQueue: string[];
@@ -128,6 +131,7 @@ export const search: SearchState = {
   history: [],
   message: '',
   messageQueue: [],
+  cmdExecOpened: false,
 };
 
 /**
@@ -531,6 +535,11 @@ export function execSearch(
   fs.writeSync(1, (optNoInit() && !mode.DUMB
     ? '\r'
     : `\x1b[${config.window};1H`) + CLEAR_LINE);
+
+  // that WAS the frame's opening (og's cmd_exec clear_bot before a
+  // possibly long walk, command.c:267), so the message frame that may
+  // follow must not write another one
+  search.cmdExecOpened = true;
 
   const input = search.input;
   if (!input) return;

@@ -856,6 +856,7 @@ export function resetFirstPaint(): void {
 // A caller that has to paint before that walk asks for the bare frame
 // rather than painting a prompt it is about to erase.
 let bareFrame = false;
+let cmdExecOpened = false;
 
 /** og's LBUFSIZE (ch.c:39): the size of one block it reads. */
 const LBUFSIZE = 8192;
@@ -1065,6 +1066,14 @@ export function render(rawContent: string[], buffer: string[]): void {
   // og reached this paint but not prompt(): the read it needed polled
   // the tty, found a key and ungot it, so prompt() returned early
   const promptHeld = !filling && crossesUnreadBlock();
+
+  // a command that already wrote og's cmd_exec clear_bot itself
+  // (execSearch, ahead of a walk that may be long) has supplied this
+  // frame's opening; error() then adds its own and the pair matches
+  // og. Consumed HERE, not inside scrollFrame: the early returns
+  // there would strand it and suppress a later frame's opening.
+  cmdExecOpened = search.cmdExecOpened;
+  search.cmdExecOpened = false;
 
   let rows = screenRows(rawContent, buffer, filling);
 
@@ -1951,7 +1960,9 @@ function scrollFrame(
   // sends nothing at all
   const prefix = scrollPrefix;
   scrollPrefix = null;
-  const opening = (): string => prefix ?? clearBot();
+
+  const opening = (): string =>
+    prefix ?? (cmdExecOpened ? '' : clearBot());
 
   // A bare frame carries no prompt row, so its LAST row is content:
   // it ends with a newline like the others, and the shapes below
