@@ -846,7 +846,7 @@ export class FileInput implements PagerInput {
     const m = regex.exec(plain);
     if (!m) return null;
 
-    const end = m.index + m[0].length;
+    const end = m.end;
     const sheight = config.window - jumpSindex();
 
     if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
@@ -2373,8 +2373,23 @@ export class FileInput implements PagerInput {
     state: { remaining: number }
   ): number | null | 'stop' {
     let pos = start;
+    const started = Date.now();
+    let noted = false;
 
     while (pos < stop && pos < this.bf.size) {
+      // og's delayed_msg shape (linenum.c:229): say nothing for the
+      // first LONGTIME seconds, then name the loop with ierror's
+      // suffix. og does this for line numbers and file length but not
+      // for a search - search.c has no message at all, so a long walk
+      // over a big file sits silent. This is the same clock the line
+      // scan above already uses.
+      if (!noted && Date.now() - started >= 2000) {
+        noted = true;
+        fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+          'Searching... (interrupt to abort)' + INVERSE_OFF);
+        search.bottomClobbered = true;
+      }
+
       const lines: string[] = [];
       const positions: number[] = [];
 
