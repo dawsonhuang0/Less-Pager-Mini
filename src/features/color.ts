@@ -1,7 +1,7 @@
 import { optUseColor } from "../options";
 
 import {
-  STYLE_RESET,
+  STYLE_RESET, COLOR_RESET,
   INVERSE_ON,
   INVERSE_OFF,
   BOLD_ON,
@@ -237,7 +237,7 @@ export function colored(
   // branches on the kind, not the map)
   if (optUseColor()) {
     const open = colorSgr(colorMap[kind]);
-    return open ? open + text + STYLE_RESET : text;
+    return open ? open + text + COLOR_RESET : text;
   }
 
   // og's lowercase -D types recolor the base attributes regardless

@@ -166,6 +166,20 @@ export let VISUAL_BELL: string | null = null;
 
 export let STYLE_RESET = '\x1b[0m';
 
+/**
+ * og's color reset, which is NOT the attribute one.
+ *
+ * A colored run ends with a literal "\033[m" (line.c:1445) — og writes
+ * the bytes itself rather than asking terminfo. Attribute runs end
+ * with sgr0 instead, which on xterm carries a "\E(B" charset
+ * designation in front. Using sgr0 for a color left that designation
+ * in the message text, where nothing can recognise it as a sequence
+ * (og's ANSI rule wants an END char, by default only "m") — so its
+ * three bytes counted as printing columns and the cursor parked three
+ * columns right of every message under --use-color.
+ */
+export const COLOR_RESET = '\x1b[m';
+
 export let INVERSE_ON = '\x1b[7m';
 export let INVERSE_OFF = '\x1b[27m';
 
@@ -241,6 +255,11 @@ export function initTerminalCapabilities(): void {
   // LESS_TERMCAP_*/$TERMCAP, so the fallback is what every ordinary
   // terminal gets. xterm's sgr0 -- and screen's, and tmux's -- is
   // "\E(B\E[m": the SGR reset preceded by designating ASCII as G0
+  // og's attribute exits go through tmodes(..., "sgr0", ..., "me")
+  // (screen.c:1788), so a bold or standout run ends with the FULL
+  // capability -- on xterm "\E(B\E[m", the SGR reset preceded by
+  // designating ASCII as G0. -N's line numbers end exactly that way in
+  // og's bytes, so this keeps the capability whole.
   const reset = terminalCapability('sgr0', 'me') ?? '\x1b(B\x1b[m';
   STYLE_RESET = reset;
   INVERSE_ON = terminalCapability('smso', 'so') ?? '\x1b[7m';

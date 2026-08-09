@@ -14,7 +14,8 @@ import { colorSgr, colored, attrText, resetColors, setColor }
 
 import { formatContent, calculateEOF, screenRows } from '../../src/helpers';
 
-import { INVERSE_ON, INVERSE_OFF, STYLE_RESET } from '../../src/state/constants';
+import { INVERSE_ON, INVERSE_OFF, STYLE_RESET, COLOR_RESET }
+  from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
@@ -94,7 +95,7 @@ describe('-D option', () => {
     toggle('--use-color\x0D');
     toggle('-DSrb\x0D');
     expect(colored('search', 'x')).toBe('\x1B[31m\x1B[44m' + 'x' +
-      STYLE_RESET);
+      COLOR_RESET);
   });
 
   it('reports og error messages for bad input', () => {
@@ -147,7 +148,7 @@ describe('color application', () => {
     doSearch('alpha');
 
     const lines = formatContent(content);
-    expect(lines[0]).toContain('\x1B[30m\x1B[102malpha' + STYLE_RESET);
+    expect(lines[0]).toContain('\x1B[30m\x1B[102malpha' + COLOR_RESET);
   });
 
   it('colors capture groups with the subsearch defaults', () => {
@@ -157,9 +158,9 @@ describe('color application', () => {
     const line = highlightLine(content[0], 0);
 
     // "al" and "a" in search kG, "ph" in sub1 ky
-    expect(line).toContain('\x1B[30m\x1B[102mal' + STYLE_RESET);
-    expect(line).toContain('\x1B[30m\x1B[43mph' + STYLE_RESET);
-    expect(line).toContain('\x1B[30m\x1B[102ma' + STYLE_RESET);
+    expect(line).toContain('\x1B[30m\x1B[102mal' + COLOR_RESET);
+    expect(line).toContain('\x1B[30m\x1B[43mph' + COLOR_RESET);
+    expect(line).toContain('\x1B[30m\x1B[102ma' + COLOR_RESET);
   });
 
   it('keeps standout when a color is cleared without --use-color', () => {
@@ -179,7 +180,7 @@ describe('color application', () => {
     toggle('-DPrb\x0D');
     search.message = '';
     expect(screenRows(content, []).pop())
-      .toBe('\x1B[31m\x1B[44m:' + STYLE_RESET);
+      .toBe('\x1B[31m\x1B[44m:' + COLOR_RESET);
   });
 });
 
