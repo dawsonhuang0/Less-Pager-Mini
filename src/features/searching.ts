@@ -55,6 +55,7 @@ import { selectedOsc8, setSelectedOsc8 } from "./osc8";
 
 import {
   INVERSE_ON,
+  CHARSET_DESIGNATION_G,
   INVERSE_OFF,
   UNDERLINE_ON,
   UNDERLINE_OFF,
@@ -949,7 +950,51 @@ export function highlightLine(line: string, row: number = -1): string {
   // the file's own bold or colour still running underneath. Splicing
   // standout into the byte stream loses that, because ending it
   // resets everything - so the state goes back in behind it.
-  let active = '';
+  // og carries ONE attribute per character (linebuf.attr[], line.c)
+  // and emits the transition the next character needs. Ours are codes
+  // in the byte stream, so the state has to be kept: a code that ends
+  // an attribute drops the one that opened it, and a reset drops them
+  // all. Accumulating every code ever seen instead replayed a whole
+  // line's history after each match - "ESC[1m ESC(B ESC[m ESC[4m
+  // ESC[24m" where og writes nothing at all, because by then bold and
+  // underline had both been closed again.
+  const open: string[] = [];
+  const styleState = (code: string): void => {
+    const sgr = /^\x1b\[([0-9;]*)m$/.exec(
+      code.replace(CHARSET_DESIGNATION_G, '')
+    );
+
+    if (!sgr) return;
+
+    for (const part of sgr[1].split(';')) {
+      const n = part === '' ? 0 : Number(part);
+
+      if (n === 0) {
+        open.length = 0;
+        continue;
+      }
+
+      // og's at_exit undoes one attribute at a time (screen.c:3108);
+      // 21-29 turn off what 1-9 turned on, and 39/49 the colours
+      const off = n >= 21 && n <= 29 ? n - 20 : 0;
+
+      if (off || n === 39 || n === 49) {
+        for (let i = open.length - 1; i >= 0; i--) {
+          const held = /^\x1b\[([0-9;]*)m$/.exec(open[i]);
+          const v = held ? Number(held[1] || '0') : -1;
+
+          if (v === off ||
+              (n === 39 && v >= 30 && v <= 38) ||
+              (n === 49 && v >= 40 && v <= 48)) {
+            open.splice(i, 1);
+          }
+        }
+        continue;
+      }
+
+      open.push(`\x1b[${n}m`);
+    }
+  };
 
   // og's store_char computes link_attr = hl_attr | AT_UNDERLINE for a
   // hilited character inside an OSC 8 link, then takes the hl_attr
@@ -960,7 +1005,7 @@ export function highlightLine(line: string, row: number = -1): string {
   for (const token of tokens) {
     if (token.code) {
       out.push(token.code);
-      active += token.code;
+      styleState(token.code);
       if (token.code.startsWith('\x1b]8;')) inLink = !isOsc8Close(token.code);
       continue;
     }
@@ -1000,7 +1045,7 @@ export function highlightLine(line: string, row: number = -1): string {
       // only when styled text actually follows: a hilite that runs to
       // the end of its run is followed by the file's own next code
       // anyway, and og emits no transition it does not need
-      if (active && end < text.length) out.push(active);
+      if (open.length && end < text.length) out.push(open.join(''));
       pos = end;
     }
   }

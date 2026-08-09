@@ -83,6 +83,15 @@ export let STYLE_REGEX_G =
   styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, 'g');
 
 /**
+ * A style sequence OR a charset designation, for the callers that lay
+ * text out in COLUMNS. Both are zero-width, but only the first is a
+ * sequence by og's rule - see CHARSET_DESIGNATION_G. Parsing of FILE
+ * content keeps to STYLE_REGEX, which is og's rule exactly.
+ */
+export let STYLE_OR_CHARSET_G = new RegExp(
+  `(?:${STYLE_REGEX_G.source}|${CHARSET_DESIGNATION_G.source})`, 'g');
+
+/**
  * Rebuilds the sequence regexes from $LESSANSIMIDCHARS and
  * $LESSANSIENDCHARS, like init_line.
  */
@@ -98,6 +107,8 @@ export function initAnsiChars(): void {
 
   STYLE_REGEX = styleRegex(mid, end, '', oscAllow, oscChars);
   STYLE_REGEX_G = styleRegex(mid, end, 'g', oscAllow, oscChars);
+  STYLE_OR_CHARSET_G = new RegExp(
+    `(?:${STYLE_REGEX_G.source}|${CHARSET_DESIGNATION_G.source})`, 'g');
 }
 
 export const CONSOLE_TITLE_START = '\x1b]0;';

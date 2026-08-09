@@ -8,7 +8,8 @@ import { controlByte } from '../features/charset';
 
 import { optWordwrap, optCtldisp } from '../options';
 
-import { STYLE_REGEX_G, STYLE_RESET } from '../state/constants';
+import { STYLE_OR_CHARSET_G, STYLE_REGEX_G, STYLE_RESET }
+  from '../state/constants';
 
 /**
  * Pre-computed layout of a single content line.
@@ -152,15 +153,18 @@ function buildLayout(line: string): LineLayout {
   if (rawCtl) {
     pushChars(line);
   } else {
-    STYLE_REGEX_G.lastIndex = 0;
+    // a charset designation counts here too: sgr0 leads with "\E(B"
+    // on xterm and it is not a sequence by og's rule, so laying it out
+    // as three printing columns wrapped lines that fit
+    STYLE_OR_CHARSET_G.lastIndex = 0;
     let i = 0;
     let ansi: RegExpExecArray | null;
 
-    while ((ansi = STYLE_REGEX_G.exec(line)) !== null) {
+    while ((ansi = STYLE_OR_CHARSET_G.exec(line)) !== null) {
       pushChars(line.slice(i, ansi.index));
       codeIdx.push(chars.length);
       codes.push(ansi[0]);
-      i = STYLE_REGEX_G.lastIndex;
+      i = STYLE_OR_CHARSET_G.lastIndex;
     }
 
     pushChars(line.slice(i));
