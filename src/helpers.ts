@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { putstr } from './tty/output';
+import { putstr, flush } from './tty/output';
 
 import { hasUngot } from './tty/keyboard';
 
@@ -1074,6 +1074,13 @@ export function render(rawContent: string[], buffer: string[]): void {
   // there would strand it and suppress a later frame's opening.
   cmdExecOpened = search.cmdExecOpened;
   search.cmdExecOpened = false;
+
+  // a mid-scan note went straight to the terminal, so what we think
+  // is on the bottom line is stale
+  if (search.bottomClobbered) {
+    search.bottomClobbered = false;
+    dirtyBottomRow();
+  }
 
   let rows = screenRows(rawContent, buffer, filling);
 
