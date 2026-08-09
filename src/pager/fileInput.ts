@@ -846,7 +846,7 @@ export class FileInput implements PagerInput {
     const m = regex.exec(plain);
     if (!m) return null;
 
-    const end = m.end;
+    const end = m.index + m[0].length;
     const sheight = config.window - jumpSindex();
 
     if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
