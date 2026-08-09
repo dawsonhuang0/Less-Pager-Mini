@@ -62,7 +62,8 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
-    "char-width": "^1.0.0"
+    "char-width": "^1.0.0",
+    "posix-regex": "^1.0.0"
   },
   "bin": {
     "lmn": "dist/cli.js"

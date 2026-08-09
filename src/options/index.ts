@@ -95,6 +95,7 @@ import { lineNumWidth } from './line-num-width';
 import { statusColWidth } from './status-col-width';
 import { incsearch } from './incsearch';
 import { useColor } from './use-color';
+import { useJsRegexp } from './use-js-regexp';
 import { header } from './header';
 import { noNumberHeaders } from './no-number-headers';
 import { noSearchHeaders } from './no-search-headers';
@@ -197,6 +198,7 @@ const OPTIONS: OptionSpec[] = [
   statusColWidth,
   incsearch,
   useColor,
+  useJsRegexp,
   fileSize,
   statusLine,
   header,

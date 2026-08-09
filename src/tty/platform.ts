@@ -1,5 +1,7 @@
 import os from 'os';
 
+import { flavors, type Dialect } from 'posix-regex';
+
 import { actualEnv, lgetenv } from '../startup/environment';
 
 /**
@@ -62,6 +64,57 @@ export const EDIT_PGM = isWindows ? 'edit' : 'vi';
  * do we.
  */
 export const POLLHUP_EXITS_F = process.platform === 'linux';
+
+/**
+ * True on the BSDs, whose libc regex is Henry Spencer's — one family,
+ * one set of answers, and NOT only Darwin: FreeBSD, OpenBSD and NetBSD
+ * ship the same lineage, and macOS's copy came from FreeBSD's.
+ */
+const IS_BSD_LIBC = ['darwin', 'freebsd', 'openbsd', 'netbsd']
+  .includes(process.platform);
+
+/**
+ * The regex dialect og's own search would use here.
+ *
+ * configure.ac tries POSIX regcomp FIRST and only falls through to
+ * PCRE2/PCRE/GNU when it is missing or broken, so og links whatever
+ * regcomp the platform's libc ships: Spencer's on the BSDs, glibc
+ * everywhere else. The two disagree on what POSIX leaves undefined, so
+ * the dialect is a platform fact like DEF_METACHARS, not a preference.
+ * The library's own default IS the glibc shape, so only the BSDs need
+ * saying and everything else falls through to it.
+ *
+ * (og's Windows build links neither — defines.wn takes Spencer's V8
+ * regcomp, which has no {n,m} intervals at all. We keep the POSIX
+ * reading there rather than give a JS user a pager whose search has
+ * lost counted repetition.)
+ */
+export const REGEX_DIALECT: Dialect = {
+  // og compiles with REG_EXTENDED (pattern.h's REGCOMP_FLAG), and this
+  // must be spelled out rather than left to the "e" flag: an explicit
+  // flavor overrides that flag, and a partial one merges onto POSIX's
+  // default BASIC, where "(a)|(b)" is nine literal characters that
+  // quietly match nothing
+  ...flavors.extended,
+
+  ...(IS_BSD_LIBC
+    ? {
+        // \w \b and friends are GNU additions BSD does not read
+        gnuOperators: false,
+        // a**, a+?, a++ ... one duplication symbol upon another
+        repeatedRepeats: false,
+        // \1 is the character '1'
+        backreferences: false,
+        // a{a} is text, but a{1 commits to an interval and is refused
+        malformedIntervalIsText: true,
+        danglingInterval: 'unless-committed' as const,
+        // x| and (d|) have no derivation in the grammar
+        emptyBranch: false,
+        // a{,3} is text, not {0,3}
+        openMinimum: false,
+      }
+    : {}),
+};
 
 /** Shell metacharacters (DEF_METACHARS, defines.wn's smaller set). */
 export const DEF_METACHARS = isWindows

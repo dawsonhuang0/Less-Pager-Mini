@@ -74,6 +74,7 @@ export const LESS_OPTION_VALUES = {
   'status-col-width': 'value',
   incsearch: 'flag',
   'use-color': 'flag',
+  'use-js-regexp': 'flag',
   header: 'value',
   'no-number-headers': 'flag',
   'no-search-headers': 'flag',
@@ -260,6 +261,8 @@ export interface LessOptions {
   incsearch?: boolean;
   /** Enables colored text. */
   'use-color'?: boolean;
+  /** Search with JavaScript's RegExp. */
+  'use-js-regexp'?: boolean;
   /** Use L lines (starting at line N) and C columns as headers. @default '-' */
   header?: number | string;
   /** Don't give line numbers to header lines. */

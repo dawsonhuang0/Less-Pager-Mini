@@ -317,6 +317,8 @@ export const help: string[] = [
   "                  Subsequent options use backslash as escape char.",
   "                --use-color",
   "                  Enables colored text.",
+  "                --use-js-regexp",
+  "                  Search with JavaScript's RegExp.",
   "                --wheel-lines=[_\bN]",
   "                  Each click of the mouse wheel moves _\bN lines.",
   "                --wordwrap",

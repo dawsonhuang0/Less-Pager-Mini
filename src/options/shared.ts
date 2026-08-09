@@ -312,6 +312,10 @@ export const optNoVbell = (): boolean => opt.noVbell > 0;
 /** True when --use-color enables the -D color map. */
 export const optUseColor = (): boolean => opt.useColor > 0;
 
+/** True when --use-js-regexp searches with the host RegExp instead of
+ *  the POSIX engine og's regcomp would give. */
+export const optUseJsRegexp = (): boolean => opt.useJsRegexp > 0;
+
 /** The -T tags file name (or a GTAGS-family name). */
 export const optTagsFile = (): string => opt.tagsFile;
 

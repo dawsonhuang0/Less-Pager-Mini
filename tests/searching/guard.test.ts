@@ -47,14 +47,16 @@ function runSearch(pattern: string): void {
 }
 
 describe('catastrophic pattern guard', () => {
-  it('drops a pattern that hangs the regex engine', () => {
+  // og runs this pattern against the same 300 a's and simply reports
+  // "Pattern not found" — a C regcomp is an NFA and has nothing to
+  // blow up. Our search is one too now, so the backtracking blowup
+  // this used to guard against cannot happen through a search pattern
+  // and the guard never fires for one.
+  it('answers a backtracking pattern the way og does', () => {
     runSearch('(a+)+b');
 
-    expect(search.message).toBe('Pattern too complex');
-    expect(search.regex).toBeNull();
-    expect(search.highlight).toBe(false);
-
-    // the display stays where it was, like an interrupted search
+    expect(search.message).toBe('Pattern not found: (a+)+b');
+    expect(search.regex).not.toBeNull();
     expect(config.row).toBe(0);
   }, 15000);
 

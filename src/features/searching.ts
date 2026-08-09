@@ -5,8 +5,10 @@ import fs from 'fs';
 import vm from 'vm';
 
 import { strWidth } from 'char-width';
+import { PsxRegExp, quote, type Found } from 'posix-regex';
 
 import { keyboard, keyboardPollFd, pushUngot } from '../tty/keyboard';
+import { REGEX_DIALECT } from '../tty/platform';
 
 import { config, mode } from "../state/config";
 
@@ -46,8 +48,11 @@ import {
   optRscroll,
   optIntrChar,
   optNoInit,
-  chopLine
+  chopLine,
+  optUseJsRegexp
 } from "../options";
+
+import { hook } from "../options/shared";
 
 import { colored, ColorKind } from "./color";
 
@@ -85,8 +90,22 @@ interface SearchInput {
   originEof: boolean;
 }
 
+/**
+ * What the search asks of a compiled pattern — the part PsxRegExp and
+ * a host RegExp can both answer, so --use-js-regexp can swap one for
+ * the other without the callers knowing which they hold.
+ */
+export interface SearchRegex {
+  readonly source: string;
+  readonly flags: string;
+  readonly global: boolean;
+  lastIndex: number;
+  test(text: string): boolean;
+  exec(text: string): Found | null;
+}
+
 interface Filter {
-  regex: RegExp;
+  regex: SearchRegex;
   invert: boolean;
   subs: Set<number>;
 }
@@ -95,7 +114,7 @@ interface SearchState {
   /** Pattern currently being typed at the prompt, or null. */
   input: SearchInput | null;
   /** Last compiled pattern, reused by n/N and highlighting. */
-  regex: RegExp | null;
+  regex: SearchRegex | null;
   /** Whether the pattern matches NON-matching lines (^N / !). */
   invert: boolean;
   /** Direction of the last search: 1 forward, -1 backward. */
@@ -172,7 +191,7 @@ export function resetHistoryRecall(): void {
   }
 }
 
-let globalRegex: RegExp | null = null;
+let globalRegex: SearchRegex | null = null;
 let compiledPattern = '';
 let compiledLiteral = false;
 
@@ -189,6 +208,21 @@ export function chgCaseless(caseless: 0 | 1 | 2): void {
   search.caseless = caseless;
   if (search.regex) compile(compiledPattern, compiledLiteral, search.invert);
 }
+
+/**
+ * Rebuilds the compiled pattern under whichever engine is now
+ * selected (--use-js-regexp). The pattern one engine accepted the
+ * other may refuse — `[[:alpha:]]` means nothing to a host RegExp, and
+ * `\d` means something else — so a failure drops the search rather
+ * than leaving the old engine's object behind.
+ */
+hook.recompilePattern = (): void => {
+  if (!search.regex) return;
+  if (!compile(compiledPattern, compiledLiteral, search.invert)) {
+    search.regex = null;
+    search.highlight = false;
+  }
+};
 
 /**
  * Opens the search or filter prompt.
@@ -645,10 +679,10 @@ export function execFilter(): LineFilter | null | undefined {
   }
 
   try {
-    const source = input.noRegex ? escapeRegExp(pattern) : pattern;
+    const source = input.noRegex ? quote(pattern) : pattern;
 
     search.filters.push({
-      regex: new RegExp(source, searchCaseFlags(pattern)),
+      regex: psx(source, searchCaseFlags(pattern)),
       invert: input.invert,
       subs: new Set(input.subs),
     });
@@ -782,10 +816,10 @@ const subColorKind = (n: number): ColorKind =>
  */
 function pushMatchRanges(
   ranges: [number, number, ColorKind][],
-  match: RegExpExecArray
+  match: Found
 ): void {
   const start = match.index;
-  const end = match.index + match[0].length;
+  const end = match.end;
   const groups: [number, number, ColorKind][] = [];
 
   if (match.indices) {
@@ -923,6 +957,8 @@ function highlightLineFor(line: string, row: number): string {
 
   if (!line) return line;
 
+  // og reuses the hilites it already has for this text (prep region);
+  // only a new search or a jump outside it clears them
   // tokenize into text runs and ANSI codes, tracking stripped offsets
   const tokens: { code: string; text: string; start: number }[] = [];
   let strippedLength = 0;
@@ -985,7 +1021,7 @@ function highlightLineFor(line: string, row: number): string {
   }
 
   globalRegex.lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let match: Found | null;
 
   while (!source && (match = globalRegex.exec(matchable)) !== null) {
     if (search.subs.size && match.indices) {
@@ -1131,13 +1167,13 @@ function highlightLineFor(line: string, row: number): string {
     }
   }
 
-  return out.join('');
+  const painted = out.join('');
+
+  // bounded: og's prep region covers the screen, not the file
+  return painted;
 }
 
 // helpers
-
-const escapeRegExp = (pattern: string): string =>
-  pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const UPPERCASE_REGEX = /\p{Lu}/u;
 
@@ -1149,26 +1185,66 @@ export const searchCaseFlags = (pattern: string): string =>
     : '';
 
 /**
- * "u" when the pattern still compiles with it.
+ * Compiles a pattern the way og's compile_pattern2 does.
  *
- * og matches whole CHARACTERS: cvt_text hands the regex a UTF-8
- * string and its "." spans one character, so "E...." covers E and the
- * four characters after it however many bytes they take. A JS regex
- * without "u" counts UTF-16 units instead, so an emoji eats two dots
- * and the match comes up short.
+ * og hands the pattern to regcomp with REG_EXTENDED (pattern.h's
+ * REGCOMP_FLAG) and REG_ICASE for -i. The dialect carries the extended
+ * spelling itself — see REGEX_DIALECT, where leaving it to the "e"
+ * flag would silently fall back to BASIC.
  *
- * Not unconditional: "u" also rejects patterns JS otherwise tolerates
- * (a stray "\\d" inside a class, an unescaped brace), and og would
- * accept those, so the stricter mode only applies when it costs
- * nothing.
+ * Matching is by CHARACTER, as og's is — cvt_text hands regcomp a
+ * UTF-8 string where "." spans one character however many bytes it
+ * takes. That used to need the "u" flag, applied only when the pattern
+ * still compiled with it, because "u" also rejected patterns og
+ * accepts (a stray "\\d" in a class, an unescaped brace). POSIX reads
+ * by code point always and has no such quarrel, so the guess is gone.
  */
-function unicodeFlag(source: string): string {
+function psx(source: string, flags: string): SearchRegex {
+  if (optUseJsRegexp()) return jsRegex(source, flags);
+  return new PsxRegExp(source, { flags, flavor: REGEX_DIALECT });
+}
+
+/**
+ * A host RegExp wearing the POSIX engine's shape, for --use-js-regexp.
+ *
+ * The two agree on everything the search reads but the match: a Found
+ * names the whole match `value` and its far end `end`, where a
+ * RegExpExecArray has `[0]` and no end at all. Rather than teach every
+ * caller both shapes, the array grows the two names — it stays a real
+ * RegExpExecArray, so `[n]`, `.index` and `.indices` are untouched.
+ *
+ * "u" goes on only when the pattern still compiles with it, which is
+ * the guess the POSIX engine let us delete: without it "." counts
+ * UTF-16 units and an emoji eats two dots, but with it JS rejects
+ * patterns og accepts. Neither answer is og's, which is the point of
+ * the option.
+ */
+function jsRegex(source: string, flags: string): SearchRegex {
+  const host = flags.replace('e', '');
+  let unicode = '';
   try {
-    void new RegExp(source, 'u');
-    return 'u';
-  } catch {
-    return '';
-  }
+    void new RegExp(source, host + 'u');
+    unicode = 'u';
+  } catch { /* the pattern outlives the stricter mode */ }
+
+  const re = new RegExp(source, host + unicode);
+
+  return {
+    source: re.source,
+    flags: re.flags,
+    global: re.global,
+    get lastIndex() { return re.lastIndex; },
+    set lastIndex(at: number) { re.lastIndex = at; },
+    test: (text: string) => re.test(text),
+    exec: (text: string) => {
+      const m = re.exec(text);
+      if (!m) return null;
+      return Object.assign(m, {
+        value: m[0],
+        end: m.index + m[0].length,
+      }) as unknown as Found;
+    },
+  };
 }
 
 function compile(pattern: string, literal: boolean, invert: boolean): boolean {
@@ -1176,10 +1252,10 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
   hiliteCache.clear();
 
   try {
-    const source = literal ? escapeRegExp(pattern) : pattern;
-    const flags = searchCaseFlags(pattern) + unicodeFlag(source);
-    search.regex = new RegExp(source, flags);
-    globalRegex = new RegExp(source, flags + 'dg');
+    const source = literal ? quote(pattern) : pattern;
+    const flags = searchCaseFlags(pattern);
+    search.regex = psx(source, flags);
+    globalRegex = psx(source, flags + 'dg');
   } catch {
     search.message = 'Invalid pattern';
     return false;
@@ -1299,7 +1375,7 @@ function matchEnd(
   // assignment sits behind a FIXME comment) and the calloc'd array
   // reads 0 there: a match ending exactly at the line end computes
   // tpos = linepos and never bottom-jumps
-  const conv = m.index + m[0].length;
+  const conv = m.end;
   return { conv, raw: map[conv] ?? 0 };
 }
 
@@ -1353,7 +1429,7 @@ function sourceRanges(source: string): [number, number, ColorKind][] {
   return out;
 }
 
-function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
+function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean {
   if (!subs.size) return regex.test(text);
 
   // og's subsearch_ok (pattern.c): a ^S group fails when `ep[i] ==
@@ -1362,9 +1438,7 @@ function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
   // keeps searching AFTER each one that fails the condition, giving up
   // when `mlen == 0` because it cannot advance (e66db83 - that guard
   // is what stopped og hanging on a pattern like `(x*)`).
-  const scan = regex.global
-    ? regex
-    : new RegExp(regex.source, regex.flags + 'g');
+  const scan = regex.global ? regex : psx(regex.source, regex.flags + 'g');
 
   let start = 0;
 
@@ -1382,7 +1456,7 @@ function testRegex(regex: RegExp, text: string, subs: Set<number>): boolean {
 
     if (ok) return true;
 
-    const end = match.index + match[0].length;
+    const end = match.end;
     if (end === start) return false;
 
     start = end;
@@ -1603,6 +1677,34 @@ let guardScript: vm.Script | null = null;
  * @returns How the run ended: the guard tripped (`complex`) or the
  *          user interrupted (`stop`).
  */
+/**
+ * og's LONGTIME (linenum.c:58): how long a loop runs before it says
+ * so. og applies it to line numbering and to determining a file's
+ * length, both through ierror, which appends "... (interrupt to
+ * abort)" (output.c:767).
+ */
+const LONGTIME_MS = 2000;
+
+/**
+ * Says what we are doing when a search runs long, the way og's
+ * delayed_msg does for its own long loops (linenum.c:229).
+ *
+ * NOT og: search.c has no delayed message, so a search over a very
+ * long line - a nested quantifier on 200k characters - sits there
+ * saying nothing until it finishes or the user interrupts. og's own
+ * shape is what this borrows: nothing for the first two seconds, then
+ * the note with ierror's suffix, written straight to the bottom line.
+ */
+function searchNote(): void {
+  fs.writeSync(1, '\r' + CLEAR_LINE + colored('error',
+    'Searching... (interrupt to abort)', INVERSE_ON, INVERSE_OFF));
+
+  // a raw write past the buffer, like the other mid-scan notes: the
+  // renderer has to know the bottom line no longer holds what it
+  // last painted there
+  search.bottomClobbered = true;
+}
+
 function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
   if (!guardContext || !guardScript) {
     guardContext = vm.createContext({ step: () => {} }) as
@@ -1612,6 +1714,9 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
 
   let finished = false;
   guardContext.step = () => { finished = slice(); };
+
+  const started = Date.now();
+  let noted = false;
 
   try {
     for (;;) {
@@ -1628,6 +1733,11 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
       // ctrl-C and the --intr char abort between slices, like
       // search_range's ABORT_SIGS checks
       if (searchInterrupted()) return 'stop';
+
+      if (!noted && Date.now() - started >= LONGTIME_MS) {
+        noted = true;
+        searchNote();
+      }
     }
   } finally {
     guardContext.step = () => {};
@@ -2080,7 +2190,7 @@ export function shiftVisibleText(text: string): void {
   if (!match) return;
 
   const startCol = strWidth(text.slice(0, match.index));
-  const endCol = startCol + strWidth(match[0]);
+  const endCol = startCol + strWidth(match.value);
   // the marker column only exists while --rscroll is enabled
   // (search.c:641: sc_width - (rscroll_char ? 1 : 0))
   const swidth = config.screenWidth - (optRscroll() ? 1 : 0);

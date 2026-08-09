@@ -53,6 +53,7 @@ export const opt = {
   statusColWidth: 2,
   incrSearch: 0,
   useColor: 0,
+  useJsRegexp: 0,
   headerLines: 0,
   headerCols: 0,
   headerStart: 0,
