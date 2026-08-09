@@ -22,6 +22,7 @@
 const OUTBUF_SIZE = 8192;
 
 let obuf = '';
+let scheduled = false;
 
 /**
  * Appends to the output buffer, like og's putstr/putchr.
@@ -43,7 +44,30 @@ export function putstr(text: string): void {
   }
 
   obuf += text;
-  if (obuf.length >= OUTBUF_SIZE) flush();
+  if (obuf.length >= OUTBUF_SIZE) {
+    flush();
+    return;
+  }
+
+  // A paint is not always a keypress: a resize, a pipe delivering
+  // more input, F following a growing file and the signal handlers
+  // all repaint on their own, and og's output reaches the terminal at
+  // each of them. Flushing only from the command loop left those
+  // sitting here until the user happened to type something - a resize
+  // kept the screen at the old size until a key arrived.
+  //
+  // So the buffer empties itself once the current turn of the event
+  // loop is done. Everything one command writes is still ONE write,
+  // because a command runs to completion inside a single turn;
+  // flushing per PAINT instead split the echo from the frame and cost
+  // four extra writes on a five-key burst.
+  if (!scheduled) {
+    scheduled = true;
+    setImmediate(() => {
+      scheduled = false;
+      flush();
+    });
+  }
 }
 
 /**
