@@ -834,6 +834,11 @@ export function squishCheck(): void {
   scrollPrefix = '';
 
   renderBare(session.content, session.buffer);
+
+  // that repaint went through forw(), which sets forw_prompt after
+  // every line it puts (forwback.c:368), so the prompt that follows
+  // needs no clear_bot of its own
+  forwPrompt = true;
 }
 
 // og's `first_time` (forwback.c): TRUE until the first forw() has
@@ -951,6 +956,11 @@ export function renderHiliteRepaint(
   }
 
   out += CURSOR_TO(rows.length, 1);
+
+  // repaint_hilite closes with lower_left() (search.c:311) and does
+  // NOT touch forw_prompt: whatever the paint before it left stands,
+  // and prompt() reads that to decide on clear_bot (command.c:993).
+
   putstr(out);
 
   // these rows ARE what the screen now shows, so the next paint may
@@ -2025,9 +2035,15 @@ function scrollFrame(
         }
 
         // NOT opening(): a carried prefix belongs to the PAINT that
-        // follows it, and og still clear_bots for the prompt when the
-        // search moved nothing at all
-        return clearBot() + (holdBot ? '' : bot);
+        // follows it. og's prompt() clear_bots only when the previous
+        // action did NOT paint forward (command.c:993) - a search that
+        // moved ran forw(), so the cursor is already parked at the
+        // lower left repaint_hilite left it on and the prompt goes
+        // straight there; a search that moved nothing never ran forw,
+        // and og does clear_bot.
+        const open = forwPrompt ? '' : clearBot();
+        forwPrompt = false;
+        return open + (holdBot ? '' : bot);
       }
     }
 
