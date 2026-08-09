@@ -115,6 +115,9 @@ interface SearchState {
   /** execSearch already wrote og's cmd_exec clear_bot for this
    *  command, so the next frame opens with nothing. */
   cmdExecOpened: boolean;
+  /** A mid-scan note was written straight to the bottom line, so the
+   *  next paint must rewrite it rather than dedupe it. */
+  bottomClobbered: boolean;
   /** Follow-up messages shown as each one is dismissed, like less's
    *  consecutive blocking error() calls. */
   messageQueue: string[];
@@ -133,6 +136,7 @@ export const search: SearchState = {
   message: '',
   messageQueue: [],
   cmdExecOpened: false,
+  bottomClobbered: false,
 };
 
 /**
@@ -142,6 +146,7 @@ export const search: SearchState = {
  * invocations through its history file.
  */
 export function resetSearch(): void {
+  hiliteCache.clear();
   search.input = null;
   search.regex = null;
   search.invert = false;
@@ -557,6 +562,7 @@ export function execSearch(
     if (pattern) {
       if (!compile(pattern, input.noRegex, input.invert)) return;
       search.subs = new Set(input.subs);
+      hiliteCache.clear();
 
       // og erases the highlights on screen and then, under -G's
       // default, highlights what already matches BEFORE it searches
@@ -718,6 +724,7 @@ export function repeatSearch(
 let hiliteHidden = false;
 
 export function setHiliteHidden(hidden: boolean): void {
+  hiliteCache.clear();
   hiliteHidden = hidden;
 }
 
@@ -817,7 +824,81 @@ function pushMatchRanges(
   }
 }
 
+/**
+ * Highlighted lines, kept between paints like og's prep region.
+ *
+ * og does not re-hilite what it has already hilited: prep_hilite
+ * (search.c:2236) records the byte range its hilite list covers, and
+ * a paint inside that range reuses it - the list is only thrown away
+ * by a new search or a jump outside it (clr_hilite). We rebuilt every
+ * displayed line on EVERY paint, which on a million-character line is
+ * ~10ms a frame; a trackpad delivering hundreds of wheel events then
+ * takes minutes, and the pager looks hung.
+ *
+ * Keyed by ROW, never by the text. A million-character line used as a
+ * Map key is hashed in full on every lookup, which cost as much as
+ * the work it was meant to save - the cache measured no faster than
+ * no cache at all. Every caller that can invalidate the answer
+ * already clears the whole map, so the row is enough.
+ */
+interface HilitedLine {
+  /** enough of the line to tell it from another one, cheaply */
+  len: number;
+  head: string;
+  tail: string;
+  painted: string;
+}
+
+const hiliteCache = new Map<number, HilitedLine>();
+
+/** What the cached answers were painted under: -g/-G and, for -g, the
+ *  row the last search landed on, which is the only row it hilites. */
+let hiliteCacheMode = '';
+const HILITE_CACHE_MAX = 256;
+
+/** og's clr_hilite: the list stops applying, so drop it. */
+export function clearHiliteCache(): void {
+  hiliteCache.clear();
+}
+
 export function highlightLine(line: string, row: number = -1): string {
+  // wrap the whole thing: the body returns early in half a dozen
+  // places (no pattern, -g on another row, no match at all), and each
+  // of those still costs a full tokenize of the line
+  if (row < 0) return highlightLineFor(line, row);
+
+  // A ROW is not a stable name for text: the block engine's content
+  // is a materialized window, so row 0 means different bytes after a
+  // scroll. Hashing the whole line to tell them apart costs what the
+  // cache saves - a million-character key is hashed in full on every
+  // lookup, which is how this first measured no faster than nothing.
+  // So the row is the key and a fingerprint confirms it.
+  // -g hilites only the landing row and -G none at all, so the cached
+  // answers stop applying the moment either changes
+  const mode = `${optHiliteSearch()}:${lastMatchRow}:${search.invert}`;
+  if (mode !== hiliteCacheMode) {
+    hiliteCacheMode = mode;
+    hiliteCache.clear();
+  }
+
+  const head = line.slice(0, 32);
+  const tail = line.slice(-32);
+  const cached = hiliteCache.get(row);
+
+  if (cached !== undefined && cached.len === line.length &&
+      cached.head === head && cached.tail === tail) {
+    return cached.painted;
+  }
+
+  const painted = highlightLineFor(line, row);
+
+  if (hiliteCache.size >= HILITE_CACHE_MAX) hiliteCache.clear();
+  hiliteCache.set(row, { len: line.length, head, tail, painted });
+
+  return painted;
+}
+
+function highlightLineFor(line: string, row: number): string {
   // og hilites through prep_hilite, which searches with SRCH_FORW |
   // SRCH_FIND_ALL and carries over only SRCH_NO_REGEX from the user's
   // search (search.c:2319). SRCH_NO_MATCH is NOT carried, so a
@@ -1091,6 +1172,9 @@ function unicodeFlag(source: string): string {
 }
 
 function compile(pattern: string, literal: boolean, invert: boolean): boolean {
+  // a new pattern is og's clr_hilite: the old list cannot apply
+  hiliteCache.clear();
+
   try {
     const source = literal ? escapeRegExp(pattern) : pattern;
     const flags = searchCaseFlags(pattern) + unicodeFlag(source);
