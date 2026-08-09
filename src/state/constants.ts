@@ -66,6 +66,18 @@ export const ansiEndChars = (): string => endChars;
 /** og's osc_ansi_chars ($LESSANSIOSCCHARS): extra OSC intro chars. */
 export const ansiOscChars = (): string => oscIntroChars;
 
+/**
+ * A "designate a character set" escape: ESC, one of ( ) * +, then the
+ * set's name. Not SGR, and og's ANSI rule cannot close it - its end
+ * chars default to just "m" (line.c:164) - so it is not a sequence to
+ * either engine. og never meets one in text because it keeps its
+ * attributes beside the characters rather than in them; we inline
+ * ours, and terminfo's sgr0 leads with "\E(B" on xterm, so anything
+ * MEASURING our display text has to skip it or count three columns
+ * that are not there.
+ */
+export const CHARSET_DESIGNATION_G = /\x1b[()*+][\x20-\x2f]*[\x30-\x7e]/g;
+
 export let STYLE_REGEX = styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, '');
 export let STYLE_REGEX_G =
   styleRegex(DEFAULT_MID_CHARS, DEFAULT_END_CHARS, 'g');

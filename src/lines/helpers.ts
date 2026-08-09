@@ -27,6 +27,7 @@ import {
   ansiOscChars,
   ASCII_REGEX,
   STYLE_REGEX,
+  CHARSET_DESIGNATION_G,
   STYLE_REGEX_G,
   STYLE_RESET,
   INVERSE_ON,
@@ -749,6 +750,20 @@ function procBackspaces(line: string): string {
  */
 export function visualWidth(line: string): number {
   if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
+
+  // og never measures its own attribute bytes: line.c keeps them in a
+  // PARALLEL array (linebuf.attr[]) and pwidth() is handed the
+  // CHARACTER, so an escape it emits can never become width. We put
+  // ours inline in the text instead, and terminfo's sgr0 - what a
+  // bold or underline run ends with - is "\E(B\E[m" on xterm. The
+  // "\E(B" half designates a charset and ends in "B", which og's ANSI
+  // rule cannot close (is_ansi_end defaults to just "m", line.c:164),
+  // so it survived the strip above and counted THREE columns. Two of
+  // them on one help line made a 79-column line measure 85 and wrap
+  // with the screen half empty.
+  if (line.includes('\x1b')) {
+    line = line.replace(CHARSET_DESIGNATION_G, '');
+  }
 
   if (line.includes('\x08')) {
     // og's pwidth counts a raw -u backspace as -1 (-2 after a wide
