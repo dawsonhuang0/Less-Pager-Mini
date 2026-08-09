@@ -840,6 +840,56 @@ export function resetFirstPaint(): void {
 // rather than painting a prompt it is about to erase.
 let bareFrame = false;
 
+/** og's LBUFSIZE (ch.c:39): the size of one block it reads. */
+const LBUFSIZE = 8192;
+
+/** The highest block og would already have read, -1 before the first. */
+let readBlocks = -1;
+
+/** Whether this chunk of input carried more than one command. */
+let inBurst = false;
+
+/** Whether THIS frame is withholding its prompt line. */
+let heldPrompt = false;
+
+/** Tells the paint that this chunk held several keys, so og's tty had
+ *  something waiting whenever it stopped to read. */
+export function markBurst(burst: boolean): void {
+  inBurst = burst;
+}
+
+/**
+ * Whether og would have gone to DISK for this paint, with a key
+ * waiting on the tty.
+ *
+ * check_poll runs before every iread of the file (os.c:303), and a key
+ * already waiting is read and pushed back with ungetcc_back
+ * (os.c:164) — which makes the NEXT prompt() return early
+ * (command.c:924), so og paints the rows and writes nothing to the
+ * bottom line. During a burst something is always waiting: og reads
+ * one byte at a time, so even the LAST arrow still has its own O and B
+ * sitting in the tty when the read happens. What is rare is the read.
+ *
+ * og reads a whole LBUFSIZE block and only when the screen reaches
+ * past what it holds. position(BOTTOM_PLUS_ONE) is how far the paint
+ * needed — painting a row means reading to the end of its line — so
+ * that offset, not the row's own, decides which block was wanted.
+ */
+function crossesUnreadBlock(): boolean {
+  const sindex = Math.max(config.window - 1 - config.blankTop, 0);
+  const byte = hook.sourceRowByte?.(sindex);
+  if (typeof byte !== 'number') return false;
+
+  const block = Math.floor(Math.max(byte - 1, 0) / LBUFSIZE);
+  if (block <= readBlocks) return false;
+
+  const first = readBlocks < 0;
+  readBlocks = block;
+
+  // the first screen is read before any key exists to be polled
+  return !first && inBurst;
+}
+
 
 
 
@@ -990,7 +1040,22 @@ export function render(rawContent: string[], buffer: string[]): void {
     mode.INIT = false;
   }
 
+  // og reached this paint but not prompt(): the read it needed polled
+  // the tty, found a key and ungot it, so prompt() returned early
+  const promptHeld = !filling && crossesUnreadBlock();
+
   let rows = screenRows(rawContent, buffer, filling);
+
+  // the withheld line still has to BE something: pin it to what the
+  // screen already shows, so the frame that skips writing it and the
+  // table that records it agree
+  if (promptHeld && prevRows && prevRows.length === rows.length &&
+      rows.length > 0) {
+    rows = rows.slice();
+    rows[rows.length - 1] = prevRows[prevRows.length - 1];
+  }
+
+  heldPrompt = promptHeld;
   if (hideHilite) setHiliteHidden(false);
 
   // that squish_check repaint OUTRANKS the freeze: og paints the
@@ -1871,6 +1936,10 @@ function scrollFrame(
   // compare against the previous frame's content rows only.
   const promptless = bareFrame;
 
+  // only the trailing `bot` goes: the rows still scroll, exactly as
+  // og's forw() wrote them before it went back for more data
+  const holdBot = heldPrompt && !promptless;
+
   // a -h-capped backward scroll repaints forward, like og's back()
   let capped = false;
 
@@ -1883,7 +1952,7 @@ function scrollFrame(
     // content here is what doubled every scrolled line.
     if (wasBare && !bareFrame && rows.length === prev.length + 1 &&
         prefixEqual(prev, rows)) {
-      return bot;
+      return holdBot ? '' : bot;
     }
 
     // and the mirror: a bare frame whose rows the screen already
@@ -1946,7 +2015,7 @@ function scrollFrame(
         // NOT opening(): a carried prefix belongs to the PAINT that
         // follows it, and og still clear_bots for the prompt when the
         // search moved nothing at all
-        return clearBot() + bot;
+        return clearBot() + (holdBot ? '' : bot);
       }
     }
 
@@ -1983,7 +2052,8 @@ function scrollFrame(
           rows.slice(overlap).map(r => r + rowEnd(r)).join('');
       }
 
-      return opening() + appended.map(r => r + rowEnd(r)).join('') + bot;
+      return opening() + appended.map(r => r + rowEnd(r)).join('') +
+        (holdBot ? '' : bot);
     }
 
     // an exact-screenful advance: og-contiguous by position (the new
@@ -1996,7 +2066,8 @@ function scrollFrame(
       }
 
       const appended = rows.slice(0, last);
-      return opening() + appended.map(r => r + rowEnd(r)).join('') + bot;
+      return opening() + appended.map(r => r + rowEnd(r)).join('') +
+        (holdBot ? '' : bot);
     }
 
     // backward: k rows scrolled in at the top; og back()'s home +
@@ -2042,7 +2113,8 @@ function scrollFrame(
             return frame + CURSOR_TO(config.window, 1) + clearBot();
           }
 
-          return frame + CURSOR_TO(config.window, 1) + clearBot() + bot;
+          return frame + CURSOR_TO(config.window, 1) + clearBot() +
+            (holdBot ? '' : bot);
         }
       }
     }
@@ -2067,7 +2139,7 @@ function scrollFrame(
     // a bare frame's rows ARE the body; appending bot printed its
     // last content row a second time
     return (repaint ? prefix ?? clearBot() : '') +
-      CLEAR_SCREEN + CURSOR_HOME + body + (promptless ? '' : bot);
+      CLEAR_SCREEN + CURSOR_HOME + body + (promptless || holdBot ? '' : bot);
   }
 
   // the first paint prints in place behind term_init's line_left CR,
@@ -2087,7 +2159,7 @@ function scrollFrame(
     }
 
     frame += CURSOR_TO(config.window, 1) + clearBot();
-    return promptless ? frame : frame + bot;
+    return promptless || holdBot ? frame : frame + bot;
   }
 
   // forward far jumps and repaints print og's skipping marker over
@@ -2097,7 +2169,7 @@ function scrollFrame(
   // only the marker goes (forwback.c:272)
   return (prefix ?? clearBot()) +
     (fullScreen() && !firstOutput ? '...skipping...\n' : '') + body +
-    (promptless ? '' : bot);
+    (promptless || holdBot ? '' : bot);
 }
 
 /**

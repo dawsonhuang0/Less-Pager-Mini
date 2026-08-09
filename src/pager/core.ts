@@ -57,6 +57,7 @@ import {
   addBufferChar,
   delBufferChar,
   render,
+  markBurst,
   freezeFrame,
   unfreezeFrame,
   markFullRepaint,
@@ -1258,12 +1259,20 @@ function keyHandlerKeys(data: Buffer): void {
   // the whole chunk back instead would be one jump at the end — the
   // buffer is there to stop a single command arriving in fragments,
   // not to merge commands together.
-  for (const sequence of splitKeys(text)) {
+  const keys = splitKeys(text);
+
+  // og reads byte at a time, so a chunk carrying more than one command
+  // always has something left in the tty when it stops to read
+  markBurst(keys.length > 1);
+
+  for (const sequence of keys) {
     handleKey(sequence);
     flush();
 
     if (session.exited) break;
   }
+
+  markBurst(false);
 
   // keys the interrupt poll queued during a blocking search run
   // now, like og's command loop draining the ungot queue — except
