@@ -62,6 +62,12 @@ import {
   delBufferChar,
   render,
   markBurst,
+  markCommandTime,
+  isStalled,
+  armStall,
+  promptHolding,
+  endPromptHold,
+  PROMPT_SETTLE_MS,
   freezeFrame,
   unfreezeFrame,
   markFullRepaint,
@@ -1053,11 +1059,24 @@ function act(action: Actions | undefined): void {
   // work - the one or two early flashes that survived every other fix.
   if (action !== undefined && CMD_EXEC_ACTIONS.has(action) &&
       !session.shellPause) {
+    putstr(clearBot());
+
     // og's cmd_exec ends with flush() (command.c:128): the clear goes
     // to the terminal BEFORE the command runs, so the ":" is off the
-    // screen while the work happens.
-    putstr(clearBot());
-    flush();
+    // screen while the work happens. og can flush unconditionally
+    // because its work is microseconds - the blank IS on the glass,
+    // just never long enough to catch.
+    //
+    // Ours is milliseconds on every key, so flushing here put that
+    // blank in front of the user on every key: the flicker, and the
+    // half-second the help prompt went missing. Held back, the clear
+    // stays in the buffer and the frame overwrites it in the same
+    // write - og's imperceptible gap, made actually imperceptible.
+    //
+    // When the ":" is meant to be gone (promptHolding), we flush like
+    // og and it really does leave the screen for the work.
+    if (promptHolding()) flush();
+
     search.cmdExecOpened = true;
     dirtyBottomRow();
   }
@@ -1372,13 +1391,41 @@ function keyHandlerKeys(data: Buffer): void {
   drainKeys();
 }
 
+/**
+ * How long the screen rests at an edge before the queue moves again.
+ *
+ * A DURATION, not a count of surviving keys. Keeping n no-op commands
+ * seemed like the same thing - they cost a frame each, so they buy
+ * time - but a no-op frame is a couple of milliseconds and four of
+ * them went by as a flash: the bottom was never actually seen.
+ *
+ * The pause matters when the keys that scroll BACK are already queued
+ * behind the ones that hit the edge, which is what a fast down-then-up
+ * burst is: without it the discarded tail lets them run immediately
+ * and the screen leaves the bottom the instant it arrives. og needs
+ * none of this because its backlog drains at microseconds a key and
+ * the edge holds for however long the user keeps pressing.
+ *
+ * A FLOOR, not a target: the edge is guaranteed to hold this long,
+ * and holds longer whenever the user simply keeps pressing.
+ */
+const EDGE_DWELL_MS = 120;
+
+/** When the current edge rest ends, 0 when not resting. */
+let edgeDwellUntil = 0;
+let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Ends an edge rest early, for a teardown or a discarded queue. */
+function cancelEdgeDwell(): void {
+  edgeDwellUntil = 0;
+  if (!dwellTimer) return;
+  clearTimeout(dwellTimer);
+  dwellTimer = null;
+}
+
 /** og's tty input queue: keys read but not yet run. */
 let pendingKeys: string[] = [];
 let draining = false;
-
-/** Whether another key is already waiting - og's `ungot != NULL` for
- *  the prompt, and what markBurst reports. */
-export const keysPending = (): boolean => pendingKeys.length > 0;
 
 /**
  * og's ISIG queue flush: the driver throws away everything typed
@@ -1386,6 +1433,7 @@ export const keysPending = (): boolean => pendingKeys.length > 0;
  */
 function dropQueuedKeys(): void {
   pendingKeys = [];
+  cancelEdgeDwell();
   takeUngot();
 }
 
@@ -1395,35 +1443,114 @@ function dropQueuedKeys(): void {
  */
 function drainKeys(): void {
   if (draining) return;
+
+  // Resting at an edge. Checked HERE rather than only where a drain
+  // hands off to the next key, because the rest has to outlive the
+  // queue going empty: the burst that hit the bottom is discarded, so
+  // there is usually nothing left to hold, and the keys the rest
+  // exists to delay are the ones the tty delivers DURING it. Those
+  // arrive through keyHandler, which calls straight in here - so this
+  // is the only gate they pass.
+  if (edgeDwellUntil) {
+    const rest = edgeDwellUntil - Date.now();
+
+    if (rest > 0) {
+      // one timer for the whole rest, however many chunks arrive
+      if (!dwellTimer) {
+        dwellTimer = setTimeout(() => {
+          dwellTimer = null;
+          drainKeys();
+        }, rest);
+      }
+
+      return;
+    }
+
+    edgeDwellUntil = 0;
+  }
+
   draining = true;
 
   try {
     const key = pendingKeys.shift();
     if (key === undefined) return;
 
+    cancelPromptSettle();
+
     // og's tty still holds the rest of the burst while it runs this
-    // one, so the ":" it writes is overwritten before it is ever
-    // composited. markBurst is that "something is still waiting".
+    // one, and its reads poll and unget from it - which is what keeps
+    // the ":" off the screen for the whole scroll.
+    //
+    // Read BEFORE armStall clears it: at an edge the previous command
+    // moved nothing, so this one will not read either and og's prompt
+    // stays up. Re-arming the hold here is what flickered "(END)".
     markBurst(pendingKeys.length > 0);
+
+    // this command has not hit an edge yet - its own eof_bell decides
+    armStall();
+
+    // og's cmd_exec/prompt() pair leaves the command line blank for
+    // exactly as long as the work takes. This is that long: a command
+    // slow enough to see holds the ":" off even without a backlog.
+    const started = Date.now();
     handleKey(key);
     flush();
+    markCommandTime(Date.now() - started);
+
+    // The command moved nothing (og's nlines == 0, forwback.c:335,
+    // :372) and the queue's head is the SAME key: it will hit the
+    // same wall, bell into the same rate limit, and repaint the same
+    // "(END)". Running it is indistinguishable from dropping it,
+    // except that running it costs a full frame - which is what made
+    // an overshoot into EOF unresponsive for as long as the backlog
+    // took to drain.
+    //
+    // Dropped only up to the first DIFFERENT key, which runs at once:
+    // holding j into EOF then pressing k moves back immediately
+    // instead of after the j's finish. og needs none of this because
+    // its no-op costs microseconds; ours is a whole render.
+    //
+    // Not done by skipping the paint instead: the frame is also what
+    // wipes the arrow's own key echo, and without it the ESC O A sat
+    // on the command line as "ESCOA".
+    //
+    // The whole run goes, and the screen then RESTS here for
+    // EDGE_DWELL_MS before anything else runs - see EDGE_DWELL_MS for
+    // why the rest is a clock and not a few surviving keys.
+    if (isStalled()) {
+      // Only a BURST rests. The rest exists because we threw away a
+      // queue og would have ground through - with nothing queued
+      // there is nothing to hold back and nothing to make up for, and
+      // resting anyway would delay an ordinary keypress that happened
+      // to land within the window (press j at the bottom, then k, and
+      // the k waits for no reason). Normal one-key-at-a-time use
+      // therefore never sees it.
+      const backlog = pendingKeys.length > 0;
+
+      while (pendingKeys.length && pendingKeys[0] === key) pendingKeys.shift();
+
+      if (backlog) edgeDwellUntil = Date.now() + EDGE_DWELL_MS;
+    }
   } finally {
     draining = false;
   }
 
   if (session.exited) {
     pendingKeys = [];
+    cancelEdgeDwell();
+    cancelPromptSettle();
     return;
   }
 
   if (pendingKeys.length) {
     // back to the read, exactly as og does - and THIS is the yield
-    // that lets a ^C typed mid-scroll be delivered at all
+    // that lets a ^C typed mid-scroll be delivered at all. A rest
+    // started by the key just run is honoured at the top.
     setImmediate(drainKeys);
     return;
   }
 
-  markBurst(false);
+  armPromptSettle();
 
   // keys the interrupt poll queued during a blocking walk run now,
   // like og's command loop draining the ungot queue - except while a
@@ -1433,6 +1560,50 @@ function drainKeys(): void {
     const pending = takeUngot();
     if (pending && !session.exited) keyHandler(pending);
   }
+}
+
+/** The pending "the scroll is over, put the ":" back" repaint. */
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cancelPromptSettle(): void {
+  if (!settleTimer) return;
+  clearTimeout(settleTimer);
+  settleTimer = null;
+}
+
+/**
+ * Brings the ":" back once the work has actually stopped.
+ *
+ * og needs nothing here: its prompt() writes the ":" at the end of
+ * every command, and the next command's clear_bot takes it away again
+ * microseconds later, so "hidden while working" and "back when idle"
+ * are the same instant. Ours holds the line blank across the whole
+ * burst instead - that is what keeps it from blinking - so something
+ * has to decide the burst is over, and an empty key queue does not:
+ * macOS auto-repeat empties it between the last few keys. A quiet
+ * interval does.
+ */
+function armPromptSettle(): void {
+  cancelPromptSettle();
+  if (!promptHolding()) return;
+
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
+    if (session.exited || pendingKeys.length) return;
+
+    endPromptHold();
+
+    // an open mca owns the bottom line; the ":" is not what belongs
+    // there, and prompt() is not reached while one is collecting
+    if (search.message || search.input || promptOpen()) return;
+
+    // the held frames left the row blank on the glass while the table
+    // still carries whatever the last written prompt was, so the
+    // delta would dedupe the ":" away and it would never come back
+    dirtyBottomRow();
+    render(session.content, session.buffer);
+    flush();
+  }, PROMPT_SETTLE_MS);
 }
 
 /** True while a prompt is collecting input, like og's mca != 0. */

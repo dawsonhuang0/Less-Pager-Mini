@@ -347,6 +347,30 @@ export function resetBellTimer(): void {
 export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   const quiet = optQuiet();
 
+  // This is og's `nlines == 0` (forwback.c:335, :372): forw()/back()
+  // broke out before moving a single line, so no line was read, so
+  // check_poll never ran and nothing was ungot - and prompt() then
+  // writes ":" or "(END)" normally, however many keys are still
+  // queued behind it. The hold exists because of that unget; where og
+  // cannot have one, we must not have one either.
+  //
+  // Not gated on the one-per-second rate limit below: that silences
+  // the BELL, never the prompt.
+  //
+  // ARRIVING at the edge, as against already sitting on it. og cannot
+  // tell these apart and does not try: it grinds every queued no-op
+  // command and the gate below collapses them into one bell per
+  // second, which is right when the user is leaning on the key.
+  //
+  // But we DISCARD that queue, so a burst that hits the bottom is a
+  // single command where og had hundreds - and if the last bell was
+  // under a second ago (scrolled off the edge and straight back onto
+  // it, which is exactly the down-then-up burst) the gate eats the
+  // only one we were going to ring. A fresh arrival therefore rings
+  // unconditionally; leaning on the key still rings once a second.
+  const freshEdge = kind === 'eof' && !edgeHeld;
+  if (kind === 'eof') markStalled();
+
   // og's clear_bot before a bell comes from cmd_exec, which runs when
   // a COMMAND executes (command.c:124), so it goes out whether or not
   // eof_bell's one-per-second gate then lets the bell through: the
@@ -374,8 +398,10 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   }
 
   if (kind === 'eof') {
+    // og's `if (now == last_eof_bell) return;` (forwback.c:56), with
+    // the fresh-arrival exception above
     const now = Math.floor(Date.now() / 1000);
-    if (now === lastEofBell) return;
+    if (now === lastEofBell && !freshEdge) return;
     lastEofBell = now;
 
     if (quiet !== 0) {
@@ -865,84 +891,128 @@ export function resetFirstPaint(): void {
 let bareFrame = false;
 let cmdExecOpened = false;
 
-/** og's LBUFSIZE (ch.c:39): the size of one block it reads. */
-const LBUFSIZE = 8192;
+/**
+ * The two halves of the ":" problem have ONE cause and take two
+ * different fixes, which is why every single-knob attempt traded one
+ * for the other.
+ *
+ * og's cmd_exec (command.c:124) blanks the command line, runs the
+ * command, and prompt() writes the ":" back, so the line is blank for
+ * exactly the duration of the work. On top of that, a read that goes
+ * to disk with a key waiting ungets the key (check_poll, os.c:164) and
+ * the NEXT prompt() returns early on `ungot != NULL` (command.c:924) -
+ * so during a burst on a real file the ":" stays gone across command
+ * after command. The help file is CH_HELPFILE, answered out of memory
+ * (ch.c:616): it is never polled, nothing is ever ungot for it, and
+ * its prompt is written at the end of every single command.
+ *
+ * So og's help prompt is steady because it is REWRITTEN every time and
+ * the gap in between is microseconds. Ours is milliseconds, so writing
+ * it every time is exactly what made it blink. Two fixes:
+ *
+ *   1. The gap. Our output is buffered, so an unflushed clear_bot is
+ *      overwritten by the frame that follows and the pair reaches the
+ *      terminal as ONE write, with no blank state in between - og's
+ *      microsecond gap, for free. cmd_exec therefore flushes its clear
+ *      only when we mean the blank to be seen (core.ts).
+ *   2. The burst. Behind the keyboard on a real file is our version of
+ *      og's poll-and-unget, and it holds the prompt off for as long as
+ *      it lasts.
+ *
+ * Neither applies to help: (1) leaves its prompt rewritten inside one
+ * atomic frame, and (2) is declined for it outright, as og's ch does.
+ */
+let promptHold = false;
 
-/** The highest block og would already have read, -1 before the first. */
-let readBlocks = -1;
+/** og's `nlines == 0`: the last command moved nothing, so it read
+ *  nothing, so there is nothing to suppress the prompt. */
+let stalled = false;
 
-/** Whether ANOTHER key of this chunk is still waiting behind the one
- *  being handled - og's tty with something left in it. */
-let inBurst = false;
+/** Whether the command BEFORE this one was also stalled - i.e. the
+ *  screen was already sitting at the edge rather than arriving. */
+let edgeHeld = false;
+
+/**
+ * How long the keyboard must stay quiet before the ":" comes back.
+ *
+ * Without it the ":" blinks through a burst's tail: macOS auto-repeat
+ * spaces its last keys further and further apart, so each one finds an
+ * empty queue and looks like the end of the scroll.
+ */
+export const PROMPT_SETTLE_MS = 150;
+
+/** A command slower than this leaves a gap the eye catches. */
+const SLOW_MS = 40;
 
 /** Whether THIS frame is withholding its prompt line. */
 let heldPrompt = false;
 
 /**
- * Tells the paint that another key is already waiting behind this one.
+ * Tells the paint we are BEHIND the keyboard - another key was already
+ * waiting when this one started.
  *
- * og writes the ":" between burst keys too - prompt()'s only early
- * return is `ungot != NULL` (command.c:924), and type-ahead sits in
- * the TTY, not in ungot. What og does NOT do is let it reach the
- * terminal: its output is buffered, and the next command's cmd_exec
- * clear_bot lands in the same buffer before anything is flushed, so
- * the prompt is overwritten before it is ever displayed.
- *
- * We flush after every key so the scroll stays smooth, which means our
- * ":" DOES reach the glass - it flickered back mid-scroll. Withholding
- * the prompt line while another key is pending is the same net effect
- * as og's coalescing.
+ * That is the state og is in whenever it polls mid-read and ungets,
+ * and it is the honest signal for "the user is scrolling faster than
+ * the screen can follow", which is when the ":" must stay out of the
+ * way. The help file declines it: og's ch never polls CH_HELPFILE, so
+ * no help command ever finds its prompt suppressed.
  */
 export function markBurst(burst: boolean): void {
-  inBurst = burst;
+  if (burst && !mode.HELP && !stalled) promptHold = true;
 }
-
-/** Whether another key of this chunk is still pending. */
-export const keysPending = (): boolean => inBurst;
 
 /**
- * Whether og would have gone to DISK for this paint, with a key
- * waiting on the tty.
- *
- * check_poll runs before every iread of the file (os.c:303), and a key
- * already waiting is read and pushed back with ungetcc_back
- * (os.c:164) — which makes the NEXT prompt() return early
- * (command.c:924), so og paints the rows and writes nothing to the
- * bottom line. During a burst something is always waiting: og reads
- * one byte at a time, so even the LAST arrow still has its own O and B
- * sitting in the tty when the read happens. What is rare is the read.
- *
- * og reads a whole LBUFSIZE block and only when the screen reaches
- * past what it holds. position(BOTTOM_PLUS_ONE) is how far the paint
- * needed — painting a row means reading to the end of its line — so
- * that offset, not the row's own, decides which block was wanted.
+ * The same hold from the other direction: a command slow enough that
+ * og's own clear_bot..prompt() gap would have been visible.
  */
-function crossesUnreadBlock(): boolean {
-  // og's check_poll fires when ch_get goes to DISK. The help file is
-  // CH_HELPFILE - its ch answers from memory, size_helpdata (ch.c:616)
-  // - so og never polls for it and never withholds the help prompt.
-  //
-  // Ours asked the FILE's source engine for a byte while the HELP was
-  // on screen: a position with nothing to do with the help text, which
-  // kept "entering new blocks" as help scrolled and withheld the
-  // prompt across key after key. That is the half-second the help
-  // prompt went missing.
-  if (mode.HELP) return false;
-
-  const sindex = Math.max(config.window - 1 - config.blankTop, 0);
-  const byte = hook.sourceRowByte?.(sindex);
-  if (typeof byte !== 'number') return false;
-
-  const block = Math.floor(Math.max(byte - 1, 0) / LBUFSIZE);
-  if (block <= readBlocks) return false;
-
-  const first = readBlocks < 0;
-  readBlocks = block;
-
-  // the first screen is read before any key exists to be polled
-  return !first && inBurst;
+export function markCommandTime(took: number): void {
+  if (took >= SLOW_MS && !mode.HELP && !stalled) promptHold = true;
 }
 
+/**
+ * og's `nlines == 0` (forwback.c:335, :372): THIS command broke out
+ * before moving a line, so it read nothing and ungot nothing.
+ *
+ * Raised by eof_bell, which og calls at exactly those points, and
+ * cleared at the start of the next command (armStall) - so it always
+ * describes the command that just ran and nothing older.
+ */
+export function markStalled(): void {
+  stalled = true;
+  promptHold = false;
+}
+
+/**
+ * Assumes the command about to run WILL move, until its eof_bell says
+ * otherwise.
+ *
+ * This used to be a latch cleared by comparing painted rows, on the
+ * theory that changed content is og's `nlines > 0`. It is - but only
+ * where a comparable frame exists: a frozen frame, an mca holding the
+ * screen, or any path that does not repaint leaves the flag standing,
+ * and a stale flag means the collapse below starts eating keys while
+ * the screen is genuinely moving. Asking each command afresh cannot
+ * go stale.
+ */
+export function armStall(): void {
+  edgeHeld = stalled;
+  stalled = false;
+}
+
+/** Whether the command just run moved nothing - so an identical key
+ *  behind it will do nothing either (core.ts collapses those). */
+export const isStalled = (): boolean => stalled;
+
+/**
+ * Whether the ":" is being held off - so cmd_exec flushes its clear
+ * like og, and the frame leaves the row alone.
+ */
+export const promptHolding = (): boolean => promptHold;
+
+/** Ends the hold once the keyboard has settled and the ":" can return. */
+export function endPromptHold(): void {
+  promptHold = false;
+}
 
 
 
@@ -1099,25 +1169,14 @@ export function render(rawContent: string[], buffer: string[]): void {
   }
 
   // og reached this paint but not prompt(): the read it needed polled
-  // the tty, found a key and ungot it, so prompt() returned early
-  // NOT `|| inBurst`. og never withholds the prompt: prompt()'s only
-  // early return is `ungot != NULL` (command.c:924), and type-ahead
-  // lives in the TTY, not in ungot - so og writes the ":" on every
-  // key of a burst and it is simply always there. Withholding it made
-  // the ":" vanish for whole frames, and macOS auto-repeat delivers
-  // its tail with growing gaps, so each of those spaced keys was the
-  // "last" one and blinked the prompt back in.
+  // the tty, found a key and ungot it, so prompt() returned early.
   //
-  // The window where og genuinely has no ":" is between cmd_exec's
-  // clear_bot and prompt() - i.e. while the command's work runs. That
-  // is cmd_exec's job (core.ts), not this one's.
-  // Withheld while another key is queued. NOT og's rule - og writes
-  // the prompt on every key (prompt()'s only early return is `ungot
-  // != NULL`, command.c:924) and stays steady because ours is always
-  // there. Ours blinks instead, because we flush per key where og's
-  // buffer coalesces. Kept at the user's call: the ":" hiding during
-  // the work matters more than the help prompt's flicker.
-  const promptHeld = !filling && (crossesUnreadBlock() || inBurst);
+  // Held for the whole burst, not just while a key happens to be
+  // queued: macOS auto-repeat spaces a burst's tail out until the
+  // queue keeps running dry, and every one of those keys then looked
+  // like the end of the scroll and blinked the ":" back in. The settle
+  // timer ends the hold instead, on the clock rather than on the queue.
+  const promptHeld = !filling && promptHold;
 
   // a command that already wrote og's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
@@ -1173,13 +1232,20 @@ export function render(rawContent: string[], buffer: string[]): void {
     rows[rows.length - 1] = bottom;
   }
 
-  // the withheld line still has to BE something: pin it to what the
-  // screen already shows, so the frame that skips writing it and the
-  // table that records it agree
-  if (promptHeld && prevRows && prevRows.length === rows.length &&
-      rows.length > 0) {
+  // the withheld line still has to BE something, and what it is is
+  // BLANK: cmd_exec cleared it and flushed that clear (core.ts), and
+  // no prompt() has written over it since. That is og's state exactly
+  // - the command line between clear_bot and the prompt.
+  //
+  // It used to be pinned to the previous frame's bottom row instead,
+  // which is the same thing only while the recorded row happens to be
+  // right. dirtyBottomRow leaves a NUL there to force a repaint, and
+  // that NUL then reached the frame builders as the row's text: a
+  // truthy row that writes nothing and, through og's put_line
+  // truncation, swallows the rest of the frame with it.
+  if (promptHeld && rows.length > 0) {
     rows = rows.slice();
-    rows[rows.length - 1] = prevRows[prevRows.length - 1];
+    rows[rows.length - 1] = '';
   }
 
   heldPrompt = promptHeld;
