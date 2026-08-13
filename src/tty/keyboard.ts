@@ -180,6 +180,38 @@ export function takeUngot(): Buffer | null {
  * aborting ^C included — never run as commands. Keys still unread
  * in the kernel's tty buffer survive, exactly like og's.
  */
+/**
+ * og's `sigs` (signal.c:29) and ABORT_SIGS().
+ *
+ *     static void u_interrupt(int type) { ... sigs |= S_INTERRUPT; ... }
+ *     #define ABORT_SIGS()  (sigs & (S_INTERRUPT|S_STOP))
+ *
+ * A volatile flag the SIGNAL handler sets, so every loop that draws
+ * can check it for free: put_line_hilite returns without output
+ * (output.c:64) and forw()/back() break where they stand
+ * (forwback.c:312, :412). That is why og stops the instant you press
+ * ^C, wherever it happens to be.
+ *
+ * We cannot get a signal delivered mid-work - node runs its handlers
+ * on the event loop - so this flag is raised by whoever first SEES
+ * the ^C: the key scan, the interrupt poll, or the SIGINT handler.
+ * The loops then behave like og's.
+ */
+let sigs = false;
+
+/** og's ABORT_SIGS(). */
+export const abortSigs = (): boolean => sigs;
+
+/** og's `sigs |= S_INTERRUPT`, from wherever the ^C was noticed. */
+export function raiseAbort(): void {
+  sigs = true;
+}
+
+/** og's psignals clearing the flag once it has been handled. */
+export function clearAbort(): void {
+  sigs = false;
+}
+
 export function consumeInterrupt(): void {
   ungot = [];
 }

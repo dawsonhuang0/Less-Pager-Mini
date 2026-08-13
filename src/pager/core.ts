@@ -50,7 +50,11 @@ import {
 
 import { help } from "../startup/lessHelp";
 
-import { getAction, splitKeys, kentSequence, kentToNewline, tailCascade }
+import { searchInterrupted } from "../features/searching";
+
+import { abortSigs, raiseAbort, clearAbort } from "../tty/keyboard";
+
+import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline, tailCascade }
   from "../keys";
 
 import {
@@ -1018,7 +1022,46 @@ const acts: Record<Actions, () => void> = {
 
 // helpers
 
+/**
+ * Exactly the commands og runs cmd_exec() for, read off command.c's
+ * switch (:1694, :1707, :1759, ...).
+ */
+const CMD_EXEC_ACTIONS = new Set<Actions>([
+  'LINE_FORWARD', 'NEWLINE_FORWARD',
+  'LINE_BACKWARD', 'NEWLINE_BACKWARD',
+  'WINDOW_FORWARD', 'SET_WINDOW_FORWARD',
+  'WINDOW_BACKWARD', 'SET_WINDOW_BACKWARD',
+  'FORCE_LINE_FORWARD', 'FORCE_LINE_BACKWARD',
+  'NO_EOF_WINDOW_FORWARD', 'FORCE_WINDOW_BACKWARD',
+  'SET_HALF_WINDOW_FORWARD', 'SET_HALF_WINDOW_BACKWARD',
+  'FIRST_LINE', 'LAST_LINE', 'PERCENT_LINE', 'GO_POS',
+]);
+
 function act(action: Actions | undefined): void {
+  // a new command: the previous one's cmd_exec opening is spent
+  search.cmdExecOpened = false;
+
+  // og's cmd_exec (command.c:124): `clear_attn(); clear_bot();
+  // flush();` before the command runs, so the ":" is off the screen
+  // while the work happens - which on a burst scroll is exactly when
+  // the line-number walk is still going. The frame that follows sees
+  // cmdExecOpened and does not write a second clear.
+  // No mode.INIT guard: og's cmd_exec is unconditional at every one of
+  // these cases (command.c:1694, :1707, ...), and first_time gates
+  // only the "...skipping..." marker inside forw(), never the clear.
+  // Skipping it on the first keys left the ":" standing through their
+  // work - the one or two early flashes that survived every other fix.
+  if (action !== undefined && CMD_EXEC_ACTIONS.has(action) &&
+      !session.shellPause) {
+    // og's cmd_exec ends with flush() (command.c:128): the clear goes
+    // to the terminal BEFORE the command runs, so the ":" is off the
+    // screen while the work happens.
+    putstr(clearBot());
+    flush();
+    search.cmdExecOpened = true;
+    dirtyBottomRow();
+  }
+
   config.keyPrefix = '';
 
   const handled = action !== undefined &&
@@ -1149,6 +1192,13 @@ function keyHandler(data: Buffer): void {
 }
 
 function keyHandlerKeys(data: Buffer): void {
+  // og's psignals clears sigs before handling it (signal.c:290), so
+  // the flag lives only for the work the interrupt was meant to stop.
+  // Clearing it at the top of every input chunk makes that fail-safe:
+  // a stuck flag would abort every paint forever, and any keystroke
+  // recovers from it.
+  clearAbort();
+
   let text = heldKeyBytes + data.toString();
   heldKeyBytes = '';
 
@@ -1186,7 +1236,25 @@ function keyHandlerKeys(data: Buffer): void {
   // og's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
   // foreground group, killing a pipe's writer along the way — the
   // driver semantics node's raw mode dropped
-  if (text.includes('\x03')) raiseSigint();
+  // NOT raiseAbort() here: og's signal fires at the DRIVER, but og
+  // has already read and run the bytes ahead of the ^C - which is why
+  // "jjjj^Cjjjj" leaves it on line 5, not line 1. Raising the flag on
+  // the whole chunk aborted the paints of those first four j's too.
+  // It is raised where the ^C is actually reached: in the key loop
+  // below, or by the poll when one is typed during the work.
+  if (text.includes('\x03')) {
+    // og's ISIG: the tty driver FLUSHES the input queue when it
+    // generates SIGINT, so every key typed before the ^C is thrown
+    // away by the KERNEL and og never sees them.
+    //
+    // Ours are already out of the kernel - node's stream drained them
+    // into userspace the moment they arrived - so a signal has nothing
+    // left to flush and the backlog kept scrolling. Holding j and
+    // hitting ^C left hundreds of queued j's still to run. This is
+    // that flush, on the queue the bytes actually sit in.
+    dropQueuedKeys();
+    raiseSigint();
+  }
 
   // og's initial fill blocks in read: check_poll queues typed tty
   // chars (ungetcc_back) until the screenful or the learned length;
@@ -1261,23 +1329,106 @@ function keyHandlerKeys(data: Buffer): void {
   // not to merge commands together.
   const keys = splitKeys(text);
 
-  // og reads byte at a time, so a chunk carrying more than one command
-  // always has something left in the tty when it stops to read
-  markBurst(keys.length > 1);
+  // og reads a byte at a time, so a chunk carrying more than one
+  // command always has something left in the tty when it stops to
+  // read - and the prompt it writes is overwritten in the buffer
+  // before any of it is flushed. Marked PER KEY: the last one has
+  // nothing behind it and gets its prompt, like og's.
+  // og's command loop is ONE key at a time:
+  //
+  //     for (;;) { c = getcc(); ... commands(); }
+  //
+  // It returns to the read after every command, which is what makes a
+  // ^C land promptly, the ":" time correctly, and the backlog
+  // discardable. Ours ran a whole chunk in one synchronous loop and
+  // never yielded, so node could deliver neither the signal nor the
+  // next byte until the last key was done - the root cause behind the
+  // uninterruptible scroll AND the prompt flicker.
+  //
+  // The queue below IS og's tty queue, held explicitly because ours
+  // has already left the kernel.
+  const chunk = splitKeys(text);
 
-  for (const sequence of keys) {
-    handleKey(sequence);
+  // og's ISIG: when the driver generates SIGINT it flushes the input
+  // QUEUE - everything typed BEFORE the ^C, which is what is sitting
+  // in it. Bytes after the ^C are enqueued afterwards and survive.
+  // Measured across four shapes, and it is the leading keys that go:
+  //
+  //   jjjj^Cjjjj -> line 5   leading 4 flushed, trailing 4 ran
+  //   jjjj^Cj    -> line 2   leading 4 flushed, trailing 1 ran
+  //   jj^C       -> line 1   leading 2 flushed, none after
+  //   ^Cjj       -> line 3   nothing queued, both ran
+  //
+  // I had this backwards at first - keeping the leading keys and
+  // dropping the trailing ones - which matched only the first shape.
+  const intr = chunk.indexOf('\x03');
+
+  if (intr > 0) {
+    chunk.splice(0, intr);
+    raiseAbort();
+  }
+
+  pendingKeys.push(...chunk);
+  drainKeys();
+}
+
+/** og's tty input queue: keys read but not yet run. */
+let pendingKeys: string[] = [];
+let draining = false;
+
+/** Whether another key is already waiting - og's `ungot != NULL` for
+ *  the prompt, and what markBurst reports. */
+export const keysPending = (): boolean => pendingKeys.length > 0;
+
+/**
+ * og's ISIG queue flush: the driver throws away everything typed
+ * before the ^C, so og never sees it. Ours is an array.
+ */
+function dropQueuedKeys(): void {
+  pendingKeys = [];
+  takeUngot();
+}
+
+/**
+ * One key, then back to the event loop - og's `commands()` returning
+ * to `getcc()`.
+ */
+function drainKeys(): void {
+  if (draining) return;
+  draining = true;
+
+  try {
+    const key = pendingKeys.shift();
+    if (key === undefined) return;
+
+    // og's tty still holds the rest of the burst while it runs this
+    // one, so the ":" it writes is overwritten before it is ever
+    // composited. markBurst is that "something is still waiting".
+    markBurst(pendingKeys.length > 0);
+    handleKey(key);
     flush();
+  } finally {
+    draining = false;
+  }
 
-    if (session.exited) break;
+  if (session.exited) {
+    pendingKeys = [];
+    return;
+  }
+
+  if (pendingKeys.length) {
+    // back to the read, exactly as og does - and THIS is the yield
+    // that lets a ^C typed mid-scroll be delivered at all
+    setImmediate(drainKeys);
+    return;
   }
 
   markBurst(false);
 
-  // keys the interrupt poll queued during a blocking search run
-  // now, like og's command loop draining the ungot queue — except
-  // while a message waits: og's get_return reads the raw tty, so
-  // queued keys stay behind it until a fresh key dismisses
+  // keys the interrupt poll queued during a blocking walk run now,
+  // like og's command loop draining the ungot queue - except while a
+  // message waits: og's get_return reads the raw tty, so queued keys
+  // stay behind it until a fresh key dismisses
   if (!search.message) {
     const pending = takeUngot();
     if (pending && !session.exited) keyHandler(pending);
@@ -1661,8 +1812,20 @@ function dispatchKey(sequence: string): void {
     // get_return RETURNS into the rest of the command that errored -
     // A_SETMARK's repaint(), say - and only then is the ungotten key
     // re-read. A repaint armed behind the message runs here, before
-    // whatever that key does
-    if (fullRepaintArmed()) {
+    // whatever that key does.
+    //
+    // ...but only when the key was CONSUMED. get_return ungets
+    // anything that is not RETURN, space or an interrupt
+    // (output.c:687), and og's prompt() then returns before
+    // make_display while that key is pending (command.c:924) - so a
+    // deferred screen_trashed (toggle_option's, unlike A_SETMARK's
+    // immediate repaint()) waits for it too. Dismissing "Chop long
+    // lines" with "-" repainted the chopped screen here; og keeps
+    // showing the old one behind the "-" prompt.
+    const consumed = session.key === '\x0D' || session.key === '\x0A' ||
+      session.key === ' ';
+
+    if (consumed && fullRepaintArmed()) {
       markPosClear();
       markBareRepaint();
       render(session.content, session.buffer);
@@ -1866,8 +2029,8 @@ function dispatchKey(sequence: string): void {
   }
 
   // ^X and : start two-key commands (^X^X, :n), like less's tables
-  if (config.keyPrefix === '\x18' || config.keyPrefix === ':' ||
-      config.keyPrefix === '\x0F') {
+  // which keys can HOLD is the table's business, not a hardcoded list
+  if (config.keyPrefix && isKeyPrefix(config.keyPrefix)) {
     const prefix = config.keyPrefix;
 
     // erase and newline cancel a prefix silently (CF_QUIT_ON_ERASE)
@@ -1932,8 +2095,7 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  if ((session.key === '\x18' || session.key === ':' ||
-       session.key === '\x0F') && !session.escCount) {
+  if (isKeyPrefix(session.key) && !session.escCount) {
     config.keyPrefix = session.key;
     render(session.content, session.buffer);
     return;

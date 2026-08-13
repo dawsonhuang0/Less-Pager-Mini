@@ -54,6 +54,26 @@ export const kentSequence = (): string =>
  * @param key - A single-character string from user input.
  * @returns The corresponding `Actions` type if defined, otherwise `undefined`.
  */
+/**
+ * og's A_PREFIX test (cmd_decode, decode.c): the bytes in hand are a
+ * proper prefix of some entry in the command table, so the command is
+ * incomplete and the loop reads another character.
+ *
+ * og derives it from the TABLE. Ours hardcoded three characters
+ * (`^X`, `:`, `^O`), so every other multi-key binding was
+ * unreachable - `ZZ` is `'Z','Z',0, A_QUIT` (decode.c:236), and with
+ * `Z` absent from that list its second key never had a chance.
+ */
+export function isKeyPrefix(keys: string): boolean {
+  if (!keys) return false;
+
+  for (const bound of Object.keys(boundKeys())) {
+    if (bound.length > keys.length && bound.startsWith(keys)) return true;
+  }
+
+  return false;
+}
+
 export function getAction(key: string): Actions | undefined {
   if (key.startsWith('\x1b[<64;')) return 'LINE_BACKWARD';
   if (key.startsWith('\x1b[<65;')) return 'LINE_FORWARD';
@@ -242,8 +262,11 @@ const keys: Record<string, Actions> = {
   ':q': 'EXIT', // :q
   ':Q': 'EXIT', // :Q
 
-  // Z-exit
-  '\x5A': 'Z_EXIT', // Z
+  // og's table is `'Z','Z',0, A_QUIT` (decode.c:236): ZZ is a TWO-key
+  // command and a lone Z is an incomplete one. Binding Z by itself
+  // meant the second Z never arrived, and the action it named had no
+  // handler at all - so ZZ rang the bell instead of quitting.
+  'ZZ': 'EXIT', // ZZ
 
   // ESC command
   '\x1B': 'ESC', // ESC

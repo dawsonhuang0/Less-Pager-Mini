@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { putstr, flush } from './tty/output';
 
-import { hasUngot } from './tty/keyboard';
+import { hasUngot, abortSigs } from './tty/keyboard';
 
 import { terminalCapability } from './tty/terminal';
 
@@ -459,6 +459,13 @@ export function formatContent(content: string[]): string[] {
     wrapLongLines(content, lines);
   }
 
+  // og's put_line_hilite opens with `if (ABORT_SIGS()) return;` - it
+  // draws NOTHING while an interrupt is pending (output.c:64), and
+  // forw()'s loop breaks on the same test (forwback.c:312). So a ^C
+  // stops the paint where it stands rather than at the next command
+  // boundary. This is that check, on the rows this frame would draw.
+  if (abortSigs()) return lines;
+
   padToEOF(lines);
   return overlayHeaderLines(content, lines);
 }
@@ -864,17 +871,34 @@ const LBUFSIZE = 8192;
 /** The highest block og would already have read, -1 before the first. */
 let readBlocks = -1;
 
-/** Whether this chunk of input carried more than one command. */
+/** Whether ANOTHER key of this chunk is still waiting behind the one
+ *  being handled - og's tty with something left in it. */
 let inBurst = false;
 
 /** Whether THIS frame is withholding its prompt line. */
 let heldPrompt = false;
 
-/** Tells the paint that this chunk held several keys, so og's tty had
- *  something waiting whenever it stopped to read. */
+/**
+ * Tells the paint that another key is already waiting behind this one.
+ *
+ * og writes the ":" between burst keys too - prompt()'s only early
+ * return is `ungot != NULL` (command.c:924), and type-ahead sits in
+ * the TTY, not in ungot. What og does NOT do is let it reach the
+ * terminal: its output is buffered, and the next command's cmd_exec
+ * clear_bot lands in the same buffer before anything is flushed, so
+ * the prompt is overwritten before it is ever displayed.
+ *
+ * We flush after every key so the scroll stays smooth, which means our
+ * ":" DOES reach the glass - it flickered back mid-scroll. Withholding
+ * the prompt line while another key is pending is the same net effect
+ * as og's coalescing.
+ */
 export function markBurst(burst: boolean): void {
   inBurst = burst;
 }
+
+/** Whether another key of this chunk is still pending. */
+export const keysPending = (): boolean => inBurst;
 
 /**
  * Whether og would have gone to DISK for this paint, with a key
@@ -894,6 +918,17 @@ export function markBurst(burst: boolean): void {
  * that offset, not the row's own, decides which block was wanted.
  */
 function crossesUnreadBlock(): boolean {
+  // og's check_poll fires when ch_get goes to DISK. The help file is
+  // CH_HELPFILE - its ch answers from memory, size_helpdata (ch.c:616)
+  // - so og never polls for it and never withholds the help prompt.
+  //
+  // Ours asked the FILE's source engine for a byte while the HELP was
+  // on screen: a position with nothing to do with the help text, which
+  // kept "entering new blocks" as help scrolled and withheld the
+  // prompt across key after key. That is the half-second the help
+  // prompt went missing.
+  if (mode.HELP) return false;
+
   const sindex = Math.max(config.window - 1 - config.blankTop, 0);
   const byte = hook.sourceRowByte?.(sindex);
   if (typeof byte !== 'number') return false;
@@ -1065,15 +1100,36 @@ export function render(rawContent: string[], buffer: string[]): void {
 
   // og reached this paint but not prompt(): the read it needed polled
   // the tty, found a key and ungot it, so prompt() returned early
-  const promptHeld = !filling && crossesUnreadBlock();
+  // NOT `|| inBurst`. og never withholds the prompt: prompt()'s only
+  // early return is `ungot != NULL` (command.c:924), and type-ahead
+  // lives in the TTY, not in ungot - so og writes the ":" on every
+  // key of a burst and it is simply always there. Withholding it made
+  // the ":" vanish for whole frames, and macOS auto-repeat delivers
+  // its tail with growing gaps, so each of those spaced keys was the
+  // "last" one and blinked the prompt back in.
+  //
+  // The window where og genuinely has no ":" is between cmd_exec's
+  // clear_bot and prompt() - i.e. while the command's work runs. That
+  // is cmd_exec's job (core.ts), not this one's.
+  // Withheld while another key is queued. NOT og's rule - og writes
+  // the prompt on every key (prompt()'s only early return is `ungot
+  // != NULL`, command.c:924) and stays steady because ours is always
+  // there. Ours blinks instead, because we flush per key where og's
+  // buffer coalesces. Kept at the user's call: the ":" hiding during
+  // the work matters more than the help prompt's flicker.
+  const promptHeld = !filling && (crossesUnreadBlock() || inBurst);
 
   // a command that already wrote og's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
   // frame's opening; error() then adds its own and the pair matches
   // og. Consumed HERE, not inside scrollFrame: the early returns
   // there would strand it and suppress a later frame's opening.
+  // NOT consumed here: a single key can render more than once (a bare
+  // fill frame, then the real one), and whichever ran first used to
+  // eat the flag - so the second frame wrote a SECOND clear_bot where
+  // og spends one per command. It stays up for the whole command and
+  // act() clears it when the next one starts.
   cmdExecOpened = search.cmdExecOpened;
-  search.cmdExecOpened = false;
 
   // a mid-scan note went straight to the terminal, so what we think
   // is on the bottom line is stale
@@ -1083,6 +1139,39 @@ export function render(rawContent: string[], buffer: string[]): void {
   }
 
   let rows = screenRows(rawContent, buffer, filling);
+
+  // og's start_mca never runs make_display: while a multichar command
+  // is collecting, prompt() is not reached at all - A_OPT_TOGGLE is
+  // `start_mca(...); c = getcc(); goto again;` (command.c:2499) - and
+  // og's prompt() would return early anyway while the ungotten
+  // dismissing key is pending (command.c:924). So the CONTENT rows
+  // stay exactly as the last real paint left them and only the bottom
+  // line moves.
+  //
+  // Ours rebuilt session.content the moment -S toggled, so the newly
+  // chopped rows reached the screen while the "-" prompt was open -
+  // og still shows the OLD wrapped screen there and repaints only
+  // once the mca closes and the owed screen_trashed is honoured.
+  //
+  // The same holds the moment the option's MESSAGE goes up: og's
+  // error() is squish_check + clear_bot + the text (output.c:705) and
+  // touches no content row, while the screen_trashed toggle_option
+  // owes is honoured only by a later make_display. `fullRepaintPending
+  // && !trashedRepaint` IS that owed-but-deferred state - which is why
+  // -S showed its chopped rows under the message where og still shows
+  // the old wrapped ones.
+  //
+  // A command that paints for itself (a search's jump_loc, a scroll)
+  // never sets fullRepaintPending, so its rows keep flowing.
+  const mcaHoldsScreen = !!option.pending || !!config.keyPrefix ||
+    (fullRepaintPending && !trashedRepaint);
+
+  if (mcaHoldsScreen && prevRows && prevRows.length === rows.length &&
+      rows.length > 0) {
+    const bottom = rows[rows.length - 1];
+    rows = prevRows.slice();
+    rows[rows.length - 1] = bottom;
+  }
 
   // the withheld line still has to BE something: pin it to what the
   // screen already shows, so the frame that skips writing it and the
@@ -1269,7 +1358,23 @@ export function render(rawContent: string[], buffer: string[]): void {
     // the prompt leaves the cursor exactly where the park would put
     // it; only an open command line positions inside its own text
     const bot = rows[rows.length - 1];
-    const opening = forwPrompt ? '' : clearBot();
+
+    // cmd_exec has already put this frame's opening on the terminal
+    // (og's clear_bot before the command ran, command.c:124), so the
+    // frame must not write a SECOND one. og spends one clear per
+    // scroll key; without this we spent two, and the extra blank of
+    // the bottom row is a flicker og does not have.
+    // og's set_mca is `mca = action; clear_bot(); clear_cmd();`
+    // (command.c:134) - start_mca clears UNCONDITIONALLY. forw_prompt
+    // gates prompt()'s clear (command.c:993), never an mca's: that is
+    // why og shows " Z" after a j and we showed ": Z", the prefix
+    // echo appended to a ":" the forward paint had told us to keep.
+    const mcaOpening = prevBottomEcho && !shownBottomEcho;
+
+    const opening = mcaOpening
+      ? clearBot()
+      : (forwPrompt || cmdExecOpened) ? '' : clearBot();
+
     forwPrompt = false;
 
     putstr(eprPrefix() +
@@ -2059,7 +2164,12 @@ function scrollFrame(
         // lower left repaint_hilite left it on and the prompt goes
         // straight there; a search that moved nothing never ran forw,
         // and og does clear_bot.
-        const open = forwPrompt ? '' : clearBot();
+        // ...and cmd_exec has already put this frame's opening on the
+        // terminal (command.c:124), so writing another blanks the
+        // prompt row a second time per key - 6 clears against og's 3
+        // on "jjj", and 6 against 4 scrolling the help. That second
+        // blank IS the flicker.
+        const open = (forwPrompt || cmdExecOpened) ? '' : clearBot();
         forwPrompt = false;
         return open + (holdBot ? '' : bot);
       }
@@ -2488,7 +2598,12 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
       // NEWLINE ending it scrolls the screen. Then prompt() writes
       // the prompt where the cursor already sits. Byte for byte:
       //   \r ESC[K  (line \r\n) x k  prompt ESC[K
-      let frame = syncOn() + clearBot();
+      // og's forw() opens with the clear_bot cmd_exec already sent
+      // (command.c:124) - it does not send a second. Ours did, so
+      // every scroll key blanked the prompt row twice: 6 clears
+      // against og's 3 on "jjj", 6 against 4 in the help. That extra
+      // blank is the flicker.
+      let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
       for (let r = n - 1 - k; r < n - 1; r++) frame += rows[r] + '\n';
 
@@ -2516,7 +2631,7 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     // mid-screen, so og addresses the bottom row before its prompt.
     //   \r ESC[K  (ESC[H ESC M line \r\n) x k  ESC[24;1H \r ESC[K
     //   prompt ESC[K
-    let frame = syncOn() + clearBot();
+    let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
     for (let r = k - 1; r >= 0; r--) {
       frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + '\n';

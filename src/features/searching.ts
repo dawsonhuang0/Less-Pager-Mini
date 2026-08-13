@@ -7,7 +7,7 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
-import { keyboard, keyboardPollFd, pushUngot } from '../tty/keyboard';
+import { keyboard, keyboardPollFd, pushUngot, raiseAbort } from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
 
 import { config, mode } from "../state/config";
@@ -1923,14 +1923,56 @@ let lastInterruptPoll = 0;
  *
  * @returns True when the search should abort.
  */
-export function searchInterrupted(): boolean {
+export function searchInterrupted(force = false): boolean {
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
   // not fd 0 (og's check_poll watches the tty, whatever stdin is)
   const kb = keyboard();
   if (!kb.isTTY) return false;
 
+  // FIRST, and with no rate limit: node's stream is in FLOWING mode,
+  // so it has already drained the tty into its own buffer - which is
+  // where a ^C typed during a scroll actually sits. The readSync
+  // below polls the TTY and finds it empty every time, which is why
+  // no abort site in the tree ever fired. Reading the stream buffer
+  // is free (memory, no syscall), so it runs on every check - og
+  // tests ABORT_SIGS() per LINE it draws (output.c:64), not ten times
+  // a second, and "stop immediately" needs that granularity.
+  const buffered = force
+    ? (kb as unknown as { read(): Buffer | string | null }).read()
+    : null;
+
+  if (buffered !== null && buffered.length) {
+    const text = typeof buffered === 'string'
+      ? buffered
+      : buffered.toString('binary');
+
+    if (text.includes('\x03')) {
+      // og's u_interrupt rings at every ^C (signal.c lbell) and sets
+      // sigs |= S_INTERRUPT, which every drawing loop then sees
+      fs.writeSync(1, '\x07');
+      raiseAbort();
+      pushUngot(Buffer.from('\x03', 'binary'));
+      return true;
+    }
+
+    if (text.includes(optIntrChar())) return true;
+
+    // og's check_poll ungets ordinary keys for the command loop
+    pushUngot(Buffer.from(text, 'binary'));
+  }
+
+  // The tty poll is a syscall, so it is rate limited by default - but
+  // a ^C typed DURING synchronous work never reaches node's buffer at
+  // all: the event loop is stopped, so nothing drains the tty. The
+  // kernel queue is the only place that byte exists, and this readSync
+  // is the only thing that can see it. Callers that are the reason the
+  // loop is blocked pass force and pay the syscall, which is
+  // microseconds against a scroll's paint.
+  //
+  // og needs none of this: ABORT_SIGS() reads a volatile flag its
+  // SIGINT handler set (signal.c:41), so checking per line is free.
   const now = Date.now();
-  if (now - lastInterruptPoll < 100) return false;
+  if (!force && now - lastInterruptPoll < 100) return false;
   lastInterruptPoll = now;
 
   // the poll must NEVER block: the keyboard fd's blocking state is
@@ -1958,6 +2000,7 @@ export function searchInterrupted(): boolean {
     // og's u_interrupt rings at every ^C (signal.c lbell), even
     // with the event loop blocked mid-scan
     fs.writeSync(1, '\x07');
+    raiseAbort();
     // queued so -K can still quit; an abort's getcc_clear drops it
     pushUngot(Buffer.from('\x03'));
     return true;

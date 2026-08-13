@@ -95,7 +95,6 @@ export type Actions =
   | 'ADD_BUFFER'
   | 'DEL_BUFFER'
   | 'COMMAND'
-  | 'Z_EXIT'
   | 'ESC'
   | 'TAG_COMMAND'
   | 'OPTION_TAG'

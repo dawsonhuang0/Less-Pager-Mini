@@ -2275,7 +2275,7 @@ export class FileInput implements PagerInput {
           'Calculating line numbers... (interrupt to abort)' + INVERSE_OFF);
       }
 
-      if (searchInterrupted()) {
+      if (searchInterrupted(true)) {
         consumeInterrupt();
         session.intrPending = true;
         this.lineScanAborted = true;
