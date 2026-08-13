@@ -2637,11 +2637,24 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
       frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + '\n';
     }
 
+    // The reverse index scrolls the WHOLE screen down, so the last
+    // content row lands on the command line - og has the same leak and
+    // wipes it in prompt(), whose clear_bot (command.c:993) runs
+    // before the prompt text. Held, there is no prompt() to do it, and
+    // the leaked row then sits there for the whole scroll. So the
+    // clear is unconditional here, exactly as og's lower_left +
+    // clear_bot pair is: it is what keeps that row blank, not the
+    // prompt that usually follows it.
+    //
+    // The forward branch above needs none: forw() ends its rows with a
+    // newline, and the row that scrolls in at the bottom is already
+    // blank.
+    const addressed = CURSOR_TO(promptRow(rows), 1) + clearBot();
     const bottom = rows[n - 1];
-    if (!bottom) return frame + CURSOR_TO(promptRow(rows), 1) + syncOff();
 
-    return frame + CURSOR_TO(promptRow(rows), 1) + clearBot() +
-      bottom + tailClear(bottom) + syncOff();
+    if (!bottom) return frame + addressed + syncOff();
+
+    return frame + addressed + bottom + tailClear(bottom) + syncOff();
   }
 
   return null;
