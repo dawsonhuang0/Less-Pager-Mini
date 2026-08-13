@@ -2,7 +2,9 @@ import { BlockFile } from './blockFile';
 
 import { decodeContent } from '../features/charset';
 
-import { optSqueeze } from '../options';
+import { optSqueeze, chopLine } from '../options';
+
+import { config } from '../state/config';
 
 /** True when the byte is a newline char, like og's '\n' || '\r'. */
 const isNl = (b: number | undefined): boolean => b === 0x0A || b === 0x0D;
@@ -44,6 +46,10 @@ interface BackLine {
 const lineMemo = new WeakMap<BlockFile, {
   size: number,
   squeeze: boolean,
+  /** og's skipeol: `chop_line() || hshift > 0` (input.c:348). */
+  skipeol: boolean,
+  /** How much of the line skipeol kept, so a wider shift re-reads. */
+  extent: number,
   lines: Map<number, ForwLine>,
 }>();
 
@@ -59,13 +65,23 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   if (pos >= bf.size) return null;
 
   const squeeze = optSqueeze();
+  // og's skipeol, and how much of the line it keeps
+  const skipeol = chopLine() || config.col > 0;
+  const extent = config.col + config.screenWidth;
   let memo = lineMemo.get(bf);
 
   // a growing file (a spool, an -F follow) can turn what was the last
   // line into the start of a longer one, and -s changes which lines
-  // fold together, so neither can be answered from the old memo
-  if (!memo || memo.size !== bf.size || memo.squeeze !== squeeze) {
-    memo = { size: bf.size, squeeze, lines: new Map() };
+  // fold together, so neither can be answered from the old memo.
+  //
+  // Nor can a change of skipeol: the same position yields a DIFFERENT
+  // line under it - one visible row ending at the real newline, versus
+  // the 64 KiB grid piece a wrapped read cuts. Without this the memo
+  // serves the pre-shift pieces after ESC-) and the fix above reaches
+  // only positions nothing has read yet.
+  if (!memo || memo.size !== bf.size || memo.squeeze !== squeeze ||
+      memo.skipeol !== skipeol || (skipeol && memo.extent !== extent)) {
+    memo = { size: bf.size, squeeze, skipeol, extent, lines: new Map() };
     lineMemo.set(bf, memo);
   }
 
@@ -80,6 +96,24 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   return line;
 }
 
+/**
+ * og's skip to the end of the line: `while (c != '\n') c =
+ * ch_forw_get()`. Unbounded, because the LINE's end is where the next
+ * one starts - the 64 KiB bound applies to what we build, not to how
+ * far the line runs.
+ */
+function newlineAfter(bf: BlockFile, pos: number): number {
+  let at = pos;
+
+  for (;;) {
+    const nl = bf.findNewline(at, MAX_LINE);
+    if (nl >= 0) return nl + 1;
+
+    at += MAX_LINE;
+    if (at >= bf.size) return bf.size;
+  }
+}
+
 function readForwLine(
   bf: BlockFile,
   pos: number,
@@ -88,6 +122,30 @@ function readForwLine(
   const nl = bf.findNewline(pos, MAX_LINE);
 
   if (nl < 0) {
+    // og's forw_line passes skipeol = `chop_line() || hshift > 0`
+    // (input.c:348): it builds the ONE visible row and then breaks
+    // with `endline = TRUE; chopped = TRUE` (input.c:502), skipping
+    // the rest of the line to its newline. One file line is one screen
+    // row, however long the line is.
+    //
+    // Cutting at the MAX_LINE grid instead handed each 64 KiB piece
+    // back as its own LINE, so a 360 KB line drew as six rows, each
+    // chopped from hshift and 65536 bytes apart. The cap is there to
+    // bound MEMORY; it must bound what we BUILD, not what counts as a
+    // line.
+    if (chopLine() || config.col) {
+      // enough bytes for the shifted row and no more (UTF-8 is at most
+      // 4 bytes per character, so this cannot come up short)
+      const want = (config.col + config.screenWidth + 1) * 4;
+      const stop = Math.min(pos + want, bf.size);
+
+      return {
+        text: decodeContent(bf.readRange(pos, stop - pos)),
+        next: newlineAfter(bf, pos),
+        split: false,
+      };
+    }
+
     // no newline in reach: cut at the absolute MAX_LINE grid so the
     // same boundaries appear when walking backward
     const grid = (Math.floor(pos / MAX_LINE) + 1) * MAX_LINE;
