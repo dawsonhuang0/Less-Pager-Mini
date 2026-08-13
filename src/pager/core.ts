@@ -8,6 +8,8 @@ import { squishCheck, renderHiliteRepaint, markSearchFlash }
   from '../helpers';
 import { fullScreenWidth } from '../options/state';
 
+import { armReadWatch } from '../state/reads';
+
 import { lgetenv, screenFillGrace } from '../startup/environment';
 
 import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
@@ -62,6 +64,7 @@ import {
   delBufferChar,
   render,
   markBurst,
+  markBehind,
   markCommandTime,
   isStalled,
   armStall,
@@ -1387,6 +1390,8 @@ function keyHandlerKeys(data: Buffer): void {
     raiseAbort();
   }
 
+  if (!pendingKeys.length) backlogSince = Date.now();
+
   pendingKeys.push(...chunk);
   drainKeys();
 }
@@ -1411,6 +1416,14 @@ function keyHandlerKeys(data: Buffer): void {
  */
 const EDGE_DWELL_MS = 120;
 
+/** How long an unbroken backlog means the loop is losing the race. */
+const BEHIND_MS = 80;
+
+/** When the CURRENT unbroken backlog started, 0 when the queue is
+ *  empty. Not "when the queue was last empty": after a quiet spell
+ *  that reads as an enormous backlog the moment one key lands. */
+let backlogSince = 0;
+
 /** When the current edge rest ends, 0 when not resting. */
 let edgeDwellUntil = 0;
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1433,6 +1446,7 @@ let draining = false;
  */
 function dropQueuedKeys(): void {
   pendingKeys = [];
+  backlogSince = 0;
   cancelEdgeDwell();
   takeUngot();
 }
@@ -1473,7 +1487,13 @@ function drainKeys(): void {
 
   try {
     const key = pendingKeys.shift();
-    if (key === undefined) return;
+    if (key === undefined) {
+      backlogSince = 0;
+      return;
+    }
+
+    // drained: the next backlog starts its own clock
+    if (!pendingKeys.length) backlogSince = 0;
 
     cancelPromptSettle();
 
@@ -1486,8 +1506,30 @@ function drainKeys(): void {
     // stays up. Re-arming the hold here is what flickered "(END)".
     markBurst(pendingKeys.length > 0);
 
+    // Falling BEHIND, as against merely holding a chunk. A terminal
+    // hands a burst over in chunks, so a few keys sit in the queue for
+    // a couple of milliseconds even when we are well ahead - that is
+    // why a queue length alone took the ":" off a one-screen file.
+    // A queue that has not gone empty for this long means the work
+    // provoked by the keys is outrunning the loop that reads them,
+    // which is exactly when the user cannot get a keypress in and
+    // exactly when the ":" should be out of the way.
+    if (pendingKeys.length && backlogSince &&
+        Date.now() - backlogSince >= BEHIND_MS) {
+      markBehind();
+    }
+
+    // Whether we are losing the race, read BEFORE the command runs -
+    // its own eof_bell clears the flag (an edge does no work), and the
+    // discard and rest below both hang off this.
+    const behind = promptHolding();
+
     // this command has not hit an edge yet - its own eof_bell decides
     armStall();
+
+    // ...and it has not read anything yet either, so og would not yet
+    // have polled for it
+    armReadWatch();
 
     // og's cmd_exec/prompt() pair leaves the command line blank for
     // exactly as long as the work takes. This is that long: a command
@@ -1517,19 +1559,18 @@ function drainKeys(): void {
     // The whole run goes, and the screen then RESTS here for
     // EDGE_DWELL_MS before anything else runs - see EDGE_DWELL_MS for
     // why the rest is a clock and not a few surviving keys.
-    if (isStalled()) {
-      // Only a BURST rests. The rest exists because we threw away a
-      // queue og would have ground through - with nothing queued
-      // there is nothing to hold back and nothing to make up for, and
-      // resting anyway would delay an ordinary keypress that happened
-      // to land within the window (press j at the bottom, then k, and
-      // the k waits for no reason). Normal one-key-at-a-time use
-      // therefore never sees it.
-      const backlog = pendingKeys.length > 0;
-
+    // Only while BEHIND. Both halves below are compensation for not
+    // keeping up: the discard throws away work og would have done, and
+    // the rest gives back the dwell that discard removed. When the
+    // loop is keeping up there is nothing to compensate for - og runs
+    // those few no-op commands and so do we, and resting anyway would
+    // delay an ordinary keypress for no reason (press j at the bottom,
+    // then k, and the k waits). Same condition that hides the ":", so
+    // the two can never disagree about whether we are struggling.
+    if (isStalled() && behind && pendingKeys.length) {
       while (pendingKeys.length && pendingKeys[0] === key) pendingKeys.shift();
 
-      if (backlog) edgeDwellUntil = Date.now() + EDGE_DWELL_MS;
+      edgeDwellUntil = Date.now() + EDGE_DWELL_MS;
     }
   } finally {
     draining = false;

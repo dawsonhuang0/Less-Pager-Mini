@@ -2,6 +2,8 @@ import fs from 'fs';
 
 import { opt } from '../options/state';
 
+import { sourceRead } from '../state/reads';
+
 /**
  * Windowed file access, ported from og's ch.c: the file is read in
  * fixed blocks kept in an LRU pool, so any position of an arbitrarily
@@ -87,6 +89,11 @@ export class BlockFile {
       this.blocks.set(index, have);
       return have;
     }
+
+    // og's ch_get reaching an iread, which is where check_poll runs
+    // (os.c:303) - the ONE point at which a waiting key is read and
+    // ungot, and so the only thing that suppresses the next prompt
+    sourceRead();
 
     const buf = Buffer.alloc(BLOCK_SIZE);
     const read = fs.readSync(this.fd, buf, 0, BLOCK_SIZE,

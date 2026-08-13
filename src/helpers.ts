@@ -7,6 +7,8 @@ import { terminalCapability } from './tty/terminal';
 
 import { config, fullScreen, mode } from './state/config';
 
+import { sawSourceRead } from './state/reads';
+
 import { chopLongLines } from './lines/chopLongLines';
 import { wrapLongLines } from './lines/wrapLongLines';
 
@@ -928,6 +930,10 @@ let promptHold = false;
  *  nothing, so there is nothing to suppress the prompt. */
 let stalled = false;
 
+/** Whether the key loop is BEHIND: keys have been waiting, unbroken,
+ *  for longer than a person can type them. Set by the key queue. */
+let heavyWork = false;
+
 /** Whether the command BEFORE this one was also stalled - i.e. the
  *  screen was already sitting at the edge rather than arriving. */
 let edgeHeld = false;
@@ -962,12 +968,47 @@ export function markBurst(burst: boolean): void {
 }
 
 /**
- * The same hold from the other direction: a command slow enough that
- * og's own clear_bot..prompt() gap would have been visible.
+ * A command that took long enough to stall the key loop - our own
+ * version of og going to disk.
  */
 export function markCommandTime(took: number): void {
-  if (took >= SLOW_MS && !mode.HELP && !stalled) promptHold = true;
+  if (took >= SLOW_MS && !mode.HELP && !stalled) heavyWork = true;
 }
+
+/**
+ * The key queue reporting that it has not drained for a while - the
+ * listener is stalled, which is the thing the user actually sees.
+ */
+export function markBehind(): void {
+  if (!mode.HELP && !stalled) heavyWork = true;
+}
+
+/**
+ * Whether the ":" should be out of the way: keys are waiting AND we
+ * are too busy to keep up with them.
+ *
+ * A key waiting is only half. Terminals deliver a burst in CHUNKS, so
+ * several keys sit in the queue for a few milliseconds even when we
+ * are comfortably ahead - which is why hiding on the backlog alone
+ * took the ":" off a one-screen file where og's stays put all day.
+ *
+ * The other half is being BEHIND, and it has two sources:
+ *
+ *   - sawSourceRead(), og's literal one. check_poll runs before an
+ *     iread and nowhere else (os.c:303), so a file already in ch's
+ *     pool is never polled however hard the keyboard bursts. Kept for
+ *     parity: og suppresses on the read whether or not it was slow.
+ *   - heavyWork, ours. og's read IS og's slow path - that is what
+ *     check_poll exists for - but ours is not the only one. A file of
+ *     enormous lines is served entirely from the line memo, so not one
+ *     block is read while each command still costs enough to stall the
+ *     key loop. On that file the read gate says "no poll" while the
+ *     pager is visibly unresponsive, ":" and all.
+ *
+ * So: the cause is not the burst, it is the work the burst provokes.
+ */
+const pollWouldFire = (): boolean =>
+  heavyWork || (promptHold && sawSourceRead());
 
 /**
  * og's `nlines == 0` (forwback.c:335, :372): THIS command broke out
@@ -980,6 +1021,8 @@ export function markCommandTime(took: number): void {
 export function markStalled(): void {
   stalled = true;
   promptHold = false;
+  // an edge does no work, so nothing is behind any more
+  heavyWork = false;
 }
 
 /**
@@ -1007,11 +1050,12 @@ export const isStalled = (): boolean => stalled;
  * Whether the ":" is being held off - so cmd_exec flushes its clear
  * like og, and the frame leaves the row alone.
  */
-export const promptHolding = (): boolean => promptHold;
+export const promptHolding = (): boolean => pollWouldFire();
 
 /** Ends the hold once the keyboard has settled and the ":" can return. */
 export function endPromptHold(): void {
   promptHold = false;
+  heavyWork = false;
 }
 
 
@@ -1176,7 +1220,7 @@ export function render(rawContent: string[], buffer: string[]): void {
   // queue keeps running dry, and every one of those keys then looked
   // like the end of the scroll and blinked the ":" back in. The settle
   // timer ends the hold instead, on the clock rather than on the queue.
-  const promptHeld = !filling && promptHold;
+  const promptHeld = !filling && pollWouldFire();
 
   // a command that already wrote og's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
