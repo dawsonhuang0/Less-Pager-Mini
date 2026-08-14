@@ -93,29 +93,44 @@ lmn huge-500GB.log    # giant files open instantly
 import pager from 'less-pager-mini';
 
 const example = ['a', 'b', 'c'];
+
 await pager(example);
+await pager(example, ['-N', '--chop-long-lines']);
+await pager(example, ['-R'], { LESS: '-X' });
 ```
 
 JavaScript calls are safe by default: interactive process escapes (`!`, `#`,
 `|`, and `v`) are disabled. The `lmn` executable keeps them enabled unless it
 is started with `--no-shell`.
 
-### Function Parameters:
+### Function Parameters
 
 <code>input</code>: Any unknown input to page.
 
-<code>config</code>: Any options and environment variables configurations for pager in a map.
+<code>args</code>: Less arguments as an array, spelled the way `less` documents
+them — `['-N', '--chop-long-lines', '+G']`. They are scanned in order, so a
+later one overrides an earlier one, and an option may repeat.
 
-#### config examples
+<code>env</code>: An environment overlay for this call — the variables `less`
+consults (`LESS`, `LESSOPEN`, `LESSSECURE`, ...). `$LESS` is scanned before
+`args`, as it is before `argv` on a command line.
 
-<code>tab-object</code>: If <code>true</code>, JSON.stringifies the input object indented with `\t`. You can adjust tab stops using `tabs` option.
+### Featuring Arguments
 
-```bash
-false:
+You can use the following flags in `args`:
+
+<code>--use-js-regexp</code>: Searches with JavaScript's `RegExp`. Off by default —
+compiling POSIX-compatible regex patterns with `posix-regex`.
+
+<code>--tab-object</code>: JSON.stringifies the input object indented with `\t`. 
+You can adjust tab stops using the `--tabs` option.
+
+```json
+off:
 ["a","b",["c","d"]]
 {"a":1,"b":2,"c":{"d":3}}
 
-true:
+on:
 [
   "a",
   "b",
@@ -133,7 +148,8 @@ true:
 }
 ```
 
-<code>examine-file</code>: If <code>true</code>, attempts to treat input as file path(s) and page content, invalid files will be ignored.
+<code>--examine-file</code>: Treats the input as file path(s) and reads from disk, 
+like naming them on the command line.
 
 Example input:
 
@@ -150,6 +166,9 @@ or
   'c' // Ignored
 ]
 ```
+
+### Notice: 
+<code>--examine-file</code> and <code>--tab-object</code> are not supported in `lmn`.
 
 
 ## About The Project
