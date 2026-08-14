@@ -1414,10 +1414,46 @@ function keyHandlerKeys(data: Buffer): void {
  * A FLOOR, not a target: the edge is guaranteed to hold this long,
  * and holds longer whenever the user simply keeps pressing.
  */
-const EDGE_DWELL_MS = 120;
+export const EDGE_DWELL_MS = 120;
+
+/**
+ * How long the queue must still rest at an edge, 0 when it may run.
+ *
+ * A FLOOR, not a target: the edge is guaranteed to hold this long and
+ * holds longer while the user keeps pressing. og needs none of it -
+ * its no-op costs microseconds, so the edge naturally holds for as
+ * long as keys arrive - but we discard the backlog, so without a rest
+ * the keys that scroll BACK run the instant the bottom is reached and
+ * the screen leaves it in the same breath.
+ */
+export function edgeWait(until: number, now: number): number {
+  return until > 0 ? Math.max(until - now, 0) : 0;
+}
 
 /** How long an unbroken backlog means the loop is losing the race. */
-const BEHIND_MS = 80;
+export const BEHIND_MS = 80;
+
+/**
+ * Whether the key loop is BEHIND: keys waiting, and waiting since
+ * longer ago than a person can type.
+ *
+ * Takes the clock rather than reading it, so the rule can be stated
+ * without one. A terminal hands a burst over in chunks, so a queue
+ * length on its own cannot tell "losing the race" from "briefly
+ * holding five keys" - which is why hiding the ":" on queue length
+ * alone took it off a one-screen file where og's stays put.
+ *
+ * @param since - When the CURRENT unbroken backlog began, 0 when the
+ *   queue is empty. Not "when the queue was last empty": after a quiet
+ *   spell that reads as an enormous backlog the moment one key lands.
+ */
+export function fallingBehind(
+  queued: number,
+  since: number,
+  now: number
+): boolean {
+  return queued > 0 && since > 0 && now - since >= BEHIND_MS;
+}
 
 /** When the CURRENT unbroken backlog started, 0 when the queue is
  *  empty. Not "when the queue was last empty": after a quiet spell
@@ -1434,6 +1470,19 @@ function cancelEdgeDwell(): void {
   if (!dwellTimer) return;
   clearTimeout(dwellTimer);
   dwellTimer = null;
+}
+
+/**
+ * Drops the run of keys identical to the one just run, in place.
+ *
+ * Stops at the first DIFFERENT key, which is the whole contract: at an
+ * edge the repeats do the same nothing and are free to discard, but
+ * the key that means something else must still run at once - hold j
+ * into the bottom, press k, and it moves without waiting for the j's.
+ * Dropping the lot instead makes the pager ignore the turn.
+ */
+export function collapseRun(queue: string[], key: string): void {
+  while (queue.length && queue[0] === key) queue.shift();
 }
 
 /** og's tty input queue: keys read but not yet run. */
@@ -1465,8 +1514,8 @@ function drainKeys(): void {
   // exists to delay are the ones the tty delivers DURING it. Those
   // arrive through keyHandler, which calls straight in here - so this
   // is the only gate they pass.
-  if (edgeDwellUntil) {
-    const rest = edgeDwellUntil - Date.now();
+  {
+    const rest = edgeWait(edgeDwellUntil, Date.now());
 
     if (rest > 0) {
       // one timer for the whole rest, however many chunks arrive
@@ -1514,8 +1563,7 @@ function drainKeys(): void {
     // provoked by the keys is outrunning the loop that reads them,
     // which is exactly when the user cannot get a keypress in and
     // exactly when the ":" should be out of the way.
-    if (pendingKeys.length && backlogSince &&
-        Date.now() - backlogSince >= BEHIND_MS) {
+    if (fallingBehind(pendingKeys.length, backlogSince, Date.now())) {
       markBehind();
     }
 
@@ -1568,8 +1616,7 @@ function drainKeys(): void {
     // then k, and the k waits). Same condition that hides the ":", so
     // the two can never disagree about whether we are struggling.
     if (isStalled() && behind && pendingKeys.length) {
-      while (pendingKeys.length && pendingKeys[0] === key) pendingKeys.shift();
-
+      collapseRun(pendingKeys, key);
       edgeDwellUntil = Date.now() + EDGE_DWELL_MS;
     }
   } finally {
