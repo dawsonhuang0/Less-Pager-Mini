@@ -1011,10 +1011,16 @@ export function markBehind(): void {
  *     key loop. On that file the read gate says "no poll" while the
  *     pager is visibly unresponsive, ":" and all.
  *
- * So: the cause is not the burst, it is the work the burst provokes.
+ * So: the cause is not the burst, it is the work the burst provokes -
+ * but a burst there must be. og suppresses by ungetting a key that was
+ * WAITING (os.c:164); with nothing waiting there is nothing to unget
+ * and prompt() writes as usual, however long the command took. Letting
+ * slow work hold on its own hid the prompt after a single G on a big
+ * file - no keys queued, nobody to be behind - and made the -M prompt
+ * come and go with how loaded the machine was.
  */
 const pollWouldFire = (): boolean =>
-  heavyWork || (promptHold && sawSourceRead());
+  promptHold && (sawSourceRead() || heavyWork);
 
 /**
  * og's `nlines == 0` (forwback.c:335, :372): THIS command broke out
