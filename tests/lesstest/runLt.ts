@@ -263,8 +263,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
     // og ran with ordinary shell access; a library call defaults to
     // --no-shell, and the caller's own config map is exactly how that
     // default is meant to be lifted (see the invocation lock)
-    const session = pager(fileArgs, {
-      'examine-file': true,
+    const session = pager(fileArgs, ['--examine-file'], {
       LESS: `${lt.env.LESS ?? ''} --+no-shell`.trim(),
     });
 

@@ -3,14 +3,15 @@ import path from 'path';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import pager, { PagerConfig } from '../../src/index';
+import pager from '../../src/index';
 
 import { config } from '../../src/state/config';
 
 import { initUnsupport, opt, optionSpecs, setCliOptions }
   from '../../src/options';
 
-import { buildLessOptionMap } from '../../src/options/apiTypes';
+import { buildLessOptionMap, buildLessOptionLetters }
+  from '../../src/options/apiTypes';
 
 import { LESS_OPTION_VALUES } from '../../src/state/lessOptionTypes';
 
@@ -141,34 +142,42 @@ async function drive(
   }
 }
 
-describe('pager(input, options, envVars) API', () => {
-  it('applies a less long option name from options', async () => {
+describe('pager(input, args, env) API', () => {
+  it('applies a less long option from the argument list', async () => {
     const output = await drive(
-      () => pager(content, { 'chop-long-lines': true })
+      () => pager(content, ['--chop-long-lines'])
     );
 
     expect(output).not.toContain('CHOPTAIL');
     expect(output).toContain('second line');
   });
 
-  it('still scans a letter key an untyped caller passes', async () => {
-    // PagerConfig lists long names only; the cast is the point of
-    // the test, mimicking plain JavaScript reaching the -X branch
-    const output = await drive(
-      () => pager(content, { S: true } as PagerConfig)
-    );
+  it('takes the letter forms too, exactly as typed', async () => {
+    // the whole point of an argument list: what less documents is
+    // what you pass, letters and long names alike
+    const output = await drive(() => pager(content, ['-S']));
 
     expect(output).not.toContain('CHOPTAIL');
   });
 
-  it('reads env names from the same config map', async () => {
-    const output = await drive(() => pager(content, { LESS: '-S' }));
+  it('applies options in order, so the later one wins', async () => {
+    // a map cannot say this: `less -S --+chop-long-lines` ends
+    // unchopped because the second undoes the first
+    const output = await drive(
+      () => pager(content, ['-S', '--+chop-long-lines'])
+    );
+
+    expect(output).toContain('CHOPTAIL');
+  });
+
+  it('reads the environment overlay from its own parameter', async () => {
+    const output = await drive(() => pager(content, [], { LESS: '-S' }));
 
     expect(output).not.toContain('CHOPTAIL');
   });
 
   it('clears the env overlay after the call', async () => {
-    await drive(() => pager(content, { LESS: '-S' }));
+    await drive(() => pager(content, [], { LESS: '-S' }));
 
     const output = await drive(() => pager(content));
 
@@ -180,12 +189,12 @@ describe('pager(input, options, envVars) API', () => {
     // og gets this by being one process per session; freshSession()
     // gives a library call the same slate, so a -S or -x from one
     // call cannot decide the next one's screen
-    await drive(() => pager(content, { 'chop-long-lines': true, tabs: 4 }));
+    await drive(() => pager(content, ['--chop-long-lines', '--tabs=4']));
 
     const plain = await drive(() => pager(content));
     expect(plain).toContain('CHOPTAIL');
 
-    const indented = await drive(() => pager({ a: 1 }, { 'tab-object': true }));
+    const indented = await drive(() => pager({ a: 1 }, ['--tab-object']));
     expect(indented).toContain('        "a": 1');
   });
 
@@ -195,9 +204,25 @@ describe('pager(input, options, envVars) API', () => {
     expect(LESS_OPTION_VALUES).toEqual(buildLessOptionMap(optionSpecs()));
   });
 
-  it('keeps option and env names disjoint, splitting one map', () => {
-    // the merged PagerConfig map relies on this invariant to route
-    // each key: option names never look like env names
+  it('keeps every option letter suggestible', () => {
+    // LessOptionLetter is a TYPE, so nothing at runtime can compare
+    // against it; what this guards is the generator's input - a letter
+    // the table gains and the snapshot misses stops being offered for
+    // `-R`-style arguments, silently. tests/types/api.types.ts checks
+    // the type itself.
+    const letters = buildLessOptionLetters(optionSpecs());
+    const source = fs.readFileSync(
+      new URL('../../src/state/lessOptionTypes.ts', import.meta.url), 'utf8');
+    // the union's last member carries the statement's semicolon
+    const emitted = [...source.matchAll(/^ {2}\| '(.+)';?$/gm)].map(m => m[1]);
+
+    expect(new Set(emitted)).toEqual(new Set(letters));
+  });
+
+  it('keeps option and env names disjoint', () => {
+    // no longer load-bearing for routing - args and env are separate
+    // parameters now - but a name in both families would still be
+    // ambiguous to a reader, and to $LESS scanning before argv
     const optionKeys = new Set(Object.keys(LESS_OPTION_VALUES));
 
     for (const name of PAGER_ENV_NAMES) {
@@ -275,14 +300,14 @@ describe('pager(input, options, envVars) API', () => {
     const savedDefault = opt.tabDefault;
 
     const narrow = await drive(
-      () => pager({ a: 1 }, { 'tab-object': true, tabs: 4 })
+      () => pager({ a: 1 }, ['--tab-object', '--tabs=4'])
     );
     expect(narrow).toContain('    "a": 1');
     expect(narrow).not.toContain('        "a": 1');
 
     // the -x spelling reaches the same option through the env
     const fromEnv = await drive(
-      () => pager({ a: 1 }, { 'tab-object': true, LESS: '-x3' })
+      () => pager({ a: 1 }, ['--tab-object'], { LESS: '-x3' })
     );
     expect(fromEnv).toContain('   "a": 1');
 
@@ -290,7 +315,7 @@ describe('pager(input, options, envVars) API', () => {
     opt.tabDefault = savedDefault;
 
     // without tabs the indent is less's default 8-column stop
-    const plain = await drive(() => pager({ a: 1 }, { 'tab-object': true }));
+    const plain = await drive(() => pager({ a: 1 }, ['--tab-object']));
     expect(plain).toContain('        "a": 1');
   });
 });

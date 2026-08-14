@@ -76,8 +76,8 @@ describe('the library shell lock', () => {
     startupInit([]);
   };
 
-  it('lets the CALLER ask for shell access in its own config map', () => {
-    // pager(x, { LESS: '--+no-shell' }): the overlay is the embedding
+  it('lets the CALLER ask for shell access in its own env', () => {
+    // pager(x, [], { LESS: '--+no-shell' }): the overlay is the embedding
     // application's own configuration, not the shell it was launched
     // from, so this one is deliberate and allowed
     setSessionEnv({ LESS: '--+no-shell' });
