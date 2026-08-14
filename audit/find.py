@@ -1,5 +1,5 @@
 import json, re, sys
-cs = json.load(open('og-audit/commits.json'))
+cs = json.load(open('audit/commits.json'))
 pat = re.compile(sys.argv[1], re.I)
 hits = [c for c in cs if pat.search(c['subj']) or pat.search(c['body'])]
 for c in hits:
