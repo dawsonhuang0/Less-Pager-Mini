@@ -34,6 +34,8 @@ import { maxSubRow } from '../lines/helpers';
 
 import { noteScrollRows, screenPainted } from '../helpers';
 
+import { flush } from '../tty/output';
+
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
 
@@ -902,6 +904,19 @@ export class FileInput implements PagerInput {
     // painting one here only to blank it on the next line was two
     // writes and a flicker that og never emits
     renderBare(session.content, session.buffer);
+
+    // ...and it has to REACH the terminal before the walk, which is
+    // synchronous: the scheduled flush runs on the next turn of the
+    // event loop, and the walk never gives it one. So the destination
+    // sat in obuf and the old screen stayed up until the count
+    // finished - on a big file, seconds of looking at the wrong page.
+    //
+    // og gets this for free by writing a whole screen into an 8K obuf
+    // (output.c:520 flushes when it fills); ours writes a delta of a
+    // few hundred bytes and never fills. Same buffer, different fill
+    // rate. Our own sink's rule covers it anyway: flush before
+    // anything that makes the user wait, and the walk is that.
+    flush();
 
     this.lineScanMessaged = false;
     let retriedAfterEarlyInterrupt = false;
@@ -2273,6 +2288,15 @@ export class FileInput implements PagerInput {
         this.lineScanMessaged = true;
         fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
           'Calculating line numbers... (interrupt to abort)' + INVERSE_OFF);
+
+        // This went straight to the terminal, so the command's
+        // cmd_exec clear no longer describes the bottom row: that
+        // clear went out BEFORE the walk, and this landed after it.
+        // Leaving the flag up made the next frame skip its own
+        // opening and print the prompt onto the end of the message -
+        // "Calculating line numbers... (interrupt to abort)(END)".
+        search.cmdExecOpened = false;
+        search.bottomClobbered = true;
       }
 
       if (searchInterrupted(true)) {
