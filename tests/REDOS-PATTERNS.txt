@@ -1,0 +1,60 @@
+Two different stress tests. They fail in different ways, and the
+first is the one that kills a backtracking engine.
+
+    tests/redos-long.txt    10k / 50k / 200k / 1M characters ON ONE LINE
+    tests/redos-many.txt    2,000,000 short lines (82 MB)
+
+The two data files are NOT kept in the tree - they are 40 MB of the
+letter a. Rebuild them when you need them:
+
+    python3 - <<'EOF'
+    with open('tests/redos-long.txt','w') as f:
+        f.write('=== one long line per section; length is what kills a backtracker ===\n')
+        for n in (10000, 50000, 200000, 1000000):
+            f.write('len%d %s\n' % (n, 'a' * n))
+    with open('tests/redos-many.txt','w') as f:
+        for i in range(2000000):
+            f.write('line%d %s\n' % (i, 'a' * 80))
+    EOF
+
+Backtracking blows up with the LENGTH of a single line, not with how
+many lines there are. A million short lines is a million cheap calls -
+linear, just slow. One million-character line is where an exponential
+engine never returns. 4000 characters was not enough to trouble
+anything, which is why these go to 1M.
+
+    node dist/cli.js -X tests/redos-long.txt
+    node dist/cli.js -X --use-js-regexp tests/redos-long.txt
+    ./less/less -X tests/redos-long.txt
+
+ON THE LONG LINES — type each with / and RETURN:
+
+  (a+)+b            classic nested quantifier
+  (a*)*b            empty-loop variant
+  (a|a)*b           alternation of the same thing
+  (a|aa)+b          overlapping alternatives
+  (x+x+)+y          the textbook one
+  ([a-z]+)+b        class instead of a literal
+  (.*a){20}b        wildcard blowup
+  a{100}{100}       nested counted repetition
+
+  a+b               control: should be instant everywhere
+  len1000000        control: a plain literal on the same line
+
+ON THE MANY LINES — throughput, and whether you can get out:
+
+  zzzznotfound      scans all 2M lines and finds nothing
+  line 1999999      the match is on the very last line
+  aaaa              matches every line
+  (a+)+b            2M cheap calls; slow, but should not hang
+
+WHAT TO WATCH
+
+  1. Does it come back at all, and how fast.
+  2. Does ^C abort a slow search. og checks ABORT_SIGS between LINES
+     (search.c), so it can stop between lines but never inside one
+     regexec call - on redos-long.txt a single line may be
+     uninterruptible even in og.
+  3. Does the pager still work afterwards, or is the screen wedged.
+  4. If og hangs too, that is worth knowing: it means the limit is
+     the C library's, not ours.
