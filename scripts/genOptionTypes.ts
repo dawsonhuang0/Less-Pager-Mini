@@ -11,7 +11,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { optionSpecs } from '../src/options';
-import { buildLessOptionMap } from '../src/options/apiTypes';
+import { buildLessOptionMap, buildLessOptionLetters }
+  from '../src/options/apiTypes';
 import { help } from '../src/startup/lessHelp';
 
 const TARGET = path.join(__dirname, '..', 'src/state/lessOptionTypes.ts');
@@ -85,6 +86,7 @@ function defaultOf(key: string, kind: 'flag' | 'value'): string | null {
 // --- emit --------------------------------------------------------------
 
 const map = buildLessOptionMap(specs);
+const letters = buildLessOptionLetters(specs);
 const ident = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const quoted = (name: string): string => ident.test(name) ? name : `'${name}'`;
 
@@ -162,6 +164,14 @@ ${values}
 export interface LessOptions {
 ${props}
 }
+
+/**
+ * Every option LETTER the scan accepts, so \`-R\` and \`-N\` are offered
+ * beside the long names. A letter carries no doc comment: og's help
+ * describes the option, and the letter is one spelling of it.
+ */
+export type LessOptionLetter =
+${letters.map(l => `  | '${l}'`).join('\n')};
 `);
 
 console.log(`wrote ${Object.keys(map).length} option keys to ${TARGET}`);

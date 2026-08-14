@@ -37,3 +37,24 @@ export function buildLessOptionMap(
 
   return out;
 }
+
+/**
+ * Every option LETTER the scan accepts, sorted, for the argument type.
+ *
+ * A triple's uppercase letter selects its second state (-e/-E), the
+ * same way an uppercase NAME does above, so it belongs here even
+ * though the table stores one letter per spec.
+ */
+export function buildLessOptionLetters(specs: OptionSpec[]): string[] {
+  const out = new Set<string>();
+
+  for (const spec of specs) {
+    if (!spec.letter) continue;
+    out.add(spec.letter);
+
+    const upper = spec.letter.toUpperCase();
+    if (spec.type === 'triple' && upper !== spec.letter) out.add(upper);
+  }
+
+  return [...out].sort();
+}

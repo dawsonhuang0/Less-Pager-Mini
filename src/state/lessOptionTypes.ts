@@ -26,6 +26,8 @@ export const LESS_OPTION_VALUES = {
   'jump-target': 'value',
   'status-column': 'flag',
   'lesskey-file': 'value',
+  'lesskey-content': 'value',
+  'lesskey-src': 'value',
   'quit-on-intr': 'flag',
   'no-lessopen': 'flag',
   'long-prompt': 'flag',
@@ -49,6 +51,7 @@ export const LESS_OPTION_VALUES = {
   'underline-special': 'flag',
   'UNDERLINE-SPECIAL': 'flag',
   version: 'flag',
+  'hilite-target': 'flag',
   'hilite-unread': 'flag',
   'HILITE-UNREAD': 'flag',
   tabs: 'value',
@@ -67,6 +70,7 @@ export const LESS_OPTION_VALUES = {
   'no-histdups': 'flag',
   mouse: 'flag',
   MOUSE: 'flag',
+  emouse: 'value',
   rmouse: 'flag',
   'wheel-lines': 'value',
   'save-marks': 'flag',
@@ -75,41 +79,37 @@ export const LESS_OPTION_VALUES = {
   incsearch: 'flag',
   'use-color': 'flag',
   'use-js-regexp': 'flag',
+  'file-size': 'flag',
+  'status-line': 'flag',
   header: 'value',
+  'no-paste': 'flag',
+  'form-feed': 'flag',
+  'past-eof': 'flag',
+  'no-edit-warn': 'flag',
+  'no-warn-edit': 'flag',
+  'no-shell': 'flag',
   'no-number-headers': 'flag',
   'no-search-headers': 'flag',
   'no-search-header-lines': 'flag',
   'no-search-header-columns': 'flag',
-  'file-size': 'flag',
-  'no-vbell': 'flag',
-  'no-edit-warn': 'flag',
-  'no-warn-edit': 'flag',
-  'no-shell': 'flag',
-  'exit-follow-on-close': 'flag',
-  'show-preproc-errors': 'flag',
   'redraw-on-quit': 'flag',
-  'no-paste': 'flag',
-  'hilite-target': 'flag',
-  intr: 'value',
-  'end-prompt': 'value',
-  cmd: 'value',
-  'lesskey-src': 'value',
-  'lesskey-content': 'value',
-  emouse: 'value',
   'search-options': 'value',
-  'match-shift': 'value',
-  autosave: 'value',
-  'status-line': 'flag',
-  'form-feed': 'flag',
-  'past-eof': 'flag',
+  'exit-follow-on-close': 'flag',
+  'no-vbell': 'flag',
   modelines: 'value',
+  intr: 'value',
+  wordwrap: 'flag',
+  'show-preproc-errors': 'flag',
   'proc-backspace': 'flag',
   'PROC-BACKSPACE': 'flag',
   'proc-tab': 'flag',
   'PROC-TAB': 'flag',
   'proc-return': 'flag',
   'PROC-RETURN': 'flag',
-  wordwrap: 'flag',
+  cmd: 'value',
+  'match-shift': 'value',
+  autosave: 'value',
+  'end-prompt': 'value',
 } as const;
 
 /**
@@ -165,6 +165,10 @@ export interface LessOptions {
   'status-column'?: boolean;
   /** Use a compiled lesskey file. */
   'lesskey-file'?: number | string;
+  /** A less option. */
+  'lesskey-content'?: number | string;
+  /** Use a lesskey source file. */
+  'lesskey-src'?: number | string;
   /** Exit less in response to ctrl-C. */
   'quit-on-intr'?: boolean;
   /** Ignore the LESSOPEN environment variable. */
@@ -211,6 +215,8 @@ export interface LessOptions {
   'UNDERLINE-SPECIAL'?: boolean;
   /** Display the version number of "less-pager-mini". */
   version?: boolean;
+  /** Highlight the target line. */
+  'hilite-target'?: boolean;
   /** Highlight first new line after full screen movement. */
   'hilite-unread'?: boolean;
   /** Highlight first new line after any movement. */
@@ -247,6 +253,8 @@ export interface LessOptions {
   mouse?: boolean;
   /** Enable mouse clicking and vertical scrolling. */
   MOUSE?: boolean;
+  /** Enable mouse features. @default '-' */
+  emouse?: number | string;
   /** Reverse mouse scroll direction. */
   rmouse?: boolean;
   /** Each click of the mouse wheel moves N lines. @default 1 */
@@ -263,8 +271,24 @@ export interface LessOptions {
   'use-color'?: boolean;
   /** Search with JavaScript's RegExp. */
   'use-js-regexp'?: boolean;
+  /** Automatically determine the size of the input file. */
+  'file-size'?: boolean;
+  /** Highlight or color the entire line containing a mark. */
+  'status-line'?: boolean;
   /** Use L lines (starting at line N) and C columns as headers. @default '-' */
   header?: number | string;
+  /** Ignore pasted input. */
+  'no-paste'?: boolean;
+  /** Stop scrolling when a form feed character is reached. */
+  'form-feed'?: boolean;
+  /** Scrolling commands continue past end of file. */
+  'past-eof'?: boolean;
+  /** Don't warn when using v command on a file opened via LESSOPEN. */
+  'no-edit-warn'?: boolean;
+  /** Don't warn when editing a file opened via LESSOPEN. */
+  'no-warn-edit'?: boolean;
+  /** Disable shell, pipe and editor commands. */
+  'no-shell'?: boolean;
   /** Don't give line numbers to header lines. */
   'no-number-headers'?: boolean;
   /** Searches do not include header lines or columns. */
@@ -273,52 +297,22 @@ export interface LessOptions {
   'no-search-header-lines'?: boolean;
   /** Searches do not include header columns. */
   'no-search-header-columns'?: boolean;
-  /** Automatically determine the size of the input file. */
-  'file-size'?: boolean;
-  /** Disable the terminal's visual bell. */
-  'no-vbell'?: boolean;
-  /** Don't warn when using v command on a file opened via LESSOPEN. */
-  'no-edit-warn'?: boolean;
-  /** Don't warn when editing a file opened via LESSOPEN. */
-  'no-warn-edit'?: boolean;
-  /** Disable shell, pipe and editor commands. */
-  'no-shell'?: boolean;
-  /** Exit F command on a pipe when writer closes pipe. */
-  'exit-follow-on-close'?: boolean;
-  /** Display a message if preprocessor exits with an error status. */
-  'show-preproc-errors'?: boolean;
   /** Redraw final screen when quitting. */
   'redraw-on-quit'?: boolean;
-  /** Ignore pasted input. */
-  'no-paste'?: boolean;
-  /** Highlight the target line. */
-  'hilite-target'?: boolean;
-  /** Use C instead of ^X to interrupt a read. @default '' */
-  intr?: number | string;
-  /** String to be printed after erasing the prompt. @default '-' */
-  'end-prompt'?: number | string;
-  /** A less option. */
-  cmd?: number | string;
-  /** Use a lesskey source file. */
-  'lesskey-src'?: number | string;
-  /** A less option. */
-  'lesskey-content'?: number | string;
-  /** Enable mouse features. @default '-' */
-  emouse?: number | string;
   /** Set default options for every search. @default '-' */
   'search-options'?: number | string;
-  /** Show at least N characters to the left of a search match. @default '0' */
-  'match-shift'?: number | string;
-  /** Actions which cause the history file to be saved. @default '-' */
-  autosave?: number | string;
-  /** Highlight or color the entire line containing a mark. */
-  'status-line'?: boolean;
-  /** Stop scrolling when a form feed character is reached. */
-  'form-feed'?: boolean;
-  /** Scrolling commands continue past end of file. */
-  'past-eof'?: boolean;
+  /** Exit F command on a pipe when writer closes pipe. */
+  'exit-follow-on-close'?: boolean;
+  /** Disable the terminal's visual bell. */
+  'no-vbell'?: boolean;
   /** Read N lines from the input file and look for vim modelines. @default 0 */
   modelines?: number | string;
+  /** Use C instead of ^X to interrupt a read. @default '' */
+  intr?: number | string;
+  /** Wrap lines at spaces. */
+  wordwrap?: boolean;
+  /** Display a message if preprocessor exits with an error status. */
+  'show-preproc-errors'?: boolean;
   /** Process backspaces for bold/underline. */
   'proc-backspace'?: boolean;
   /** Treat backspaces as control characters. */
@@ -331,6 +325,70 @@ export interface LessOptions {
   'proc-return'?: boolean;
   /** Treat carriage returns as control characters. */
   'PROC-RETURN'?: boolean;
-  /** Wrap lines at spaces. */
-  wordwrap?: boolean;
+  /** A less option. */
+  cmd?: number | string;
+  /** Show at least N characters to the left of a search match. @default '0' */
+  'match-shift'?: number | string;
+  /** Actions which cause the history file to be saved. @default '-' */
+  autosave?: number | string;
+  /** String to be printed after erasing the prompt. @default '-' */
+  'end-prompt'?: number | string;
 }
+
+/**
+ * Every option LETTER the scan accepts, so `-R` and `-N` are offered
+ * beside the long names. A letter carries no doc comment: og's help
+ * describes the option, and the letter is one spelling of it.
+ */
+export type LessOptionLetter =
+  | '"'
+  | '#'
+  | '?'
+  | 'A'
+  | 'B'
+  | 'C'
+  | 'D'
+  | 'E'
+  | 'F'
+  | 'G'
+  | 'I'
+  | 'J'
+  | 'K'
+  | 'L'
+  | 'M'
+  | 'N'
+  | 'O'
+  | 'P'
+  | 'Q'
+  | 'R'
+  | 'S'
+  | 'T'
+  | 'U'
+  | 'V'
+  | 'W'
+  | 'X'
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z'
+  | '~';
