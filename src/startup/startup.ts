@@ -8,7 +8,8 @@ import { search } from '../features/searching';
 
 import { resetMisc } from '../features/misc';
 
-import { resetBellTimer, resetPrompting } from '../helpers';
+import { resetBellTimer, resetPrompting, endPromptHold, armStall }
+  from '../helpers';
 
 import { initSecure, secureAllow } from '../features/secure';
 
@@ -49,6 +50,16 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   resetMisc();
   resetBellTimer();
   resetPrompting();
+
+  // The ":" hold and the edge stall are module state that outlives a
+  // session: nothing clears the hold but the settle timer, so a
+  // session ending mid-burst leaves the next one starting held - its
+  // first prompt, message or "(END)" withheld for a screen that has
+  // no burst behind it. resetBellTimer beside it exists for the same
+  // reason (og's static last_eof_bell, forwback.c:58).
+  endPromptHold();
+  armStall();
+  armStall();
   resetOsc8();
   onRebuild(() => {});
 
