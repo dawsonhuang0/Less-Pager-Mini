@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { putstr, flush } from './tty/output';
+import { putstr } from './tty/output';
 
 import { hasUngot, abortSigs } from './tty/keyboard';
 

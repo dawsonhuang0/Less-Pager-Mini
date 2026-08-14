@@ -53,7 +53,6 @@ export type PagerArg =
   // nothing is REJECTED here, so the suggestion set is worth
   // asserting against NamedArg, which has no such escape hatch -
   // dropping a form from it is otherwise invisible.
-  // eslint-disable-next-line @typescript-eslint/ban-types
   | (string & {});
 
 /** Pulls this library's switches out of the argument list, leaving

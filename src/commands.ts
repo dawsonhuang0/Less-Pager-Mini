@@ -327,7 +327,6 @@ export function runExamine(): void {
 
   for (const name of names) {
     let at = files.list.findIndex(entry => entry.path === name);
-    let inserted = false;
 
     if (at < 0) {
       at = current + 1;
@@ -339,7 +338,6 @@ export function runExamine(): void {
         saved: null,
       });
       marksFileSpliced(at, 1);
-      inserted = true;
     }
 
     if (!loadFile(at)) {

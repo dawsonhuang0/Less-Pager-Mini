@@ -6,8 +6,6 @@ import { isWindows } from '../tty/platform';
 import { onHilitePaint, setHiliteHidden } from '../features/searching';
 import { squishCheck, renderHiliteRepaint, markSearchFlash }
   from '../helpers';
-import { fullScreenWidth } from '../options/state';
-
 import { armReadWatch } from '../state/reads';
 
 import { lgetenv, screenFillGrace } from '../startup/environment';
@@ -52,12 +50,10 @@ import {
 
 import { help } from "../startup/lessHelp";
 
-import { searchInterrupted } from "../features/searching";
+import { raiseAbort, clearAbort } from "../tty/keyboard";
 
-import { abortSigs, raiseAbort, clearAbort } from "../tty/keyboard";
-
-import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline, tailCascade }
-  from "../keys";
+import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
+  tailCascade } from "../keys";
 
 import {
   addBufferChar,
@@ -1349,7 +1345,6 @@ function keyHandlerKeys(data: Buffer): void {
   // the whole chunk back instead would be one jump at the end — the
   // buffer is there to stop a single command arriving in fragments,
   // not to merge commands together.
-  const keys = splitKeys(text);
 
   // og reads a byte at a time, so a chunk carrying more than one
   // command always has something left in the tty when it stops to
