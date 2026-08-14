@@ -38,7 +38,25 @@ export interface LineLayout {
 
 const CACHE_LIMIT = 5000;
 
+/**
+ * How much the cache may hold, counted in display characters.
+ *
+ * A count of ENTRIES does not bound anything: a layout carries a
+ * chars/widths/rowStyle entry per character, so it costs roughly a
+ * hundred times the line it describes, and 5000 of them off a file of
+ * 2 KB lines reached 228 MB against og's 16 MB. og has no layout cache
+ * at all - it keeps one linebuf and rebuilds - so any budget here is
+ * memory og never spends; the point is only that it be A budget.
+ *
+ * Half a million characters holds a screenful of the longest line we
+ * will ever build (MAX_LINE) many times over, and everything an
+ * ordinary file displays.
+ */
+const CACHE_CHAR_BUDGET = 1 << 19;
+
 let cache = new Map<string, LineLayout>();
+/** Display characters currently held, the budget's running total. */
+let cacheChars = 0;
 let cacheWidth = 0;
 let cacheWordwrap = false;
 let cacheCtldisp = -1;
@@ -70,21 +88,45 @@ export function getLayout(line: string): LineLayout {
   if (cacheWidth !== config.screenWidth || cacheWordwrap !== optWordwrap() ||
       cacheCtldisp !== optCtldisp()) {
     cache = new Map();
+    cacheChars = 0;
     cacheWidth = config.screenWidth;
     cacheWordwrap = optWordwrap();
     cacheCtldisp = optCtldisp();
     generation++;
   }
 
-  let layout = cache.get(line);
+  const layout = cache.get(line);
 
-  if (!layout) {
-    layout = buildLayout(line);
-    if (cache.size >= CACHE_LIMIT) cache.clear();
+  if (layout) {
+    // freshen: Map keeps insertion order, so re-inserting moves this
+    // to the young end and the eviction below cannot take a line the
+    // screen is still drawing - the one long line of a file like
+    // `long` is asked for every frame but inserted only once
+    cache.delete(line);
     cache.set(line, layout);
+    return layout;
   }
 
-  return layout;
+  const built = buildLayout(line);
+
+  if (cache.size >= CACHE_LIMIT) {
+    cache.clear();
+    cacheChars = 0;
+  }
+
+  cache.set(line, built);
+  cacheChars += built.chars.length;
+
+  // evict oldest-first until the budget holds, always keeping the one
+  // just built - the caller is about to draw from it
+  while (cacheChars > CACHE_CHAR_BUDGET && cache.size > 1) {
+    const oldest = cache.keys().next().value as string;
+    const gone = cache.get(oldest);
+    cache.delete(oldest);
+    if (gone) cacheChars -= gone.chars.length;
+  }
+
+  return built;
 }
 
 function buildLayout(line: string): LineLayout {
