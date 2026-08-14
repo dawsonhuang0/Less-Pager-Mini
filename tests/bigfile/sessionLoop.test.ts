@@ -56,11 +56,40 @@ fs.writeFileSync(bracketFile, Array.from({ length: 12000 }, (_, i) => {
 
 fs.writeFileSync(tagsFile, `deep\t${streamedFile}\t11000\n`);
 
+// A terabyte with LINES in it, clustered at both ends.
+//
+// It used to be a single 1 TB line: one newline at byte 18, the next
+// at 2^40. That passed instantly only because forwLine cut a
+// newline-less run at the 64 KiB grid and never went looking for the
+// real end - which is the bug that drew a 360 KB line as six rows
+// (546290e). og reads to the newline however far it is (input.c:241,
+// `do { c = ch_forw_get(); } while (c != '\n' && c != EOI)`), and so
+// do we, so that shape now costs a terabyte of scanning in either
+// pager. og is in fact SLOWER at it than we are: on a 4 GB version,
+// og 10.1s to our 5.2s.
+//
+// The point of the fixture is byte-position G/g on a huge sparse
+// file, not a pathological single line, so the lines live in clusters
+// at the head and tail. G and g each land on a cluster and never scan
+// the hole; only scrolling into the middle would, and nothing does.
+// The file is still 2^40 bytes and still sparse.
 {
   const fd = fs.openSync(sparseFile, 'w');
-  fs.writeSync(fd, 'FIRST SPARSE LINE\n');
+
+  // head: enough lines to fill a screen after g, including a long
+  // line. At 1 KB it is a control: it cannot cost anything, so if the
+  // test is still slow the long line was never the reason.
+  const long = 'LONGSTART' + 'x'.repeat(1024);
+  const head = ['FIRST SPARSE LINE', long, 'AFTER LONG LINE']
+    .concat(Array.from({ length: 12 }, (_, i) => `head line ${i + 1}`));
+  fs.writeSync(fd, head.join('\n') + '\n');
+
   fs.ftruncateSync(fd, 2 ** 40);
-  const tail = Buffer.from('\nFINAL SPARSE LINE\n');
+
+  // tail: a screenful, so G's screen is all real lines
+  const tail = Buffer.from('\n' +
+    Array.from({ length: 12 }, (_, i) => `tail line ${i + 1}`).join('\n') +
+    '\nFINAL SPARSE LINE\n');
   fs.writeSync(fd, tail, 0, tail.length, 2 ** 40 - tail.length);
   fs.closeSync(fd);
 }
@@ -282,6 +311,13 @@ describe('unified file command loop', () => {
 
     expect(output).toContain('FINAL SPARSE LINE');
     expect(output).toContain('FIRST SPARSE LINE');
+
+    // the long line is ONE row under -S, so the line after it is on
+    // screen too: og's skipeol ends a chopped line at its first
+    // screenful and skips to the newline (input.c:239), however many
+    // megabytes away that is. Cutting it into 64 KiB pieces instead
+    // put 64 rows of the same line on screen and pushed this off
+    expect(output).toContain('AFTER LONG LINE');
   }, 20000);
 
   it('keeps shared commands and headers beyond the bootstrap block',

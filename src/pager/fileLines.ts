@@ -61,7 +61,11 @@ const LINE_MEMO_LIMIT = 64;
  * The result is shared with the other callers reading the same
  * position, so it must be treated as read-only.
  */
-export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
+export function forwLine(
+  bf: BlockFile,
+  pos: number,
+  noScan = false
+): ForwLine | null {
   if (pos >= bf.size) return null;
 
   const squeeze = optSqueeze();
@@ -88,7 +92,11 @@ export function forwLine(bf: BlockFile, pos: number): ForwLine | null {
   const hit = memo.lines.get(pos);
   if (hit) return hit;
 
-  const line = readForwLine(bf, pos, squeeze);
+  const line = readForwLine(bf, pos, squeeze, noScan);
+
+  // declined, not read: nothing to remember, and the caller asks
+  // again without noScan when it decides to pay after all
+  if (!line) return null;
 
   if (memo.lines.size >= LINE_MEMO_LIMIT) memo.lines.clear();
   memo.lines.set(pos, line);
@@ -114,11 +122,21 @@ function newlineAfter(bf: BlockFile, pos: number): number {
   }
 }
 
+/**
+ * @param noScan - Return null rather than run the unbounded scan for
+ *   a chopped line's end. Only the read-ahead passes it: the newline
+ *   search here is the ONE the line costs, so a caller that probes
+ *   with noScan and then reads for real pays it twice - and a caller
+ *   that probes separately, before calling at all, pays it twice on
+ *   EVERY line. That cost is what pushed G past the slow-command
+ *   threshold and left the -M prompt held off the screen.
+ */
 function readForwLine(
   bf: BlockFile,
   pos: number,
-  squeeze: boolean
-): ForwLine {
+  squeeze: boolean,
+  noScan = false
+): ForwLine | null {
   const nl = bf.findNewline(pos, MAX_LINE);
 
   if (nl < 0) {
@@ -134,6 +152,10 @@ function readForwLine(
     // bound MEMORY; it must bound what we BUILD, not what counts as a
     // line.
     if (chopLine() || config.col) {
+      // the end is not within reach and the file has more to give:
+      // finding it is the unbounded walk, so a read-ahead declines
+      if (noScan && bf.size - pos > MAX_LINE) return null;
+
       // enough bytes for the shifted row and no more (UTF-8 is at most
       // 4 bytes per character, so this cannot come up short)
       const want = (config.col + config.screenWidth + 1) * 4;

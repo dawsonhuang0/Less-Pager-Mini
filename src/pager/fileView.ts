@@ -12,6 +12,14 @@ import { getLayout, rowEndFrom, LineLayout } from '../lines/lineLayout';
 import { rowStartBelow, lastRowStart, subRowAt } from '../lines/screenOps';
 
 /**
+ * How far a line's end may be before the rows above it are worth
+ * putting on the screen first. Matches fileInput's FLUSH_AHEAD: both
+ * ask "is this wait visible?", and the answer is the same few
+ * milliseconds of scanning.
+ */
+const SLOW_PAINT_BYTES = 8 * 1024 * 1024;
+
+/**
  * The visible-screen model for file-backed sessions, ported from
  * og's position.c + forwback.c: the view is a position INSIDE the
  * file where the screen starts, and movement walks rows from there —
@@ -116,8 +124,16 @@ export class BigView {
    * Materializes the visible screen, like og filling the position
    * table: returns the raw line texts with their positions/offsets,
    * exactly `count` display rows unless the file ends first.
+   *
+   * @param essential - Rows the screen actually needs. Past this the
+   *   read-ahead is best-effort and gives up rather than pay an
+   *   unbounded read for a row nobody will look at.
    */
-  visible(count: number): {
+  visible(
+    count: number,
+    essential: number = count,
+    onSlow?: (rows: { text: string }[]) => void
+  ): {
     rows: { text: string, pos: number, subRow: number, offset: number }[],
     endPos: number,
   } {
@@ -129,7 +145,52 @@ export class BigView {
     let more = false;
 
     while (true) {
-      const line = forwLine(this.bf, pos);
+      // Reading a line means finding its END, and a line with no
+      // newline within reach costs a scan to wherever the next one is
+      // - the whole file, if there is not another. That is og's own
+      // rule (input.c:241) and the screen has to pay it. Read-AHEAD
+      // does not: og has no read-ahead at all, its position table
+      // holds exactly sc_height rows, so a row past the screen is
+      // ours to skip.
+      //
+      // Without this, sync()'s three-window batch walked a terabyte
+      // to materialize row 16 of a 64-row batch on a 12-row screen.
+      // The probe IS the read: forwLine hands back the line when its
+      // end is within reach, and null only when finding it would mean
+      // the unbounded walk. Asking a separate question first cost a
+      // newline search on EVERY line - enough extra work to push G
+      // over the slow-command threshold, which held the -M prompt off
+      // the screen entirely.
+      let line = forwLine(this.bf, pos, true);
+
+      if (!line && !this.bf.atEnd(pos)) {
+        if (rows.length >= essential) {
+          // declined, not ended: there IS more content here
+          more = true;
+          endPos = pos;
+          break;
+        }
+
+        // Inside the screen the read has to happen - but the rows
+        // ABOVE it are already known, and og would have them on the
+        // glass by now: it paints each row as forw_line returns it, so
+        // a costly row delays only the rows after it. We build the
+        // whole screen and paint once, so without this a single
+        // expensive line left the terminal blank for as long as the
+        // scan took - a terabyte hole showed nothing at all where og
+        // showed its first line.
+        // ...but only when the wait is one the eye would catch. The
+        // scan runs about a gigabyte a second, so anything short of
+        // this is over before a frame, and painting twice for it costs
+        // an extra render AND an extra write on every keypress - which
+        // is the whole cost of scrolling a file of 360 KB lines.
+        if (rows.length && this.bf.size - pos > SLOW_PAINT_BYTES) {
+          onSlow?.(rows.slice());
+        }
+
+        line = forwLine(this.bf, pos);
+      }
+
       if (!line) break;
 
       const len = this.lineLength(line.text);

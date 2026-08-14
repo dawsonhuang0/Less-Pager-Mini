@@ -36,6 +36,16 @@ import { noteScrollRows, screenPainted } from '../helpers';
 
 import { flush } from '../tty/output';
 
+/**
+ * How far the line-number walk must reach before the screen it is
+ * about to sit on top of is worth flushing early.
+ *
+ * The scan runs about a gigabyte a second, so this is a few
+ * milliseconds - under it the walk is over before an eye could catch
+ * the stale page, and the write it would cost is pure fragmentation.
+ */
+const FLUSH_AHEAD = 8 * 1024 * 1024;
+
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
 
@@ -887,6 +897,35 @@ export class FileInput implements PagerInput {
     this.sync();
   }
 
+  /** Set while paintPartial is drawing, so the paint it triggers
+   *  cannot come back round into another sync. */
+  private painting = false;
+
+  /**
+   * Puts the rows read so far on the screen, before a read that is
+   * going to take a while.
+   *
+   * og needs no equivalent: forw() writes each row as forw_line
+   * returns it, so the rows above a slow one are already drawn when
+   * it stalls. We materialize the screen and paint once, which is
+   * fewer writes for the ordinary case and a blank terminal for this
+   * one. Bare, because no prompt belongs on a screen still being
+   * built - the same reason resolveBottom paints bare.
+   */
+  private paintPartial(head: string[], rows: { text: string }[]): void {
+    if (this.painting || !rows.length) return;
+    this.painting = true;
+
+    try {
+      session.fullContent = head.concat(rows.map(row => row.text));
+      session.content = deriveContent();
+      renderBare(session.content, session.buffer);
+      flush();
+    } finally {
+      this.painting = false;
+    }
+  }
+
   /** og's currline(BOTTOM) closing every forw()/back(): the eager
    *  line-number resolution running after each move's paint. */
   resolveBottom(): void {
@@ -904,19 +943,6 @@ export class FileInput implements PagerInput {
     // painting one here only to blank it on the next line was two
     // writes and a flicker that og never emits
     renderBare(session.content, session.buffer);
-
-    // ...and it has to REACH the terminal before the walk, which is
-    // synchronous: the scheduled flush runs on the next turn of the
-    // event loop, and the walk never gives it one. So the destination
-    // sat in obuf and the old screen stayed up until the count
-    // finished - on a big file, seconds of looking at the wrong page.
-    //
-    // og gets this for free by writing a whole screen into an 8K obuf
-    // (output.c:520 flushes when it fills); ours writes a delta of a
-    // few hundred bytes and never fills. Same buffer, different fill
-    // rate. Our own sink's rule covers it anyway: flush before
-    // anything that makes the user wait, and the walk is that.
-    flush();
 
     this.lineScanMessaged = false;
     let retriedAfterEarlyInterrupt = false;
@@ -2265,6 +2291,20 @@ export class FileInput implements PagerInput {
     }
 
     let { pos, num } = anchor;
+
+    // The destination screen is painted but still in obuf, and this
+    // walk is synchronous - nothing will flush it until we return, so
+    // a long count leaves the OLD page on the glass the whole time.
+    // og never notices: its repaint writes a whole screen into an 8K
+    // obuf and overflows (output.c:520), while our delta is a few
+    // hundred bytes and never fills.
+    //
+    // Only when the walk is far enough to see. Flushing here
+    // unconditionally cost an extra write on EVERY move - 10 writes
+    // to og's 8 on a five-key burst (tests/framesweep.py), and
+    // fragmentation on a burst is what flicker IS.
+    if (target - pos > FLUSH_AHEAD) flush();
+
     const started = Date.now();
     let messaged = false;
     let steps = 0;
@@ -2769,7 +2809,19 @@ export class FileInput implements PagerInput {
         if (accepted < screenful) session.softEofSeen = true;
       }
     } else {
-      const visible = this.view.visible(Math.max(config.window * 3, 64));
+      // three windows of read-ahead, but only the screen is
+      // ESSENTIAL: the rest is dropped rather than block on a line
+      // whose end is a scan away. og reads no further than the rows
+      // it paints, so stopping early is the og-shaped behaviour.
+      //
+      // The third argument is the other half of that: when a row
+      // INSIDE the screen is the expensive one, the rows already read
+      // go to the terminal before the wait, the way og's row-at-a-time
+      // painting does for free. Same shape as resolveBottom putting
+      // the destination up before its line-number walk.
+      const visible = this.view.visible(
+        Math.max(config.window * 3, 64), config.window,
+        rows => this.paintPartial(raw, rows));
       if (bodyStart < 0) bodyStart = raw.length;
 
       for (const row of visible.rows) {
