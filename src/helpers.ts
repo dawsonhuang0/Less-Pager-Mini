@@ -370,7 +370,13 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   // it, which is exactly the down-then-up burst) the gate eats the
   // only one we were going to ring. A fresh arrival therefore rings
   // unconditionally; leaning on the key still rings once a second.
-  const freshEdge = kind === 'eof' && !edgeHeld;
+  // `stalled` as well as `edgeHeld`: edgeHeld is maintained by
+  // armStall at the top of each command, so on its own it would let
+  // any caller that rings twice without a command in between - a
+  // direct call, a path that does not go through the key loop - claim
+  // a fresh arrival each time and ring straight past og's gate.
+  // Already being stalled IS already being at the edge.
+  const freshEdge = kind === 'eof' && !edgeHeld && !stalled;
   if (kind === 'eof') markStalled();
 
   // og's clear_bot before a bell comes from cmd_exec, which runs when
