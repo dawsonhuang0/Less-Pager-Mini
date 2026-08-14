@@ -597,6 +597,28 @@ describe('unified file command loop', () => {
       expect(output).toContain('\x1b[?2004h');
     }, 20000);
 
+  // A key string reaching `drive` is fed as ONE chunk, so a
+  // multi-character one leaves keys queued behind the first - og's
+  // tty still holding the rest of the burst.
+
+  it('keeps -N numbers correct after the anchor pool evicts',
+    async () => {
+      // og's table holds LINENUM_POOL entries and drops the smallest
+      // gap when full (linenum.c:185). Resolving one per rendered row,
+      // this scroll pushes well past 1024, so the numbers on screen
+      // come from a table that has evicted.
+      const output = await drive(['j'.repeat(150)], '-N -S', streamedFile);
+      const rows = screenOf(output).filter(row => /^\s*\d+\s/.test(row));
+      const nums = rows.map(row => parseInt(row.trim().split(/\s+/)[0], 10));
+
+      expect(nums.length).toBeGreaterThan(3);
+      // contiguous, and naming the line they actually sit on
+      nums.forEach((n, i) => {
+        if (i > 0) expect(n).toBe(nums[i - 1] + 1);
+      });
+      expect(rows[0]).toContain(`stream line ${nums[0]}`);
+    }, 20000);
+
   it('warns instead of opening big-file shell and editor commands',
     async () => {
       const output = await drive([

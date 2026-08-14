@@ -155,6 +155,22 @@ describe('file command orchestration', () => {
     expect(files.newFile).toBe(true);
   });
 
+  it('starts the new file at column 0, like og edit_ifile hshift = 0', () => {
+    // og's edit_ifile zeroes hshift (edit.c:680) in the same block as
+    // pos_clear and clr_hilite: a switch starts at the left edge
+    // however far the file being left was shifted. It has to - og
+    // saves a scrpos per ifile (ifile.c:35) and the shift is not in
+    // it, so there is nothing to restore to.
+    //
+    // We had somewhere to keep it and kept it, so :n from a
+    // right-shifted file opened the next one mid-line.
+    config.col = 40;
+
+    expect(switchToFile(1)).toBe(true);
+
+    expect(config.col).toBe(0);
+  });
+
   it('leaves the current file alone when the target cannot load', () => {
     files.list.push({
       path: missing,
