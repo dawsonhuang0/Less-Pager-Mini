@@ -34,33 +34,37 @@ import { ScreenRow } from './screenTable';
 export function rowStartBelow(line: string, offset: number): number {
   if (offset <= 0 || chopLine() || config.col) return 0;
 
-  const layout = getLayout(line);
-  let start = 0;
-  let next = rowEndFrom(layout, 0);
+  // The layout already HOLDS every row start (buildRowStarts), so the
+  // answer is a lookup. Re-walking the line with rowEndFrom from 0
+  // made this O(rows), and getLastRow calls it once per screen row -
+  // on a 360 KB line wrapped at 80 columns that is ~4500 steps a call
+  // and ~100k a keypress, which is what made scrolling it crawl.
+  const starts = getLayout(line).rowStart;
+  let lo = 0;
+  let hi = starts.length - 1;
+  let best = 0;
 
-  while (next < offset) {
-    const step = rowEndFrom(layout, next);
-    start = next;
-    if (step <= next) break;
-    next = step;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+
+    if (starts[mid] < offset) {
+      best = starts[mid];
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
 
-  return start;
+  return best;
 }
 
 /** The offset of a line's last display row. */
 export function lastRowStart(line: string): number {
   if (chopLine() || config.col) return 0;
 
-  const layout = getLayout(line);
-  const len = layout.chars.length;
-  let start = 0;
-
-  for (;;) {
-    const end = rowEndFrom(layout, start);
-    if (end >= len || end <= start) return start;
-    start = end;
-  }
+  // the last entry of the same array, rather than stepping to it
+  const starts = getLayout(line).rowStart;
+  return starts[starts.length - 1] ?? 0;
 }
 
 /**
@@ -86,9 +90,24 @@ export function rowOffsetOf(line: string, subRow: number): number {
 export function subRowAt(line: string, offset: number): number {
   if (chopLine() || config.col) return 0;
 
+  // same array, same reason: the last row whose start is at or before
+  // the offset, found rather than counted to
   const starts = getLayout(line).rowStart;
+  let lo = 0;
+  let hi = starts.length - 1;
   let sub = 0;
-  while (sub + 1 < starts.length && starts[sub + 1] <= offset) sub++;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+
+    if (starts[mid] <= offset) {
+      sub = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
   return sub;
 }
 
