@@ -1,5 +1,5 @@
 import { keyboard } from './keyboard';
-import { putstr } from './output';
+import { putstr, flush } from './output';
 
 import { config, mode, setFullScreen } from '../state/config';
 
@@ -103,6 +103,14 @@ export function leaveScreenCodes(): void {
  */
 export function suspendTerminal(): void {
   leaveScreenCodes();
+
+  // og's lsystem: `term_deinit(); flush(); /* Make sure the deinit
+  // chars get out */` (lsystem.c:97). The child writes to fd 1
+  // directly, so anything of ours still in obuf arrives AFTER it -
+  // including the alternate-screen exit. `!echo hi` then printed hi
+  // inside the alt screen, and leaving it a moment later threw the
+  // line away: og showed "hi", we showed nothing.
+  flush();
 
   keyboard().setRawMode(false);
   keyboard().pause();
