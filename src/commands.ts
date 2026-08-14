@@ -125,6 +125,15 @@ export function switchToFile(target: number): boolean {
   config.subRow = saved ? saved.subRow : 0;
   config.blankTop = 0;
 
+  // og's edit_ifile sets `hshift = 0` (edit.c:680) on EVERY switch,
+  // in the same block as pos_clear/clr_hilite: a new file starts at
+  // column 0 however far the last one was shifted. og saves a scrpos
+  // per ifile (ifile.c:35) and the shift is not in it.
+  //
+  // Ours carried the shift across, so :n from a right-shifted file
+  // opened the next one mid-line.
+  config.col = 0;
+
   mode.INIT = false;
   calculateEOF(session.content);
 

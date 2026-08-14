@@ -2850,6 +2850,13 @@ function exitHelp(): boolean {
   applyConfig(session.prevConfig);
   applyMode(session.prevMode);
 
+  // Quitting help re-edits the file, and og's edit_ifile sets
+  // `hshift = 0` (edit.c:680) for that switch like any other - so og
+  // comes back at column 0 however far the file was shifted before h.
+  // Entering help already matched (resetConfig zeroes it); leaving
+  // restored the whole saved config, shift included.
+  config.col = 0;
+
   // og's option variables (shift_count, swindow, wscroll,
   // chop_line) are globals: a change made inside the help screen
   // persists after leaving it
