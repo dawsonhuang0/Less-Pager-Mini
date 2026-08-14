@@ -46,6 +46,10 @@ import { flush } from '../tty/output';
  */
 const FLUSH_AHEAD = 8 * 1024 * 1024;
 
+/** og's LINENUM_POOL (defines.h:234): how many resolved line-number
+ *  positions the table keeps before it starts evicting. */
+const LINENUM_POOL = 1024;
+
 import { osc8Internal, osc8Links, setSelectedOsc8 }
   from '../features/osc8';
 
@@ -2280,15 +2284,66 @@ export class FileInput implements PagerInput {
     return num === null ? null : num + 1;
   }
 
-  /** Fable's cached find_linenum walk, retaining only sparse anchors. */
-  private countTo(target: number): number | null {
-    let anchor = this.lineAnchors[0];
+  /**
+   * Remembers a resolved position, like og's add_lnum (linenum.c).
+   *
+   * Sorted by position and CAPPED, both for og's reasons. The list
+   * used to grow by one entry per resolution - and lineNumber() runs
+   * once per rendered ROW - so a couple of hundred keys left thousands
+   * of entries, each countTo scanning all of them linearly. Cost grew
+   * with how long you had been scrolling: -N on a 113 MB file spent
+   * 0.68s of CPU on 200 keys where og spent 0.01s.
+   *
+   * When full, og drops the entry whose removal leaves the smallest
+   * gap (calcgap: next->pos - prev->pos, linenum.c:185), so what
+   * survives stays spread across the file rather than clustered where
+   * the user happened to be.
+   */
+  private addAnchor(pos: number, num: number): void {
+    const at = this.anchorIndex(pos);
+    if (this.lineAnchors[at]?.pos === pos) return;
 
-    for (const candidate of this.lineAnchors) {
-      if (candidate.pos <= target && candidate.pos > anchor.pos) {
-        anchor = candidate;
+    this.lineAnchors.splice(at + 1, 0, { pos, num });
+
+    if (this.lineAnchors.length <= LINENUM_POOL) return;
+
+    let victim = 1;
+    let smallest = Infinity;
+
+    for (let i = 1; i < this.lineAnchors.length - 1; i++) {
+      const gap = this.lineAnchors[i + 1].pos - this.lineAnchors[i - 1].pos;
+      if (gap < smallest) {
+        smallest = gap;
+        victim = i;
       }
     }
+
+    this.lineAnchors.splice(victim, 1);
+  }
+
+  /** Index of the last anchor at or before `pos`, by binary search. */
+  private anchorIndex(pos: number): number {
+    let lo = 0;
+    let hi = this.lineAnchors.length - 1;
+    let best = 0;
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+
+      if (this.lineAnchors[mid].pos <= pos) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    return best;
+  }
+
+  /** Fable's cached find_linenum walk, retaining only sparse anchors. */
+  private countTo(target: number): number | null {
+    const anchor = this.lineAnchors[this.anchorIndex(target)];
 
     let { pos, num } = anchor;
 
@@ -2321,7 +2376,7 @@ export class FileInput implements PagerInput {
       pos += chunk.length;
 
       if ((++steps & 15) !== 0) continue;
-      this.lineAnchors.push({ pos, num });
+      this.addAnchor(pos, num);
 
       if (!messaged && Date.now() - started >= 2000) {
         messaged = true;
@@ -2353,7 +2408,7 @@ export class FileInput implements PagerInput {
       }
     }
 
-    this.lineAnchors.push({ pos: target, num });
+    this.addAnchor(target, num);
     return num;
   }
 
