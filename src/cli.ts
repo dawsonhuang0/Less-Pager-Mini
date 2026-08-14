@@ -267,7 +267,7 @@ async function main(): Promise<void> {
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
-    await pager(files, { 'examine-file': true });
+    await pager(files, ['--examine-file']);
     return;
   }
 
