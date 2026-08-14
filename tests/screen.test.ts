@@ -40,6 +40,8 @@ import {
   calculateDimensions
 } from '../src/tty/screen';
 
+import { putstr, pendingOutput, discardOutput } from '../src/tty/output';
+
 const stdoutWrite = vi.spyOn(process.stdout, 'write')
   .mockImplementation(() => true);
 
@@ -105,6 +107,39 @@ describe('terminal mode transitions', () => {
     expect(fake.keyboard.setRawMode).toHaveBeenCalledWith(false);
     expect(fake.keyboard.pause).toHaveBeenCalledOnce();
     expect(hook.screenActive).toBe(false);
+  });
+
+  it('flushes the deinit codes before a child process can write', () => {
+    // og's lsystem: `term_deinit(); flush(); /* Make sure the deinit
+    // chars get out */` (lsystem.c:97).
+    //
+    // spawnSync inherits fd 1, so the child writes DIRECTLY while
+    // anything of ours still in the output buffer waits behind it -
+    // including the alternate-screen exit. `!echo hi` then printed hi
+    // inside the alt screen and leaving it threw the line away: og
+    // showed "hi", we showed nothing.
+    //
+    // Buffering only happens on a tty (output.ts writes through
+    // otherwise), so the rest of this file cannot see the bug at all.
+    const tty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    Object.defineProperty(process.stdout, 'isTTY',
+      { value: true, configurable: true });
+    discardOutput();
+
+    try {
+      hook.screenActive = true;
+      putstr('!echo hi\n');
+
+      suspendTerminal();
+
+      // nothing of ours may be left for the child to jump ahead of
+      expect(pendingOutput()).toBe('');
+      expect(writes().join('')).toContain(ALTERNATE_CONSOLE_OFF);
+    } finally {
+      if (tty) Object.defineProperty(process.stdout, 'isTTY', tty);
+      else delete (process.stdout as { isTTY?: boolean }).isTTY;
+      discardOutput();
+    }
   });
 
   it('keeps hardcoded mouse/paste teardown on a dumb terminal', () => {
