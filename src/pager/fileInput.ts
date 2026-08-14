@@ -2809,19 +2809,13 @@ export class FileInput implements PagerInput {
         if (accepted < screenful) session.softEofSeen = true;
       }
     } else {
-      // three windows of read-ahead, but only the screen is
-      // ESSENTIAL: the rest is dropped rather than block on a line
-      // whose end is a scan away. og reads no further than the rows
-      // it paints, so stopping early is the og-shaped behaviour.
-      //
-      // The third argument is the other half of that: when a row
-      // INSIDE the screen is the expensive one, the rows already read
-      // go to the terminal before the wait, the way og's row-at-a-time
-      // painting does for free. Same shape as resolveBottom putting
-      // the destination up before its line-number walk.
+      // Exactly the screen, like og's sc_height position table. The
+      // callback puts the rows already read on the terminal when the
+      // next one turns out to be a long wait, the way og's
+      // row-at-a-time painting does for free - same shape as
+      // resolveBottom putting the destination up before its walk.
       const visible = this.view.visible(
-        Math.max(config.window * 3, 64), config.window,
-        rows => this.paintPartial(raw, rows));
+        config.window, rows => this.paintPartial(raw, rows));
       if (bodyStart < 0) bodyStart = raw.length;
 
       for (const row of visible.rows) {
