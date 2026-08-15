@@ -6,6 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PipeSpool } from '../../src/pager/spool';
 
+import { BlockFile } from '../../src/pager/blockFile';
+
+import { FileInput } from '../../src/pager/fileInput';
+
+import { files, initContent } from '../../src/features/files';
+
 class FakePipe extends EventEmitter {
   paused = true;
   destroyed = false;
@@ -106,6 +112,44 @@ describe('bounded pipe spooling', () => {
 
       spool.close();
       expect(fs.existsSync(directory)).toBe(false);
+    });
+
+  it('gives the engine the length of a spool that ended before it attached',
+    async () => {
+      // The spool emits its end once, to whoever is listening then.
+      // A short pipe can reach that end during the session's startup -
+      // a dumb terminal's "Press RETURN to continue" gate is easily
+      // long enough - and FileInput subscribes only afterwards, so the
+      // event went to nobody and the length stayed unknown for the
+      // rest of the session: the prompt showed ":" where og shows
+      // "(END)". og cannot lose it, because ch_length becomes known on
+      // the read that returns EOI and every read from here would.
+      const text = Array.from({ length: 40 },
+        (_, i) => `spooled line ${i + 1}`).join('\n') + '\n';
+
+      const spool = await PipeSpool.create(
+        Readable.from([Buffer.from(text)]));
+      open.push(spool);
+      await spool.waitForEnd();
+      expect(spool.ended).toBe(true);
+
+      initContent(text.split('\n'));
+      const entry = files.list[0];
+      entry.sizeKnown = false;
+      entry.streaming = true;
+
+      const bf = new BlockFile(spool.path);
+      const input = new FileInput(bf, 0, spool);
+
+      try {
+        input.ready();
+
+        expect(entry.sizeKnown).toBe(true);
+        expect(entry.streaming).toBe(false);
+        expect(entry.size).toBe(Buffer.byteLength(text));
+      } finally {
+        input.close();
+      }
     });
 
   it('writes a newline-free input directly to disk without a line tail',

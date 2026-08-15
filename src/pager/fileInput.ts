@@ -314,6 +314,19 @@ export class FileInput implements PagerInput {
       this.unsubscribeGrowth = this.spool.subscribe(
         event => this.onGrowth(event)
       );
+
+      // A short pipe can reach its end between the startup fill and
+      // this subscribe - a dumb terminal's "Press RETURN to continue"
+      // gate is easily long enough - and the spool never repeats that
+      // event, so the length it carried was lost. og cannot miss it:
+      // ch_length becomes known on the read that returns EOI, and
+      // every read from here on would return it. Unadopted, the
+      // length stayed unknown for the whole session and the prompt
+      // showed ":" where og shows "(END)".
+      if (this.spool.ended) {
+        this.bf.refreshSize();
+        this.adoptSpoolEnd();
+      }
       // --file-size wants the pipe's true length: read it all, like
       // og's scan_eof running the EOI-discovering read up front
       if (opt.wantFileSize > 0 && this.spoolAlive()) this.spool.drain();
@@ -408,6 +421,17 @@ export class FileInput implements PagerInput {
     return true;
   }
 
+  /** Takes the finished spool's length as the file's, like og's
+   *  ch_fsize after the read that returned EOI. */
+  private adoptSpoolEnd(): void {
+    const entry = files.list[this.fileIndex];
+    if (!entry) return;
+
+    entry.size = this.spool?.size ?? this.bf.size;
+    entry.sizeKnown = true;
+    entry.streaming = false;
+  }
+
   /** Makes newly spooled bytes visible and completes commands which
    *  were blocked at the provisional end of a non-seekable input. */
   private onGrowth(event: SpoolEvent): void {
@@ -419,14 +443,7 @@ export class FileInput implements PagerInput {
 
     if (event.error) search.message = event.error.message;
 
-    if (event.ended && !this.softEnd) {
-      const entry = files.list[this.fileIndex];
-      if (entry) {
-        entry.size = this.spool?.size ?? this.bf.size;
-        entry.sizeKnown = true;
-        entry.streaming = false;
-      }
-    }
+    if (event.ended && !this.softEnd) this.adoptSpoolEnd();
 
     if (this.pendingJump) {
       const jump = this.pendingJump;
