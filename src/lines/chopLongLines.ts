@@ -253,12 +253,18 @@ function chopAsciiLine(
 ): void {
   const end = start + width;
 
+  // og's pdone closes every line the same way whatever is in it, and
+  // under -R that is three literal bytes rather than nothing - so even
+  // a line with no style of its own goes through withReset. The
+  // rscroll marker follows the close, like add_attr_normal running
+  // before pdone paints it (line.c:1482)
   if (longLine.length <= end) {
-    lines.push(longLine.slice(start));
+    lines.push(withReset(longLine.slice(start)));
   } else if (marker) {
-    lines.push(longLine.slice(start, end - 1) + getMoreIndicator(1));
+    lines.push(withReset(longLine.slice(start, end - 1)) +
+      getMoreIndicator(1));
   } else {
-    lines.push(longLine.slice(start, end));
+    lines.push(withReset(longLine.slice(start, end)));
   }
 }
 

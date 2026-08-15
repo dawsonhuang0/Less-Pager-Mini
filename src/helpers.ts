@@ -1554,9 +1554,14 @@ export function render(rawContent: string[], buffer: string[]): void {
 
 /**
  * Repaints for a terminal without cursor addressing, like og drawing
- * with the dumb entry's caps: attribute strings are empty (styles
- * stripped; og's default caret mode never emits raw file escapes
- * either) and nothing is ever erased.
+ * with the dumb entry's caps: nothing is ever erased.
+ *
+ * The rows arrive as they are. og's own attributes went dark in
+ * initTerminalCapabilities, where the missing "smso" empties them the
+ * way tmodes does; what is left is the FILE's escapes under -R, which
+ * og's put_line hands to putchr untouched whatever the terminal is
+ * (line.c:1300 stores them AT_ANSI, and at_switch ignores that bit).
+ * Stripping here took those with it, so -R lost its colour.
  *
  * - A bottom-line change overwrites in place after a bare `\r`; a
  *   shorter line leaves the old tail visible, like og without `el`.
@@ -1570,7 +1575,7 @@ function dumbFrame(
   buffer: string[] = [],
   posClear: boolean = false
 ): string {
-  const plain = rows.map(row => row.replace(STYLE_REGEX_G, ''));
+  const plain = rows;
   const last = plain.length - 1;
 
   // og's start_mca has run for a command line that was already open,
@@ -1591,7 +1596,7 @@ function dumbFrame(
   // og's pos_clear'd repaint redraws whole even when nothing moved,
   // so the incremental shapes below must not swallow it
   if (prev && !posClear && prev.length === plain.length) {
-    const prevPlain = prev.map(row => row.replace(STYLE_REGEX_G, ''));
+    const prevPlain = prev;
 
     let same = 0;
     while (same < last && plain[same] === prevPlain[same]) same++;

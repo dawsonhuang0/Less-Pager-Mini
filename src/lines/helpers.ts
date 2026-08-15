@@ -30,6 +30,7 @@ import {
   CHARSET_DESIGNATION_G,
   STYLE_REGEX_G,
   STYLE_RESET,
+  COLOR_RESET,
   INVERSE_ON,
   INVERSE_OFF,
   UNDERLINE_ON,
@@ -838,14 +839,31 @@ export function visualWidth(line: string): number {
 }
 
 /**
- * Appends a style reset to a line only if a style is still open at its end.
+ * Closes a display line, like og's add_attr_normal from pdone
+ * (line.c:1426, called at line.c:1482 and :1499).
  *
- * - Prevents style bleeding without emitting redundant reset codes.
+ * Under -R og appends a literal "\033[m" to EVERY line, open attribute
+ * or not - it writes those three bytes itself rather than asking
+ * terminfo, and stores them zero-width, so they neither cost a column
+ * nor depend on the terminal. That is what keeps an unclosed colour in
+ * the file from bleeding down the screen. Its companion "\033]8;;\e\\"
+ * goes out only inside an OSC 8 link, which we do not track across the
+ * line end and so never emit.
+ *
+ * Every other ctldisp leaves the line alone in og, because no file
+ * escape survives to that point: only ours can be open, and the reset
+ * below closes it.
  *
  * @param line - The line to terminate.
  * @returns The line with styles guaranteed closed.
  */
 export function withReset(line: string): string {
+  // og's guard is is_ansi_end('m'): $LESSANSIENDCHARS can take "m"
+  // away, and then the sequence it would write is not one
+  if (optCtldisp() === 2 && ansiEndChars().includes('m')) {
+    return line + COLOR_RESET;
+  }
+
   return stylesOpen(line) ? line + STYLE_RESET : line;
 }
 

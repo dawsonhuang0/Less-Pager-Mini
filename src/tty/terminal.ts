@@ -174,20 +174,42 @@ function stripPadding(value: string): string {
   return value.replace(/\$<[0-9.]*[*/]*>/g, '');
 }
 
+// og's DEFAULT_TERM (screen.c:133): an unset $TERM still names an
+// entry, and "unknown" is a real one - it is how a terminal with no
+// capabilities at all gets described rather than left undescribed.
+// (og's other spelling, "ansi", is the OS2 build's; node has none.)
+const DEFAULT_TERM = 'unknown';
+
 // tgetent is og's one-time load at init; doing it on first use keeps
 // the $TERM lookup after the environment tiers have been set up
 let terminfoLoaded = false;
+let terminfoEntry = false;
 
 /** Loads the compiled entry for $TERM, once, like og's tgetent. */
 function loadTerminfo(): void {
   if (terminfoLoaded) return;
   terminfoLoaded = true;
-  tgetent(terminalEnv() ?? null);
+  terminfoEntry = tgetent(terminalEnv() || DEFAULT_TERM) === 1;
+}
+
+/**
+ * Whether the terminal database described this terminal.
+ *
+ * og always has an answer here: it links curses, so a capability the
+ * entry omits is genuinely ABSENT and og uses the empty string. We
+ * read the compiled entries ourselves, so a miss can also mean we
+ * found no database to read - and there the hardcoded ANSI guesses
+ * are the better answer. This tells the two apart.
+ */
+export function terminfoAnswered(): boolean {
+  loadTerminfo();
+  return terminfoEntry;
 }
 
 /** Forgets the loaded entry, so a fresh session re-reads $TERM. */
 export function resetTerminfo(): void {
   terminfoLoaded = false;
+  terminfoEntry = false;
 }
 
 export function terminalNumber(

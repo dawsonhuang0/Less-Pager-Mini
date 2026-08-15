@@ -1,8 +1,8 @@
 
 import { lgetenv } from '../startup/environment';
 
-import { formatTerminalCapability, terminalCapability, terminalFlag }
-  from '../tty/terminal';
+import { formatTerminalCapability, terminalCapability, terminalFlag,
+  terminfoAnswered } from '../tty/terminal';
 
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
 
@@ -274,27 +274,64 @@ export function initTerminalCapabilities(): void {
     terminalCapability('ri', 'sr') ?? '';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
-  // og reads sgr0 from terminfo; this lookup only sees
-  // LESS_TERMCAP_*/$TERMCAP, so the fallback is what every ordinary
-  // terminal gets. xterm's sgr0 -- and screen's, and tmux's -- is
-  // "\E(B\E[m": the SGR reset preceded by designating ASCII as G0
   // og's attribute exits go through tmodes(..., "sgr0", ..., "me")
   // (screen.c:1788), so a bold or standout run ends with the FULL
   // capability -- on xterm "\E(B\E[m", the SGR reset preceded by
   // designating ASCII as G0. -N's line numbers end exactly that way in
   // og's bytes, so this keeps the capability whole.
-  const reset = terminalCapability('sgr0', 'me') ?? '\x1b(B\x1b[m';
-  STYLE_RESET = reset;
-  INVERSE_ON = terminalCapability('smso', 'so') ?? '\x1b[7m';
-  // og reads rmso from the terminfo database; terminalCapability only
-  // consults LESS_TERMCAP_*/$TERMCAP, so the lookup always misses and
-  // the fallback IS the answer on every ordinary terminal. og's is
-  // ESC[27m there (xterm's rmso), not a full reset -- matching the
-  // ANSI default the other capabilities already fall back to
-  INVERSE_OFF = terminalCapability('rmso', 'se') ?? '\x1b[27m';
-  BOLD_ON = terminalCapability('bold', 'md') ?? '\x1b[1m';
-  BOLD_OFF = reset;
-  UNDERLINE_ON = terminalCapability('smul', 'us') ?? '\x1b[4m';
-  UNDERLINE_OFF = terminalCapability('rmul', 'ue') ?? reset;
+  //
+  // A terminal whose entry has no sgr0 leaves og with "", but this
+  // file also uses STYLE_RESET as its own "the styles end here"
+  // sentinel -- split on, compared against -- so it keeps a value.
+  // Only what tmodes hands to the TERMINAL goes empty.
+  STYLE_RESET = terminalCapability('sgr0', 'me') ?? '\x1b(B\x1b[m';
+
+  // og's order, and its defaults: standout falls back to nothing at
+  // all, and the other three fall back to STANDOUT (screen.c:1645).
+  [INVERSE_ON, INVERSE_OFF] =
+    tmodes('smso', 'so', 'rmso', 'se', '', '', '\x1b[7m', '\x1b[27m');
+  [UNDERLINE_ON, UNDERLINE_OFF] = tmodes('smul', 'us', 'rmul', 'ue',
+    INVERSE_ON, INVERSE_OFF, '\x1b[4m', STYLE_RESET);
+  [BOLD_ON, BOLD_OFF] = tmodes('bold', 'md', 'sgr0', 'me',
+    INVERSE_ON, INVERSE_OFF, '\x1b[1m', STYLE_RESET);
+
   END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
+}
+
+/**
+ * og's tmodes (screen.c:1774): one attribute's enter/exit pair.
+ *
+ * The ENTER capability decides. Missing, the pair falls back whole -
+ * both strings - to the defaults it is handed; og gives standout the
+ * empty pair, so a terminal without "smso" simply never stands out,
+ * and hands the others standout's pair, so bold and underline come
+ * out as standout on a terminal that has only that. Present, the exit
+ * is looked up on its own, then sgr0, then the empty string.
+ *
+ * `guess` is ours, not og's: it applies only where no terminal entry
+ * was found at all, which for og cannot happen (see terminfoAnswered).
+ */
+function tmodes(
+  enterInfo: string,
+  enterCap: string,
+  exitInfo: string,
+  exitCap: string,
+  defaultEnter: string,
+  defaultExit: string,
+  guessEnter: string,
+  guessExit: string
+): [string, string] {
+  const enter = terminalCapability(enterInfo, enterCap);
+
+  if (enter === undefined) {
+    return terminfoAnswered()
+      ? [defaultEnter, defaultExit]
+      : [guessEnter, guessExit];
+  }
+
+  const exit = terminalCapability(exitInfo, exitCap) ??
+    terminalCapability('sgr0', 'me') ??
+    (terminfoAnswered() ? '' : guessExit);
+
+  return [enter, exit];
 }

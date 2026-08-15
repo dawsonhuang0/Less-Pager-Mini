@@ -234,6 +234,10 @@ describe('display transforms', () => {
     // -R (CD_ANSI) passes style sequences through
     toggle('-R');
     expect(transformContent(['\x1b[31mred'])).toEqual(['\x1b[31mred']);
+
+    // and back to the default: -R also makes pdone close every line
+    // with a literal "\033[m", which the tests after this one draw
+    toggle('-+R');
   });
 
   it('renders -N line numbers in the gutter', () => {

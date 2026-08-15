@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config, mode } from '../../src/state/config';
 
@@ -8,7 +8,33 @@ import { initContent } from '../../src/features/files';
 
 import { opt, option } from '../../src/options';
 
-import { render, resetRender, calculateEOF } from '../../src/helpers';
+import { render, resetRender, resetDumbPaint, calculateEOF }
+  from '../../src/helpers';
+
+import { initTerminalCapabilities, INVERSE_ON, INVERSE_OFF, BOLD_ON,
+  UNDERLINE_ON } from '../../src/state/constants';
+
+import { resetTerminfo } from '../../src/tty/terminal';
+
+// mode.DUMB alone is a state no terminal is ever in: og reaches it by
+// loading an entry with no capabilities, which is also what empties
+// its attribute strings. Setting the flag while the CAPABILITIES still
+// come from a real xterm (tests/setup.ts forces one) leaves standout
+// and bold on the rows, and the frames below would be asserting
+// against a terminal that cannot exist.
+const realTerm = process.env.TERM;
+
+const useTerm = (term: string): void => {
+  process.env.TERM = term;
+  resetTerminfo();
+  initTerminalCapabilities();
+};
+
+afterAll(() => {
+  process.env.TERM = realTerm;
+  resetTerminfo();
+  initTerminalCapabilities();
+});
 
 const written: string[] = [];
 
@@ -20,6 +46,8 @@ vi.spyOn(process.stdout, 'write').mockImplementation(data => {
 const content = Array.from({ length: 30 }, (_, i) => `d${i + 1}`);
 
 beforeEach(() => {
+  useTerm('dumb');
+
   config.row = 0;
   config.subRow = 0;
   config.col = 0;
@@ -44,10 +72,46 @@ beforeEach(() => {
   initContent(content);
   calculateEOF(content);
   resetRender();
+  // resetRender does not clear it: dumbPainted is what tells the dumb
+  // painter a screen is already up, and it survives a session the way
+  // og's own statics do. Left standing between tests, the first paint
+  // of the next one opens with a repaint's CR
+  resetDumbPaint();
   written.length = 0;
 });
 
 describe('dumb terminal rendering', () => {
+  it('has no attribute strings to draw with, like og tmodes', () => {
+    // the entry has no smso, so og's tmodes leaves standout empty -
+    // and hands that same empty pair to underline and bold
+    // (screen.c:1645). Nothing on this terminal stands out, which is
+    // why the frames below carry no attribute bytes of their own
+    expect(INVERSE_ON).toBe('');
+    expect(INVERSE_OFF).toBe('');
+    expect(BOLD_ON).toBe('');
+    expect(UNDERLINE_ON).toBe('');
+  });
+
+  it('still passes the file\'s own -R escapes to the terminal', () => {
+    // og's put_line hands an AT_ANSI char to putchr whatever the
+    // terminal is (line.c:1300), so -R colours a dumb terminal just
+    // as it colours an xterm; measured against og at TERM=dumb. Its
+    // pdone closes every line with a literal "\033[m" too
+    const coloured = ['\x1b[31mred', 'plain'];
+    opt.ctldisp = 2;
+    initContent(coloured);
+    calculateEOF(coloured);
+    resetRender();
+    written.length = 0;
+
+    render(coloured, []);
+    const frame = written.join('');
+    opt.ctldisp = 0;
+
+    expect(frame).toContain('\x1b[31mred\x1b[m');
+    expect(frame).toContain('plain\x1b[m');
+  });
+
   it('paints with newlines only, attributes stripped', () => {
     render(content, []);
     const frame = written.join('');
@@ -122,7 +186,10 @@ describe('dumb terminal rendering', () => {
   });
 
   it('keeps cursor-addressed frames on smart terminals', () => {
+    useTerm('xterm-256color');
     mode.DUMB = false;
+    resetRender();
+    written.length = 0;
     render(content, []);
 
     expect(written.join('')).toContain('\x1B[');
