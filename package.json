@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --removeComments --declaration false && tsc --emitDeclarationOnly",
     "gen:options": "tsx scripts/genOptionTypes.ts",
     "lint": "eslint src tests scripts",
     "typecheck": "tsc -p tsconfig.typecheck.json",
