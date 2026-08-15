@@ -111,9 +111,11 @@ export function initAnsiChars(): void {
     `(?:${STYLE_REGEX_G.source}|${CHARSET_DESIGNATION_G.source})`, 'g');
 }
 
-export const CONSOLE_TITLE_START = '\x1b]0;';
-export const CONSOLE_TITLE_END = '\x07';
-export const CONSOLE_TITLE_RESET = CONSOLE_TITLE_START + CONSOLE_TITLE_END;
+// No title sequences live here any more: the terminal takes its title
+// from the process name, and src/tty/title.ts sets that instead. An
+// OSC title put a second name in the bar beside the process one and
+// survived the quit, because the terminal that has to restore it
+// ignores the xterm title stack.
 
 export const CONSOLE_CLEAR = '\x1b[2J\x1b[H';
 

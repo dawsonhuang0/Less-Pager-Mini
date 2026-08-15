@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { putstr, flush } from '../tty/output';
 
-import { isWindows } from '../tty/platform';
+import { refreshWindowTitle } from '../tty/title';
 
 import { onHilitePaint, setHiliteHidden } from '../features/searching';
 import { squishCheck, renderHiliteRepaint, markSearchFlash }
@@ -280,9 +280,6 @@ import { chopLongLines } from "../lines/chopLongLines";
 import { wrapLongLines } from "../lines/wrapLongLines";
 
 import {
-  CONSOLE_TITLE_START,
-  CONSOLE_TITLE_END,
-  CONSOLE_TITLE_RESET,
   ALTERNATE_CONSOLE_ON,
   ON_ALTERNATE_SCREEN,
   KEYPAD_ON,
@@ -292,7 +289,6 @@ import {
   CURSOR_TO
 } from "../state/constants";
 
-const TITLE = CONSOLE_TITLE_START + 'less-pager-mini' + CONSOLE_TITLE_END;
 
 // The active acquisition backend. It may answer only the operations which
 // depend on seekable byte positions; the shared controller owns everything
@@ -2698,16 +2694,11 @@ function init() {
   // the kernel process name (what Terminal shows for less itself) is
   // fixed at exec time; the OSC title is the best an interpreted
   // program can do, and process.title at least fixes ps output
-  process.title = 'less-pager-mini';
+  refreshWindowTitle();
 
   // a dumb terminal gets no title, init or keypad strings, like
   // og's empty termcap capabilities
   if (!mode.DUMB) {
-    // og sets a console title only on WIN32, through SetConsoleTitleW
-    // and to the FILE's name, re-set at every prompt (command.c:967).
-    // On unix it sends nothing at all, so neither do we
-    if (isWindows) putstr(TITLE);
-
     // -X leaves the init/deinit strings unsent, like less
     if (!optNoInit()) {
       putstr(ALTERNATE_CONSOLE_ON);
@@ -3117,9 +3108,7 @@ function cleanUp(): void {
   // the two ways out of the screen cannot drift apart
   leaveScreenCodes();
 
-  if (!mode.DUMB) {
-    if (isWindows) putstr(CONSOLE_TITLE_RESET);
-  } else {
+  if (mode.DUMB) {
     // og-dumb quits with just lower_left (a bare CR) and no newline,
     // so the shell prompt overwrites the last prompt line
     putstr('\r');
