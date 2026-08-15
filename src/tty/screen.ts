@@ -135,7 +135,15 @@ export function enterScreen(): void {
   termInitTail();
 
   hook.screenActive = true;
-  resetRender();
+
+  // og's first_time is a static set at STARTUP and never again
+  // (forwback.c:22, cleared at :381) - term_init does not touch it,
+  // and lsystem, pipe_data and psignals all come back through
+  // term_init. So a screen RE-entered still counts as having painted,
+  // and its first repaint prints "...skipping..." like og's. Clearing
+  // the flag here is what swallowed the marker after every ! and ^Z.
+  // A genuinely fresh session clears it in freshSession instead.
+  resetRender(true);
   screenEntered();
 }
 

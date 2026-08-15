@@ -13,6 +13,8 @@ import { render, resetRender, resetDumbPaint, calculateEOF,
 
 import { initTerminalCapabilities } from '../../src/state/constants';
 
+import { enterScreen } from '../../src/tty/screen';
+
 const written: string[] = [];
 
 vi.spyOn(process.stdout, 'write').mockImplementation(data => {
@@ -105,6 +107,22 @@ describe('-X main-screen rendering', () => {
     // og's repaint()/forw without top_scroll
     expect(frame.startsWith('\r\x1B[K...skipping...\n')).toBe(true);
     expect(frame).toContain('x21');
+  });
+
+  it('prints it again when the screen is re-entered', () => {
+    render(content, []);
+
+    // og's lsystem, pipe_data and psignals all come back through
+    // term_init, which does not touch first_time - a static set at
+    // startup and cleared at the end of the first forw (forwback.c:22,
+    // :381). So the screen that comes back is not a FIRST screen and
+    // repaints behind the marker. Measured after "!echo h": og 1,
+    // ours 0 until enterScreen stopped clearing the painted flag
+    enterScreen();
+    written.length = 0;
+
+    render(content, []);
+    expect(written.join('')).toContain('...skipping...\n');
   });
 
   it('clears and paints in reverse on far backward jumps', () => {

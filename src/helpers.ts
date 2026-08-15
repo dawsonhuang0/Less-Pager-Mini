@@ -1645,7 +1645,7 @@ function dumbFrame(
   // hardcopy home's visible |-overstruck-^ marker ("|\b^"); a later
   // paint leads with lower_left's bare CR, the first one leans on the
   // one term_init has already written
-  const repaint = prev !== null || dumbPainted;
+  const drawn = prev !== null || dumbPainted;
   const clearHome = optClearRepaint() || dumbHomePending;
   dumbHomePending = false;
   dumbPainted = true;
@@ -1655,10 +1655,21 @@ function dumbFrame(
   // forw sets forw_prompt after every line it puts
   forwPrompt = !plain[last];
 
-  return (prefix ?? (repaint ? '\r' : '')) +
-    (repaint && (clearHome || fullScreen())
-      ? (clearHome ? '\n\n|\b^' : '...skipping...\n')
-      : '') +
+  // og's FIRST forw leads with neither: first_time still holds, so
+  // there is no marker (forwback.c:272) and no lower_left CR in front
+  // of one. A command line open before anything is painted echoes
+  // frame after frame - the "-" the startup error gate ungets opens
+  // one - and each of those leaves a prev behind, which made the
+  // first forw look like a repaint and print "...skipping..." over
+  // its own first screen. top_scroll's clear+home is NOT gated that
+  // way: need_home at :271 carries no first_time test.
+  const repaint = drawn && !firstOutput;
+  const home = drawn && clearHome;
+
+  return (prefix ?? (repaint || home ? '\r' : '')) +
+    (home
+      ? '\n\n|\b^'
+      : repaint && fullScreen() ? '...skipping...\n' : '') +
     joinDumb(plain);
 }
 

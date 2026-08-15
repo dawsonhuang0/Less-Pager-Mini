@@ -1912,7 +1912,9 @@ function dispatchKey(sequence: string): void {
       putstr('\n');
       enterScreen();
     } else {
-      resetRender();
+      // the | screen was already re-entered before the done message,
+      // so this only forgets the frame - not og's first_time
+      resetRender(true);
     }
 
     session.shellPause = false;

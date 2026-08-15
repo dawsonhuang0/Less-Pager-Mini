@@ -8,8 +8,8 @@ import { initContent } from '../../src/features/files';
 
 import { opt, option } from '../../src/options';
 
-import { render, resetRender, resetDumbPaint, calculateEOF }
-  from '../../src/helpers';
+import { render, resetRender, resetDumbPaint, calculateEOF, freezeFrame,
+  markPosClear } from '../../src/helpers';
 
 import { initTerminalCapabilities, INVERSE_ON, INVERSE_OFF, BOLD_ON,
   UNDERLINE_ON } from '../../src/state/constants';
@@ -152,6 +152,30 @@ describe('dumb terminal rendering', () => {
     expect(frame).toContain('hello there');
     expect(frame).not.toContain('\n');
     expect(frame).not.toContain('\x1B');
+  });
+
+  it('never marks its own first screen, whatever was echoed first', () => {
+    // og clears first_time at the END of the first forw (forwback.c:381)
+    // and tests it before printing the marker (:272), so nothing
+    // written before that first paint can make the paint look like a
+    // repaint. The startup error gate ungets whatever key was typed
+    // at it, and a "-" opens a command line: those echo frames paint
+    // no content - they are prompt() returning early - but each still
+    // left a previous frame behind, and the first real forw then
+    // printed "...skipping..." over its own opening screen.
+    freezeFrame();
+    render(content, []);
+    expect(written.join('')).not.toBe('');
+    written.length = 0;
+
+    // the mca closing repaints through og's pos_clear'd forw, which
+    // is the path that carries the marker
+    markPosClear();
+    render(content, []);
+    const frame = written.join('');
+
+    expect(frame).toContain('d1');
+    expect(frame).not.toContain('...skipping...');
   });
 
   it('repaints behind "...skipping..." on backward moves, like og', () => {
