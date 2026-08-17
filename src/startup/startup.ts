@@ -110,6 +110,7 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
     const extra = scanOptions(arg, content, false);
     startup.firstCmds.push(...extra.firstCmds);
     if (extra.dohelp) startup.dohelp = true;
+    if (extra.lesskeyHelp) startup.lesskeyHelp = true;
     if (extra.version) startup.version = true;
   }
 

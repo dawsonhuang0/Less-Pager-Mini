@@ -29,6 +29,10 @@ export const session = {
   prevConfig: config as Config,
   /** The main mode flags parked while the help screen displays. */
   prevMode: mode as Record<Mode, boolean>,
+  /** The SOURCE lines of the help page on screen: an O_REPAINT option
+   *  toggled inside it re-transforms the page being looked at, and
+   *  there is more than one (the commands help, --lesskey-help). */
+  helpSource: [] as string[],
 
   /** The key sequence being dispatched. */
   key: '',
@@ -143,6 +147,7 @@ export function resetSession(content: string[]): void {
   session.exit = () => {};
 
   session.startupHelp = false;
+  session.helpSource = [];
 
   session.pasting = false;
   session.ignoringPaste = false;

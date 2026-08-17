@@ -50,6 +50,8 @@ import {
 
 import { help } from "../startup/lessHelp";
 
+import { lesskeyHelp } from "../startup/lesskeyHelp";
+
 import { raiseAbort, clearAbort } from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
@@ -429,7 +431,7 @@ export async function contentPager(
     // rebuild lands in the parked copy for when help exits
     if (mode.HELP) {
       session.prevContent = deriveContent();
-      session.content = transformContent(help);
+      session.content = transformContent(session.helpSource);
       calculateEOF(session.content);
       return;
     }
@@ -624,9 +626,13 @@ export async function contentPager(
   // a filename. This is also the order the h command already works
   // in, since by then the engine has long been ready.
   if (startup.dohelp) {
-    prepareHelp();
+    openHelp();
+    session.startupHelp = true;
+  } else if (startup.lesskeyHelp) {
+    openHelp(lesskeyHelp);
     session.startupHelp = true;
   }
+
 
   // og never squishes the first paint with a header configured
   // (forwback.c's squish condition requires header_lines == 0 &&
@@ -785,7 +791,7 @@ function startShellFeature(
 const acts: Record<Actions, () => void> = {
   FORCE_EXIT: () => session.exit(),
   EXIT: () => { if (!exitHelp()) session.exit(); },
-  HELP: () => prepareHelp(),
+  HELP: () => openHelp(),
   ADD_BUFFER: () => addBufferChar(session.buffer, session.key),
   DEL_BUFFER: () => delBufferChar(session.buffer),
   LINE_FORWARD: () =>
@@ -2977,8 +2983,21 @@ let helpGateUngot = false;
 // the file, running the preprocessor AGAIN (edit_prev -> edit_ifile)
 let helpClosedAlt = false;
 
-function prepareHelp(): void {
+/**
+ * Opens a help screen as og's h does: a full edit of the FAKE_HELPFILE.
+ *
+ * `text` is ours, not og's - og has exactly one help file. The lesskey
+ * syntax page rides the same path so it scrolls, searches and exits
+ * identically; only the content differs.
+ */
+// the --lesskey-help option reaches the pager through here: options
+// cannot import this module, so the entry point is a hook
+hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
+
+function openHelp(text: string[] = help): void {
   if (mode.HELP) return;
+
+  session.helpSource = text;
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file
@@ -3053,7 +3072,7 @@ function prepareHelp(): void {
   session.prevContent = session.content;
   // the help file renders through the normal content pipeline, so
   // its nroff overstrikes become bold/underline like og
-  session.content = transformContent(help);
+  session.content = transformContent(text);
 
   // Help is og's CH_HELPFILE pseudo-file, but edit_ifile still calls
   // set_header(ch_zero()) for it: headers remain active and re-anchor

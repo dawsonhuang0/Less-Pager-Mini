@@ -24,6 +24,8 @@ import {
 
 import { help } from './startup/lessHelp';
 
+import { lesskeyHelp } from './startup/lesskeyHelp';
+
 import { initInvocationOptions, markTerminalInvocation }
   from './startup/invocation';
 
@@ -140,6 +142,11 @@ async function main(): Promise<void> {
   // registering FAKE_HELPFILE, so no filename is required
   const wantsHelp = optArgs.some(a => a === '-?' || a === '--help');
 
+  // --lesskey-help pages the lesskey syntax the same way, as its
+  // own input file. Not an og switch: og has `man lesskey` and an
+  // npm install has nothing.
+  const wantsLesskeyHelp = optArgs.some(a => a === '--lesskey-help');
+
   // command line options scan after $LESS, one scan_option call per
   // argument like og's main (a "$" separator would break long names)
   setCliOptions(optArgs);
@@ -159,6 +166,7 @@ async function main(): Promise<void> {
     // not a terminal: copy input to output, like og's cat_file loop;
     // --help makes the help file the first input
     if (wantsHelp) putstr(help.join('\n') + '\n');
+    if (wantsLesskeyHelp) putstr(lesskeyHelp.join('\n') + '\n');
 
     if (files.length) {
       // og reaches the cat loop through its ordinary startup: the
@@ -268,6 +276,16 @@ async function main(): Promise<void> {
 
     markTerminalInvocation();
     await pager(files, ['--examine-file']);
+    return;
+  }
+
+  if (wantsLesskeyHelp) {
+    // as --help does with no files; WITH a file, startup.lesskeyHelp
+    // pages the syntax first and the file after it
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
+
+    markTerminalInvocation();
+    await pager(lesskeyHelp.join('\n'));
     return;
   }
 

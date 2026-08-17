@@ -80,6 +80,8 @@ import { window } from './window';
 import { quotes } from './quotes';
 import { tilde } from './tilde';
 import { help } from './help';
+
+import { lesskeyHelp } from './lesskey-help';
 import { shift } from './shift';
 import { noKeypad } from './no-keypad';
 import { oldBot } from './old-bot';
@@ -182,6 +184,7 @@ const OPTIONS: OptionSpec[] = [
   quotes,
   tilde,
   help,
+  lesskeyHelp,
   shift,
   noKeypad,
   oldBot,
@@ -821,6 +824,8 @@ interface StartupCmds {
   firstCmds: string[];
   /** True when `-?`/`--help` pages the help file first (og's dohelp). */
   dohelp: boolean;
+  /** The same, for --lesskey-help and the lesskey syntax page. */
+  lesskeyHelp: boolean;
   /** True when -V printed the version: the pager must not start. */
   version: boolean;
 }
@@ -1352,7 +1357,8 @@ export function scanOptions(
   content: string[],
   isEnv: boolean = true
 ): StartupCmds {
-  const result: StartupCmds = { firstCmds: [], dohelp: false, version: false };
+  const result: StartupCmds =
+    { firstCmds: [], dohelp: false, lesskeyHelp: false, version: false };
   let setDefault = false;
   let i = 0;
 
@@ -1505,6 +1511,13 @@ export function scanOptions(
 
     if (spec.letter === '?') {
       result.dohelp = true;
+      continue;
+    }
+
+    // not og's: --lesskey-help pages our lesskey syntax page the way
+    // -? pages the command help, through the same dohelp path
+    if (spec.names.includes('lesskey-help')) {
+      result.lesskeyHelp = true;
       continue;
     }
 

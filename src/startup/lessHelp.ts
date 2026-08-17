@@ -257,6 +257,8 @@ export const help: string[] = [
   "                  Use lesskey source file contents.",
   "                --lesskey-src=_\bf_\bi_\bl_\be",
   "                  Use a lesskey source file.",
+  "                --lesskey-help",
+  "                  Display lesskey help.",
   "                --line-num-width=[_\bN]",
   "                  Set the width of the -N line number field to _\bN characters.",
   "                --match-shift=[_\bN]",

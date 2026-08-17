@@ -63,6 +63,9 @@ export const hook = {
   screenActive: false,
   /** --file-size draining a still-unknown pipe (og's opt_filesize). */
   scanFileSize: (() => {}) as () => void,
+
+  /** Opens the lesskey syntax page, like the h command opens help. */
+  showLesskeyHelp: (() => {}) as () => void,
   /** Absolute 1-based line number for a source-backed local row. */
   sourceLineNumber: null as null |
     ((row: number) => number | null | undefined),
