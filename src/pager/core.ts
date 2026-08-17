@@ -607,19 +607,26 @@ export async function contentPager(
 
   init();
 
-  // -? pages the help file first, like og's dohelp registering
-  // FAKE_HELPFILE as an input file: quitting that help quits the
-  // pager, unlike the h command's overlay
-  if (startup.dohelp) {
-    prepareHelp();
-    session.startupHelp = true;
-  }
-
   // a command-line --header applies now that the file is open, like
   // og's deferred init_header (find_pos works, the view opens at the
   // header start via the first jump's after_header_pos)
   pagerInput?.ready();
   applyPendingHeader(session.fullContent);
+
+  // -? pages the help file first, like og's dohelp registering
+  // FAKE_HELPFILE as an input file: quitting that help quits the
+  // pager, unlike the h command's overlay.
+  //
+  // AFTER the engine is ready, not before: a file-backed session
+  // finishes ready() by seeking and syncing, which puts the FILE's
+  // lines back into session.content. Opening help first left the
+  // file's text under a "HELP --" prompt whenever -?/--help was given
+  // a filename. This is also the order the h command already works
+  // in, since by then the engine has long been ready.
+  if (startup.dohelp) {
+    prepareHelp();
+    session.startupHelp = true;
+  }
 
   // og never squishes the first paint with a header configured
   // (forwback.c's squish condition requires header_lines == 0 &&
