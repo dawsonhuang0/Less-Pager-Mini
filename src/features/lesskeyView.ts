@@ -5,6 +5,10 @@ import path from 'path';
 import { lesskeyForms, lesskeyFile, LesskeyForm, loadLesskey }
   from './lesskey';
 
+import { files, makeFileList, FileEntry, saveFilePosition } from './files';
+
+import { switchToFile } from '../commands';
+
 import { renderLesskeyBinary } from './lesskeyRender';
 import { compileLesskey } from './lesskeyCompile';
 import { DEFAULT_KEYMAP } from './lesskeyCodes';
@@ -185,41 +189,107 @@ export function cleanLesskeyView(dir: string | null): void {
 }
 
 /**
- * Pages the session's lesskey files, then reloads whatever changed.
- *
- * The nested call is what makes `q` mean "done looking" rather than
- * "quit": it unwinds this pager and leaves the one underneath exactly
- * as it was.
- *
- * @param version - The running less version, for #version lines.
- * @param env - The library caller's environment, passed straight on.
+ * What the session was looking at before the lesskey files replaced
+ * it, so `q` can put it back.
  */
-export async function viewLesskey(
-  version: number,
-  env: Record<string, string> | null = null
-): Promise<void> {
-  if (!secureAllow('lesskey')) return;
+interface Stash {
+  list: FileEntry[];
+  index: number;
+  files: ViewFile[];
+  dir: string | null;
+}
 
-  const { files, dir } = lesskeyViewFiles();
+let stash: Stash | null = null;
+
+/** True while the lesskey files are the session's file list. */
+export const inLesskeyView = (): boolean => stash !== null;
+
+/**
+ * Swaps the lesskey files in as the session's file list.
+ *
+ * The same move the help screen makes, one level up: help stashes the
+ * CONTENT and puts it back, this stashes the FILE LIST. Which has to
+ * be the file list rather than a rendered blob, because the whole
+ * point is that :n and :p walk between the forms and `v` opens the
+ * one on screen in an editor - both of which are things the pager
+ * only does for real files.
+ *
+ * A nested pager() would have been the obvious way and is the wrong
+ * one: two sessions sharing one screen means two painters, and the
+ * outer one's prompt timers keep firing into the row the inner one is
+ * drawing on - measured as a doubled ":" on the prompt line, and a
+ * `q` that tore down the shared keyboard and took both sessions with
+ * it.
+ *
+ * @returns False when there is nothing to show, or a form could not
+ *   be opened - the session is untouched either way.
+ */
+export function openLesskeyView(): boolean {
+  if (stash !== null || !secureAllow('lesskey')) return false;
+
+  const view = lesskeyViewFiles();
 
   // the defaults case writes the seed before opening it, so `v` has a
   // real file to edit and the loader finds it next time
-  if (files.length === 1 && files[0].form === null) {
-    seedDefaultKeymap(files[0].path);
+  if (view.files.length === 1 && view.files[0].form === null) {
+    seedDefaultKeymap(view.files[0].path);
   }
 
-  try {
-    const { default: pager } = await import('../index');
+  // the file being left keeps its position, like edit_ifile storing
+  // one before the switch - restoring it is the whole trick
+  saveFilePosition();
 
-    await pager(files.map(file => file.path), ['--examine-file'], env);
-  } finally {
-    const messages = writeBackLesskey(files, version);
+  const held: Stash = {
+    list: files.list,
+    index: files.index,
+    files: view.files,
+    dir: view.dir,
+  };
 
-    cleanLesskeyView(dir);
+  files.list = makeFileList(view.files.map(file => file.path));
+  files.index = -1;
 
-    // an edited file only takes effect once it is read again
-    loadLesskey(true);
-
-    if (messages.length) search.message = messages[0];
+  if (!switchToFile(0)) {
+    files.list = held.list;
+    files.index = held.index;
+    cleanLesskeyView(view.dir);
+    return false;
   }
+
+  stash = held;
+  return true;
+}
+
+/**
+ * Puts the session back, like exitHelp: the stashed list returns and
+ * the file that was open re-opens at its saved position.
+ *
+ * Anything edited through `v` is written back first - a rendered
+ * binary compiled over the file it came from - and the tables are
+ * reloaded, so a key changed in there works on the way out.
+ *
+ * @param version - The running less version, for #version lines.
+ * @returns False when no lesskey view is open, so `q` can mean quit.
+ */
+export function exitLesskeyView(version: number): boolean {
+  if (stash === null) return false;
+
+  const held = stash;
+  stash = null;
+
+  const messages = writeBackLesskey(held.files, version);
+
+  cleanLesskeyView(held.dir);
+  loadLesskey(true);
+
+  files.list = held.list;
+  files.index = -1;
+
+  // -1 first, so this is a real switch rather than edit_ifile's
+  // "already open" early return
+  switchToFile(held.index);
+
+  if (messages.length) search.message = messages[0];
+
+  return true;
 }

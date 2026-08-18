@@ -52,7 +52,8 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
-import { viewLesskey } from "../features/lesskeyView";
+import { openLesskeyView, exitLesskeyView }
+  from "../features/lesskeyView";
 
 import { LESS_VERSION } from "../features/lesskey";
 
@@ -813,7 +814,12 @@ function mouseShift(direction: -1 | 1): void {
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
 const acts: Record<Actions, () => void> = {
   FORCE_EXIT: () => session.exit(),
-  EXIT: () => { if (!exitHelp()) session.exit(); },
+  EXIT: () => {
+    // the lesskey view unwinds before help does, and before quitting:
+    // both are stashes over the same session
+    if (exitLesskeyView(LESS_VERSION)) return;
+    if (!exitHelp()) session.exit();
+  },
   HELP: () => openHelp(),
   ADD_BUFFER: () => addBufferChar(session.buffer, session.key),
   DEL_BUFFER: () => delBufferChar(session.buffer),
@@ -3022,9 +3028,9 @@ hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
 // the nested session is what makes `q` mean "done looking": it
 // unwinds the lesskey pager and leaves this one exactly as it was
 hook.viewLesskey = (): void => {
-  void viewLesskey(LESS_VERSION).then(() => {
-    render(session.content, session.buffer);
-  });
+  // like the h command's overlay rather than a session of its own:
+  // one painter, and `q` unwinds one level
+  if (openLesskeyView()) render(session.content, session.buffer);
 };
 
 function openHelp(text: string[] = help): void {
@@ -3137,6 +3143,11 @@ function openHelp(text: string[] = help): void {
 
 function cleanUp(): void {
   endFollow();
+
+  // quitting OUT of the lesskey view (Q, or -e reaching the end)
+  // still owes the write-back and the temp files: exitLesskeyView is
+  // what does both, and it costs nothing when no view is open
+  exitLesskeyView(LESS_VERSION);
 
   // og's quit() runs check_altpipe_error before restoring the
   // terminal: closeAlt's inline gate blocks at (press RETURN) on

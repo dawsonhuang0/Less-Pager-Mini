@@ -26,7 +26,8 @@ import { help } from './startup/lessHelp';
 
 import { lesskeyHelp } from './startup/lesskeyHelp';
 
-import { viewLesskey } from './features/lesskeyView';
+import { lesskeyViewFiles, writeBackLesskey, cleanLesskeyView,
+  seedDefaultKeymap } from './features/lesskeyView';
 
 import { LESS_VERSION } from './features/lesskey';
 
@@ -282,7 +283,25 @@ async function main(): Promise<void> {
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
-    await viewLesskey(LESS_VERSION);
+
+    // no session to stash out here, so the forms simply ARE the file
+    // list; the runtime form swaps them over a live one instead
+    const view = lesskeyViewFiles();
+
+    if (view.files.length === 1 && view.files[0].form === null) {
+      seedDefaultKeymap(view.files[0].path);
+    }
+
+    try {
+      await pager(view.files.map(file => file.path), ['--examine-file']);
+    } finally {
+      const messages = writeBackLesskey(view.files, LESS_VERSION);
+
+      cleanLesskeyView(view.dir);
+
+      for (const message of messages) putstr(message + '\n');
+    }
+
     return;
   }
 

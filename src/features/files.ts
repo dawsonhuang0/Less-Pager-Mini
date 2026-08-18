@@ -49,7 +49,7 @@ import { lgetenv } from '../startup/environment';
 /**
  * One entry in the command line file list, like less's ifile.
  */
-interface FileEntry {
+export interface FileEntry {
   path: string;
   /** Preloaded lines for non-file content, like stdin's "-". */
   lines: string[] | null;
@@ -188,8 +188,9 @@ export function initContent(lines: string[]): void {
  *
  * @param paths - File paths to page.
  */
-export function initFiles(paths: string[]): void {
-  files.list = paths.map(path => ({
+/** A file list from paths, with nothing opened yet. */
+export function makeFileList(paths: string[]): FileEntry[] {
+  return paths.map(path => ({
     path,
     lines: null,
     size: 0,
@@ -197,6 +198,10 @@ export function initFiles(paths: string[]): void {
     sizeKnown: true,
     saved: null,
   }));
+}
+
+export function initFiles(paths: string[]): void {
+  files.list = makeFileList(paths);
   files.index = -1;
   files.newFile = false;
   examine.pending = false;

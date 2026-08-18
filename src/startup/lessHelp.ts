@@ -322,7 +322,7 @@ export const help: string[] = [
   "                --use-js-regexp",
   "                  Search with JavaScript's RegExp.",
   "                --view-lesskey",
-  "                  View the lesskey files this session loaded.",
+  "                  View lesskeys in use.",
   "                --wheel-lines=[_\bN]",
   "                  Each click of the mouse wheel moves _\bN lines.",
   "                --wordwrap",
