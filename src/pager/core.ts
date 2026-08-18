@@ -139,7 +139,7 @@ import {
   onAutosave,
   onHistTouch,
   onHistRecord, posixRetry,
-  retryWithPosix} from "../features/searching";
+  retryWithPosix, duringUserSearch} from "../features/searching";
 
 import {
   firstLine,
@@ -858,12 +858,12 @@ const acts: Record<Actions, () => void> = {
   MOUSE_RIGHT: () => mouseShift(1),
   SPAN_REPEAT_SEARCH: () => spanningSearch(
     false,
-    request => pagerInput?.search(request) ?? false,
+    request => duringUserSearch(() => pagerInput?.search(request) ?? false),
     () => pagerInput?.handle('LAST_LINE', 0) ?? false
   ),
   SPAN_REVERSE_SEARCH: () => spanningSearch(
     true,
-    request => pagerInput?.search(request) ?? false,
+    request => duringUserSearch(() => pagerInput?.search(request) ?? false),
     () => pagerInput?.handle('LAST_LINE', 0) ?? false
   ),
   NEXT_TAG: () => tagStep(1),
@@ -939,7 +939,7 @@ const acts: Record<Actions, () => void> = {
       session.content,
       bufferToNum(session.buffer) || 1,
       false,
-      request => pagerInput?.search(request) ?? false
+      request => duringUserSearch(() => pagerInput?.search(request) ?? false)
     );
   },
   REVERSE_SEARCH: () => {
@@ -948,7 +948,7 @@ const acts: Record<Actions, () => void> = {
       session.content,
       bufferToNum(session.buffer) || 1,
       true,
-      request => pagerInput?.search(request) ?? false
+      request => duringUserSearch(() => pagerInput?.search(request) ?? false)
     );
   },
   HIGHLIGHT_TOGGLE: () => toggleHighlight(),
@@ -2221,7 +2221,7 @@ function dispatchKey(sequence: string): void {
       } else {
         execSearch(
           session.content,
-          request => pagerInput?.search(request) ?? false
+          request => duringUserSearch(() => pagerInput?.search(request) ?? false)
         );
       }
     } else if (result === 'cancel') {
@@ -2237,7 +2237,7 @@ function dispatchKey(sequence: string): void {
       pagerInput?.restoreSearchOrigin();
       incrementalSearch(
         session.content,
-        request => pagerInput?.search(request) ?? false
+        request => duringUserSearch(() => pagerInput?.search(request) ?? false)
       );
     }
 

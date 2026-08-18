@@ -1213,6 +1213,32 @@ export const searchCaseFlags = (pattern: string): string =>
  */
 export const posixRetry = { pending: false };
 
+/**
+ * True only while a search the USER asked for is running.
+ *
+ * Matching happens in two very different situations. A search is a
+ * command: it can take a while, and being asked whether to finish it
+ * another way is help. Highlighting is a repaint: it runs over the
+ * lines already on screen, for a pattern that was compiled long ago,
+ * and a question in the middle of one would arrive attached to
+ * nothing the user just did - toggling --use-js-regexp re-highlights,
+ * which is how this turned up.
+ *
+ * Both are guarded, so neither can hang. Only the first asks.
+ */
+let userSearch = false;
+
+/** Runs a search the user asked for, with the offer to retry armed. */
+export function duringUserSearch<T>(run: () => T): T {
+  userSearch = true;
+
+  try {
+    return run();
+  } finally {
+    userSearch = false;
+  }
+}
+
 /** Set while a retry runs, so this one search skips the host engine. */
 let forcePosix = false;
 
@@ -1296,7 +1322,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       // already set the abort in motion
       const answer = runGuarded(text, true);
 
-      if (answer === null) posixRetry.pending = true;
+      if (answer === null && userSearch) posixRetry.pending = true;
 
       return answer?.test ?? false;
     },
@@ -1304,7 +1330,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       const answer = runGuarded(text, false);
       const found = answer?.match;
 
-      if (answer === null) posixRetry.pending = true;
+      if (answer === null && userSearch) posixRetry.pending = true;
 
       if (!found) return null;
 

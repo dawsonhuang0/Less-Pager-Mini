@@ -44,7 +44,8 @@ describe('the offer to finish a search with POSIX', () => {
     expect(answer).toBeNull();
     expect(jsRegexAborted()).toBe(true);
 
-    // searching.ts raises the question on exactly this answer
+    // searching.ts raises the question on exactly this answer, and
+    // only while a search the user ASKED for is running
     posixRetry.pending = answer === null;
     expect(getPrompt([])).toContain('Try again with POSIX RegExp?');
 
