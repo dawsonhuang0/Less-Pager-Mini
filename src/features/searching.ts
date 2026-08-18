@@ -242,6 +242,10 @@ hook.flashMessage = (text: string): void => {
 };
 
 hook.recompilePattern = (): void => {
+  // the point of recompiling is to see the other engine's answer, so
+  // a pattern given up on under the last one gets another go
+  hiliteAbandoned = false;
+
   if (!search.regex) return;
   if (!compile(compiledPattern, compiledLiteral, search.invert)) {
     search.regex = null;
@@ -963,7 +967,11 @@ function highlightLineFor(line: string, row: number): string {
   // search (search.c:2319). SRCH_NO_MATCH is NOT carried, so a
   // ^N/! search still marks the text that really matches - the
   // inversion decides where it JUMPS, not what it paints.
-  if (!globalRegex || !search.regex || !search.highlight || hiliteHidden) {
+  // hiliteAbandoned: a pattern this engine could not get through, so
+  // the frame stops trying rather than paying for it again on every
+  // scroll. Not the same thing as the user turning highlighting off
+  if (!globalRegex || !search.regex || !search.highlight || hiliteHidden ||
+      hiliteAbandoned) {
     return line;
   }
 
@@ -1256,6 +1264,29 @@ export const posixRetry = {
 let inRepaint = false;
 
 /**
+ * True once a frame's highlighting was given up on.
+ *
+ * Its own flag, not search.highlight: that one is the user's, set by
+ * a search and cleared by undo-hilite, and a pattern this engine
+ * cannot get through says nothing about whether they want
+ * highlighting. Clobbering it left the pager with no highlights for
+ * the rest of the session and no way to ask for them back.
+ *
+ * Cleared by anything that means "try again": a new search, and the
+ * toggle that recompiles under the other engine.
+ */
+let hiliteAbandoned = false;
+
+/** True while highlighting is being skipped for a pattern it cannot
+ *  get through. */
+export const hiliteGivenUp = (): boolean => hiliteAbandoned;
+
+/** Lets highlighting be attempted again. */
+export function retryHilite(): void {
+  hiliteAbandoned = false;
+}
+
+/**
  * Marks the frame as the thing running, so matching done for it is
  * treated as a repaint rather than as a search.
  *
@@ -1282,6 +1313,7 @@ export function duringRepaint<T>(run: () => T): T {
 /** Kept for the search entry points: they still mark the run. */
 export function duringUserSearch<T>(run: () => T): T {
   beginGuardedRun();
+  hiliteAbandoned = false;
   return run();
 }
 
@@ -1367,7 +1399,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
     // a key that was not an interrupt is not a request for advice:
     // the user moved on, so highlighting stops and nothing is asked
     if (inRepaint && !abortedByInterrupt()) {
-      search.highlight = false;
+      hiliteAbandoned = true;
       return;
     }
 
@@ -1379,7 +1411,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
 
     // no more matching until it is answered: the frame that draws the
     // question must not run the pattern that raised it
-    if (inRepaint) search.highlight = false;
+    if (inRepaint) hiliteAbandoned = true;
   };
 
   const runGuarded = (text: string, test: boolean):
