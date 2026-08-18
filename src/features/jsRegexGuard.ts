@@ -116,6 +116,16 @@ export function endGuardedRun(): void {
  * asks it. The keys it took come back through takeGuardedKeys.
  */
 export function watcherSawInterrupt(): boolean {
+  // the JS flag first: an interrupt that stopped a MATCH is answered
+  // by killing the workers, which drops the shared buffer and the
+  // verdict with it. The search around that match still has to learn
+  // it was interrupted, or it walks on and the next ^C is the one
+  // that appears to work
+  if (sawInterrupt) {
+    sawInterrupt = false;
+    return true;
+  }
+
   const state = shared;
 
   if (!state?.watcher) return false;
@@ -419,6 +429,9 @@ let aborted = false;
 let noticed = false;
 let byInterrupt = false;
 
+/** An interrupt that ended a match, still owed to whoever asked for it. */
+let sawInterrupt = false;
+
 /** Whatever a worker said on its way down, for a caller that asks. */
 let lastFailure = '';
 
@@ -446,6 +459,7 @@ export function clearJsRegexAbort(): void {
   aborted = false;
   noticed = false;
   byInterrupt = false;
+  sawInterrupt = false;
 }
 
 /**
@@ -531,6 +545,7 @@ export function guardedMatch(
   if (Atomics.load(state.header, STATE) === ABORT) {
     aborted = true;
     runAbandoned = true;
+    if (byInterrupt) sawInterrupt = true;
     killWorkers();
     return { answer: null, keys };
   }
