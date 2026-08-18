@@ -828,7 +828,14 @@ const acts: Record<Actions, () => void> = {
   EXIT: () => {
     // the lesskey view unwinds before help does, and before quitting:
     // both are stashes over the same session
-    if (exitLesskeyView(LESS_VERSION)) return;
+    if (exitLesskeyView(LESS_VERSION)) {
+      // straight back to the page it was opened from, if it was
+      // opened from one: each q undoes one thing the user opened
+      restoreHelpUnderView();
+
+      return;
+    }
+
     if (!exitHelp()) session.exit();
   },
   HELP: () => openHelp(),
@@ -3100,17 +3107,68 @@ hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
 // the nested session is what makes `q` mean "done looking": it
 // unwinds the lesskey pager and leaves this one exactly as it was
 hook.viewLesskey = (): void => {
-  // like the h command's overlay rather than a session of its own:
-  // one painter, and `q` unwinds one level.
+  // a help screen is a stash over the FILE, and so is this - so help
+  // comes off FIRST and the view opens over the file, exactly as it
+  // does when nothing is stashed. Left on, mode.HELP painted the
+  // help prompt over the lesskey files ("HELP -- Press RETURN for
+  // more, or q when done" under a list of key bindings) and every
+  // command that rings in help rang here too.
   //
+  // Unwinding through exitHelp rather than clearing the flag is the
+  // point: the config, the content and the backspace modes all
+  // belong to the page being left, and it is the one thing that
+  // knows how to give them back
+  const page = mode.HELP && !session.startupHelp ? session.helpSource : null;
+
+  if (page) exitHelp();
+
+  // -? is the session's own input, not an overlay: exitHelp refuses
+  // it (quitting THAT help quits the pager), so the flag is all
+  // there is to take off, and the view's own stash puts the screen
+  // back
+  const startupHelp = mode.HELP;
+
+  if (startupHelp) mode.HELP = false;
+
   // NO render here: the command that ran this renders when it
   // returns, and a frame drawn now would be the one that spends
   // less's new_file - pr_string clears it as it builds the prompt
   // (prompt.c:630), and the whole "?n?f%f .?m(%T %i of %m) .." group
   // hangs off it. Rendering twice meant the screen the user actually
   // saw had neither the name nor the file count
-  openLesskeyView();
+  if (openLesskeyView()) {
+    helpUnderView = page;
+    startupHelpUnderView = startupHelp;
+
+    return;
+  }
+
+  // refused - put back exactly what was on screen before
+  if (startupHelp) mode.HELP = true;
+  if (page) openHelp(page);
 };
+
+/** The help page `q` owes the user once the lesskey view unwinds. */
+let helpUnderView: string[] | null = null;
+
+/** Whether that page was -?'s, which is a flag rather than a stash. */
+let startupHelpUnderView = false;
+
+/** Puts the help screen back after the view over it has unwound. */
+function restoreHelpUnderView(): void {
+  const page = helpUnderView;
+
+  helpUnderView = null;
+
+  if (startupHelpUnderView) {
+    startupHelpUnderView = false;
+    mode.HELP = true;
+
+    return;
+  }
+
+  if (page) openHelp(page);
+}
 
 function openHelp(text: string[] = help): void {
   // already on a help page: switch to the other one rather than

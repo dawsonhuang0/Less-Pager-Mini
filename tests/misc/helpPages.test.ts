@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 import { config, mode } from '../../src/state/config';
 import { session } from '../../src/state/session';
 
 import { hook } from '../../src/options/shared';
+
+import { files, initFiles } from '../../src/features/files';
+import { exitLesskeyView } from '../../src/features/lesskeyView';
+import { loadLesskey, resetLesskey } from '../../src/features/lesskey';
+import { switchToFile } from '../../src/commands';
 
 import { help } from '../../src/startup/lessHelp';
 import { lesskeyHelp } from '../../src/startup/lesskeyHelp';
@@ -71,5 +80,56 @@ describe('switching between the help pages', () => {
     expect(session.helpSource).toBe(lesskeyHelp);
     expect(mode.HELP).toBe(true);
     expect(session.prevContent).toBe(FILE);
+  });
+});
+
+
+/*
+ * The lesskey view opened from a help screen.
+ *
+ * Both are stashes over the same file, so the view has to open OVER
+ * the file rather than over the page: left in help, the view painted
+ * the lesskey bindings under "HELP -- Press RETURN for more, or q
+ * when done", and every command that rings in help rang here too.
+ */
+describe('the lesskey view opened from a help screen', () => {
+  it('is a file view, not a help screen', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-helpview-'));
+    const keys = path.join(dir, 'keys.lesskey');
+    const target = path.join(dir, 'target.txt');
+
+    fs.writeFileSync(keys, 'x quit\n');
+    fs.writeFileSync(target, 'line 1\nline 2\n');
+
+    process.env.LESSKEYIN = keys;
+    process.env.LESSKEY = path.join(dir, 'none');
+    resetLesskey();
+    loadLesskey(true);
+    initFiles([target]);
+    switchToFile(0);
+
+    // in help, with the file parked underneath
+    session.prevConfig = { ...config };
+    session.prevMode = { ...mode, DUMB: false };
+    session.prevContent = FILE;
+    session.content = help;
+    session.helpSource = help;
+    mode.HELP = true;
+
+    hook.viewLesskey();
+
+    // the view really opened: the lesskey file is what is being paged
+    expect(files.list.map(entry => entry.path)).toContain(keys);
+
+    // ...and the reported symptom is gone. Left on, mode.HELP put
+    // "HELP -- Press RETURN for more, or q when done" under a screen
+    // of key bindings
+    expect(mode.HELP).toBe(false);
+
+    // the file is still parked for the page to come back to
+    expect(session.prevContent).toBe(FILE);
+
+    // and the view unwinds, so the EXIT action can put the page back
+    expect(exitLesskeyView(707)).toBe(true);
   });
 });
