@@ -73,7 +73,7 @@ const CMD_ACTIONS: Record<string, Actions | null> = {
   'goto-end-buffered': 'LAST_LINE',
   'goto-line': 'FIRST_LINE',
   'goto-mark': 'GO_MARK',
-  'goto-pos': null,
+  'goto-pos': 'GO_POS',
   'help': 'HELP',
   'index-file': 'INDEX_FILE',
   'invalid': null,
@@ -271,10 +271,10 @@ const ACTION_CODES: Record<number, Actions | null> = {
   48: null,                      // A_OPT_SET
   49: null,                      // A_OPT_UNSET
   50: 'FOLLOW',                  // A_F_FOREVER
-  51: null,                      // A_GOPOS
+  51: 'GO_POS',                  // A_GOPOS
   52: 'REMOVE_FILE',             // A_REMOVE_FILE
-  53: null,                      // A_NEXT_TAG
-  54: null,                      // A_PREV_TAG
+  53: 'NEXT_TAG',                // A_NEXT_TAG
+  54: 'PREV_TAG',                // A_PREV_TAG
   55: 'PATTERN_ONLY',            // A_FILTER
   56: 'FOLLOW_HILITE',           // A_F_UNTIL_HILITE
   57: 'LAST_LINE',               // A_GOEND_BUF

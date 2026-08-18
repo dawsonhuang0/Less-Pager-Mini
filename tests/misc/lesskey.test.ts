@@ -137,13 +137,27 @@ describe('#command bindings', () => {
   });
 
   it('accepts unsupported og actions as invalid bindings', () => {
-    parse('P goto-pos');
+    // og names "debug" in lesskey_parse.c:47 but writes no case for
+    // A_DEBUG, so commands() falls to its default and rings
+    // (command.c:2517). A key bound to it is dead in og too
+    parse('P debug');
     expect(search.message).toBe('');
     expect(userBinding('P')).toEqual({
       action: undefined,
       key: undefined,
       extra: undefined,
     });
+  });
+
+  it('binds the actions og reaches only from a lesskey file', () => {
+    // goto-pos and the two tag steps have handlers in og
+    // (command.c:1918, :2216, :2241) and here, and are bindable by
+    // name; nothing but a stale table entry made them ring
+    parse('P goto-pos\nx next-tag\ny prev-tag');
+    expect(search.message).toBe('');
+    expect(userBinding('P')?.action).toBe('GO_POS');
+    expect(userBinding('x')?.action).toBe('NEXT_TAG');
+    expect(userBinding('y')?.action).toBe('PREV_TAG');
   });
 
   it('reports unknown actions and missing actions like og', () => {
@@ -326,6 +340,20 @@ describe('binary lesskey files', () => {
       key: undefined,
       extra: '5',
     });
+  });
+
+  it('reads the codes only a compiled file carries', () => {
+    // A_GOPOS(51), A_NEXT_TAG(53), A_PREV_TAG(54): the source names
+    // reach them, so the binary codes have to as well
+    parseLesskeyBinary(binary(section('c', [
+      0x50, 0x00, 51,
+      0x74, 0x00, 53,
+      0x54, 0x00, 54,
+    ])));
+
+    expect(userBinding('P')?.action).toBe('GO_POS');
+    expect(userBinding('t')?.action).toBe('NEXT_TAG');
+    expect(userBinding('T')?.action).toBe('PREV_TAG');
   });
 
   it('translates SK special key blobs to terminal sequences', () => {
