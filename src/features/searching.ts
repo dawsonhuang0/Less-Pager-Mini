@@ -1241,7 +1241,7 @@ export const searchCaseFlags = (pattern: string): string =>
  * by code point always and has no such quarrel, so the guess is gone.
  */
 /**
- * The `Pattern too complex. Try again with POSIX RegExp?` prompt, in
+ * The `Pattern too complex.  Try again with POSIX RegExp?` prompt, in
  * the shape og asks about a binary file: a question on the bottom row
  * that y answers and anything else declines.
  *
@@ -1513,7 +1513,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
     // the char itself is never handed on (os.c:161).
     //
     // Handing it back put a ^C in front of the question that same ^C
-    // had just raised, so "Pattern too complex. Try again with POSIX
+    // had just raised, so "Pattern too complex.  Try again with POSIX
     // RegExp?" was answered and gone before it could be read - and
     // the queue the next ^C arrived into was not the queue the first
     // one did, which is why the second never felt like the first

@@ -42,7 +42,7 @@ EXPECTED = [
     ('search, 1.0s in', '/(a+)+b\n', 1.0, ''),
     ('search, 2.5s in', None, 1.5, 'Searching... (interrupt to abort)'),
     ('one ^C', '\x03', 1.5,
-     'Pattern too complex. Try again with POSIX RegExp?'),
+     'Pattern too complex.  Try again with POSIX RegExp?'),
     ('y retries on POSIX', 'y', 4.0, 'Pattern not found: (a+)+b  (press RETURN)'),
     ('RETURN', '\n', 0.6, ':'),
     # the one that was reported: the search AFTER a retry used to want
@@ -51,7 +51,7 @@ EXPECTED = [
     ('search again, 2.5s in', '/(a+)+b\n', 2.5,
      'Searching... (interrupt to abort)'),
     ('one ^C again', '\x03', 1.5,
-     'Pattern too complex. Try again with POSIX RegExp?'),
+     'Pattern too complex.  Try again with POSIX RegExp?'),
 ]
 
 

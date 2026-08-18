@@ -24,7 +24,7 @@ describe('the offer to finish a search with POSIX', () => {
     // the question replaces the prompt entirely, as og's binary one
     // does - there is nothing else the bottom row could usefully say
     expect(getPrompt([])).toContain(
-      'Pattern too complex. Try again with POSIX RegExp?');
+      'Pattern too complex.  Try again with POSIX RegExp?');
   });
 
   it('is raised by a match that had to be killed', () => {

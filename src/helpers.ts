@@ -3065,7 +3065,7 @@ export function getPrompt(content: string[]): string {
   // the pattern is not wrong, the engine asked for cannot get through
   // it, and the one that can is right here
   if (posixRetry.pending) {
-    return 'Pattern too complex. Try again with POSIX RegExp? ';
+    return 'Pattern too complex.  Try again with POSIX RegExp? ';
   }
 
   if (option.pending) {
