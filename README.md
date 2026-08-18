@@ -119,8 +119,24 @@ consults (`LESS`, `LESSOPEN`, `LESSSECURE`, ...). `$LESS` is scanned before
 
 You can use the following flags in `args`:
 
-<code>--use-js-regexp</code>: Searches with JavaScript's `RegExp`. Off by default —
-compiling POSIX-compatible regex patterns with `posix-regex`.
+<code>--examine-file</code>: Treats the input as file path(s) and reads from disk, 
+like naming them on the command line.
+
+Example input:
+
+```ts
+'a.txt'
+```
+
+or
+
+```ts
+[
+  'a.txt',
+  'b.md',
+  'c' // Ignored
+]
+```
 
 <code>--tab-object</code>: JSON.stringifies the input object indented with `\t`. 
 You can adjust tab stops using the `--tabs` option.
@@ -148,26 +164,15 @@ on:
 }
 ```
 
-<code>--examine-file</code>: Treats the input as file path(s) and reads from disk, 
-like naming them on the command line.
+<code>--use-js-regexp</code>: Searches with JavaScript's `RegExp`. Off by default —
+compiling POSIX-compatible regex patterns with `posix-regex`.
 
-Example input:
+<code>--lesskey-help</code>: Displays the syntax of lesskey files.
 
-```ts
-'a.txt'
-```
+<code>--view-lesskey</code>: Shows the lesskeys in use — `v` edits and re-applies the one on screen;
+creates `~/.lesskey` if no lesskey is in use.
 
-or
-
-```ts
-[
-  'a.txt',
-  'b.md',
-  'c' // Ignored
-]
-```
-
-### Notice: 
+### Notice:
 <code>--examine-file</code> and <code>--tab-object</code> are not supported in `lmn`.
 
 
@@ -194,7 +199,7 @@ Whether you're debugging, dumping logs, or previewing data structures — this p
 - [x] MISCELLANEOUS COMMANDS
 - [x] OPTIONS
 - [x] LINE EDITING
-- [ ] Custom Key-Bindings
+- [x] Custom Key-Bindings (lesskey)
 - [x] Start up via `lmn` command directly from terminal
 - [x] Load 1TB file instantly
 - [x] Support wide-character (emoji, CJK, etc.) rendering
