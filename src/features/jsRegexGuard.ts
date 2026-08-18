@@ -79,6 +79,17 @@ let runAbandoned = false;
 export function beginGuardedRun(): void {
   runStarted = Date.now();
   runAbandoned = false;
+  trace('run');
+}
+
+/** $LMN_GUARD_TRACE names a file to log what the guard did, and when. */
+export function trace(what: string): void {
+  const file = process.env.LMN_GUARD_TRACE;
+
+  if (file) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('fs').appendFileSync(file, Date.now() + ' ' + what + '\n');
+  }
 }
 
 /** The matcher: takes a request, answers with a result. */
@@ -358,10 +369,17 @@ export function guardedMatch(
 
   // already given up on: the rest of the frame is not worth another
   // wait, and certainly not another keypress each
-  if (runAbandoned) return { answer: null, keys: '' };
+  if (runAbandoned) {
+    trace('  skip (run abandoned)');
+    return { answer: null, keys: '' };
+  }
 
   const bytes = Buffer.from(JSON.stringify(request));
   const state = ensureWorkers(bytes.length);
+
+  trace('  call anyKey=' + anyKey + ' watcher=' + (state.watcher !== null) +
+    ' len=' + request.text.length +
+    ' noticeIn=' + Math.max(0, NOTICE_MS - (now - runStarted)));
 
   state.payload.set(bytes);
   Atomics.store(state.header, LENGTH, bytes.length);
@@ -399,6 +417,10 @@ export function guardedMatch(
     : '';
 
   noticed = Atomics.load(state.header, NOTICED) === 1;
+
+  trace('  end state=' + Atomics.load(state.header, STATE) +
+    ' keys=' + JSON.stringify(keys) + ' noticed=' + noticed +
+    ' ms=' + (Date.now() - now));
 
   if (Atomics.load(state.header, STATE) === ABORT) {
     aborted = true;

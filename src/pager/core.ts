@@ -52,6 +52,8 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
+import { trace as guardTrace } from "../features/jsRegexGuard";
+
 import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
   nameLesskeyViewSession } from "../features/lesskeyView";
 
@@ -1899,6 +1901,9 @@ let mouseReport: { sgr: boolean, buf: string } | null = null;
 
 function dispatchKey(sequence: string): void {
   session.key = sequence;
+  guardTrace('KEY ' + JSON.stringify(sequence) +
+    ' msg=' + JSON.stringify(search.message.slice(0, 24)) +
+    ' hilite=' + search.highlight + ' retry=' + posixRetry.pending);
 
   if (mouseReport !== null) {
     const report = mouseReport;
