@@ -2135,6 +2135,14 @@ function dispatchKey(sequence: string): void {
   // does repaints. We left it to the repaint alone.
   if (hadMessage && !search.message && !mode.DUMB) {
     putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE);
+
+    // and OUT, not into the buffer. og's error() ends with flush()
+    // there, and the difference shows the moment the repaint behind
+    // it is slow: highlighting a screenful through a host RegExp can
+    // take seconds, and the message sat under the cursor for all of
+    // them, looking like a RETURN that did nothing
+    flush();
+
     dirtyBottomRow();
 
     // get_return RETURNS into the rest of the command that errored -
