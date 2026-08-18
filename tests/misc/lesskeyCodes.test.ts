@@ -7,6 +7,9 @@ import {
   COMMAND_NAMES,
   EDIT_ACTION_CODES,
   EDIT_ACTION_NAMES,
+  SK_SPECIAL_KEY,
+  SK_CONTROL_K,
+  SPECIAL_KEY_CODES,
 } from '../../src/features/lesskeyCodes';
 
 /*
@@ -70,6 +73,25 @@ describe('lesskey action codes', () => {
     ]) {
       expect([a, COMMAND_CODES[a]]).toEqual([a, COMMAND_CODES[b]]);
     }
+  });
+
+  it('carries every \\k form a compiled file can hold', () => {
+    // the pager's own \\k handling resolves through terminfo and so
+    // only knows the keys a terminal describes; this table is what
+    // COMPILES, and og's tstr accepts the keypad forms too
+    expect(Object.keys(SPECIAL_KEY_CODES)).toHaveLength(55);
+
+    expect({
+      up: SPECIAL_KEY_CODES['u'],        // SK_UP_ARROW 3
+      ctrlDown: SPECIAL_KEY_CODES['^d'], // SK_CTL_DOWN_ARROW 45
+      shiftUp: SPECIAL_KEY_CODES['+u'],  // SK_SHIFT_UP_ARROW 42
+      padEnter: SPECIAL_KEY_CODES['pe'], // SK_PAD_ENTER 41
+      padStar: SPECIAL_KEY_CODES['p*'],  // SK_PAD_STAR 27
+    }).toEqual({ up: 3, ctrlDown: 45, shiftUp: 42, padEnter: 41, padStar: 27 });
+
+    // a blob opens with CONTROL('K'), which is why a literal ^K has to
+    // be stored as SK_CONTROL_K instead of as itself
+    expect([SK_SPECIAL_KEY, SK_CONTROL_K]).toEqual([0x0B, 40]);
   });
 
   it('leaves the mouse actions unnamed, like og', () => {

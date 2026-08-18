@@ -233,3 +233,80 @@ export const EDIT_ACTION_NAMES: Record<number, string> = {
   101:  'noaction',
   102:  'invalid',
 };
+
+/**
+ * SK_SPECIAL_KEY, the byte that opens a special-key blob in a compiled
+ * file: CONTROL('K'). A literal ^K in a key sequence is stored as the
+ * SK_CONTROL_K blob instead, so that this byte always means "blob".
+ */
+export const SK_SPECIAL_KEY = 0x0B;
+
+/** SK_CONTROL_K: how a literal ^K is stored. */
+export const SK_CONTROL_K = 40;
+
+/**
+ * Every \k form and the SK_* code it compiles to, out of og's tstr.
+ *
+ * A compiled file stores the blob `SK_SPECIAL_KEY <code> 6 1 1 1`, not
+ * a terminal sequence - the reader expands it through terminfo when it
+ * loads. Which is why this is a different table from the pager's own
+ * \k handling, and a superset of it: the keypad forms have no
+ * capability to resolve to, but they still compile.
+ */
+export const SPECIAL_KEY_CODES: Record<string, number> = {
+  '+d':  43,
+  '+e':  35,
+  '+h':  34,
+  '+l':  38,
+  '+r':  39,
+  '+u':  42,
+  '+x':  46,
+  '1':   14,
+  'B':   16,
+  'D':   6,
+  'E':   37,
+  'F':   35,
+  'H':   36,
+  'I':   34,
+  'L':   11,
+  'M':   38,
+  'R':   12,
+  'S':   39,
+  'U':   5,
+  'X':   13,
+  '^b':  16,
+  '^d':  45,
+  '^e':  37,
+  '^h':  36,
+  '^l':  11,
+  '^r':  12,
+  '^u':  44,
+  '^x':  13,
+  'b':   17,
+  'd':   4,
+  'e':   8,
+  'h':   7,
+  'i':   10,
+  'l':   2,
+  'p*':  27,
+  'p+':  30,
+  'p,':  32,
+  'p-':  29,
+  'p.':  31,
+  'p/':  28,
+  'p0':  33,
+  'p1':  25,
+  'p2':  19,
+  'p3':  24,
+  'p4':  21,
+  'p5':  26,
+  'p6':  20,
+  'p7':  23,
+  'p8':  18,
+  'p9':  22,
+  'pe':  41,
+  'r':   1,
+  't':   15,
+  'u':   3,
+  'x':   9,
+};

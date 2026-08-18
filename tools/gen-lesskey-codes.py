@@ -42,6 +42,37 @@ def table(source, nums, name):
             re.findall(r'\{\s*"([^"]+)",\s*(\w+)\s*\}', body.group(1))]
 
 
+def special_keys(source, nums):
+    """The \\k letter forms and their SK_* codes, out of og's tstr.
+
+    The compiler needs every one: a compiled file stores the SK blob,
+    not a terminal sequence, and the reader expands it through terminfo
+    later. The ^ + p prefixes each open a nested switch.
+    """
+    body = re.search(
+        r"case 'k':\s*\n\s*if \(xlate\)(.*?)\n\t\t\t\t\}\n\t\t\t\tif \(ch == 0\)",
+        source, re.S)
+    if body is None:
+        sys.exit('%s: no \\k switch found in tstr' % PARSE_C)
+
+    keys = {}
+    prefix = ''
+
+    for line in body.group(1).splitlines():
+        opens = re.match(r"\s*case '(.)':\s*$", line)
+        if opens and opens.group(1) in '^+p':
+            prefix = opens.group(1)
+            continue
+
+        case = re.match(r"\s*case '(.)': ch = (SK_\w+); break;", line)
+        if case:
+            keys[prefix + case.group(1)] = nums[case.group(2)]
+        elif re.match(r'\s*break;', line):
+            prefix = ''
+
+    return keys
+
+
 def forward(pairs):
     width = max(len(name) for name, _ in pairs) + 1
     return '\n'.join("  '%s':%s %d," % (name, ' ' * (width - len(name)), code)
@@ -63,17 +94,21 @@ def main():
     source = open(PARSE_C).read()
     cmd = table(source, nums, 'cmdnames')
     edit = table(source, nums, 'editnames')
+    keys = sorted(special_keys(source, nums).items())
 
     open(OUT, 'w').write(TEMPLATE % {
         'extra': nums['A_EXTRA'],
         'ev_ok': nums['EV_OK'],
+        'sk_key': nums.get('SK_CONTROL_K'),
+        'keys': forward(keys),
         'cmd': forward(cmd),
         'edit': forward(edit),
         'cmd_names': reverse(cmd),
         'edit_names': reverse(edit),
     })
 
-    print('%s: %d command names, %d line-edit names' % (OUT, len(cmd), len(edit)))
+    print('%s: %d command names, %d line-edit names, %d \\k forms'
+          % (OUT, len(cmd), len(edit), len(keys)))
 
 
 TEMPLATE = '''/**
@@ -121,6 +156,29 @@ export const COMMAND_NAMES: Record<number, string> = {
 /** The same, for the #line-edit section. */
 export const EDIT_ACTION_NAMES: Record<number, string> = {
 %(edit_names)s
+};
+
+/**
+ * SK_SPECIAL_KEY, the byte that opens a special-key blob in a compiled
+ * file: CONTROL('K'). A literal ^K in a key sequence is stored as the
+ * SK_CONTROL_K blob instead, so that this byte always means "blob".
+ */
+export const SK_SPECIAL_KEY = 0x0B;
+
+/** SK_CONTROL_K: how a literal ^K is stored. */
+export const SK_CONTROL_K = %(sk_key)d;
+
+/**
+ * Every \\k form and the SK_* code it compiles to, out of og's tstr.
+ *
+ * A compiled file stores the blob `SK_SPECIAL_KEY <code> 6 1 1 1`, not
+ * a terminal sequence - the reader expands it through terminfo when it
+ * loads. Which is why this is a different table from the pager's own
+ * \\k handling, and a superset of it: the keypad forms have no
+ * capability to resolve to, but they still compile.
+ */
+export const SPECIAL_KEY_CODES: Record<string, number> = {
+%(keys)s
 };
 '''
 
