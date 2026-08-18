@@ -131,6 +131,8 @@ export const help: string[] = [
   "  s _\bf_\bi_\bl_\be               Save input to a file.",
   "  v                    Edit the current file with $VISUAL or $EDITOR.",
   "  V                    Print version number of \"less-pager-mini\".",
+  "        ---------------------------------------------------",
+  "        v re-applies the current file in --view-lesskey.",
   " ---------------------------------------------------------------------------",
   "",
   "                           O\bOP\bPT\bTI\bIO\bON\bNS\bS",
