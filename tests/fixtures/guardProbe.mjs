@@ -7,12 +7,14 @@
  * simply never ends. A plain process has no such trouble, so the test
  * runs this and reads the JSON back.
  */
-import { guardedMatch, endJsRegexGuard, jsRegexAborted }
+import { guardedMatch, endJsRegexGuard, jsRegexAborted, beginGuardedRun }
   from '../../dist/features/jsRegexGuard.js';
 
 const never = () => false;
 const out = {};
-const step = name => process.stderr.write('STEP ' + name + '\n');
+// each case is its own run, as a frame or a search would be
+const step = name => { process.stderr.write('STEP ' + name + '\n');
+  beginGuardedRun(); };
 
 step('match');
 out.match = guardedMatch(

@@ -15,6 +15,8 @@ import { wrapLongLines } from './lines/wrapLongLines';
 import { maxSubRow, visualWidth, isStyled, transformPrompt, promptHasAnsi }
   from './lines/helpers';
 
+import { beginGuardedRun } from './features/jsRegexGuard';
+
 import { search, searchPrompt, statusColChar, setHiliteHidden, posixRetry}
   from './features/searching';
 
@@ -1139,6 +1141,12 @@ export function renderHiliteRepaint(
 }
 
 export function render(rawContent: string[], buffer: string[]): void {
+  // one frame is one run to whoever is watching it, however many
+  // lines it highlights: what it says about taking a while, and what
+  // giving up on it means, both belong to the frame and not to its
+  // twelfth line
+  beginGuardedRun();
+
   // og's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole
   // screen, tildes and all, before showing (output.c:719)

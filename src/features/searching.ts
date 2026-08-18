@@ -7,7 +7,7 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
-import { guardedMatch, watchWith, jsRegexNoticed }
+import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun }
   from './jsRegexGuard';
 
 import { keyboard, keyboardPollFd, pushUngot, raiseAbort } from '../tty/keyboard';
@@ -1257,6 +1257,7 @@ let userSearch = false;
 /** Runs a search the user asked for, with the offer to retry armed. */
 export function duringUserSearch<T>(run: () => T): T {
   userSearch = true;
+  beginGuardedRun();
 
   try {
     return run();

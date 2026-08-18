@@ -27,7 +27,7 @@ import { Worker } from 'worker_threads';
  */
 
 /** Header words: what is happening, and the sizes that go with it. */
-const HEADER = 5;
+const HEADER = 6;
 const STATE = 0;
 const LENGTH = 1;
 /** 1 while ANY key should end the wait, 0 for an interrupt only. */
@@ -36,6 +36,8 @@ const MODE = 2;
 const KEYLEN = 3;
 /** 1 once the watcher has said this is taking a while. */
 const NOTICED = 4;
+/** Milliseconds from now until the watcher should say something. */
+const NOTICE_IN = 5;
 
 const IDLE = 0;
 const REQUEST = 1;
@@ -50,6 +52,34 @@ const KEYROOM = 256;
 
 /** How long before the watcher says something. */
 const NOTICE_MS = 2000;
+
+/**
+ * When the RUN this call belongs to began, and whether it was given
+ * up on.
+ *
+ * A frame is one piece of work to the person watching it, and a dozen
+ * separate calls to this - one per line on screen. Timing each call on
+ * its own means a frame that grinds for seven seconds never reaches
+ * two on any single line, so it never says anything; and abandoning
+ * one line leaves the other eleven still to be abandoned, each
+ * wanting its own keypress. Both are the same mistake: the run is the
+ * unit, not the call.
+ */
+let runStarted = 0;
+let runAbandoned = false;
+
+/**
+ * Opens a run: a search, or one frame's highlighting.
+ *
+ * Declared rather than guessed. A gap between calls would have to
+ * stand in for "the user got their screen back", and the difference
+ * between a frame's twelfth line and the next frame's first is
+ * microseconds either way.
+ */
+export function beginGuardedRun(): void {
+  runStarted = Date.now();
+  runAbandoned = false;
+}
 
 /** The matcher: takes a request, answers with a result. */
 const MATCHER = `
@@ -138,6 +168,7 @@ for (;;) {
   Atomics.wait(header, ${STATE}, ${IDLE});
 
   const started = Date.now();
+  const sayAt = Atomics.load(header, ${NOTICE_IN});
   let said = false;
 
   while (Atomics.load(header, ${STATE}) === ${REQUEST}) {
@@ -163,7 +194,7 @@ for (;;) {
       }
     }
 
-    if (!said && Date.now() - started >= ${NOTICE_MS}) {
+    if (!said && Date.now() - started >= sayAt) {
       said = true;
       Atomics.store(header, ${NOTICED}, 1);
       fs.writeSync(1, notice);
@@ -323,6 +354,12 @@ export function guardedMatch(
 ): { answer: { test?: boolean,
   match?: { index: number, groups: string[] } | null } | null,
   keys: string } {
+  const now = Date.now();
+
+  // already given up on: the rest of the frame is not worth another
+  // wait, and certainly not another keypress each
+  if (runAbandoned) return { answer: null, keys: '' };
+
   const bytes = Buffer.from(JSON.stringify(request));
   const state = ensureWorkers(bytes.length);
 
@@ -330,6 +367,11 @@ export function guardedMatch(
   Atomics.store(state.header, LENGTH, bytes.length);
   Atomics.store(state.header, KEYLEN, 0);
   Atomics.store(state.header, NOTICED, 0);
+
+  // what is left of the run's two seconds, not this call's: the
+  // notice belongs to the work as a whole
+  Atomics.store(state.header, NOTICE_IN,
+    Math.max(0, NOTICE_MS - (now - runStarted)));
   Atomics.store(state.header, MODE, anyKey ? 1 : 0);
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
@@ -360,6 +402,7 @@ export function guardedMatch(
 
   if (Atomics.load(state.header, STATE) === ABORT) {
     aborted = true;
+    runAbandoned = true;
     killWorkers();
     return { answer: null, keys };
   }
