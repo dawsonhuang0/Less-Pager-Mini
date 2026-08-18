@@ -68,4 +68,35 @@ describe('mouse wheel scrolling on a file', () => {
     expect(screens[1]).toBe('line 4');
     expect(screens[2]).toBe('line 7');
   }, 20000);
+
+  it('is swallowed whole while a count is pending, like og', async () => {
+    // og decodes the report inside editchar, which hands it to
+    // x116mouse_action(skip=TRUE) and gets A_NOACTION back
+    // (decode.c:818); the digit prompt reads that as "ignore this
+    // char and get another one" (command.c:690). So the tick does
+    // nothing AND the count survives it - measured against og, which
+    // still shows ":5" when it exits
+    const screens = await tops(
+      [DOWN, '5', DOWN, 'j'],
+      '--mouse --wheel-lines=3'
+    );
+
+    expect(screens[1]).toBe('line 4'); // the tick before the count
+    expect(screens[3]).toBe('line 4'); // the tick during it: nothing
+    expect(screens[4]).toBe('line 9'); // the 5 was still there for j
+  }, 20000);
+
+  it('is swallowed whole in the middle of a search prompt', async () => {
+    // same editchar path, reached from cmd_char instead: A_NOACTION
+    // becomes CC_OK and the pattern never sees the bytes
+    // (cmdbuf.c:877). Ours used to type them INTO the pattern
+    const typed = ['/', 'l', 'i', 'n', 'e', ' ', '9', '\r'];
+    const clean = await tops(typed);
+    const interrupted = await tops(
+      ['/', 'l', 'i', DOWN, 'n', 'e', ' ', '9', '\r']
+    );
+
+    expect(interrupted[interrupted.length - 1])
+      .toBe(clean[clean.length - 1]);
+  }, 20000);
 });

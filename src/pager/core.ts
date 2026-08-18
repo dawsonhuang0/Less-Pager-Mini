@@ -1920,6 +1920,20 @@ function dispatchKey(sequence: string): void {
     }
   }
 
+  // a report that arrives while a prompt - or a COUNT - is open is
+  // read and thrown away. og's line editor decodes it through
+  // editchar, which hands it to x116mouse_action(skip=TRUE), and
+  // that returns A_NOACTION before it ever looks at the button
+  // (decode.c:818). cmd_char turns A_NOACTION into CC_OK and the
+  // digit prompt turns it into MCA_MORE, "ignore this char and get
+  // another one" (command.c:690) - so the prompt keeps its text,
+  // nothing scrolls, and nothing repaints. Measured: with ":5" up,
+  // og swallows a wheel tick whole and still shows ":5" at exit.
+  if (!session.escCount && (promptOpen() || mode.BUFFERING)) {
+    const report = normalizeMouse(session.key) ?? session.key;
+
+    if (/^\x1b\[<\d+;\d+;\d+[Mm]$/.test(report)) return;
+  }
 
   // the interrupt key abandons a G/% pipe drain: og's interrupted
   // ch_end_seek returns SUCCESS (the loop exits on the READ_INTR
