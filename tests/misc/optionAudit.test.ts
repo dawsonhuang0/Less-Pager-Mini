@@ -43,6 +43,8 @@ import {
 
 import { prProto, setProto } from '../../src/features/prompt';
 
+import { resetLesskey, userBinding } from '../../src/features/lesskey';
+
 // registers the session hooks (--file-size's scan) like the runtime
 import '../../src/features/pipe';
 
@@ -643,6 +645,44 @@ describe('command line argument scans (og scan_option per arg)', () => {
 
     expect(search.message)
       .toBe('Cannot use lesskey source file "/definitely/not/there"');
+  });
+
+  it('accepts the source files og accepts, and only complains like it', () => {
+    // measured against og over four inputs. Only a MISSING file is an
+    // error there; the other three load silently, and the compiled
+    // binary is the one this used to refuse - og's line stops at its
+    // first NUL (lesskey_parse.c:722), so og reads an empty first line
+    // where this read the whole blob and called it a missing action
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-ks-'));
+    const write = (name: string, data: string | Buffer): string => {
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, data);
+      return file;
+    };
+
+    // "\0M+G" + a 'c' section binding x to A_QUIT(24) + "x" "End"
+    const compiled = Buffer.from([
+      0x00, 0x4D, 0x2B, 0x47,
+      0x63, 3, 0, 0x78, 0x00, 24,
+      0x78, 0x45, 0x6E, 0x64,
+    ]);
+
+    for (const [name, data] of [
+      ['empty.src', ''],
+      ['compiled.src', compiled],
+      ['crlf.src', 'x quit\r\n'],
+    ] as [string, string | Buffer][]) {
+      resetLesskey();
+      search.message = '';
+      scanOptions(`--lesskey-src=${write(name, data)}`, []);
+
+      expect([name, search.message]).toEqual([name, '']);
+    }
+
+    // the CRLF file was the last one read, and its binding took
+    expect(userBinding('x')?.action).toBe('EXIT');
+
+    resetLesskey();
   });
 
   it('sets each startup header-search exclusion independently', () => {
