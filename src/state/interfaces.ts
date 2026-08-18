@@ -159,6 +159,15 @@ export type Actions =
    *  the SGR (1006) form. lesskey names them "mouse" and "mouse6". */
   | 'MOUSE_X11_IN'
   | 'MOUSE_SGR_IN'
+  /** og's A_F_MOUSE / A_B_MOUSE / A_L_MOUSE / A_R_MOUSE: what a
+   *  decoded wheel report RESOLVES to. The --emouse gate and the
+   *  --rmouse flip both live in the decoder (decode.c:613), so these
+   *  four move unconditionally - which is what a lesskey file binding
+   *  their codes gets, with no mouse involved. */
+  | 'MOUSE_FORWARD'
+  | 'MOUSE_BACKWARD'
+  | 'MOUSE_LEFT'
+  | 'MOUSE_RIGHT'
   | 'NOACTION'
   | 'VERSION'
   | 'FORCE_LINE_FORWARD'

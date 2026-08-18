@@ -356,6 +356,24 @@ describe('binary lesskey files', () => {
     expect(userBinding('T')?.action).toBe('PREV_TAG');
   });
 
+  it('reads the four mouse codes, which have no name at all', () => {
+    // A_F_MOUSE(66)/A_B_MOUSE(67)/A_L_MOUSE(78)/A_R_MOUSE(79) are what
+    // og's decoder RESOLVES a wheel report to (decode.c:613), so
+    // lesskey_parse.c never names them - a hand-written binary is the
+    // only way to bind one, and og runs it with no mouse involved
+    parseLesskeyBinary(binary(section('c', [
+      0x61, 0x00, 66,
+      0x62, 0x00, 67,
+      0x63, 0x00, 78,
+      0x64, 0x00, 79,
+    ])));
+
+    expect(userBinding('a')?.action).toBe('MOUSE_FORWARD');
+    expect(userBinding('b')?.action).toBe('MOUSE_BACKWARD');
+    expect(userBinding('c')?.action).toBe('MOUSE_LEFT');
+    expect(userBinding('d')?.action).toBe('MOUSE_RIGHT');
+  });
+
   it('translates SK special key blobs to terminal sequences', () => {
     // SK blob: SK_SPECIAL_KEY, SK_UP_ARROW(3), 6, 1, 1, 1
     parseLesskeyBinary(binary(section('c', [

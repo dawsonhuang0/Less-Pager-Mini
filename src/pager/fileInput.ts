@@ -98,6 +98,7 @@ import {
   optPastEof,
   optForwScroll,
   optStopOnFormFeed,
+  optWheelLines,
 } from '../options';
 
 import { setOsc8Display, transformContent }
@@ -514,6 +515,17 @@ export class FileInput implements PagerInput {
         return true;
       case 'LINE_BACKWARD':
         this.backward(count || 1);
+        return true;
+      // og's A_F_MOUSE/A_B_MOUSE are forward()/backward() over
+      // wheel_lines (command.c:1720), so on a file they have to move
+      // the same view every other command moves. Left calling the
+      // in-memory mover instead, ONE wheel tick landed right and the
+      // next one bell'd at a (END) the file was nowhere near
+      case 'MOUSE_FORWARD':
+        this.forward(optWheelLines(), true);
+        return true;
+      case 'MOUSE_BACKWARD':
+        this.backward(optWheelLines());
         return true;
       case 'FORCE_LINE_BACKWARD':
         // og's K: back with force=TRUE, padding past BOF

@@ -787,6 +787,25 @@ function startShellFeature(
   if (secureAllow(feature)) start();
 }
 
+/**
+ * Shifts the view --wheel-lines columns, og's A_L_MOUSE/A_R_MOUSE.
+ *
+ * Both cases open with pos_rehead(), like the keyboard shifts
+ * (command.c:1740 and :1754), and the left one floors at column 0
+ * where og's `if (wheel_lines > hshift) hshift = 0` does.
+ *
+ * @param direction -1 to shift left, 1 to shift right.
+ */
+function mouseShift(direction: -1 | 1): void {
+  if (mode.INIT) mode.INIT = false;
+
+  posRehead();
+
+  config.col = direction < 0
+    ? Math.max(config.col - optWheelLines(), 0)
+    : config.col + optWheelLines();
+}
+
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
 const acts: Record<Actions, () => void> = {
   FORCE_EXIT: () => session.exit(),
@@ -810,6 +829,14 @@ const acts: Record<Actions, () => void> = {
   NEWLINE_BACKWARD: () =>
     newlineBackward(session.content, bufferToNum(session.buffer) || 1),
   GO_POS: () => goPos(session.content, bufferToNum(session.buffer)),
+  // og's four wheel cases (command.c:1720-1755). They take no count
+  // and read no option: whoever produced the action already decided
+  // the direction, so a lesskey file bound to code 66 scrolls with
+  // --emouse off entirely - og's decoder never sees the key
+  MOUSE_FORWARD: () => lineForward(session.content, optWheelLines()),
+  MOUSE_BACKWARD: () => lineBackward(session.content, optWheelLines()),
+  MOUSE_LEFT: () => mouseShift(-1),
+  MOUSE_RIGHT: () => mouseShift(1),
   SPAN_REPEAT_SEARCH: () => spanningSearch(
     false,
     request => pagerInput?.search(request) ?? false,
@@ -1049,6 +1076,7 @@ const CMD_EXEC_ACTIONS = new Set<Actions>([
   'NO_EOF_WINDOW_FORWARD', 'FORCE_WINDOW_BACKWARD',
   'SET_HALF_WINDOW_FORWARD', 'SET_HALF_WINDOW_BACKWARD',
   'FIRST_LINE', 'LAST_LINE', 'PERCENT_LINE', 'GO_POS',
+  'MOUSE_FORWARD', 'MOUSE_BACKWARD', 'MOUSE_LEFT', 'MOUSE_RIGHT',
 ]);
 
 function act(action: Actions | undefined): void {
@@ -1892,6 +1920,7 @@ function dispatchKey(sequence: string): void {
     }
   }
 
+
   // the interrupt key abandons a G/% pipe drain: og's interrupted
   // ch_end_seek returns SUCCESS (the loop exits on the READ_INTR
   // EOI), so G jumps to the buffered end and paints — only % still
@@ -2379,33 +2408,23 @@ function dispatchKey(sequence: string): void {
   // mouse wheel ticks scroll --wheel-lines lines; --rmouse (or
   // --MOUSE) reverses the scroll direction, like less; the wheel
   // is ignored without the vscroll --emouse feature (decode.c)
-  if (!session.escCount && session.key.startsWith('\x1b[<64;')) {
+  if (!session.escCount && (session.key.startsWith('\x1b[<64;') ||
+      session.key.startsWith('\x1b[<65;'))) {
     // og's command loop returns to prompt() for EVERY key it consumed,
     // even one whose action does nothing: the report is swallowed but
     // the prompt is still reprinted, which is visible on the first one
     // because that is when the filename prompt gives way to ":"
     if (!optWheelEnabled()) return void render(session.content, session.buffer);
 
-    if (optMouseReverse()) {
-      lineForward(session.content, optWheelLines());
-    } else {
-      lineBackward(session.content, optWheelLines());
-    }
+    const up = session.key.startsWith('\x1b[<64;');
 
-    render(session.content, session.buffer);
-    return;
-  }
-
-  if (!session.escCount && session.key.startsWith('\x1b[<65;')) {
-    if (!optWheelEnabled()) return void render(session.content, session.buffer);
-
-    if (optMouseReverse()) {
-      lineBackward(session.content, optWheelLines());
-    } else {
-      lineForward(session.content, optWheelLines());
-    }
-
-    render(session.content, session.buffer);
+    // og's mouse_wheel_up/down (decode.c:613): the DECODER picks
+    // which of the two actions the report becomes, and --rmouse
+    // swaps them there, not in the handler. The action then runs the
+    // ordinary way - a wheel tick is a command like any other in og's
+    // loop, so it gets cmd_exec, the input's own mover, and the
+    // prompt that follows
+    act(up !== optMouseReverse() ? 'MOUSE_BACKWARD' : 'MOUSE_FORWARD');
     return;
   }
 
@@ -2420,19 +2439,7 @@ function dispatchKey(sequence: string): void {
 
     const left = session.key.startsWith('\x1b[<66;') !== (optMouseReverse());
 
-    if (mode.INIT) mode.INIT = false;
-
-    // og's A_L_MOUSE/A_R_MOUSE call pos_rehead first, like the
-    // keyboard shifts (command.c:1740 and :1754)
-    posRehead();
-
-    if (left) {
-      config.col = Math.max(config.col - optWheelLines(), 0);
-    } else {
-      config.col += optWheelLines();
-    }
-
-    render(session.content, session.buffer);
+    act(left ? 'MOUSE_LEFT' : 'MOUSE_RIGHT');
     return;
   }
 

@@ -285,8 +285,8 @@ const ACTION_CODES: Record<number, Actions | null> = {
   62: 'CLEAR_MARK',              // A_CLRMARK
   63: 'SET_MARK_BOTTOM',         // A_SETMARKBOT
   64: 'MOUSE_X11_IN',            // A_X11MOUSE_IN
-  66: null,                      // A_F_MOUSE
-  67: null,                      // A_B_MOUSE
+  66: 'MOUSE_FORWARD',           // A_F_MOUSE
+  67: 'MOUSE_BACKWARD',          // A_B_MOUSE
   68: 'MOUSE_SGR_IN',            // A_X116MOUSE_IN
   69: 'PSHELL_COMMAND',          // A_PSHELL
   70: 'CLEAR_SEARCH',            // A_CLR_SEARCH
@@ -295,6 +295,8 @@ const ACTION_CODES: Record<number, Actions | null> = {
   73: 'OSC8_OPEN',               // A_OSC8_OPEN
   74: 'OSC8_JUMP',               // A_OSC8_JUMP
   77: 'FOLLOW_BELL',             // A_F_FOREVER_BELL
+  78: 'MOUSE_LEFT',              // A_L_MOUSE
+  79: 'MOUSE_RIGHT',             // A_R_MOUSE
   100: null,                     // A_INVALID
   101: 'NOACTION',               // A_NOACTION
   102: null,                     // A_UINVALID
