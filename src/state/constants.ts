@@ -166,6 +166,18 @@ const SYNC_OFF = '\x1b[?2026l';
 export let ON_ALTERNATE_SCREEN = true;
 
 export let ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
+
+/**
+ * The alternate screen WITHOUT clearing it (xterm's 1047, versus
+ * 1049 which "switches to the Alternate Screen Buffer, clearing it
+ * first").
+ *
+ * For one moment only: an editor that switched screens has left its
+ * last screen sitting in that buffer, and switching away is all
+ * `rmcup` does - so going back in without clearing puts the file the
+ * user was just looking at behind whatever is said about it.
+ */
+export const ALTERNATE_CONSOLE_KEEP = '\x1b[?1047h';
 export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 
 // terminfo smkx/rmkx (DECCKM + DECKPAM), like less's keypad init;

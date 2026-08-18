@@ -60,6 +60,7 @@ import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
   jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';
 
 import {
+  ALTERNATE_CONSOLE_KEEP,
   CONSOLE_CLEAR,
   CURSOR_TO,
   INVERSE_ON,
@@ -747,13 +748,19 @@ export function runEditor(): void {
 
     if (!failed.length) return false;
 
-    // still on the editor's screen: the messages print under the text
-    // they are about, and the pager does not take the terminal back
-    // until the RETURN. og's main errmsgs gate has the same shape -
-    // every message on its own line, then one prompt, then the screen
-    for (const message of failed) putstr(message + '\n');
+    // back into the buffer the editor drew in, WITHOUT clearing it,
+    // so its last screen is still there to read these against. An
+    // editor that switches screens has already switched away by now -
+    // leaving us on the primary, under a shell prompt and the command
+    // that started all this, which is no backdrop for a message about
+    // a lesskey. One that does not switch never left, and this is a
+    // no-op for it
+    putstr(ALTERNATE_CONSOLE_KEEP);
 
-    putstr('Press RETURN to continue ');
+    for (const message of failed) putstr('\n' + message);
+
+    putstr('\nPress RETURN to continue ');
+
     session.shellPause = 'shell';
     return true;
   });
