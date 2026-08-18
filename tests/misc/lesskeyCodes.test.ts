@@ -10,7 +10,10 @@ import {
   SK_SPECIAL_KEY,
   SK_CONTROL_K,
   SPECIAL_KEY_CODES,
+  DEFAULT_KEYMAP,
 } from '../../src/features/lesskeyCodes';
+
+import { compileLesskey } from '../../src/features/lesskeyCompile';
 
 /*
  * The generated name/code table (tools/gen-lesskey-codes.py).
@@ -92,6 +95,31 @@ describe('lesskey action codes', () => {
     // a blob opens with CONTROL('K'), which is why a literal ^K has to
     // be stored as SK_CONTROL_K instead of as itself
     expect([SK_SPECIAL_KEY, SK_CONTROL_K]).toEqual([0x0B, 40]);
+  });
+
+  it('writes og\'s built-in bindings as source that compiles', () => {
+    // --edit-lesskey opens this when a session has no lesskey at all,
+    // so it has to be a real file, not a description of one
+    const { data, errors } = compileLesskey(
+      DEFAULT_KEYMAP.join('\n') + '\n', 707);
+
+    expect(errors).toEqual([]);
+    expect(data).not.toBeNull();
+
+    // nothing in og's table went untranslated
+    expect(DEFAULT_KEYMAP.filter(line => line.includes('<?'))).toEqual([]);
+
+    // the only commented lines are the two paste markers, which have
+    // no lesskey name (A_START_PASTE / A_END_PASTE)
+    expect(DEFAULT_KEYMAP.filter(line => line.startsWith('# '))).toHaveLength(4);
+
+    expect(DEFAULT_KEYMAP).toContain('j\tforw-line');
+    expect(DEFAULT_KEYMAP).toContain('q\tquit');
+    expect(DEFAULT_KEYMAP).toContain('\\ku\tback-line');
+    // the bracket commands carry their pair as an extra string
+    expect(DEFAULT_KEYMAP).toContain('{\tforw-bracket\t{}');
+    expect(DEFAULT_KEYMAP.filter(l => l === '#command' || l === '#line-edit'))
+      .toEqual(['#command', '#line-edit']);
   });
 
   it('leaves the mouse actions unnamed, like og', () => {

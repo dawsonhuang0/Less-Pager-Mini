@@ -42,6 +42,30 @@ def table(source, nums, name):
             re.findall(r'\{\s*"([^"]+)",\s*(\w+)\s*\}', body.group(1))]
 
 
+def special_key_symbols(source):
+    """SK_* symbol back to the \\k form that produces it."""
+    body = re.search(
+        r"case 'k':\s*\n\s*if \(xlate\)(.*?)\n\t\t\t\t\}\n\t\t\t\tif \(ch == 0\)",
+        source, re.S)
+
+    forms = {'SK_CONTROL_K': None}
+    prefix = ''
+
+    for line in body.group(1).splitlines():
+        opens = re.match(r"\s*case '(.)':\s*$", line)
+        if opens and opens.group(1) in '^+p':
+            prefix = opens.group(1)
+            continue
+
+        case = re.match(r"\s*case '(.)': ch = (SK_\w+); break;", line)
+        if case:
+            forms.setdefault(case.group(2), prefix + case.group(1))
+        elif re.match(r'\s*break;', line):
+            prefix = ''
+
+    return forms
+
+
 def special_keys(source, nums):
     """The \\k letter forms and their SK_* codes, out of og's tstr.
 
@@ -73,6 +97,91 @@ def special_keys(source, nums):
     return keys
 
 
+DECODE_C = 'less/decode.c'
+
+# C character literals that mean something else in lesskey source
+KEY_CHARS = {r"'\r'": r'\r', r"'\n'": r'\n', r"'\t'": r'\t',
+             "' '": r'\40', "'#'": r'\#', "'^'": r'\^',
+             r"'\\'": '\\\\', r"'\17'": r'\017'}
+
+# inside an extra string a space is just a space: it ends nothing
+EXTRA_CHARS = dict(KEY_CHARS, **{"' '": ' '})
+
+
+def token(text, chars, skforms):
+    """One entry of og's byte table, as lesskey source notation."""
+    if text.startswith('SK('):
+        form = skforms.get(text[3:-1])
+        # SK_CONTROL_K has no \k form: it is how a literal ^K is stored
+        return '^K' if form is None else '\\k' + form
+    if text.startswith('CONTROL('):
+        return '^' + text[9:-2]
+    if text == 'ESC':
+        return r'\e'
+    if text.startswith("'"):
+        return chars.get(text, text[1:-1])
+    return '<?%s>' % text
+
+
+def builtin(source, name, nums, names, skforms):
+    """og's own default bindings, as lesskey source lines.
+
+    decode.c's tables are byte lists - the key bytes, a 0, then the
+    action, and for an action OR'd with A_EXTRA a NUL-terminated extra
+    string after it.
+    """
+    body = re.search(r'%s\[\]\s*=\s*\{(.*?)\n\};' % name, source, re.S)
+    if body is None:
+        sys.exit('%s: no %s found' % (DECODE_C, name))
+
+    parts = [t.strip() for t in
+             re.sub(r'/\*.*?\*/', '', body.group(1), flags=re.S).split(',')
+             if t.strip()]
+
+    lines = []
+    keys = []
+    i = 0
+
+    while i < len(parts):
+        if parts[i] != '0':
+            keys.append(token(parts[i], KEY_CHARS, skforms))
+            i += 1
+            continue
+
+        action = parts[i + 1]
+        i += 2
+        extra = ''
+
+        if '|A_EXTRA' in action:
+            action = action.split('|')[0]
+            chunk = []
+            while i < len(parts) and parts[i] != '0':
+                chunk.append(token(parts[i], EXTRA_CHARS, skforms))
+                i += 1
+            i += 1
+            extra = ''.join(chunk)
+
+        sequence = ''.join(keys)
+        keys = []
+        named = names.get(nums.get(action))
+
+        if named is None:
+            # A_START_PASTE and A_END_PASTE have no lesskey name; they
+            # are the bracketed-paste markers, not commands
+            lines.append('# %s\t<%s: no lesskey name>' % (sequence, action))
+        else:
+            lines.append('%s\t%s%s' % (sequence, named,
+                                       '\t' + extra if extra else ''))
+
+    return lines
+
+
+def ts_string(text):
+    """A TypeScript single-quoted literal."""
+    return "'%s'" % text.replace('\\', '\\\\').replace("'", "\\'").replace(
+        '\t', '\\t')
+
+
 def forward(pairs):
     width = max(len(name) for name, _ in pairs) + 1
     return '\n'.join("  '%s':%s %d," % (name, ' ' * (width - len(name)), code)
@@ -96,11 +205,21 @@ def main():
     edit = table(source, nums, 'editnames')
     keys = sorted(special_keys(source, nums).items())
 
+    decode = open(DECODE_C).read()
+    symbols = special_key_symbols(source)
+    cmd_names = {code: name for name, code in reversed(cmd)}
+    edit_names = {code: name for name, code in reversed(edit)}
+    defaults = (['#command'] +
+                builtin(decode, 'cmdtable', nums, cmd_names, symbols) +
+                ['', '#line-edit'] +
+                builtin(decode, 'edittable', nums, edit_names, symbols))
+
     open(OUT, 'w').write(TEMPLATE % {
         'extra': nums['A_EXTRA'],
         'ev_ok': nums['EV_OK'],
         'sk_key': nums.get('SK_CONTROL_K'),
         'keys': forward(keys),
+        'defaults': '\n'.join('  %s,' % ts_string(l) for l in defaults),
         'cmd': forward(cmd),
         'edit': forward(edit),
         'cmd_names': reverse(cmd),
@@ -180,6 +299,23 @@ export const SK_CONTROL_K = %(sk_key)d;
 export const SPECIAL_KEY_CODES: Record<string, number> = {
 %(keys)s
 };
+
+/**
+ * og's built-in bindings, written out as lesskey source.
+ *
+ * --edit-lesskey opens this when a session has no lesskey of any kind,
+ * so the editor holds what the keys ALREADY do rather than an empty
+ * file - every binding is there to be changed or deleted, and the
+ * shape of the syntax comes with it.
+ *
+ * It is og's own cmdtable/edittable (decode.c), not a description of
+ * them: compile it and you get the defaults back. The two paste
+ * markers appear commented out, because A_START_PASTE and A_END_PASTE
+ * have no lesskey name to write.
+ */
+export const DEFAULT_KEYMAP: string[] = [
+%(defaults)s
+];
 '''
 
 if __name__ == '__main__':
