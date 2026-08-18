@@ -1994,8 +1994,12 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
       if (finished) return 'done';
 
       // ctrl-C and the --intr char abort between slices, like
-      // search_range's ABORT_SIGS checks
-      if (searchInterrupted()) return 'stop';
+      // search_range's ABORT_SIGS checks. FORCED: this loop is the
+      // reason the event loop is stopped, so the rate limit that
+      // protects casual callers only makes the interrupt late here -
+      // and late is exactly what it felt like next to the watcher,
+      // which answers a ^C the moment the kernel hands it over
+      if (searchInterrupted(true)) return 'stop';
 
       if (!noted && Date.now() - started >= LONGTIME_MS) {
         noted = true;
