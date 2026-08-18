@@ -52,7 +52,7 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
-import { openLesskeyView, exitLesskeyView }
+import { openLesskeyView, exitLesskeyView, isLesskeyViewSession }
   from "../features/lesskeyView";
 
 import { LESS_VERSION } from "../features/lesskey";
@@ -636,7 +636,7 @@ export async function contentPager(
   } else if (startup.lesskeyHelp) {
     openHelp(lesskeyHelp);
     session.startupHelp = true;
-  } else if (startup.viewLesskey) {
+  } else if (startup.viewLesskey && !isLesskeyViewSession()) {
     // over the file, not instead of it: q ends the view and the
     // session carries on with what was named, unlike -? whose help
     // IS the input file and whose q quits

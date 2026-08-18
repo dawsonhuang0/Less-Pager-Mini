@@ -27,7 +27,8 @@ import { help } from './startup/lessHelp';
 import { lesskeyHelp } from './startup/lesskeyHelp';
 
 import { lesskeyViewFiles, applyLesskeyEdits, cleanLesskeyView,
-  seedDefaultKeymap } from './features/lesskeyView';
+  seedDefaultKeymap, markLesskeyViewSession }
+  from './features/lesskeyView';
 
 import { LESS_VERSION } from './features/lesskey';
 
@@ -155,7 +156,13 @@ async function main(): Promise<void> {
 
   // command line options scan after $LESS, one scan_option call per
   // argument like og's main (a "$" separator would break long names)
-  setCliOptions(optArgs);
+  // --view-lesskey with no file BECOMES the session, so the forms are
+  // already the file list by the time the scan runs. Left in, the
+  // scan would open the view a second time over itself, and it took
+  // two q's to get out of one screen
+  setCliOptions(wantsViewLesskey && !files.length
+    ? optArgs.filter(arg => arg !== '--view-lesskey')
+    : optArgs);
 
   const stdoutTty = process.stdout.isTTY === true;
 
@@ -288,6 +295,8 @@ async function main(): Promise<void> {
 
     // no session to stash out here, so the forms simply ARE the file
     // list; the runtime form swaps them over a live one instead
+    markLesskeyViewSession();
+
     const view = lesskeyViewFiles();
 
     if (view.files.length === 1 && view.files[0].form === null) {

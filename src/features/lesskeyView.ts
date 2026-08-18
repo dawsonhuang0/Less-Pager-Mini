@@ -233,6 +233,30 @@ interface Stash {
 
 let stash: Stash | null = null;
 
+/** True when the session's file list IS the lesskey forms already. */
+let isViewSession = false;
+
+/**
+ * Marks this session as being the view itself.
+ *
+ * `--view-lesskey` with no file has nothing to open over, so the
+ * forms simply are the file list. The option scan still sees the
+ * flag - from argv, or from $LESS where no filter can reach it - and
+ * would open the view a SECOND time over itself, which took two q's
+ * to leave one screen.
+ */
+export function markLesskeyViewSession(): void {
+  isViewSession = true;
+}
+
+/** True when opening a view again would only stack one on itself. */
+export const isLesskeyViewSession = (): boolean => isViewSession;
+
+/** Clears the mark, for a test or a second session in one process. */
+export function resetLesskeyViewSession(): void {
+  isViewSession = false;
+}
+
 /** True while the lesskey files are the session's file list. */
 export const inLesskeyView = (): boolean => stash !== null;
 
