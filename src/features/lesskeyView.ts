@@ -202,6 +202,14 @@ export function applyLesskeyEdits(
     }
   }
 
+  // whatever was already on the prompt row belongs to something else
+  // - a lesskey that was already broken when the session started, and
+  // whose messages were shown then. Left in place they would be
+  // collected below and shown a SECOND time, dated by an edit that
+  // had nothing to do with them
+  search.message = '';
+  search.messageQueue.length = 0;
+
   // NOT quiet: a SOURCE form's bad lines are found by the reader, in
   // og's own wording, and it reports them the way it always does -
   // into search.message with the rest queued behind it

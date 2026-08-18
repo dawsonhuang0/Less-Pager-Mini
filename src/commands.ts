@@ -450,7 +450,8 @@ export function runExamine(): void {
 export function runShell(
   cmd: string,
   doneMsg: string | null,
-  input?: string
+  input?: string,
+  onDone?: () => boolean
 ): void {
   if (optNoShell()) {
     search.message = NO_SHELL_MESSAGE;
@@ -521,6 +522,12 @@ export function runShell(
     session.shellPause = 'shell';
     return;
   }
+
+  // a last word on the SHELL's screen, before the pager takes it
+  // back: anything printed after enterScreen lands on a cleared
+  // alternate screen, where the command's own output is no longer
+  // there to read it against
+  if (onDone?.()) return;
 
   enterScreen();
 }
@@ -717,36 +724,53 @@ export function runEditor(): void {
 
   session.pendingEditWarn = false;
 
-  runShell(editCommand(session.content), null);
+  // the lesskey work happens while the EDITOR's screen is still up,
+  // so its messages print under the text they are about, the way a
+  // scan error prints before the pager takes the terminal at startup
+  runShell(editCommand(session.content), null, undefined, () => {
+    if (!inLesskeyView()) return false;
+
+    // switchToFile returns at once for the file it already holds,
+    // exactly like og's edit_ifile - and og really does leave the old
+    // text up after v, until R flushes the buffers (clear_buffers,
+    // command.c:1846). The lesskey view is not a file being read
+    // though: an editor was opened to change what the keys DO, so the
+    // screen has to show what was written and the bindings have to be
+    // live before the user quits to find out
+    const index = files.index;
+
+    saveFilePosition();
+    files.index = -1;
+    switchToFile(index);
+
+    const failed = refreshLesskeyView(LESS_VERSION);
+
+    if (!failed.length) return false;
+
+    // og's main errmsgs gate, moved onto the pager's OWN screen:
+    // every message on a line of its own, then one "Press RETURN to
+    // continue" before anything is drawn. The editor left us on the
+    // primary screen - the shell prompt and the command that started
+    // this - which is no place to report on a file the pager owns
+    enterScreen();
+
+    // 1049h restores a saved cursor rather than homing, so say where
+    // this starts: the top of a cleared screen, like the messages a
+    // broken lesskey prints before the pager takes the terminal
+    putstr(CONSOLE_CLEAR + CURSOR_TO(1, 1));
+
+    for (const message of failed) putstr(message + '\n');
+
+    putstr('Press RETURN to continue ');
+
+    // 'pager' rather than 'shell': the screen is already ours, so the
+    // key only has to forget the frame and repaint
+    session.shellPause = 'pager';
+    return true;
+  });
 
   // the file may have changed: re-examine it, like less's reedit
   switchToFile(files.index);
-
-  if (!inLesskeyView()) return;
-
-  // ...except switchToFile returns at once for the file it already
-  // holds, exactly like og's edit_ifile - and og really does leave
-  // the old text up after v, until R flushes the buffers
-  // (clear_buffers, command.c:1846). The lesskey view is not a file
-  // being read though: an editor was opened to change what the keys
-  // DO, so the screen has to show what was written and the bindings
-  // have to be live before the user quits to find out
-  const index = files.index;
-
-  saveFilePosition();
-  files.index = -1;
-  switchToFile(index);
-
-  // a bad line goes on the pager's own bottom row, where og puts an
-  // error raised DURING a session: standout, "(press RETURN)" after
-  // it, and each key bringing up the next. Printed to the terminal
-  // instead they landed wherever the editor left the cursor - the
-  // outer terminal, under a shell history, for any editor that
-  // restores the screen on its way out
-  for (const message of refreshLesskeyView(LESS_VERSION)) {
-    if (search.message) search.messageQueue.push(message);
-    else search.message = message;
-  }
 }
 
 export function runMiscInput(
