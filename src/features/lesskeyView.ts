@@ -193,18 +193,6 @@ export function applyLesskeyEdits(
 ): string[] {
   const messages: string[] = [];
 
-  // $LESSKEY_TRACE names a file to log what this did and to what.
-  // Nothing about the view is visible from outside it - the forms are
-  // temporary, the writes go to paths the user never typed - so a
-  // report that "nothing changed" has no way to be checked
-  const trace = (text: string): void => {
-    const file = process.env.LESSKEY_TRACE;
-
-    if (file) fs.appendFileSync(file, text + '\n');
-  };
-
-  trace(`apply: ${view.length} form(s)`);
-
   const report = (text: string): void => { messages.push(text); };
 
   for (const file of view) {
@@ -215,12 +203,8 @@ export function applyLesskeyEdits(
     try {
       text = fs.readFileSync(file.path, 'utf8');
     } catch {
-      trace(`  ${file.path}: unreadable`);
       continue;
     }
-
-    trace(`  ${file.form.kind} ${file.form.origin} <- ${file.path}` +
-      ` (${text.length} bytes)`);
 
     if (file.form.kind === 'content') {
       // straight into the process environment, not the lesskey #env
@@ -257,9 +241,7 @@ export function applyLesskeyEdits(
 
     try {
       fs.writeFileSync(file.form.origin, data);
-      trace(`  wrote ${data.length} bytes to ${file.form.origin}`);
-    } catch (error) {
-      trace(`  FAILED writing ${file.form.origin}: ${String(error)}`);
+    } catch {
       report(`Cannot write ${file.form.origin}`);
     }
   }
