@@ -1419,7 +1419,8 @@ function jsRegex(source: string, flags: string): SearchRegex {
     // write; both are this side's business, and neither changes
     watchWith(keyboardPollFd(), optIntrChar(),
       '\r' + CLEAR_LINE + INVERSE_ON +
-        'Searching... (interrupt to abort)' + INVERSE_OFF);
+        'Searching... (interrupt to abort)' + INVERSE_OFF,
+      '\r' + CLEAR_LINE);
 
     // interrupt only, for a frame as much as for a search. Any key
     // ending a frame's matching was a workaround for keys that were
@@ -1430,7 +1431,8 @@ function jsRegex(source: string, flags: string): SearchRegex {
     const { answer, keys } = guardedMatch(
       { source: re.source, flags: re.flags, text, test },
       false,
-      fallbackPoll);
+      fallbackPoll,
+      search.message !== '');
 
     // whatever the watcher took off the terminal belongs to the
     // command loop, interrupt or not: og's check_poll ungets the keys

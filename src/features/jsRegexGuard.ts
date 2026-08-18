@@ -27,7 +27,7 @@ import { Worker } from 'worker_threads';
  */
 
 /** Header words: what is happening, and the sizes that go with it. */
-const HEADER = 6;
+const HEADER = 7;
 const STATE = 0;
 const LENGTH = 1;
 /** 1 while ANY key should end the wait, 0 for an interrupt only. */
@@ -38,6 +38,8 @@ const KEYLEN = 3;
 const NOTICED = 4;
 /** Milliseconds from now until the watcher should say something. */
 const NOTICE_IN = 5;
+/** 1 while a message is on the bottom row, waiting to be dismissed. */
+const MSG_UP = 6;
 
 const IDLE = 0;
 const REQUEST = 1;
@@ -162,6 +164,7 @@ const keys = new Uint8Array(workerData.memory,
   ${HEADER} * 4 + ${PAYLOAD}, ${KEYROOM});
 const buf = Buffer.alloc(64);
 const notice = Buffer.from(workerData.notice, 'binary');
+const clearRow = Buffer.from(workerData.clearRow, 'binary');
 const intr = workerData.intr;
 
 const keep = bytes => {
@@ -198,6 +201,15 @@ for (;;) {
 
       keep(buf.subarray(0, n));
 
+      // a key pressed at a message answers it, and the answer should
+      // show now rather than when the work happens to end. The row is
+      // cleared from here because here is the only thread awake; the
+      // main one dismisses the message properly when it picks the key
+      // up, and by then this row is already blank
+      if (!stop && Atomics.compareExchange(header, ${MSG_UP}, 1, 0) === 1) {
+        fs.writeSync(1, clearRow);
+      }
+
       if (stop && Atomics.compareExchange(
         header, ${STATE}, ${REQUEST}, ${ABORT}) === ${REQUEST}) {
         Atomics.notify(header, ${STATE});
@@ -232,6 +244,9 @@ let shared: Shared | null = null;
 /** What the watcher writes after NOTICE_MS, styled by the caller. */
 let noticeBytes = '';
 
+/** What clears the bottom row, for the key that dismisses a message. */
+let clearBytes = '';
+
 /** The fd the watcher reads, and the --intr char to look for. */
 let watchFd: number | null = null;
 let intrChar = '';
@@ -245,13 +260,17 @@ let intrChar = '';
  * the writing has to happen on a thread that is awake, so the bytes
  * are handed over rather than a callback.
  */
-export function watchWith(fd: number | null, intr: string, notice: string):
-void {
-  if (fd === watchFd && intr === intrChar && notice === noticeBytes) return;
+export function watchWith(fd: number | null, intr: string, notice: string,
+  clearRow: string): void {
+  if (fd === watchFd && intr === intrChar && notice === noticeBytes &&
+      clearRow === clearBytes) {
+    return;
+  }
 
   watchFd = fd;
   intrChar = intr;
   noticeBytes = notice;
+  clearBytes = clearRow;
 
   // the watcher carries these; a new set means a new watcher
   if (shared?.watcher) {
@@ -301,6 +320,7 @@ function ensureWorkers(need: number): Shared {
         fd: watchFd,
         intr: intrChar,
         notice: noticeBytes,
+        clearRow: clearBytes,
       },
     });
 
@@ -361,7 +381,8 @@ export function clearJsRegexAbort(): void {
 export function guardedMatch(
   request: { source: string, flags: string, text: string, test: boolean },
   anyKey: boolean,
-  fallbackPoll?: () => boolean
+  fallbackPoll?: () => boolean,
+  messageUp = false
 ): { answer: { test?: boolean,
   match?: { index: number, groups: string[] } | null } | null,
   keys: string } {
@@ -391,6 +412,7 @@ export function guardedMatch(
   Atomics.store(state.header, NOTICE_IN,
     Math.max(0, NOTICE_MS - (now - runStarted)));
   Atomics.store(state.header, MODE, anyKey ? 1 : 0);
+  Atomics.store(state.header, MSG_UP, messageUp ? 1 : 0);
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
 
