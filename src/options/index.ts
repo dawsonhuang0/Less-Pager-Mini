@@ -10,8 +10,8 @@ import { ringBell } from "../helpers";
 import { cmd as cmdBuf, cmdOpen, cmdClose, cmdChar, cmdText,
   cmdSetText, cmdUngot } from "../features/cmdbuf";
 
-import { parseLesskey, parseLesskeyBinary, parseLesskeyContent }
-  from "../features/lesskey";
+import { parseLesskey, parseLesskeyBinary, parseLesskeyContent,
+  recordLesskeyForm } from "../features/lesskey";
 
 import { secureAllow } from "../features/secure";
 
@@ -82,6 +82,7 @@ import { tilde } from './tilde';
 import { help } from './help';
 
 import { lesskeyHelp } from './lesskey-help';
+import { viewLesskey } from './view-lesskey';
 import { shift } from './shift';
 import { noKeypad } from './no-keypad';
 import { oldBot } from './old-bot';
@@ -185,6 +186,7 @@ const OPTIONS: OptionSpec[] = [
   tilde,
   help,
   lesskeyHelp,
+  viewLesskey,
   shift,
   noKeypad,
   oldBot,
@@ -826,6 +828,7 @@ interface StartupCmds {
   dohelp: boolean;
   /** The same, for --lesskey-help and the lesskey syntax page. */
   lesskeyHelp: boolean;
+  viewLesskey: boolean;
   /** True when -V printed the version: the pager must not start. */
   version: boolean;
 }
@@ -1076,6 +1079,10 @@ function applyScanString(
       // read (optfunc.c:307)
       if (parseLesskey(fs.readFileSync(param, 'utf8'), param) !== 0) {
         optScanError(`Cannot use lesskey source file "${param}"`);
+      } else {
+        // the ladder records its own; this one arrives after it ran,
+        // since og's init_cmds precedes scan_option (main.c:262)
+        recordLesskeyForm({ kind: 'source', origin: param, system: false });
       }
     } catch {
       optScanError(`Cannot use lesskey source file "${param}"`);
@@ -1090,6 +1097,7 @@ function applyScanString(
     try {
       if (!secureAllow('lesskey')) throw new Error('secure');
       parseLesskeyBinary(fs.readFileSync(param));
+      recordLesskeyForm({ kind: 'binary', origin: param, system: false });
     } catch {
       optScanError(`Cannot use lesskey file "${param}"`);
     }
@@ -1358,7 +1366,8 @@ export function scanOptions(
   isEnv: boolean = true
 ): StartupCmds {
   const result: StartupCmds =
-    { firstCmds: [], dohelp: false, lesskeyHelp: false, version: false };
+    { firstCmds: [], dohelp: false, lesskeyHelp: false,
+      viewLesskey: false, version: false };
   let setDefault = false;
   let i = 0;
 
@@ -1518,6 +1527,13 @@ export function scanOptions(
     // -? pages the command help, through the same dohelp path
     if (spec.names.includes('lesskey-help')) {
       result.lesskeyHelp = true;
+      continue;
+    }
+
+    // also not og's: --view-lesskey pages the lesskey files THEMSELVES
+    // instead of the file it was given, the way -? pages the help
+    if (spec.names.includes('view-lesskey')) {
+      result.viewLesskey = true;
       continue;
     }
 

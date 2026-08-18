@@ -321,6 +321,8 @@ export const help: string[] = [
   "                  Enables colored text.",
   "                --use-js-regexp",
   "                  Search with JavaScript's RegExp.",
+  "                --view-lesskey",
+  "                  View the lesskey files this session loaded.",
   "                --wheel-lines=[_\bN]",
   "                  Each click of the mouse wheel moves _\bN lines.",
   "                --wordwrap",

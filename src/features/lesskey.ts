@@ -16,6 +16,8 @@ import { terminalCapability } from '../tty/terminal';
 
 import { hook } from '../options/shared';
 
+import { SPECIAL_KEY_CODES } from './lesskeyCodes';
+
 import { secureAllow } from './secure';
 
 /**
@@ -30,7 +32,7 @@ interface UserBinding {
 }
 
 // this port replicates less 707x
-const LESS_VERSION = 707;
+export const LESS_VERSION = 707;
 
 /** Command names from lesskey_parse.c mapped onto our actions; null
  *  names are accepted but unsupported (they ring like A_UINVALID). */
@@ -220,6 +222,10 @@ function specialKey(name: string): string | undefined {
   return SPECIAL_KEYS[name];
 }
 
+/** True for a \k name og's own tstr accepts, resolvable or not. */
+const knownSpecialKey = (name: string): boolean =>
+  name in SPECIAL_KEY_CODES;
+
 /** Binary-file action codes (cmd.h A_*) mapped onto our actions. */
 const ACTION_CODES: Record<number, Actions | null> = {
   2: 'LINE_BACKWARD',            // A_B_LINE
@@ -353,6 +359,36 @@ const SK_CODES: Record<number, string> = {
 };
 
 // the loaded user tables
+/**
+ * One lesskey a session loaded, in whatever shape it arrived.
+ *
+ * The loader takes up to six at once and merges them, so "the current
+ * lesskey" is a list, not a file. --edit-lesskey needs to know which
+ * ones were real to put them all in front of the user.
+ */
+export interface LesskeyForm {
+  /** How it was stored: editable text, compiled bytes, or a variable. */
+  kind: 'source' | 'binary' | 'content';
+  /** The file path, or the variable name for a content form. */
+  origin: string;
+  /** System-wide rather than the user's own. */
+  system: boolean;
+}
+
+const loadedForms: LesskeyForm[] = [];
+
+/** The lesskey forms this session loaded, in ladder order. */
+export const lesskeyForms = (): LesskeyForm[] => [...loadedForms];
+
+/**
+ * Notes a lesskey that loaded. The ladder records its own; the option
+ * scan records what the command line added, since that arrives after
+ * loadLesskey has already run (og's init_cmds precedes scan_option).
+ */
+export function recordLesskeyForm(form: LesskeyForm): void {
+  loadedForms.push(form);
+}
+
 const bindings = new Map<string, UserBinding>();
 const editKeys = new Map<string, string>();
 const definedVars = new Set<string>();
@@ -399,6 +435,7 @@ export const translateEditKey = (key: string): string =>
 
 /** Forgets all lesskey state for a fresh session. */
 export function resetLesskey(): void {
+  loadedForms.length = 0;
   bindings.clear();
   editKeys.clear();
   definedVars.clear();
@@ -455,6 +492,7 @@ export function loadLesskey(quiet: boolean = false): void {
   try {
     parseLesskey(fs.readFileSync(sysFile, 'utf8'), sysFile, true);
     sysSourceLoaded = true;
+    recordLesskeyForm({ kind: 'source', origin: sysFile, system: true });
   } catch {
     // a missing system file is the normal case
   }
@@ -463,6 +501,7 @@ export function loadLesskey(quiet: boolean = false): void {
     const sysBinary = lgetenv('LESSKEY_SYSTEM') || LESSKEYFILE_SYS;
     try {
       parseLesskeyBinary(fs.readFileSync(sysBinary), true);
+      recordLesskeyForm({ kind: 'binary', origin: sysBinary, system: true });
     } catch {
       // like og, a missing system binary is not an error
     }
@@ -475,6 +514,7 @@ export function loadLesskey(quiet: boolean = false): void {
     try {
       parseLesskey(fs.readFileSync(file, 'utf8'), file);
       userSourceLoaded = true;
+      recordLesskeyForm({ kind: 'source', origin: file, system: false });
     } catch {
       // og opens the default file silently
     }
@@ -488,16 +528,27 @@ export function loadLesskey(quiet: boolean = false): void {
 
     try {
       parseLesskeyBinary(fs.readFileSync(binary));
+      recordLesskeyForm({ kind: 'binary', origin: binary, system: false });
     } catch {
       // like og, a missing binary file is not an error
     }
   }
 
   const systemContent = lgetenv('LESSKEY_CONTENT_SYSTEM');
-  if (systemContent) parseLesskeyContent(systemContent, true);
+
+  if (systemContent) {
+    parseLesskeyContent(systemContent, true);
+    recordLesskeyForm({ kind: 'content', origin: 'LESSKEY_CONTENT_SYSTEM',
+      system: true });
+  }
 
   const content = lgetenv('LESSKEY_CONTENT');
-  if (content) parseLesskeyContent(content);
+
+  if (content) {
+    parseLesskeyContent(content);
+    recordLesskeyForm({ kind: 'content', origin: 'LESSKEY_CONTENT',
+      system: false });
+  }
 }
 
 /**
@@ -650,7 +701,7 @@ function parseBinaryVars(buf: Buffer): void {
 /**
  * Finds the lesskey source file, like add_hometable's lookup.
  */
-function lesskeyFile(): string | null {
+export function lesskeyFile(): string | null {
   const configured = lgetenv('LESSKEYIN');
   if (configured) return configured;
 
@@ -876,7 +927,7 @@ function tstr(
   line: string,
   at: number,
   xlate: boolean
-): { text: string, next: number } {
+): { text: string, next: number, unresolved?: boolean } {
   const c = line[at];
 
   if (c === '\\') {
@@ -914,6 +965,13 @@ function tstr(
         const seq = specialKey(name);
 
         if (seq === undefined) {
+          // og accepts every name its tstr lists and stores a blob for
+          // it; whether the TERMINAL can produce that key is decided
+          // later, when the blob is resolved (decode.c). So a keypad
+          // name on a terminal with no keypad binds nothing and says
+          // nothing - only a name og never had is an error
+          if (knownSpecialKey(name)) return { text: '', next, unresolved: true };
+
           parseError(`invalid escape sequence "\\k${name}"`);
           return { text: '', next };
         }
@@ -950,10 +1008,12 @@ function parseCmdLine(line: string, section: 'command' | 'edit'): void {
   // the key sequence runs to the first unescaped whitespace
   let seq = '';
   let i = 0;
+  let unresolved = false;
 
   do {
     const token = tstr(line, i, true);
     seq += token.text;
+    unresolved ||= token.unresolved === true;
     i = token.next;
   } while (i < line.length && !isSpace(line[i]));
 
@@ -985,6 +1045,10 @@ function parseCmdLine(line: string, section: 'command' | 'edit'): void {
       return;
     }
 
+    // the ACTION still had to be a real one, so a typo is still
+    // reported; only the key went missing
+    if (unresolved) return;
+
     // only editing behaviors our prompts implement can be re-bound
     if (canon !== null && !editKeys.has(seq)) editKeys.set(seq, canon);
     return;
@@ -996,6 +1060,12 @@ function parseCmdLine(line: string, section: 'command' | 'edit'): void {
     parseError(`unknown action: "${name}"`);
     return;
   }
+
+  // a key this terminal cannot produce binds nothing, like a blob
+  // whose SK code resolves to no sequence (the binary path drops one
+  // the same way). The action was still checked, so a typo above is
+  // still reported
+  if (unresolved) return;
 
   addBinding(seq, action ?? undefined, CMD_KEYS[name], extra || undefined);
 }

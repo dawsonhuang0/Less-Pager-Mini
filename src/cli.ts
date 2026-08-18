@@ -26,6 +26,10 @@ import { help } from './startup/lessHelp';
 
 import { lesskeyHelp } from './startup/lesskeyHelp';
 
+import { viewLesskey } from './features/lesskeyView';
+
+import { LESS_VERSION } from './features/lesskey';
+
 import { initInvocationOptions, markTerminalInvocation }
   from './startup/invocation';
 
@@ -146,6 +150,7 @@ async function main(): Promise<void> {
   // own input file. Not an og switch: og has `man lesskey` and an
   // npm install has nothing.
   const wantsLesskeyHelp = optArgs.some(a => a === '--lesskey-help');
+  const wantsViewLesskey = optArgs.some(a => a === '--view-lesskey');
 
   // command line options scan after $LESS, one scan_option call per
   // argument like og's main (a "$" separator would break long names)
@@ -268,6 +273,16 @@ async function main(): Promise<void> {
 
     markTerminalInvocation();
     await pagerPipe(process.stdin);
+    return;
+  }
+
+  // --view-lesskey pages the lesskey files THEMSELVES, whatever else
+  // was named: like -? it replaces the session rather than joining it
+  if (wantsViewLesskey) {
+    if (!openTtyKeyboard()) usageError('cannot open terminal');
+
+    markTerminalInvocation();
+    await viewLesskey(LESS_VERSION);
     return;
   }
 

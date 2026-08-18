@@ -62,6 +62,7 @@ export const LESS_OPTION_VALUES = {
   tilde: 'flag',
   help: 'flag',
   'lesskey-help': 'flag',
+  'view-lesskey': 'flag',
   shift: 'value',
   'no-keypad': 'flag',
   'old-bot': 'flag',
@@ -236,8 +237,10 @@ export interface LessOptions {
   tilde?: boolean;
   /** Display help (from command line). */
   help?: boolean;
-  /** Display the lesskey syntax page. */
+  /** Display lesskey help. */
   'lesskey-help'?: boolean;
+  /** A less option. */
+  'view-lesskey'?: boolean;
   /** Set horizontal scroll amount (0 = one half screen width). @default '0' */
   shift?: number | string;
   /** Don't send termcap keypad init/deinit strings. */

@@ -111,6 +111,7 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
     startup.firstCmds.push(...extra.firstCmds);
     if (extra.dohelp) startup.dohelp = true;
     if (extra.lesskeyHelp) startup.lesskeyHelp = true;
+    if (extra.viewLesskey) startup.viewLesskey = true;
     if (extra.version) startup.version = true;
   }
 

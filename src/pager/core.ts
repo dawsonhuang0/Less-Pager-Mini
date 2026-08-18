@@ -52,6 +52,10 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
+import { viewLesskey } from "../features/lesskeyView";
+
+import { LESS_VERSION } from "../features/lesskey";
+
 import { raiseAbort, clearAbort } from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
@@ -3014,6 +3018,14 @@ let helpClosedAlt = false;
 // the --lesskey-help option reaches the pager through here: options
 // cannot import this module, so the entry point is a hook
 hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
+
+// the nested session is what makes `q` mean "done looking": it
+// unwinds the lesskey pager and leaves this one exactly as it was
+hook.viewLesskey = (): void => {
+  void viewLesskey(LESS_VERSION).then(() => {
+    render(session.content, session.buffer);
+  });
+};
 
 function openHelp(text: string[] = help): void {
   if (mode.HELP) return;
