@@ -1252,18 +1252,36 @@ export const posixRetry = {
  *
  * Both are guarded, so neither can hang. Only the first asks.
  */
-let userSearch = false;
+let inRepaint = false;
 
-/** Runs a search the user asked for, with the offer to retry armed. */
-export function duringUserSearch<T>(run: () => T): T {
-  userSearch = true;
-  beginGuardedRun();
+/**
+ * Marks the frame as the thing running, so matching done for it is
+ * treated as a repaint rather than as a search.
+ *
+ * Decided from the RENDER, not from the search entry points. Wrapping
+ * those looked right and measured backwards: a search's matching does
+ * not happen inside the callback that starts it, and the frame that
+ * follows does - so a search ran as "any key aborts" and had its own
+ * RETURN kill it, while the repaint waited for a ^C nobody would
+ * press. The frame is the one boundary that is always exactly where
+ * it says it is.
+ */
+export function duringRepaint<T>(run: () => T): T {
+  const outer = inRepaint;
+
+  inRepaint = true;
 
   try {
     return run();
   } finally {
-    userSearch = false;
+    inRepaint = outer;
   }
+}
+
+/** Kept for the search entry points: they still mark the run. */
+export function duringUserSearch<T>(run: () => T): T {
+  beginGuardedRun();
+  return run();
 }
 
 /** Set while a retry runs, so this one search skips the host engine. */
@@ -1322,9 +1340,9 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // key: it is running behind whatever the user does next, and a key
   // arriving means they have moved on - waiting for a ^C they have no
   // reason to press is how a RETURN went unread for seven seconds
-  const fallbackPoll = (): boolean => userSearch
-    ? searchInterrupted(true)
-    : duringRepaintMatch(() => searchInterrupted(true));
+  const fallbackPoll = (): boolean => inRepaint
+    ? duringRepaintMatch(() => searchInterrupted(true))
+    : searchInterrupted(true);
 
   // the same shape as the line-number walk's message, because it is
   // the same kind of thing: work the pager is doing on your behalf,
@@ -1347,20 +1365,20 @@ function jsRegex(source: string, flags: string): SearchRegex {
   const giveUp = (): void => {
     // a key that was not an interrupt is not a request for advice:
     // the user moved on, so highlighting stops and nothing is asked
-    if (!userSearch && !abortedByInterrupt()) {
+    if (inRepaint && !abortedByInterrupt()) {
       search.highlight = false;
       return;
     }
 
     posixRetry.pending = true;
-    posixRetry.fromSearch = userSearch;
+    posixRetry.fromSearch = !inRepaint;
 
     search.message = '';
     search.messageQueue.length = 0;
 
     // no more matching until it is answered: the frame that draws the
     // question must not run the pattern that raised it
-    if (!userSearch) search.highlight = false;
+    if (inRepaint) search.highlight = false;
   };
 
   const runGuarded = (text: string, test: boolean):
@@ -1374,7 +1392,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
 
     const { answer, keys } = guardedMatch(
       { source: re.source, flags: re.flags, text, test },
-      !userSearch,
+      inRepaint,
       fallbackPoll);
 
     // whatever the watcher took off the terminal belongs to the

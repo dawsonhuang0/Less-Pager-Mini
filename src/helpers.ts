@@ -17,6 +17,8 @@ import { maxSubRow, visualWidth, isStyled, transformPrompt, promptHasAnsi }
 
 import { beginGuardedRun } from './features/jsRegexGuard';
 
+import { duringRepaint } from './features/searching';
+
 import { search, searchPrompt, statusColChar, setHiliteHidden, posixRetry}
   from './features/searching';
 
@@ -1141,6 +1143,13 @@ export function renderHiliteRepaint(
 }
 
 export function render(rawContent: string[], buffer: string[]): void {
+  // everything this frame matches is matched FOR the frame: any
+  // key ends it, and giving up on it costs highlighting rather
+  // than raising a question about a search nobody ran
+  duringRepaint(() => renderFrame(rawContent, buffer));
+}
+
+function renderFrame(rawContent: string[], buffer: string[]): void {
   // one frame is one run to whoever is watching it, however many
   // lines it highlights: what it says about taking a while, and what
   // giving up on it means, both belong to the frame and not to its
