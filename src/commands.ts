@@ -756,12 +756,14 @@ export function runEditor(): void {
     // clearing it first")
     enterScreen();
 
-    // 1049h restores a saved cursor rather than homing, so say where
-    // this starts
-    putstr(CONSOLE_CLEAR + CURSOR_TO(1, 1));
-
     // og's main errmsgs gate: every message on a line of its own,
-    // then one prompt, and nothing drawn until the key
+    // then one prompt, and nothing drawn until the key. Placed so the
+    // prompt lands on the BOTTOM row, where every other thing this
+    // pager asks of the user lands - and 1049h restores a saved
+    // cursor rather than homing, so the position has to be said
+    putstr(CONSOLE_CLEAR +
+      CURSOR_TO(Math.max(1, config.window - failed.length), 1));
+
     for (const message of failed) putstr(message + '\n');
 
     putstr('Press RETURN to continue ');
