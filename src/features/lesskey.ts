@@ -749,6 +749,16 @@ function parseLesskeyText(text: string, filename: string): number {
     parseLine = n + 1;
     let line = lines[n];
 
+    // og's line is a C STRING: fgets keeps every byte it read, but
+    // control_line and clean_line walk it with strncmp and stop at the
+    // first NUL (lesskey_parse.c:722), so the line IS what precedes
+    // one. Handing a COMPILED lesskey to --lesskey-src is the case
+    // that shows it - the file opens with a NUL, so og reads an empty
+    // line and says nothing, while we read the whole blob as one line
+    // and refused the file over a "missing action"
+    const nul = line.indexOf('\0');
+    if (nul >= 0) line = line.slice(0, nul);
+
     // control lines, like control_line's prefix checks
     if (line.startsWith('#line-edit')) { section = 'edit'; continue; }
     if (line.startsWith('#command')) { section = 'command'; continue; }

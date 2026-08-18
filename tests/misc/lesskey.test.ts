@@ -160,6 +160,19 @@ describe('#command bindings', () => {
     expect(userBinding('y')?.action).toBe('PREV_TAG');
   });
 
+  it('ends a line at a NUL, because og\'s line is a C string', () => {
+    // fgets keeps every byte it read, but control_line and clean_line
+    // walk the buffer with strncmp and stop at the first NUL
+    // (lesskey_parse.c:722). Handing a COMPILED lesskey to
+    // --lesskey-src is the case that shows it: the file opens with a
+    // NUL, so og reads an empty line and reports nothing at all
+    parse('x quit\0 this is never seen\nq help');
+
+    expect(search.message).toBe('');
+    expect(userBinding('x')?.action).toBe('EXIT');
+    expect(userBinding('q')?.action).toBe('HELP');
+  });
+
   it('reports unknown actions and missing actions like og', () => {
     parse('q blah\nq');
     expect(search.message).toBe('test: line 1: unknown action: "blah"');
