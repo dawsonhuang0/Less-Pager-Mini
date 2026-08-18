@@ -60,7 +60,6 @@ import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
   jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';
 
 import {
-  ALTERNATE_CONSOLE_KEEP,
   CONSOLE_CLEAR,
   CURSOR_TO,
   INVERSE_ON,
@@ -748,20 +747,28 @@ export function runEditor(): void {
 
     if (!failed.length) return false;
 
-    // back into the buffer the editor drew in, WITHOUT clearing it,
-    // so its last screen is still there to read these against. An
-    // editor that switches screens has already switched away by now -
-    // leaving us on the primary, under a shell prompt and the command
-    // that started all this, which is no backdrop for a message about
-    // a lesskey. One that does not switch never left, and this is a
-    // no-op for it
-    putstr(ALTERNATE_CONSOLE_KEEP);
+    // on the pager's OWN screen. The editor left us on the primary
+    // one - under a shell prompt and the command that started the
+    // session, which is no backdrop for a message about a lesskey -
+    // and its own screen cannot be borrowed: an editor that switched
+    // has switched back by now, and re-entering the alternate buffer
+    // clears it (1049h "switches to the Alternate Screen Buffer,
+    // clearing it first")
+    enterScreen();
 
-    for (const message of failed) putstr('\n' + message);
+    // 1049h restores a saved cursor rather than homing, so say where
+    // this starts
+    putstr(CONSOLE_CLEAR + CURSOR_TO(1, 1));
 
-    putstr('\nPress RETURN to continue ');
+    // og's main errmsgs gate: every message on a line of its own,
+    // then one prompt, and nothing drawn until the key
+    for (const message of failed) putstr(message + '\n');
 
-    session.shellPause = 'shell';
+    putstr('Press RETURN to continue ');
+
+    // 'pager' rather than 'shell': the screen is already ours, so the
+    // key only has to forget the frame and repaint
+    session.shellPause = 'pager';
     return true;
   });
 
