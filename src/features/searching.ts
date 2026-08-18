@@ -1420,9 +1420,12 @@ function jsRegex(source: string, flags: string): SearchRegex {
     search.message = '';
     search.messageQueue.length = 0;
 
-    // no more matching until it is answered: the frame that draws the
-    // question must not run the pattern that raised it
-    if (inRepaint) hiliteAbandoned = true;
+    // and no more matching until it is answered - whether a search
+    // raised this or a repaint did. The frame that DRAWS the question
+    // would otherwise paint with the pattern the question is about,
+    // attach a watcher to it, and two seconds later announce itself
+    // over the question
+    hiliteAbandoned = true;
   };
 
   const runGuarded = (text: string, test: boolean):
