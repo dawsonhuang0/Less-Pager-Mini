@@ -164,7 +164,7 @@ export const lesskeyHelp: string[] = [
   "  version              Print version number of \"less-pager-mini\".",
   "  digit                Add a digit to the number before a command.",
   "  quit                 Exit.",
-  "  debug                Nothing; less defines the name but no action.",
+  "  debug                Disable the key, with a bell; no command exists.",
   "  invalid              Disable the key, with a bell.",
   "",
   "  #\b#l\bli\bin\bne\be-\b-e\bed\bdi\bit\bt",
