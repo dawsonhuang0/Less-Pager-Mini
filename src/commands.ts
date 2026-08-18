@@ -450,7 +450,8 @@ export function runExamine(): void {
 export function runShell(
   cmd: string,
   doneMsg: string | null,
-  input?: string
+  input?: string,
+  onDone?: () => boolean
 ): void {
   if (optNoShell()) {
     search.message = NO_SHELL_MESSAGE;
@@ -521,6 +522,12 @@ export function runShell(
     session.shellPause = 'shell';
     return;
   }
+
+  // a last word on the SHELL's screen, before the pager takes it
+  // back: anything printed after enterScreen lands on a cleared
+  // alternate screen, where the command's own output is no longer
+  // there to read it against
+  if (onDone?.()) return;
 
   enterScreen();
 }
@@ -717,19 +724,19 @@ export function runEditor(): void {
 
   session.pendingEditWarn = false;
 
-  runShell(editCommand(session.content), null);
+  // the lesskey work happens while the EDITOR's screen is still up,
+  // so its messages print under the text they are about, the way a
+  // scan error prints before the pager takes the terminal at startup
+  runShell(editCommand(session.content), null, undefined, () => {
+    if (!inLesskeyView()) return false;
 
-  // the file may have changed: re-examine it, like less's reedit
-  switchToFile(files.index);
-
-  // ...except switchToFile returns at once for the file it already
-  // holds, exactly like og's edit_ifile - and og really does leave
-  // the old text up after v, until R flushes the buffers
-  // (clear_buffers, command.c:1846). The lesskey view is not a file
-  // being read though: an editor was opened to change what the keys
-  // DO, so the screen has to show what was written and the bindings
-  // have to be live before the user quits to find out
-  if (inLesskeyView()) {
+    // switchToFile returns at once for the file it already holds,
+    // exactly like og's edit_ifile - and og really does leave the old
+    // text up after v, until R flushes the buffers (clear_buffers,
+    // command.c:1846). The lesskey view is not a file being read
+    // though: an editor was opened to change what the keys DO, so the
+    // screen has to show what was written and the bindings have to be
+    // live before the user quits to find out
     const index = files.index;
 
     saveFilePosition();
@@ -738,18 +745,19 @@ export function runEditor(): void {
 
     const failed = refreshLesskeyView(LESS_VERSION);
 
-    // like og's main errmsgs gate, which prints every scan error and
-    // then blocks once: a file with three bad lines should show three
-    // lines and take one RETURN, not paint the screen and dribble the
-    // rest out behind a prompt nobody reads. The repaint waits for
-    // the key, through the same pause a shell command uses
-    if (failed.length) {
-      for (const message of failed) putstr(message + '\n');
+    if (!failed.length) return false;
 
-      putstr('Press RETURN to continue ');
-      session.shellPause = 'shell';
-    }
-  }
+    // og's main errmsgs gate: every message printed, then ONE
+    // "Press RETURN to continue" before anything is drawn
+    for (const message of failed) putstr(message + '\n');
+
+    putstr('Press RETURN to continue ');
+    session.shellPause = 'shell';
+    return true;
+  });
+
+  // the file may have changed: re-examine it, like less's reedit
+  switchToFile(files.index);
 }
 
 export function runMiscInput(
