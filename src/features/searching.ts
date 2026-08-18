@@ -2238,6 +2238,18 @@ export function duringRepaintMatch<T>(run: () => T): T {
 }
 
 export function searchInterrupted(force = false): boolean {
+  // an interrupt the watcher already took, owed to whoever asks next.
+  // FIRST, before any question about whether a watcher is still
+  // running: answering an interrupt kills the workers, so by the time
+  // the search around the match asks, there is no watcher to be
+  // active - and the verdict was going unread behind that test
+  if (watcherSawInterrupt()) {
+    fs.writeSync(1, '\x07');
+    raiseAbort();
+    abortWasInterrupt = true;
+    return true;
+  }
+
   // one reader per run: while the watcher has the terminal, asking it
   // is a shared word instead of a read(2), and it has been reading
   // BETWEEN matches as well as during them - which is the gap the
@@ -2247,12 +2259,7 @@ export function searchInterrupted(force = false): boolean {
 
     if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
 
-    if (!watcherSawInterrupt()) return false;
-
-    fs.writeSync(1, '\x07');
-    raiseAbort();
-    abortWasInterrupt = true;
-    return true;
+    return false;
   }
 
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
