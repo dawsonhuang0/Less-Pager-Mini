@@ -10,7 +10,8 @@ import { PsxRegExp, quote, type Found } from 'posix-regex';
 import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun }
   from './jsRegexGuard';
 
-import { keyboard, keyboardPollFd, pushUngot, raiseAbort } from '../tty/keyboard';
+import { keyboard, keyboardPollFd, pushUngot, pushUngotLive, raiseAbort }
+  from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
 
 import { config, mode } from "../state/config";
@@ -1398,7 +1399,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
     // whatever the watcher took off the terminal belongs to the
     // command loop, interrupt or not: og's check_poll ungets the keys
     // it looked at (os.c)
-    if (keys) pushUngot(Buffer.from(keys, 'binary'));
+    if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
 
     // the message it may have written lands after the clear the
     // command already emitted, so the next frame must repaint the row

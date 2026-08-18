@@ -59,7 +59,7 @@ import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
 
 import { LESS_VERSION } from "../features/lesskey";
 
-import { raiseAbort, clearAbort } from "../tty/keyboard";
+import { raiseAbort, clearAbort, ungotIsLive} from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
   tailCascade } from "../keys";
@@ -1697,7 +1697,10 @@ function drainKeys(): void {
   // like og's command loop draining the ungot queue - except while a
   // message waits: og's get_return reads the raw tty, so queued keys
   // stay behind it until a fresh key dismisses
-  if (!search.message) {
+  // ...unless the queue holds a key typed while this very screen was
+  // up: the watcher takes those off the terminal mid-work, and the
+  // message they answer has been showing the whole time
+  if (!search.message || ungotIsLive()) {
     const pending = takeUngot();
     if (pending && !session.exited) keyHandler(pending);
   }

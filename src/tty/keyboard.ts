@@ -165,8 +165,31 @@ export function pushUngot(data: Buffer): void {
   ungot.push(data);
 }
 
+/**
+ * True when a queued key was typed while the screen it will act on
+ * was already up.
+ *
+ * Queued keys wait behind a message, because og's get_return reads
+ * the raw tty and a key typed BEFORE a message appeared must not
+ * dismiss it. A key taken off the terminal mid-work is the opposite
+ * case: the message was on screen for the whole wait, so the user was
+ * answering it - and holding it back meant they had to press it twice.
+ */
+let ungotLive = false;
+
+/** Queues a key that was typed with the current screen already up. */
+export function pushUngotLive(data: Buffer): void {
+  ungotLive = true;
+  ungot.push(data);
+}
+
+/** Whether the queue holds a key typed against the current screen. */
+export const ungotIsLive = (): boolean => ungotLive;
+
 /** Takes all queued keys, oldest first; null when none wait. */
 export function takeUngot(): Buffer | null {
+  ungotLive = false;
+
   if (!ungot.length) return null;
 
   const all = ungot.length === 1 ? ungot[0] : Buffer.concat(ungot);
