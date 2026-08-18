@@ -2442,7 +2442,8 @@ export class FileInput implements PagerInput {
   }
 
   private jumpMark(mark: Mark, sline: number): boolean {
-    if (files.index !== this.fileIndex || mark.file !== this.fileIndex ||
+    if (files.index !== this.fileIndex ||
+        mark.file !== files.list[this.fileIndex] ||
         mark.pos === undefined) {
       return false;
     }

@@ -37,7 +37,7 @@ import { search, repeatSearch, execFilter, SearchFinder }
   from './features/searching';
 
 import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition,
-  marksFileSpliced, markPos }
+  markPos }
   from './features/jumping';
 
 import { stepTag, tagRow, currTagFile, jumpSourceTag }
@@ -173,7 +173,6 @@ export function openByName(name: string): boolean {
     at = files.index + 1;
     files.list.splice(at, 0, { path: name, lines: null, size: 0,
       sizeKnown: true, saved: null });
-    marksFileSpliced(at, 1);
 
     if (!loadFile(at)) {
       // a binary-looking file keeps its entry and asks first,
@@ -189,7 +188,6 @@ export function openByName(name: string): boolean {
       }
 
       files.list.splice(at, 1);
-      marksFileSpliced(at, -1);
       return false;
     }
   } else if (!loadFile(at)) {
@@ -295,7 +293,6 @@ export function removeFile(): void {
 
   // og's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
-  marksFileSpliced(removed, -1);
   if (files.index > removed) files.index--;
 }
 
@@ -345,7 +342,6 @@ export function runExamine(): void {
         sizeKnown: true,
         saved: null,
       });
-      marksFileSpliced(at, 1);
     }
 
     if (!loadFile(at)) {
@@ -378,7 +374,6 @@ export function runExamine(): void {
       // (edit.c) - a name that was already in the list and now
       // cannot be opened is dropped from it too
       files.list.splice(at, 1);
-      marksFileSpliced(at, -1);
       if (at <= current) current--;
       continue;
     }

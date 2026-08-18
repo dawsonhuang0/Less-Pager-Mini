@@ -9,7 +9,7 @@ import { config, mode } from "../state/config";
 
 import { search } from "./searching";
 
-import { files, lineBase, byteBase } from "./files";
+import { files, lineBase, byteBase, FileEntry } from "./files";
 
 import { prChar, chopLine, jumpSindex, optHeader, optShowAttn, optWordwrap,
   optPermaMarks, optAutosaveAction, hook } from "../options";
@@ -388,7 +388,16 @@ export function subRowOfIndex(line: string, index: number): number {
  * occupied, like less's scrpos, and the file it belongs to (m_ifile).
  */
 export interface Mark {
-  file: number;
+  /**
+   * The file itself, not its place in the list.
+   *
+   * og's mark holds an IFILE pointer, which stays valid however the
+   * list is reordered, spliced or swapped out. A list index does not:
+   * every change to the list silently re-points every mark, which is
+   * why this used to need a renumbering pass on :d and a snapshot
+   * around --view-lesskey. The entry object is our ifile.
+   */
+  file: FileEntry;
   row: number;
   subRow: number;
   sline: number;
@@ -445,31 +454,6 @@ export function getFileMarks(): FileMark[] {
   return fileMarks;
 }
 
-/**
- * Rebinds mark file indexes around a file-list splice: og marks hold
- * stable IFILEs, ours hold list indexes. A removal drops that file's
- * marks like og's unmark(ifile); an insertion shifts the rest.
- *
- * @param at - The splice position.
- * @param delta - +1 for an insertion, -1 for a removal.
- */
-export function marksFileSpliced(at: number, delta: 1 | -1): void {
-  const adjust = (mark: Mark): Mark | null => {
-    if (delta < 0 && mark.file === at) return null;
-    if (mark.file >= at + (delta < 0 ? 1 : 0)) {
-      return { ...mark, file: mark.file + delta };
-    }
-    return mark;
-  };
-
-  for (const [char, mark] of [...userMarks]) {
-    const next = adjust(mark);
-    if (next) userMarks.set(char, next);
-    else userMarks.delete(char);
-  }
-
-  if (quoteMark) quoteMark = adjust(quoteMark);
-}
 
 /** Removes a restored mark, like clrmark clearing file_marks "so
  *  save_marks doesn't save it to history file". */
@@ -560,7 +544,7 @@ export function adoptFileMarks(index: number, lines: string[]): void {
     }
 
     const mark = {
-      file: index,
+      file: files.list[index],
       row,
       subRow: 0,
       sline: restored.sline,
@@ -629,7 +613,7 @@ export function markAtRow(row: number): string {
   const pos = sourceMarkHooks?.position(row, 0);
 
   for (const [char, mark] of userMarks) {
-    if (mark.file !== files.index) continue;
+    if (mark.file !== files.list[files.index]) continue;
     if (pos !== null && pos !== undefined && mark.pos === pos) return char;
     if (mark.pos === undefined && mark.row === row) return char;
   }
@@ -764,7 +748,7 @@ function setMark(
 
   if (lineNum) {
     mark = {
-      file: files.index,
+      file: files.list[files.index],
       row: Math.min(lineNum - 1, Math.max(content.length - 1, 0)),
       subRow: 0,
       sline: bottom ? config.window - 1 : 1,
@@ -772,7 +756,7 @@ function setMark(
     };
   } else {
     mark = bottom ? lastVisiblePosition(content) : {
-      file: files.index,
+      file: files.list[files.index],
       row: config.row,
       subRow: config.subRow,
       sline: config.blankTop + 1,
@@ -807,7 +791,7 @@ function goMark(content: string[], char: string, sline: number): void {
 
   switch (char) {
     case '^':
-      mark = { file: files.index, row: 0, subRow: 0, sline: 0, pos: 0 };
+      mark = { file: files.list[files.index], row: 0, subRow: 0, sline: 0, pos: 0 };
       break;
 
     case '$': {
@@ -816,7 +800,7 @@ function goMark(content: string[], char: string, sline: number): void {
         ? 0
         : maxSubRow(content[row]);
       mark = {
-        file: files.index,
+        file: files.list[files.index],
         row,
         subRow,
         sline: config.window - 1,
@@ -828,7 +812,7 @@ function goMark(content: string[], char: string, sline: number): void {
     case '.':
     case ':':
       mark = {
-        file: files.index,
+        file: files.list[files.index],
         row: config.row,
         subRow: config.subRow,
         sline: config.blankTop + 1,
@@ -853,7 +837,7 @@ function goMark(content: string[], char: string, sline: number): void {
       // position in from the window, where row 0 is the current top:
       // after any scrolling `''` jumped to where it already was
       mark = quoteMark ?? {
-        file: files.index,
+        file: files.list[files.index],
         row: 0,
         subRow: 0,
         sline: jumpSindex() + 1,
@@ -889,11 +873,11 @@ function goMark(content: string[], char: string, sline: number): void {
       }
   }
 
-  if (mark.pos === undefined && mark.file === files.index) {
+  if (mark.pos === undefined && mark.file === files.list[files.index]) {
     mark.pos = sourceMarkHooks?.position(mark.row, mark.subRow) ?? undefined;
   }
 
-  if (mark.file !== files.index) {
+  if (mark.file !== files.list[files.index]) {
     // og's gomark edits the mark's file (edit_ifile) and jumps there;
     // "Mark not in current file" belongs to markpos (the | command)
     markSwitchHook(mark, sline);
@@ -942,7 +926,7 @@ export function jumpToUserMark(
 ): void {
   const mark = userMarks.get(char);
 
-  if (!mark || mark.file !== files.index) {
+  if (!mark || mark.file !== files.list[files.index]) {
     search.message = 'Mark not set';
     return;
   }
@@ -1066,7 +1050,7 @@ export function markRow(content: string[], char: string): number | null {
     }
   }
 
-  if (mark.file !== files.index) {
+  if (mark.file !== files.list[files.index]) {
     search.message = 'Mark not in current file';
     return null;
   }
@@ -1137,7 +1121,7 @@ export function markPos(
   // markpos reports "Mark not in current file" and returns
   // NULL_POSITION; the caller has already reported through markRow, so
   // an unusable mark just falls back to the row path here.
-  if (!mark || mark.file !== files.index) return undefined;
+  if (!mark || mark.file !== files.list[files.index]) return undefined;
   return mark.pos;
 }
 
@@ -1262,7 +1246,7 @@ export function recordLastPosition(): void {
   touchMarks();
 
   quoteMark = {
-    file: files.index,
+    file: files.list[files.index],
     row: config.row,
     subRow: config.subRow,
     sline: config.blankTop + 1,
@@ -1345,7 +1329,7 @@ export function setMouseMark(content: string[], y: number): void {
   }
 
   userMarks.set('#', {
-    file: files.index,
+    file: files.list[files.index],
     row,
     subRow,
     sline: y + 1,
@@ -1365,7 +1349,7 @@ function lastVisiblePosition(content: string[]): Mark {
   if (chopLine() || config.col) {
     const row = Math.min(config.row + steps, content.length - 1);
     return {
-      file: files.index,
+      file: files.list[files.index],
       row,
       subRow: 0,
       sline: config.blankTop + 1 + (row - config.row),
@@ -1399,7 +1383,7 @@ function lastVisiblePosition(content: string[]): Mark {
   }
 
   return {
-    file: files.index,
+    file: files.list[files.index],
     row,
     subRow,
     sline: config.blankTop + 1 + taken,

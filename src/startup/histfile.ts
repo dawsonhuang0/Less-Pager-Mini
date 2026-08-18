@@ -281,20 +281,26 @@ function markLines(): string[] {
   }
 
   if (optPermaMarks()) {
-    const lineCache = new Map<number, string[] | null>();
+    const lineCache = new Map<string, string[] | null>();
 
     for (const { char, mark } of allMarks()) {
-      const entry = files.list[mark.file];
+      const entry = mark.file;
       if (!entry || entry.path === '-') continue;
 
       let pos = mark.pos;
 
       if (pos === undefined) {
-        if (!lineCache.has(mark.file)) {
-          lineCache.set(mark.file, loadFile(mark.file));
+        // a mark whose file is no longer in the list still has to be
+        // saved: og's ifile outlives the list too. Reading it back
+        // needs an index, so one that is gone simply keeps no
+        // position - which is what an unreadable file gets anyway
+        const index = files.list.indexOf(entry);
+
+        if (!lineCache.has(entry.path)) {
+          lineCache.set(entry.path, index < 0 ? null : loadFile(index));
         }
 
-        const lines = lineCache.get(mark.file);
+        const lines = lineCache.get(entry.path);
         if (!lines) continue;
         pos = byteOffset(lines, mark.row);
       }

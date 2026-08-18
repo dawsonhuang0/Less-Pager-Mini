@@ -201,7 +201,7 @@ interface Stash {
   index: number;
   files: ViewFile[];
   dir: string | null;
-  /** Marks name their file by INDEX, so they belong to the list. */
+  /** So the ' mark cannot name a temp file that is about to go. */
   marks: MarkSnapshot;
   /** The `#` file, which a switch can overwrite. */
   previous: string | null;
@@ -277,13 +277,15 @@ export function openLesskeyView(): boolean {
 /**
  * Undoes what the swap wrote that would OUTLIVE it.
  *
- * A mark names its file by index (og holds an ifile pointer, which we
- * cannot), so one recorded in there points into a list that no longer
- * exists - after the restore that index is some other file, and ' or
- * 'a jumps into it. edit_ifile records the ' mark on every switch, so
- * this happens without anyone setting one. The `#` file and the
- * examine history would likewise keep temp paths that were deleted
- * seconds earlier.
+ * A mark holds its file, not a place in the list, so nothing in here
+ * can re-point one any more - what it can do is leave the ' mark
+ * naming a file that gets DELETED on the way out, since a rendered
+ * binary and a content variable are both temp files. edit_ifile
+ * records that mark on every switch, so it happens whether or not
+ * anyone set one, and `'` afterwards would simply do nothing.
+ *
+ * The `#` file and the examine history hold the same temp paths for
+ * the same reason.
  */
 function restoreLesskeyViewState(held: Stash): void {
   restoreMarkSnapshot(held.marks);

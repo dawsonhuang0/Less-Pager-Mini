@@ -177,16 +177,30 @@ export function initContent(lines: string[]): void {
   // file it was filled from, so it cannot outlive it (pos_clear)
   config.screen = [];
 
-  files.list = [{
+  // the SAME entry when there already is one: og's stdin ifile is
+  // opened once and outlives every read, and a mark holds the entry
+  // itself - handing out a new object for the same pseudo-file would
+  // quietly orphan every mark set before it
+  const existing = files.list.length === 1 && files.list[0].path === '-'
+    ? files.list[0]
+    : null;
+
+  const entry: FileEntry = existing ?? {
     path: '-',
     lines,
-    size: byteOffset(lines, lines.length) - 1,
-    // a pipe's length is unknown until a read returns EOI —
-    // --file-size runs that read up front (og's edit.c scan_eof),
-    // which reveals the size through the pipe machinery itself
+    size: 0,
     sizeKnown: false,
     saved: null,
-  }];
+  };
+
+  entry.lines = lines;
+  entry.size = byteOffset(lines, lines.length) - 1;
+  // a pipe's length is unknown until a read returns EOI —
+  // --file-size runs that read up front (og's edit.c scan_eof),
+  // which reveals the size through the pipe machinery itself
+  entry.sizeKnown = false;
+
+  files.list = [entry];
   files.index = 0;
   files.newFile = false;
   examine.pending = false;

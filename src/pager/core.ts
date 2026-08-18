@@ -2703,7 +2703,11 @@ function init() {
   // open a restored mark's file by name (mark_get_ifile + edit_ifile)
   onMarkSwitch(
     (mark, sline) => {
-      if (!switchToFile(mark.file)) return;
+      // the mark holds the file itself; the switch wants its place in
+      // the list, and a mark into a file no longer listed goes nowhere
+      const index = files.list.indexOf(mark.file);
+
+      if (index < 0 || !switchToFile(index)) return;
       jumpToMark(session.content, mark, sline, true);
     },
     (path, char, sline) => {
