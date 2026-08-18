@@ -2379,10 +2379,13 @@ function dispatchKey(sequence: string): void {
       hook.recompilePattern();
       search.highlight = true;
 
-      if (posixRetry.fromSearch) {
-        act('REPEAT_SEARCH');
-        return;
-      }
+      // and the search runs again, whether a search or a frame's
+      // highlighting raised the question. "Try again" is a promise
+      // about the PATTERN: re-highlighting alone left the user with
+      // no answer at all - not a match, not "Pattern not found",
+      // nothing to show for the key they pressed
+      act('REPEAT_SEARCH');
+      return;
     }
 
     render(session.content, session.buffer);

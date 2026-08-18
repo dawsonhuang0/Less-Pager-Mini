@@ -1248,11 +1248,7 @@ export const searchCaseFlags = (pattern: string): string =>
  * they asked for cannot finish it. The engine that can is already
  * here, so offer it rather than reporting a failure.
  */
-export const posixRetry = {
-  pending: false,
-  /** True when a search raised it, false when a repaint did. */
-  fromSearch: false,
-};
+export const posixRetry = { pending: false };
 
 /**
  * True only while a search the USER asked for is running.
@@ -1420,7 +1416,6 @@ function jsRegex(source: string, flags: string): SearchRegex {
     }
 
     posixRetry.pending = true;
-    posixRetry.fromSearch = !inRepaint;
 
     search.message = '';
     search.messageQueue.length = 0;
