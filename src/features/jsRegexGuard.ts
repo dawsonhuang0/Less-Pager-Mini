@@ -158,12 +158,14 @@ export function clearJsRegexAbort(): void {
  *
  * @param interrupted - The poll; true means the user wants out.
  * @param notice - Run once, when the wait has gone on long enough.
+ * @param budgetMs - The point at which to give up unasked.
  * @returns The reply, or null when it was killed.
  */
 function waitForReply(
   state: Shared,
   interrupted: () => boolean,
-  notice: () => void
+  notice: () => void,
+  budgetMs: number
 ): unknown | null {
   const started = Date.now();
   let noticed = false;
@@ -180,7 +182,7 @@ function waitForReply(
       return JSON.parse(text);
     }
 
-    if (interrupted()) {
+    if (interrupted() || Date.now() - started >= budgetMs) {
       killWorker();
       aborted = true;
       return null;
@@ -202,12 +204,15 @@ function waitForReply(
  * @param request - Pattern, flags, subject, and which call to make.
  * @param interrupted - Polled between slices; true aborts.
  * @param notice - Called once when this has run long enough to say so.
+ * @param budgetMs - Give up after this long even with no interrupt.
+ *   A search waits for the user; a repaint has nobody to wait for.
  * @returns The worker's answer, or null when aborted or unusable.
  */
 export function guardedMatch(
   request: { source: string, flags: string, text: string, test: boolean },
   interrupted: () => boolean,
-  notice: () => void = () => {}
+  notice: () => void = () => {},
+  budgetMs = Infinity
 ): { test?: boolean, match?: { index: number, groups: string[] } | null,
   failed?: string } | null {
   const bytes = Buffer.from(JSON.stringify(request));
@@ -218,6 +223,6 @@ export function guardedMatch(
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
 
-  return waitForReply(state, interrupted, notice) as
+  return waitForReply(state, interrupted, notice, budgetMs) as
     ReturnType<typeof guardedMatch>;
 }

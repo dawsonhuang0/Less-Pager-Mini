@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import fs from 'fs';
+
 import { posixRetry, search } from '../../src/features/searching';
 
 import { getPrompt } from '../../src/helpers';
+
+import { useJsRegexp } from '../../src/options/use-js-regexp';
 
 import { endJsRegexGuard, guardedMatch, jsRegexAborted, clearJsRegexAbort }
   from '../../src/features/jsRegexGuard';
@@ -51,4 +55,30 @@ describe('the offer to finish a search with POSIX', () => {
 
     endJsRegexGuard();
   }, 10000);
+});
+
+describe('toggling the engine', () => {
+  it('says so before it does the work the toggle causes', () => {
+    // the option machinery assigns search.message AFTER set()
+    // returns, so an option whose set() re-highlights a screenful
+    // reports itself only once that is done - which reads as a toggle
+    // that did nothing for a while
+    // straight to the terminal, like the line-number walk's message:
+    // no frame is being built, and the point is that it arrives first
+    const written: string[] = [];
+    const writeSync = vi.spyOn(fs, 'writeSync').mockImplementation(
+      ((_fd: number, data: string) => {
+        written.push(String(data));
+        return String(data).length;
+      }) as unknown as typeof fs.writeSync);
+
+    try {
+      useJsRegexp.set(1, []);
+    } finally {
+      writeSync.mockRestore();
+      useJsRegexp.set(0, []);
+    }
+
+    expect(written.join('')).toContain("Search with JavaScript's RegExp");
+  });
 });

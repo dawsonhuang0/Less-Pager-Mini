@@ -30,6 +30,13 @@ export const useJsRegexp: OptionSpec = {
     set: value => {
       opt.useJsRegexp = value as number;
 
+      // said BEFORE the work below, not after it. The option
+      // machinery sets the message once set() returns, so a toggle
+      // that re-highlights a screenful first looks like a toggle that
+      // did nothing - and the whole question the user is asking is
+      // "did it land"
+      hook.flashMessage(useJsRegexp.messages[value as number]);
+
       // the compiled pattern belongs to the old engine; drop it so the
       // next search — and the highlighting of the current screen —
       // goes through the new one

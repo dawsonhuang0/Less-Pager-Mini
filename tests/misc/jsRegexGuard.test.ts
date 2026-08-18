@@ -108,4 +108,24 @@ describe('a host regex that can be killed', () => {
     // identical to the line-number walk's message
     expect(written.join('')).toContain('NOTICE');
   }, 15000);
+
+  it('gives up on its own when nobody is there to interrupt', () => {
+    // a repaint has no user waiting on it: highlighting runs on every
+    // frame, and the only person who could interrupt is the one who
+    // just pressed something else. So it gets a budget
+    clearJsRegexAbort();
+
+    const start = Date.now();
+
+    const answer = guardedMatch({
+      source: '(a+)+b', flags: '', text: 'a'.repeat(40), test: true,
+    }, () => false, () => {}, 100);
+
+    const spent = Date.now() - start;
+
+    expect(answer).toBeNull();
+    expect(jsRegexAborted()).toBe(true);
+    expect(spent).toBeGreaterThanOrEqual(100);
+    expect(spent).toBeLessThan(1000);
+  }, 10000);
 });

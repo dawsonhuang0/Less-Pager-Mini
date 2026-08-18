@@ -218,6 +218,23 @@ export function chgCaseless(caseless: 0 | 1 | 2): void {
  * `\d` means something else — so a failure drops the search rather
  * than leaving the old engine's object behind.
  */
+/**
+ * Writes a message to the bottom row straight away.
+ *
+ * The option machinery sets search.message AFTER calling an option's
+ * set(), so an option whose set() does real work reports itself only
+ * once that work is done - "Search with JavaScript's RegExp" arriving
+ * after the re-highlight it caused reads as if the toggle did
+ * nothing for a while. This is the line-number walk's trick: straight
+ * to the terminal, and the next frame told the row is spoken for.
+ */
+hook.flashMessage = (text: string): void => {
+  fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON + text + INVERSE_OFF);
+
+  search.cmdExecOpened = false;
+  search.bottomClobbered = true;
+};
+
 hook.recompilePattern = (): void => {
   if (!search.regex) return;
   if (!compile(compiledPattern, compiledLiteral, search.invert)) {
@@ -1242,6 +1259,19 @@ export function duringUserSearch<T>(run: () => T): T {
 /** Set while a retry runs, so this one search skips the host engine. */
 let forcePosix = false;
 
+/**
+ * How long a match gets when nobody asked for it.
+ *
+ * A search waits as long as the user lets it: they typed it, they can
+ * interrupt it. A repaint waits for nobody - highlighting runs on
+ * every frame, for a pattern compiled long ago, and the only person
+ * who could interrupt it is the one who just pressed something else.
+ * So it gets a budget, and a pattern that cannot make it inside that
+ * budget stops being highlighted rather than being tried again every
+ * frame forever.
+ */
+const HILITE_BUDGET_MS = 100;
+
 /** Takes the next search away from --use-js-regexp, for the retry. */
 export function retryWithPosix(): void {
   forcePosix = true;
@@ -1298,6 +1328,23 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // ends it. Straight to the terminal, since no frame is being built;
   // and bottomClobbered so the NEXT frame repaints the row instead of
   // printing its prompt onto the end of this
+  /**
+   * What a killed match costs, which depends on who wanted it.
+   *
+   * A search offers the engine that can finish it. A repaint has
+   * nobody to ask, and a pattern this engine cannot get through will
+   * not get through it on the next frame either - so highlighting
+   * stops, rather than every scroll paying the budget again.
+   */
+  const giveUp = (): void => {
+    if (userSearch) {
+      posixRetry.pending = true;
+      return;
+    }
+
+    search.highlight = false;
+  };
+
   const notice = (): void => {
     fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
       'Searching... (interrupt to abort)' + INVERSE_OFF);
@@ -1309,7 +1356,10 @@ function jsRegex(source: string, flags: string): SearchRegex {
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
   | null => guardedMatch(
-    { source: re.source, flags: re.flags, text, test }, abortPoll, notice);
+    { source: re.source, flags: re.flags, text, test },
+    userSearch ? abortPoll : () => false,
+    userSearch ? notice : () => {},
+    userSearch ? Infinity : HILITE_BUDGET_MS);
 
   return {
     source: re.source,
@@ -1322,7 +1372,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       // already set the abort in motion
       const answer = runGuarded(text, true);
 
-      if (answer === null && userSearch) posixRetry.pending = true;
+      if (answer === null) giveUp();
 
       return answer?.test ?? false;
     },
@@ -1330,7 +1380,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       const answer = runGuarded(text, false);
       const found = answer?.match;
 
-      if (answer === null && userSearch) posixRetry.pending = true;
+      if (answer === null) giveUp();
 
       if (!found) return null;
 
