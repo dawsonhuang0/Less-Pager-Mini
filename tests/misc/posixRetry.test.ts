@@ -48,8 +48,7 @@ describe('the offer to finish a search with POSIX', () => {
     expect(answer).toBeNull();
     expect(jsRegexAborted()).toBe(true);
 
-    // searching.ts raises the question on exactly this answer, and
-    // only while a search the user ASKED for is running
+    // searching.ts raises the question on exactly this answer
     posixRetry.pending = answer === null;
     expect(getPrompt([])).toContain('Try again with POSIX RegExp?');
 
@@ -80,5 +79,18 @@ describe('toggling the engine', () => {
     }
 
     expect(written.join('')).toContain("Search with JavaScript's RegExp");
+  });
+
+  it('is not hidden behind the message the toggle left', () => {
+    // a message outranks the prompt row, and a toggle sets one - so
+    // the question would be raised into a row already spoken for, and
+    // the user would answer something they never saw
+    search.message = "Search with JavaScript's RegExp";
+    posixRetry.pending = true;
+
+    // what searching.ts does when it raises the question
+    search.message = '';
+
+    expect(getPrompt([])).toContain('Try again with POSIX RegExp?');
   });
 });

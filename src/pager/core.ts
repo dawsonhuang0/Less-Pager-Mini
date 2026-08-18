@@ -2353,8 +2353,16 @@ function dispatchKey(sequence: string): void {
 
     if (session.key === 'y' || session.key === 'Y') {
       retryWithPosix();
-      act('REPEAT_SEARCH');
-      return;
+
+      // a search repeats; a frame's highlighting only needs the
+      // pattern rebuilt under the other engine, and turning back on
+      if (posixRetry.fromSearch) {
+        act('REPEAT_SEARCH');
+        return;
+      }
+
+      hook.recompilePattern();
+      search.highlight = true;
     }
 
     render(session.content, session.buffer);

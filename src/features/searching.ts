@@ -229,7 +229,11 @@ export function chgCaseless(caseless: 0 | 1 | 2): void {
  * to the terminal, and the next frame told the row is spoken for.
  */
 hook.flashMessage = (text: string): void => {
-  fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON + text + INVERSE_OFF);
+  // exactly as a held message renders, "(press RETURN)" and all: this
+  // row is not replaced when the frame comes round, it is the SAME
+  // message arriving early, and it stays until the user dismisses it
+  fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON + text +
+    '  (press RETURN)' + INVERSE_OFF);
 
   search.cmdExecOpened = false;
   search.bottomClobbered = true;
@@ -1228,7 +1232,11 @@ export const searchCaseFlags = (pattern: string): string =>
  * they asked for cannot finish it. The engine that can is already
  * here, so offer it rather than reporting a failure.
  */
-export const posixRetry = { pending: false };
+export const posixRetry = {
+  pending: false,
+  /** True when a search raised it, false when a repaint did. */
+  fromSearch: false,
+};
 
 /**
  * True only while a search the USER asked for is running.
@@ -1317,20 +1325,27 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // and bottomClobbered so the NEXT frame repaints the row instead of
   // printing its prompt onto the end of this
   /**
-   * What a killed match costs, which depends on who wanted it.
+   * A killed match offers the engine that can finish it, whether it
+   * was a search or the highlighting of a frame. Both are the same
+   * question - this engine cannot get through your pattern, shall we
+   * use the other one - and the answer differs only in what gets
+   * redone afterwards.
    *
-   * A search offers the engine that can finish it. A repaint has
-   * nothing to offer - the user interrupted a frame, not a command -
-   * so highlighting stops instead, rather than asking for the same
-   * interrupt again on the next frame and the one after.
+   * The message the bottom row is holding goes with it. A toggle sets
+   * one ("Search with JavaScript's RegExp") and a message outranks the
+   * prompt, so leaving it there would answer a question the user
+   * cannot see.
    */
   const giveUp = (): void => {
-    if (userSearch) {
-      posixRetry.pending = true;
-      return;
-    }
+    posixRetry.pending = true;
+    posixRetry.fromSearch = userSearch;
 
-    search.highlight = false;
+    search.message = '';
+    search.messageQueue.length = 0;
+
+    // no more matching until it is answered: the frame that draws the
+    // question must not run the pattern that raised it
+    if (!userSearch) search.highlight = false;
   };
 
   const notice = (): void => {
