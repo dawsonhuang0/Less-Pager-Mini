@@ -198,12 +198,6 @@ export function takeUngot(): Buffer | null {
 }
 
 /**
- * Discards the queued keys, like og's iread on READ_INTR running
- * `getcc_clear()` (os.c): keys typed before the interrupt — the
- * aborting ^C included — never run as commands. Keys still unread
- * in the kernel's tty buffer survive, exactly like og's.
- */
-/**
  * og's `sigs` (signal.c:29) and ABORT_SIGS().
  *
  *     static void u_interrupt(int type) { ... sigs |= S_INTERRUPT; ... }
@@ -235,8 +229,15 @@ export function clearAbort(): void {
   sigs = false;
 }
 
+/**
+ * Discards the queued keys, like og's iread on READ_INTR running
+ * `getcc_clear()` (os.c): keys typed before the interrupt — the
+ * aborting ^C included — never run as commands. Keys still unread
+ * in the kernel's tty buffer survive, exactly like og's.
+ */
 export function consumeInterrupt(): void {
   ungot = [];
+  ungotLive = false;
 }
 
 /** True while ungot input pends, og's prompt() early-return test. */

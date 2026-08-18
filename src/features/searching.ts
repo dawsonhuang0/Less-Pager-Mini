@@ -11,8 +11,8 @@ import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
   endGuardedRun, jsRegexAbortedByInterrupt, watcherActive,
   watcherSawInterrupt, takeGuardedKeys } from './jsRegexGuard';
 
-import { keyboard, keyboardPollFd, pushUngot, pushUngotLive, raiseAbort }
-  from '../tty/keyboard';
+import { consumeInterrupt, keyboard, keyboardPollFd, pushUngot,
+  pushUngotLive, raiseAbort } from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
 
 import { config, mode } from "../state/config";
@@ -1473,9 +1473,21 @@ function jsRegex(source: string, flags: string): SearchRegex {
       search.message !== '');
 
     // whatever the watcher took off the terminal belongs to the
-    // command loop, interrupt or not: og's check_poll ungets the keys
-    // it looked at (os.c)
-    if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
+    // command loop - EXCEPT the interrupt that ended the wait. og's
+    // check_poll ungets an ordinary key with ungetcc_back, and on the
+    // intr char calls getcc_clear() instead: the queue is emptied and
+    // the char itself is never handed on (os.c:161).
+    //
+    // Handing it back put a ^C in front of the question that same ^C
+    // had just raised, so "Pattern too complex. Try again with POSIX
+    // RegExp?" was answered and gone before it could be read - and
+    // the queue the next ^C arrived into was not the queue the first
+    // one did, which is why the second never felt like the first
+    if (keys && !jsRegexAbortedByInterrupt()) {
+      pushUngotLive(Buffer.from(keys, 'binary'));
+    } else if (jsRegexAbortedByInterrupt()) {
+      consumeInterrupt();
+    }
 
     // the message it may have written lands after the clear the
     // command already emitted, so the next frame must repaint the row

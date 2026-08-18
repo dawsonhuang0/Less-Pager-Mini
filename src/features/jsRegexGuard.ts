@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Worker } from 'worker_threads';
 
 /**
@@ -157,8 +158,7 @@ export function trace(what: string): void {
   const file = process.env.LMN_GUARD_TRACE;
 
   if (file) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require('fs').appendFileSync(file, Date.now() + ' ' + what + '\n');
+    fs.appendFileSync(file, Date.now() + ' ' + what + '\n');
   }
 }
 

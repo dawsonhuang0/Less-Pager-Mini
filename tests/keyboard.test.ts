@@ -7,7 +7,9 @@ import {
   keyboardFd,
   openTtyKeyboard,
   pushUngot,
+  pushUngotLive,
   takeUngot,
+  ungotIsLive,
   consumeInterrupt,
   hasUngot,
   gateReleaseKind,
@@ -90,6 +92,19 @@ describe('ungot keyboard queue', () => {
     expect(hasUngot()).toBe(false);
     expect(takeUngot()).toBe(null);
   });
+
+  // og's check_poll ungets an ordinary key and, on the intr char,
+  // calls getcc_clear() instead (os.c:161) - so the ^C itself is
+  // never handed on. Handing it back put an interrupt in front of the
+  // question that same interrupt had raised, and answered it unseen
+  it('leaves nothing live behind, so the next screen is not answered',
+    () => {
+      pushUngotLive(Buffer.from('\x03'));
+      consumeInterrupt();
+
+      expect(ungotIsLive()).toBe(false);
+      expect(takeUngot()).toBe(null);
+    });
 });
 
 describe('noninteractive return gate', () => {

@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import fs from 'fs';
-
 import { posixRetry, search } from '../../src/features/searching';
 
 import { getPrompt } from '../../src/helpers';
-
-import { useJsRegexp } from '../../src/options/use-js-regexp';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
