@@ -4,26 +4,31 @@ Found while writing the `--lesskey-help` syntax page (2026-08-17). Same
 statuses as `FLAGS.md`: `?` unresolved · `OK` verified match · `FIX`
 diverged and fixed · `GAP` diverged, open.
 
-Both open items are in the same area: how a **digit that turned out to
-be a prefix** is resolved. Neither is reachable without a lesskey file.
+`K01` is a divergence we keep on purpose; everything else found here
+is fixed.
 
 ## Open
 
 | # | status | case | og | ours |
 |---|---|---|---|---|
-| K01 | **GAP** | `x digit` bound, then `x x x j` | top stays 1 — the `j` is swallowed | top 2 — the `j` moves one line |
-| K02 | **GAP** | `5e forw-line` bound, then `5 j` | top 2 — the `j` runs after the incomplete prefix | top 1 — the `j` is dropped |
+| K01 | **KEPT** | `x digit` bound, then pressing `x` | spins | the key joins the count |
 
-K01: `digit` on a non-digit key does not produce a count in either pager
-— `command.c:685` re-tests the character (`c >= '0' && c <= '9'`). The
-divergence is only in what happens to the key that ends the number.
+og cannot leave that state. `fcmd_decode` returns `A_DIGIT`, the loop
+runs `start_mca(A_DIGIT, ":")` and `goto again` with the SAME
+character (`command.c:1649`); `mca_char` sees a non-digit, `editchar`
+answers `A_INVALID`, and its A_DIGIT arm ends the number, clears the
+mca and returns `NO_MCA` (`command.c:685`) - which drops the character
+straight back into `fcmd_decode`. Nothing in that cycle reads another
+key, so it repeats forever.
 
-K02: binding a sequence that STARTS with a digit turns that digit into
-`A_PREFIX`, so it stops being a count. Both pagers agree on that much;
-they disagree on the key that follows an unmatched prefix.
+Measured before it was traced, it read as "the following key is
+swallowed": the harness simply hit its deadline with the screen
+unchanged. A hang is not a behaviour to port. Ours treats the key as
+og's own A_DIGIT arm would treat a digit and moves on.
 
-The two look like one bug from opposite sides: og replays the trailing
-key, we drop it (K02), except when we replay one og drops (K01).
+`digit` on a non-digit key produces no count either way -
+`command.c:685` re-tests the character - so nothing is lost by not
+spinning.
 
 ## Fixed
 
@@ -33,6 +38,14 @@ key, we drop it (K02), except when we replay one og drops (K01).
 | K04 | **FIX** | `goto-pos`, and code 51 | rang — the table said unsupported | jumps to the byte position, like og's `A_GOPOS` (`command.c:1918`) |
 | K05 | **FIX** | codes 53 / 54 in a compiled file | rang, though the NAMES `next-tag`/`prev-tag` bound fine | both channels reach the tag steps |
 | K06 | **FIX** | `--lesskey-help` said `debug` did nothing | og writes no `case A_DEBUG`, so it falls to `commands()`'s default and RINGS (`command.c:2517`) | the page says it rings |
+| K02 | **FIX** | `5e forw-line` bound, then `5 j` | the `j` runs: cmd_decode matches the TAIL of what accumulated, so bytes that lead nowhere age out (`decode.c:943`, `cmd_match:845`) | the `j` ran, where it used to ring and be dropped |
+
+K02 is why a digit is not always a count: binding a sequence that
+STARTS with one turns that digit into a prefix. Both pagers agree on
+that; they disagreed on the key that ended an incomplete one. The key
+that ended it now runs on its own - the whole sequence cannot be
+replayed, since that would collect the same prefix again and arrive
+back here forever.
 
 K04 was measured through the pager — but NOT with `P goto-pos`, which
 proves nothing: `P` is already `A_GOPOS` in og's built-in table

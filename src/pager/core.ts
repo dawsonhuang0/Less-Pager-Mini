@@ -2624,12 +2624,23 @@ function dispatchKey(sequence: string): void {
     }
 
     if (session.userSeq) {
-      // the collected sequence completes no binding: bad command
+      // the collected sequence completes no binding. og does NOT
+      // treat that as a bad command: cmd_decode matches against the
+      // TAIL of what has accumulated (decode.c:943, cmd_match:845),
+      // so the bytes that led nowhere age out silently and the last
+      // one runs as a command of its own. With "5e forw-line" bound,
+      // typing 5 then j moves a line in og - the 5 was a prefix, not
+      // a count, and the j is still a j. Belling here dropped it
+      const last = session.key;
+
       session.userSeq = '';
       config.keyPrefix = '';
       session.escCount = 0;
-      ringBell();
-      render(session.content, session.buffer);
+
+      // the key that ENDED the sequence, not the sequence: feeding
+      // the whole thing back would collect the same prefix again and
+      // arrive here forever
+      dispatchKey(last);
       return;
     }
 
