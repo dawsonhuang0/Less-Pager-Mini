@@ -747,25 +747,14 @@ export function runEditor(): void {
 
     if (!failed.length) return false;
 
-    // og's main errmsgs gate, moved onto the pager's OWN screen:
-    // every message on a line of its own, then one "Press RETURN to
-    // continue" before anything is drawn. The editor left us on the
-    // primary screen - the shell prompt and the command that started
-    // this - which is no place to report on a file the pager owns
-    enterScreen();
-
-    // 1049h restores a saved cursor rather than homing, so say where
-    // this starts: the top of a cleared screen, like the messages a
-    // broken lesskey prints before the pager takes the terminal
-    putstr(CONSOLE_CLEAR + CURSOR_TO(1, 1));
-
+    // still on the editor's screen: the messages print under the text
+    // they are about, and the pager does not take the terminal back
+    // until the RETURN. og's main errmsgs gate has the same shape -
+    // every message on its own line, then one prompt, then the screen
     for (const message of failed) putstr(message + '\n');
 
     putstr('Press RETURN to continue ');
-
-    // 'pager' rather than 'shell': the screen is already ours, so the
-    // key only has to forget the frame and repaint
-    session.shellPause = 'pager';
+    session.shellPause = 'shell';
     return true;
   });
 

@@ -14,7 +14,8 @@ import { resetLesskey, loadLesskey } from '../../src/features/lesskey';
 
 import { openLesskeyView, exitLesskeyView, inLesskeyView,
   refreshLesskeyView, lesskeyViewFiles, applyLesskeyEdits,
-  cleanLesskeyView } from '../../src/features/lesskeyView';
+  checkLesskeyEdits, cleanLesskeyView }
+  from '../../src/features/lesskeyView';
 
 import { search } from '../../src/features/searching';
 
@@ -179,8 +180,10 @@ describe('viewing lesskey files over a live session', () => {
 
       fs.writeFileSync(rendered!.path, '#command\nz help\nq blah\nw quit\n');
 
-      expect(applyLesskeyEdits(view.files, 707))
+      expect(checkLesskeyEdits(view.files, 707))
         .toEqual([`${binary}: line 3: unknown action: "blah"`]);
+
+      expect(applyLesskeyEdits(view.files, 707)).toEqual([]);
 
       // the good lines took, on both sides of the bad one
       expect(userBinding('z')?.action).toBe('HELP');
@@ -228,7 +231,10 @@ describe('viewing lesskey files over a live session', () => {
       fs.writeFileSync(rendered!.path,
         '#command\na blah\nb quit\nc nope\nd also-wrong\n');
 
-      const messages = applyLesskeyEdits(view.files, 707);
+      // the CHECK is what reports; the apply that follows is silent
+      const messages = checkLesskeyEdits(view.files, 707);
+
+      applyLesskeyEdits(view.files, 707);
 
       expect(messages).toHaveLength(3);
       expect(messages[0]).toContain('line 2: unknown action: "blah"');

@@ -131,6 +131,49 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
 }
 
 /**
+ * Reads back what `v` wrote and says what is wrong with it, touching
+ * nothing.
+ *
+ * Checking and loading are separate on purpose. The check runs while
+ * the editor's screen is still up, so its messages print where the
+ * text they are about is - the way a broken lesskey reports before
+ * the pager takes the terminal at startup. The load runs after, and
+ * says nothing: everything worth saying has been said.
+ *
+ * The compiler is the checker for both kinds of form. It parses the
+ * same grammar the reader does and words its errors identically
+ * (tests/lksweep.py compares them against og's own lesskey), and it
+ * has no side effects - so a source file can be checked without
+ * being loaded, which the reader could not do.
+ *
+ * @returns One message per bad line, in og's wording.
+ */
+export function checkLesskeyEdits(
+  view: ViewFile[],
+  version: number
+): string[] {
+  const problems: string[] = [];
+
+  for (const file of view) {
+    let text: string;
+
+    try {
+      text = fs.readFileSync(file.path, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const name = file.form?.origin ?? file.path;
+
+    for (const error of compileLesskey(text, version).errors) {
+      problems.push(`${name}: ${error}`);
+    }
+  }
+
+  return problems;
+}
+
+/**
  * Writes back whatever the session may have edited through `v`, and
  * reloads, so the new bindings are live.
  *
@@ -183,12 +226,13 @@ export function applyLesskeyEdits(
     // job, so it takes the reader's rule: one mistyped action does
     // not cost the user the rest of what they wrote. Only a table too
     // large to encode leaves nothing to write
-    const { data, errors } = compileLesskey(text, version);
-
-    // reported HERE, not by the reload: compiling is where this text
-    // gets parsed, and by the time the reader sees the result a bad
-    // action is already A_INVALID with its name gone
-    for (const error of errors) report(`${file.form.origin}: ${error}`);
+    // errors and all: og's lesskey PROGRAM refuses to write output
+    // when a source has any ("N errors; no output produced",
+    // lesskey.c:316), but og's pager READING a lesskey keeps every
+    // binding that parsed. This is the reader's job, so one mistyped
+    // action does not cost the user the rest of what they wrote - and
+    // checkLesskeyEdits has already reported it
+    const { data } = compileLesskey(text, version);
 
     if (data === null) {
       report(`${file.form.origin}: too large to write`);
@@ -202,30 +246,9 @@ export function applyLesskeyEdits(
     }
   }
 
-  // whatever was already on the prompt row belongs to something else
-  // - a lesskey that was already broken when the session started, and
-  // whose messages were shown then. Left in place they would be
-  // collected below and shown a SECOND time, dated by an edit that
-  // had nothing to do with them
-  search.message = '';
-  search.messageQueue.length = 0;
-
-  // NOT quiet: a SOURCE form's bad lines are found by the reader, in
-  // og's own wording, and it reports them the way it always does -
-  // into search.message with the rest queued behind it
-  loadLesskey(false);
-
-  // drained into the same list, so every message from this edit is
-  // gated together instead of one showing on the prompt row and the
-  // others queueing invisibly behind it
-  if (search.message) {
-    messages.push(search.message);
-    search.message = '';
-  }
-
-  while (search.messageQueue.length) {
-    messages.push(search.messageQueue.shift() as string);
-  }
+  // quiet: checkLesskeyEdits has already said everything there is to
+  // say about this text, where it could be read
+  loadLesskey(true);
 
   return messages;
 }
@@ -336,7 +359,16 @@ export const inLesskeyView = (): boolean => stash !== null;
  * @returns A message when a write-back failed, else null.
  */
 export function refreshLesskeyView(version: number): string[] {
-  return stash === null ? [] : applyLesskeyEdits(stash.files, version);
+  if (stash === null) return [];
+
+  // checked BEFORE anything is written or loaded, so the messages can
+  // be shown while the editor's screen is still the one on the
+  // terminal - and the load that follows has nothing left to report
+  const problems = checkLesskeyEdits(stash.files, version);
+
+  applyLesskeyEdits(stash.files, version);
+
+  return problems;
 }
 
 /**
