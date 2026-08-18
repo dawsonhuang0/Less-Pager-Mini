@@ -2,6 +2,8 @@
 node_modules/
 dist/
 coverage/
+# python leaves these beside the sweeps the moment one imports another
+__pycache__/
 
 # files
 *.log
