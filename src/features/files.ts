@@ -150,6 +150,22 @@ export function setPreviousPath(filePath: string | null): void {
   previousPath = filePath;
 }
 
+/** The `#` file, for a caller that has to put it back. */
+export function getPreviousPath(): string | null {
+  return previousPath;
+}
+
+/** How many examine entries exist, so a swap can trim its own back. */
+export function examineHistoryLength(): number {
+  return examineHistory.length;
+}
+
+/** Drops examine entries added after a mark, like a file list that
+ *  was only ever on screen to be looked at. */
+export function trimExamineHistory(length: number): void {
+  examineHistory.length = Math.min(examineHistory.length, length);
+}
+
 /**
  * Starts a session over in-memory content, registered as the pseudo-file
  * `-` so `:e`/`:p` can navigate back to it, like less reading stdin.

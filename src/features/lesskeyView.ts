@@ -5,7 +5,11 @@ import path from 'path';
 import { lesskeyForms, lesskeyFile, LesskeyForm, loadLesskey }
   from './lesskey';
 
-import { files, makeFileList, FileEntry, saveFilePosition } from './files';
+import { files, makeFileList, FileEntry, saveFilePosition,
+  getPreviousPath, setPreviousPath, examineHistoryLength,
+  trimExamineHistory } from './files';
+
+import { markSnapshot, restoreMarkSnapshot, MarkSnapshot } from './jumping';
 
 import { switchToFile } from '../commands';
 
@@ -197,6 +201,12 @@ interface Stash {
   index: number;
   files: ViewFile[];
   dir: string | null;
+  /** Marks name their file by INDEX, so they belong to the list. */
+  marks: MarkSnapshot;
+  /** The `#` file, which a switch can overwrite. */
+  previous: string | null;
+  /** How long the examine history was, so temp paths can be trimmed. */
+  history: number;
 }
 
 let stash: Stash | null = null;
@@ -244,6 +254,9 @@ export function openLesskeyView(): boolean {
     index: files.index,
     files: view.files,
     dir: view.dir,
+    marks: markSnapshot(),
+    previous: getPreviousPath(),
+    history: examineHistoryLength(),
   };
 
   files.list = makeFileList(view.files.map(file => file.path));
@@ -252,12 +265,30 @@ export function openLesskeyView(): boolean {
   if (!switchToFile(0)) {
     files.list = held.list;
     files.index = held.index;
+    restoreLesskeyViewState(held);
     cleanLesskeyView(view.dir);
     return false;
   }
 
   stash = held;
   return true;
+}
+
+/**
+ * Undoes what the swap wrote that would OUTLIVE it.
+ *
+ * A mark names its file by index (og holds an ifile pointer, which we
+ * cannot), so one recorded in there points into a list that no longer
+ * exists - after the restore that index is some other file, and ' or
+ * 'a jumps into it. edit_ifile records the ' mark on every switch, so
+ * this happens without anyone setting one. The `#` file and the
+ * examine history would likewise keep temp paths that were deleted
+ * seconds earlier.
+ */
+function restoreLesskeyViewState(held: Stash): void {
+  restoreMarkSnapshot(held.marks);
+  setPreviousPath(held.previous);
+  trimExamineHistory(held.history);
 }
 
 /**
@@ -288,6 +319,8 @@ export function exitLesskeyView(version: number): boolean {
   // -1 first, so this is a real switch rather than edit_ifile's
   // "already open" early return
   switchToFile(held.index);
+
+  restoreLesskeyViewState(held);
 
   if (messages.length) search.message = messages[0];
 

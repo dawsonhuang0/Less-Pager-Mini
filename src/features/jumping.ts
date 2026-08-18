@@ -637,6 +637,34 @@ export function markAtRow(row: number): string {
   return '';
 }
 
+/** Every mark, for a caller about to swap the file list underneath. */
+export interface MarkSnapshot {
+  user: [string, Mark][];
+  quote: Mark | null;
+}
+
+/**
+ * Copies the marks aside.
+ *
+ * A mark names its file by INDEX (og's ifile pointer, which we cannot
+ * hold), so anything recorded while a different file list is in place
+ * points somewhere else entirely once the old list returns - the
+ * automatic ' mark included, since edit_ifile records one on every
+ * switch. Whoever swaps the list puts the marks back with it.
+ */
+export function markSnapshot(): MarkSnapshot {
+  return { user: [...userMarks], quote: quoteMark };
+}
+
+/** Puts a snapshot back, dropping anything marked in the meantime. */
+export function restoreMarkSnapshot(snapshot: MarkSnapshot): void {
+  userMarks.clear();
+
+  for (const [char, mark] of snapshot.user) userMarks.set(char, mark);
+
+  quoteMark = snapshot.quote;
+}
+
 /**
  * Forgets all marks and closes any mark prompt.
  */
