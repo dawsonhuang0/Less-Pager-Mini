@@ -1264,8 +1264,15 @@ export class FileInput implements PagerInput {
     entry.streaming = false;
     checkModelines(lines);
 
-    const current = files.list[this.fileIndex];
-    if (current) this.saved.set(current.path, { ...this.view.top });
+    // by the path this engine HOLDS, not by looking its index up in
+    // a list that may already have been replaced underneath: the
+    // lesskey view swaps the whole list, so files.list[fileIndex] is
+    // the incoming file by now. Filing the outgoing position under
+    // the incoming name put a 245-line lesskey file's end offset on
+    // the user's file, which then opened way past its own EOF
+    if (this.activePath) {
+      this.saved.set(this.activePath, { ...this.view.top });
+    }
 
     this.pending?.bf.close();
     this.pending = { index, bf: next, lines };
@@ -2443,7 +2450,7 @@ export class FileInput implements PagerInput {
 
   private jumpMark(mark: Mark, sline: number): boolean {
     if (files.index !== this.fileIndex ||
-        mark.file !== files.list[this.fileIndex] ||
+        mark.file.path !== this.activePath ||
         mark.pos === undefined) {
       return false;
     }
