@@ -27,7 +27,7 @@ import { Worker } from 'worker_threads';
  */
 
 /** Header words: what is happening, and the sizes that go with it. */
-const HEADER = 8;
+const HEADER = 10;
 const STATE = 0;
 const LENGTH = 1;
 /** 1 while ANY key should end the wait, 0 for an interrupt only. */
@@ -42,6 +42,10 @@ const NOTICE_IN = 5;
 const MSG_UP = 6;
 /** 1 when what stopped the match was an interrupt, not another key. */
 const BY_INTR = 7;
+/** 1 while a run is open, so the watcher reads between matches too. */
+const WATCHING = 8;
+/** 1 when the watcher saw an interrupt with no match out to stop. */
+const PENDING = 9;
 
 const IDLE = 0;
 const REQUEST = 1;
@@ -84,6 +88,56 @@ export function beginGuardedRun(): void {
   runStarted = Date.now();
   runAbandoned = false;
   trace('run');
+
+  const state = shared;
+
+  if (!state?.watcher) return;
+
+  Atomics.store(state.header, PENDING, 0);
+  Atomics.store(state.header, WATCHING, 1);
+  Atomics.notify(state.header, WATCHING);
+}
+
+/** Closes a run, so the watcher stops taking keys nobody asked it to. */
+export function endGuardedRun(): void {
+  const state = shared;
+
+  if (!state?.watcher) return;
+
+  Atomics.store(state.header, WATCHING, 0);
+  Atomics.notify(state.header, WATCHING);
+}
+
+/**
+ * The watcher's verdict, for the scan between matches.
+ *
+ * Reading this is a shared word rather than a read(2) on the tty: one
+ * thread watches the terminal for the whole run, and everything else
+ * asks it. The keys it took come back through takeGuardedKeys.
+ */
+export function watcherSawInterrupt(): boolean {
+  const state = shared;
+
+  if (!state?.watcher) return false;
+
+  return Atomics.compareExchange(state.header, PENDING, 1, 0) === 1;
+}
+
+/** True while a watcher is doing the reading for this run. */
+export const watcherActive = (): boolean =>
+  shared?.watcher != null && Atomics.load(shared.header, WATCHING) === 1;
+
+/** Whatever the watcher took off the terminal and has not handed back. */
+export function takeGuardedKeys(): string {
+  const state = shared;
+
+  if (!state) return '';
+
+  const taken = Atomics.exchange(state.header, KEYLEN, 0);
+
+  return taken > 0
+    ? Buffer.from(state.keys.subarray(0, taken)).toString('binary')
+    : '';
 }
 
 /** $LMN_GUARD_TRACE names a file to log what the guard did, and when. */
@@ -212,12 +266,18 @@ for (;;) {
         fs.writeSync(1, clearRow);
       }
 
-      if (stop) Atomics.store(header, ${BY_INTR}, byIntr ? 1 : 0);
+      if (stop) {
+        Atomics.store(header, ${BY_INTR}, byIntr ? 1 : 0);
 
-      if (stop && Atomics.compareExchange(
-        header, ${STATE}, ${REQUEST}, ${ABORT}) === ${REQUEST}) {
-        Atomics.notify(header, ${STATE});
-        break;
+        // a match is out: end it. Nothing out: leave the verdict where
+        // the scan between matches will find it, which is a shared
+        // word rather than a syscall of its own
+        if (Atomics.compareExchange(
+          header, ${STATE}, ${REQUEST}, ${ABORT}) === ${REQUEST}) {
+          Atomics.notify(header, ${STATE});
+        } else {
+          Atomics.store(header, ${PENDING}, 1);
+        }
       }
     }
 
@@ -225,17 +285,16 @@ for (;;) {
     // for an answer, and talking over it loses the question. It goes
     // out the moment the row is free, however long ago the two
     // seconds passed
-    if (!said && Date.now() - started >= sayAt &&
+    if (!said && Atomics.load(header, ${STATE}) === ${REQUEST} &&
+        Date.now() - started >= sayAt &&
         Atomics.load(header, ${MSG_UP}) === 0) {
       said = true;
       Atomics.store(header, ${NOTICED}, 1);
       fs.writeSync(1, notice);
     }
 
-    // this wait IS the sleep and the wake-up: it returns early the
-    // moment the state stops being REQUEST, so nothing is polled for
-    // its own sake
-    Atomics.wait(header, ${STATE}, ${REQUEST}, 1);
+    // the sleep between reads; it ends early when the run does
+    Atomics.wait(header, ${WATCHING}, 1, 1);
   }
 }
 `;
@@ -322,6 +381,8 @@ function ensureWorkers(need: number): Shared {
   }
 
   if (!shared.watcher && watchFd !== null) {
+    Atomics.store(shared.header, WATCHING, 1);
+
     shared.watcher = new Worker(WATCHER, {
       eval: true,
       workerData: {

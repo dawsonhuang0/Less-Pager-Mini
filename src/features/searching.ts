@@ -8,7 +8,8 @@ import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
 import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
-  jsRegexAbortedByInterrupt } from './jsRegexGuard';
+  endGuardedRun, jsRegexAbortedByInterrupt, watcherActive,
+  watcherSawInterrupt, takeGuardedKeys } from './jsRegexGuard';
 
 import { keyboard, keyboardPollFd, pushUngot, pushUngotLive, raiseAbort }
   from '../tty/keyboard';
@@ -1316,7 +1317,14 @@ export function duringRepaint<T>(run: () => T): T {
 export function duringUserSearch<T>(run: () => T): T {
   beginGuardedRun();
   hiliteAbandoned = false;
-  return run();
+
+  try {
+    return run();
+  } finally {
+    // the run is over: the watcher stops reading, so the next key
+    // belongs to the command loop and not to a search that ended
+    endGuardedRun();
+  }
 }
 
 /** Set while a retry runs, so this one search skips the host engine. */
@@ -2214,6 +2222,23 @@ export function duringRepaintMatch<T>(run: () => T): T {
 }
 
 export function searchInterrupted(force = false): boolean {
+  // one reader per run: while the watcher has the terminal, asking it
+  // is a shared word instead of a read(2), and it has been reading
+  // BETWEEN matches as well as during them - which is the gap the
+  // scan's own poll used to cover, a tenth of a second late
+  if (watcherActive()) {
+    const keys = takeGuardedKeys();
+
+    if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
+
+    if (!watcherSawInterrupt()) return false;
+
+    fs.writeSync(1, '\x07');
+    raiseAbort();
+    abortWasInterrupt = true;
+    return true;
+  }
+
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
   // not fd 0 (og's check_poll watches the tty, whatever stdin is)
   const kb = keyboard();
