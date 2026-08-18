@@ -738,7 +738,17 @@ export function runEditor(): void {
 
     const failed = refreshLesskeyView(LESS_VERSION);
 
-    if (failed) search.message = failed;
+    // like og's main errmsgs gate, which prints every scan error and
+    // then blocks once: a file with three bad lines should show three
+    // lines and take one RETURN, not paint the screen and dribble the
+    // rest out behind a prompt nobody reads. The repaint waits for
+    // the key, through the same pause a shell command uses
+    if (failed.length) {
+      for (const message of failed) putstr(message + '\n');
+
+      putstr('Press RETURN to continue ');
+      session.shellPause = 'shell';
+    }
   }
 }
 

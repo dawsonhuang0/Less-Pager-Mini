@@ -150,13 +150,7 @@ export function applyLesskeyEdits(
 ): string[] {
   const messages: string[] = [];
 
-  /** Like parseError: the first shows, the rest wait behind it. */
-  const report = (text: string): void => {
-    messages.push(text);
-
-    if (search.message) search.messageQueue.push(text);
-    else search.message = text;
-  };
+  const report = (text: string): void => { messages.push(text); };
 
   for (const file of view) {
     if (file.form === null || !file.temporary) continue;
@@ -208,10 +202,22 @@ export function applyLesskeyEdits(
     }
   }
 
-  // NOT quiet: the reload is where a bad line gets reported, in og's
-  // own wording and through og's own gate - "file: line 3: unknown
-  // action: \"blah\"", then the RETURN it waits on
+  // NOT quiet: a SOURCE form's bad lines are found by the reader, in
+  // og's own wording, and it reports them the way it always does -
+  // into search.message with the rest queued behind it
   loadLesskey(false);
+
+  // drained into the same list, so every message from this edit is
+  // gated together instead of one showing on the prompt row and the
+  // others queueing invisibly behind it
+  if (search.message) {
+    messages.push(search.message);
+    search.message = '';
+  }
+
+  while (search.messageQueue.length) {
+    messages.push(search.messageQueue.shift() as string);
+  }
 
   return messages;
 }
@@ -321,12 +327,8 @@ export const inLesskeyView = (): boolean => stash !== null;
  *
  * @returns A message when a write-back failed, else null.
  */
-export function refreshLesskeyView(version: number): string | null {
-  if (stash === null) return null;
-
-  const messages = applyLesskeyEdits(stash.files, version);
-
-  return messages.length ? messages[0] : null;
+export function refreshLesskeyView(version: number): string[] {
+  return stash === null ? [] : applyLesskeyEdits(stash.files, version);
 }
 
 /**

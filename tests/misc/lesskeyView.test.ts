@@ -143,7 +143,7 @@ describe('viewing lesskey files over a live session', () => {
     // what `v` would have left behind
     fs.writeFileSync(source, 'j quit\nQQ help\n');
 
-    expect(refreshLesskeyView(707)).toBeNull();
+    expect(refreshLesskeyView(707)).toEqual([]);
     expect(userBinding('j')?.action).toBe('EXIT');
     expect(userBinding('QQ')?.action).toBe('HELP');
 
@@ -186,11 +186,59 @@ describe('viewing lesskey files over a live session', () => {
       expect(userBinding('z')?.action).toBe('HELP');
       expect(userBinding('w')?.action).toBe('EXIT');
 
-      // and the bad one was reported, in og's wording
-      expect(search.message).toMatch(/line 3: unknown action: "blah"/);
+      // reported to the CALLER, not left on the prompt row: the
+      // caller prints every message and gates once, like startup
 
       // the binary itself was written, not left at its old contents
       expect(userBinding('x')).toBeUndefined();
+
+      cleanLesskeyView(view.dir);
+    } finally {
+      process.env.LESSKEYIN = source;
+      delete process.env.LESSKEY;
+      resetLesskey();
+      loadLesskey(true);
+    }
+  });
+
+  it('collects every bad line, so one gate covers them all', () => {
+    // og's main errmsgs gate prints each scan error and blocks ONCE.
+    // Left on the prompt row instead, the first would show and the
+    // rest would queue invisibly behind a screen nobody is reading
+    const binary = path.join(dir, 'many.bin');
+
+    fs.writeFileSync(binary, Buffer.from([
+      0x00, 0x4D, 0x2B, 0x47,
+      0x63, 3, 0, 0x78, 0x00, 24,
+      0x65, 0, 0, 0x76, 0, 0,
+      0x78, 0x45, 0x6E, 0x64,
+    ]));
+
+    process.env.LESSKEYIN = path.join(dir, 'no-source-here');
+    process.env.LESSKEY = binary;
+    resetLesskey();
+    loadLesskey(true);
+    search.message = '';
+    search.messageQueue.length = 0;
+
+    try {
+      const view = lesskeyViewFiles();
+      const rendered = view.files.find(file => file.form?.kind === 'binary');
+
+      fs.writeFileSync(rendered!.path,
+        '#command\na blah\nb quit\nc nope\nd also-wrong\n');
+
+      const messages = applyLesskeyEdits(view.files, 707);
+
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toContain('line 2: unknown action: "blah"');
+      expect(messages[2]).toContain('line 5: unknown action: "also-wrong"');
+
+      // the good line between them still took
+      expect(userBinding('b')?.action).toBe('EXIT');
+
+      // and nothing was left behind on the prompt row
+      expect([search.message, search.messageQueue]).toEqual(['', []]);
 
       cleanLesskeyView(view.dir);
     } finally {
