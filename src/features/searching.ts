@@ -1259,18 +1259,6 @@ export function duringUserSearch<T>(run: () => T): T {
 /** Set while a retry runs, so this one search skips the host engine. */
 let forcePosix = false;
 
-/**
- * How long a match gets when nobody asked for it.
- *
- * A search waits as long as the user lets it: they typed it, they can
- * interrupt it. A repaint waits for nobody - highlighting runs on
- * every frame, for a pattern compiled long ago, and the only person
- * who could interrupt it is the one who just pressed something else.
- * So it gets a budget, and a pattern that cannot make it inside that
- * budget stops being highlighted rather than being tried again every
- * frame forever.
- */
-const HILITE_BUDGET_MS = 100;
 
 /** Takes the next search away from --use-js-regexp, for the retry. */
 export function retryWithPosix(): void {
@@ -1332,9 +1320,9 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * What a killed match costs, which depends on who wanted it.
    *
    * A search offers the engine that can finish it. A repaint has
-   * nobody to ask, and a pattern this engine cannot get through will
-   * not get through it on the next frame either - so highlighting
-   * stops, rather than every scroll paying the budget again.
+   * nothing to offer - the user interrupted a frame, not a command -
+   * so highlighting stops instead, rather than asking for the same
+   * interrupt again on the next frame and the one after.
    */
   const giveUp = (): void => {
     if (userSearch) {
@@ -1356,10 +1344,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
   | null => guardedMatch(
-    { source: re.source, flags: re.flags, text, test },
-    userSearch ? abortPoll : () => false,
-    userSearch ? notice : () => {},
-    userSearch ? Infinity : HILITE_BUDGET_MS);
+    { source: re.source, flags: re.flags, text, test }, abortPoll, notice);
 
   return {
     source: re.source,
