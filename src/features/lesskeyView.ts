@@ -361,12 +361,20 @@ export const inLesskeyView = (): boolean => stash !== null;
 export function refreshLesskeyView(version: number): string[] {
   if (stash === null) return [];
 
+  // only the file that was just edited. The others are as they were,
+  // and a complaint about one of them here would be about something
+  // the user did not touch - and would arrive attached to an editor
+  // session that had nothing to do with it
+  const current = files.list[files.index]?.path;
+  const edited = stash.files.filter(file => file.path === current);
+
   // checked BEFORE anything is written or loaded, so the messages can
   // be shown while the editor's screen is still the one on the
   // terminal - and the load that follows has nothing left to report
-  const problems = checkLesskeyEdits(stash.files, version);
+  const problems = checkLesskeyEdits(edited, version);
 
-  applyLesskeyEdits(stash.files, version);
+  // the reload runs whatever was edited, since the tables are shared
+  applyLesskeyEdits(edited, version);
 
   return problems;
 }

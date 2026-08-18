@@ -255,6 +255,39 @@ describe('viewing lesskey files over a live session', () => {
     }
   });
 
+  it('checks only the file v was used on', () => {
+    // two forms, one of them already broken, and an editor opened on
+    // the other: a complaint about the file the user did not touch
+    // would arrive attached to an edit that had nothing to do with it
+    fs.writeFileSync(source, 'j forw-line\n');
+    process.env.LESSKEY_CONTENT = 'x quit;y nonsense';
+    resetLesskey();
+    loadLesskey(true);
+
+    try {
+      openLesskeyView();
+
+      // the source file is first in the ladder, so it is the one open
+      expect(files.list[files.index].path).toBe(source);
+
+      fs.writeFileSync(source, 'j forw-line\nk also-nonsense\n');
+
+      const problems = refreshLesskeyView(707);
+
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('also-nonsense');
+
+      // and nothing about the form that was not opened
+      expect(problems.join('\n')).not.toContain('LESSKEY_CONTENT');
+
+      exitLesskeyView(707);
+    } finally {
+      delete process.env.LESSKEY_CONTENT;
+      resetLesskey();
+      loadLesskey(true);
+    }
+  });
+
   it('names a materialized form after where it came from', () => {
     // the temp path a rendered form lives at is noise - sixty
     // characters of /var/folders before the name starts - on a prompt
