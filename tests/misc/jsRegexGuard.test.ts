@@ -97,16 +97,15 @@ describe('a host regex that can be killed', () => {
     try {
       guardedMatch({
         source: '(a+)+b', flags: '', text: 'a'.repeat(40), test: false,
-      }, () => Date.now() - start > 2500);
+      }, () => Date.now() - start > 2500,
+      () => { process.stdout.write('NOTICE'); });
     } finally {
       (process.stdout as unknown as { write: unknown }).write = write;
     }
 
-    const shown = written.join('');
-
-    expect(shown).toContain('Searching... (interrupt to abort)');
-
-    // and in standout, like every other message that holds you
-    expect(shown).toMatch(/\x1b\[7m.*Searching\.\.\./);
+    // the guard does not style anything: it says WHEN, and the
+    // caller says what that looks like - which is how it ends up
+    // identical to the line-number walk's message
+    expect(written.join('')).toContain('NOTICE');
   }, 15000);
 });

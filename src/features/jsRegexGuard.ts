@@ -1,12 +1,5 @@
 import { Worker } from 'worker_threads';
 
-import { putstr, flush } from '../tty/output';
-
-import { config } from '../state/config';
-
-import { CURSOR_TO, CLEAR_LINE, INVERSE_ON, INVERSE_OFF }
-  from '../state/constants';
-
 /**
  * Runs a host RegExp somewhere it can be killed.
  *
@@ -164,11 +157,13 @@ export function clearJsRegexAbort(): void {
  * Waits for the worker, letting the interrupt poll run between slices.
  *
  * @param interrupted - The poll; true means the user wants out.
+ * @param notice - Run once, when the wait has gone on long enough.
  * @returns The reply, or null when it was killed.
  */
 function waitForReply(
   state: Shared,
-  interrupted: () => boolean
+  interrupted: () => boolean,
+  notice: () => void
 ): unknown | null {
   const started = Date.now();
   let noticed = false;
@@ -181,11 +176,6 @@ function waitForReply(
       const text = Buffer.from(state.payload.subarray(0, length)).toString();
 
       Atomics.store(state.header, STATE, IDLE);
-
-      if (noticed) {
-        putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE);
-        flush();
-      }
 
       return JSON.parse(text);
     }
@@ -201,12 +191,7 @@ function waitForReply(
     // saying why is the thing to avoid
     if (!noticed && Date.now() - started >= NOTICE_MS) {
       noticed = true;
-      // standout, like every other message the pager holds you at -
-      // og's wait_message and ours for a stalled pipe both stand out
-      // from the text they sit under
-      putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE +
-        INVERSE_ON + 'Searching... (interrupt to abort)' + INVERSE_OFF);
-      flush();
+      notice();
     }
   }
 }
@@ -216,11 +201,13 @@ function waitForReply(
  *
  * @param request - Pattern, flags, subject, and which call to make.
  * @param interrupted - Polled between slices; true aborts.
+ * @param notice - Called once when this has run long enough to say so.
  * @returns The worker's answer, or null when aborted or unusable.
  */
 export function guardedMatch(
   request: { source: string, flags: string, text: string, test: boolean },
-  interrupted: () => boolean
+  interrupted: () => boolean,
+  notice: () => void = () => {}
 ): { test?: boolean, match?: { index: number, groups: string[] } | null,
   failed?: string } | null {
   const bytes = Buffer.from(JSON.stringify(request));
@@ -231,5 +218,6 @@ export function guardedMatch(
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
 
-  return waitForReply(state, interrupted) as ReturnType<typeof guardedMatch>;
+  return waitForReply(state, interrupted, notice) as
+    ReturnType<typeof guardedMatch>;
 }

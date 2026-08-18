@@ -1239,10 +1239,24 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // underneath does not backtrack and has nothing to abort
   const abortPoll = (): boolean => searchInterrupted(true);
 
+  // the same shape as the line-number walk's message, because it is
+  // the same kind of thing: work the pager is doing on your behalf,
+  // long enough that silence would read as a hang, with a key that
+  // ends it. Straight to the terminal, since no frame is being built;
+  // and bottomClobbered so the NEXT frame repaints the row instead of
+  // printing its prompt onto the end of this
+  const notice = (): void => {
+    fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+      'Searching... (interrupt to abort)' + INVERSE_OFF);
+
+    search.cmdExecOpened = false;
+    search.bottomClobbered = true;
+  };
+
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
   | null => guardedMatch(
-    { source: re.source, flags: re.flags, text, test }, abortPoll);
+    { source: re.source, flags: re.flags, text, test }, abortPoll, notice);
 
   return {
     source: re.source,
