@@ -10,7 +10,7 @@ import {
 /**
  * Renders a compiled lesskey back as the source it was built from.
  *
- * A binary cannot be edited, and og ships no tool that turns one back
+ * A binary cannot be edited, and less ships no tool that turns one back
  * into text - `lesskey` only goes one way. --edit-lesskey needs the
  * other way, so a user whose keys live in ~/.less sees the same thing
  * a user with ~/.lesskey sees.
@@ -43,7 +43,7 @@ type Section = 'command' | 'edit' | 'var';
 /**
  * One byte of a key sequence, in source notation.
  *
- * The escapes are og's tstr read backwards: a control byte becomes
+ * The escapes are less's tstr read backwards: a control byte becomes
  * `^X`, the three characters that mean something to the parser get a
  * backslash, and anything unprintable falls back to octal - which
  * tstr accepts for any byte at all.
@@ -78,7 +78,7 @@ function keySequence(bytes: number[]): string {
       const name = SPECIAL_KEY_NAMES[code];
 
       // a blob no \k form produces cannot be written as source at all;
-      // og's own tables never emit one, so this is a corrupt file
+      // less's own tables never emit one, so this is a corrupt file
       out += name === undefined ? `\\k?${code}` : '\\k' + name;
       continue;
     }
@@ -92,7 +92,7 @@ function keySequence(bytes: number[]): string {
 /**
  * An extra string, or a variable's value.
  *
- * og parses these with tstr's translation OFF, so `\k` means a
+ * less parses these with tstr's translation OFF, so `\k` means a
  * literal k and only the plain escapes apply - but `^X` still means
  * control, since that case sits outside the xlate test.
  */
@@ -131,7 +131,7 @@ function renderBindings(bytes: number[], section: Section): string[] {
 
     if (action === undefined) break;
 
-    // og's A_END_LIST, which a #stop line put there
+    // less's A_END_LIST, which a #stop line put there
     if (key.taken.length === 0 && action === 103) {
       lines.push('#stop');
       continue;
@@ -172,11 +172,11 @@ function renderVariables(bytes: number[]): string[] {
     const name = upToNul(bytes, at);
     at = name.next;
 
-    // no action byte follows: this is what og writes for a "+=" with
+    // no action byte follows: this is what less writes for a "+=" with
     // nothing to append to (parse_varline erases the previous entry's
     // terminating NUL, and on an empty table there is none). The name
     // never reached the file, so "+= value" is the only source that
-    // rebuilds these exact bytes - and it is what og's own compiler
+    // rebuilds these exact bytes - and it is what less's own compiler
     // accepts, since parse_varline only needs a "+" before the "="
     if (at >= bytes.length) {
       lines.push(`+= ${plainString(name.taken)}`);
@@ -228,7 +228,7 @@ export function renderLesskeyBinary(data: Buffer): string | null {
       marker === 'e' ? 'edit' :
       marker === 'v' ? 'var' : null;
 
-    // og's lesskey skips a section type it does not know, and so does
+    // less's lesskey skips a section type it does not know, and so does
     // its reader; there is nothing to render for one either
     if (section === null || body.length === 0) continue;
 

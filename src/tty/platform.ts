@@ -5,18 +5,18 @@ import { flavors, type Dialect } from 'posix-regex';
 import { actualEnv, lgetenv } from '../startup/environment';
 
 /**
- * Platform differences, like og's per-platform defines headers
+ * Platform differences, like less's per-platform defines headers
  * (defines.h for unix, defines.wn for Windows, defines.ds/o2 for the
  * DOS and OS/2 builds): file names, shells, editors and quoting all
  * differ between the Windows console world and unix. Node's unix
- * family (linux, darwin, the BSDs, aix, sunos) takes og's autoconf
+ * family (linux, darwin, the BSDs, aix, sunos) takes less's autoconf
  * build values; win32 takes defines.wn's.
  */
 
 export const isWindows = process.platform === 'win32';
 
 /**
- * The home directory, like og resolving $HOME with main.c's Windows
+ * The home directory, like less resolving $HOME with main.c's Windows
  * fallback to HOMEDRIVE+HOMEPATH; $HOME wins when set on either
  * platform, like lgetenv("HOME").
  */
@@ -56,11 +56,11 @@ export const LESSKEYFILE_SYS = isWindows
 export const EDIT_PGM = isWindows ? 'edit' : 'vi';
 
 /**
- * True where og's --exit-follow-on-close can actually fire: check_poll
+ * True where less's --exit-follow-on-close can actually fire: check_poll
  * (os.c:167) exits the F wait only on a BARE POLLHUP — a drained,
  * closed pipe reports exactly that on Linux, but Darwin adds POLLIN
- * (EOF counts as readable) and og's Windows build has no HUP check at
- * all, so og's F on a closed pipe just keeps waiting there — and so
+ * (EOF counts as readable) and less's Windows build has no HUP check at
+ * all, so less's F on a closed pipe just keeps waiting there — and so
  * do we.
  */
 export const POLLHUP_EXITS_F = process.platform === 'linux';
@@ -74,23 +74,23 @@ const IS_BSD_LIBC = ['darwin', 'freebsd', 'openbsd', 'netbsd']
   .includes(process.platform);
 
 /**
- * The regex dialect og's own search would use here.
+ * The regex dialect less's own search would use here.
  *
  * configure.ac tries POSIX regcomp FIRST and only falls through to
- * PCRE2/PCRE/GNU when it is missing or broken, so og links whatever
+ * PCRE2/PCRE/GNU when it is missing or broken, so less links whatever
  * regcomp the platform's libc ships: Spencer's on the BSDs, glibc
  * everywhere else. The two disagree on what POSIX leaves undefined, so
  * the dialect is a platform fact like DEF_METACHARS, not a preference.
  * The library's own default IS the glibc shape, so only the BSDs need
  * saying and everything else falls through to it.
  *
- * (og's Windows build links neither — defines.wn takes Spencer's V8
+ * (less's Windows build links neither — defines.wn takes Spencer's V8
  * regcomp, which has no {n,m} intervals at all. We keep the POSIX
  * reading there rather than give a JS user a pager whose search has
  * lost counted repetition.)
  */
 export const REGEX_DIALECT: Dialect = {
-  // og compiles with REG_EXTENDED (pattern.h's REGCOMP_FLAG), and this
+  // less compiles with REG_EXTENDED (pattern.h's REGCOMP_FLAG), and this
   // must be spelled out rather than left to the "e" flag: an explicit
   // flavor overrides that flag, and a partial one merges onto POSIX's
   // default BASIC, where "(a)|(b)" is nine literal characters that
@@ -127,8 +127,8 @@ export const DEF_METAESCAPE = isWindows ? '' : '\\';
 
 /**
  * The shell argv for a ! command or a preprocessor pipe: unix runs
- * `$SHELL -c cmd` (og's HAVE_SHELL, with LESS_SHELL_COPTION replacing
- * -c and a bare "-" dropping the wrapper); og's Windows build has
+ * `$SHELL -c cmd` (less's HAVE_SHELL, with LESS_SHELL_COPTION replacing
+ * -c and a bare "-" dropping the wrapper); less's Windows build has
  * HAVE_SHELL=0 and hands the command to system(), i.e. %COMSPEC% /c,
  * with an empty command opening the shell itself (lsystem.c).
  */

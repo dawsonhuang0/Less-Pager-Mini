@@ -50,7 +50,7 @@ export async function pagerPipe(stream: Readable): Promise<void> {
   freshSession();
   initInvocationOptions();
 
-  // og never refuses to start over the keyboard: open_getchr takes
+  // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then
   // /dev/tty, then stderr itself (ttyin.c:67) - and pages either way.
   // If that turns out to have no input, getchr sees EOF and quits
@@ -61,11 +61,11 @@ export async function pagerPipe(stream: Readable): Promise<void> {
 
   // the pipe spools to a private temp file, becoming seekable: the
   // whole session then runs the same block-backed engine as a file,
-  // with the upstream paused close to the view (og's ch buffers)
+  // with the upstream paused close to the view (less's ch buffers)
   const spool = await PipeSpool.create(stream);
 
   try {
-    // og's initial read blocks until a screenful is seekable (or
+    // less's initial read blocks until a screenful is seekable (or
     // LESS_SCREENFILL_TIME expires): a screen of newlines for short
     // lines, or a wrapped screen's worth of bytes for long ones
     const rows = process.stdout.rows ?? 24;
@@ -138,7 +138,7 @@ export default async function streamPager(input: unknown): Promise<void> {
   freshSession();
   initInvocationOptions();
 
-  // og never refuses to start over the keyboard: open_getchr takes
+  // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then
   // /dev/tty, then stderr itself (ttyin.c:67) - and pages either way.
   // If that turns out to have no input, getchr sees EOF and quits
@@ -162,7 +162,7 @@ async function filePager(filePaths: string[]): Promise<void> {
 
   initFiles(filePaths);
 
-  // og's edit_ifile takes the name "-" from fd0 and keeps it open
+  // less's edit_ifile takes the name "-" from fd0 and keeps it open
   // (edit.c:516). Ours needs it SEEKABLE to run the block engine, so
   // standard input spools to a private file once, up front, and the
   // entry points at it - the same trick pagerPipe already uses for a
@@ -202,7 +202,7 @@ async function filePagerBody(
       );
 
       // the question must be on screen before we block on the answer,
-      // like og flushing at every prompt that calls getcc
+      // like less flushing at every prompt that calls getcc
       flush();
 
       const answer = await warnReturn();

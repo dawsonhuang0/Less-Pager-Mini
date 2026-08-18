@@ -17,7 +17,7 @@ export const autoBuffers: OptionSpec = {
     set: value => {
       opt.autoBuffers = value as number;
 
-      // og reads autobuf live at each allocation; the cached pipe
+      // less reads autobuf live at each allocation; the cached pipe
       // bound re-derives here instead
       hook.trimBufSpace();
     },

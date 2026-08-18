@@ -52,7 +52,7 @@ const content = Array.from({ length: 30 }, (_, i) => `e${i + 1}`);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-env-'));
 
 /** Scans a $LESS value over the shared content, reporting a dangling
- *  option like the pager's startup (og's nopendopt). */
+ *  option like the pager's startup (less's nopendopt). */
 const scan = (env: string): ReturnType<typeof scanOptions> => {
   const result = scanOptions(env, content);
   flushPendopt();
@@ -123,7 +123,7 @@ describe('letters and triples', () => {
     expect(optCtldisp()).toBe(2);
   });
 
-  it('reports an unknown letter and stops, like og', () => {
+  it('reports an unknown letter and stops, like less', () => {
     scan('-Y -S');
     expect(search.message).toBe(
       'There is no -Y option ("less --help" for help)'
@@ -141,7 +141,7 @@ describe('long names', () => {
     expect(optQuitAtEof()).toBe(2);
   });
 
-  it('selects the second state through the typed case, like og', () => {
+  it('selects the second state through the typed case, like less', () => {
     scan('--Quit-at-eof');
     expect(optQuitAtEof()).toBe(2);
   });
@@ -158,7 +158,7 @@ describe('long names', () => {
     );
   });
 
-  it('reports unknown names with the remainder, like og', () => {
+  it('reports unknown names with the remainder, like less', () => {
     scan('--xyzzy -S');
     expect(search.message).toBe(
       'There is no --xyzzy -S option ("less --help" for help)'
@@ -166,7 +166,7 @@ describe('long names', () => {
     expect(config.chopLongLines).toBe(false);
   });
 
-  it('rejects = after a toggle option, like og', () => {
+  it('rejects = after a toggle option, like less', () => {
     scan('--squeeze-blank-lines=1');
     expect(search.message).toBe(
       'The --squeeze-blank-lines=1 option should not be followed by ='
@@ -180,7 +180,7 @@ describe('long names', () => {
     expect(config.chopLongLines).toBe(false);
   });
 
-  it('separates letters but not long names with $, like og', () => {
+  it('separates letters but not long names with $, like less', () => {
     scan('-S$-s');
     expect(config.chopLongLines).toBe(true);
     expect(optSqueeze()).toBe(true);
@@ -192,7 +192,7 @@ describe('long names', () => {
   });
 });
 
-describe('-i and -I fold into one caseless option, like og', () => {
+describe('-i and -I fold into one caseless option, like less', () => {
   it.each([
     ['-i', 1],
     ['-I', 2],
@@ -233,21 +233,21 @@ describe('numbers', () => {
     expect(config.setWindow).toBe(30);
   });
 
-  it('reports a missing number and rescans the char, like og', () => {
+  it('reports a missing number and rescans the char, like less', () => {
     scan('-hx');
     expect(search.message).toBe('Number is required after -h');
 
-    // og then reads "x" as the -x option, which waits for a value
+    // less then reads "x" as the -x option, which waits for a value
     expect(search.messageQueue).toContain(
       'Value is required after -x (--tabs)'
     );
   });
 
-  it('reports a rejected negative and rescans it, like og', () => {
+  it('reports a rejected negative and rescans it, like less', () => {
     scan('-h-3');
     expect(search.message).toBe('Negative number not allowed in -h');
 
-    // og resumes at the "-", so "3" becomes a more-style window size
+    // less resumes at the "-", so "3" becomes a more-style window size
     expect(config.setWindow).toBe(3);
   });
 
@@ -256,7 +256,7 @@ describe('numbers', () => {
     expect(search.message).toBe('Number too large in -b');
   });
 
-  it('reports a bad long name number with the remainder, like og', () => {
+  it('reports a bad long name number with the remainder, like less', () => {
     scan('--max-back-scroll x');
     expect(search.message).toBe(
       'Number is required after max-back-scroll x'
@@ -339,7 +339,7 @@ describe('+ commands', () => {
     expect(scan('+G').firstCmds).toEqual(['G']);
   });
 
-  it('consumes the rest of the string without $, like og', () => {
+  it('consumes the rest of the string without $, like less', () => {
     expect(scan('+5 -S').firstCmds).toEqual(['5 -S']);
     expect(config.chopLongLines).toBe(false);
   });
@@ -354,7 +354,7 @@ describe('+ commands', () => {
     expect(getFirstCmd()).toBe('G');
   });
 
-  it('turns -p into a search command, like og', () => {
+  it('turns -p into a search command, like less', () => {
     expect(scan('-pfoo$-S').firstCmds).toEqual(['/foo']);
     expect(config.chopLongLines).toBe(true);
   });
@@ -380,14 +380,14 @@ describe('special options', () => {
     expect(optNoKeypad()).toBe(true);
   });
 
-  it('sets the header search exclusions silently, like og INIT', () => {
+  it('sets the header search exclusions silently, like less INIT', () => {
     scan('--no-search-headers');
     expect(optNoSearchHeaders()).toEqual({ lines: true, cols: true });
     expect(search.message).toBe('');
   });
 
   it('-k loads a binary lesskey file, erroring like opt_k', () => {
-    // og's lesskey(s, 0) failure message (optfunc.c:293)
+    // less's lesskey(s, 0) failure message (optfunc.c:293)
     scan('-k/definitely/not/there');
     expect(search.message).toBe(
       'Cannot use lesskey file "/definitely/not/there"');
@@ -433,13 +433,13 @@ describe('-o and -O startup log files', () => {
     expect(takeStartupLog()).toEqual({ name: log, force: true });
   });
 
-  it('does not log regular files, like og', () => {
+  it('does not log regular files, like less', () => {
     const log = path.join(dir, 'log4.txt');
     files.list[0].path = path.join(dir, 'input.txt');
 
     scan(`-o${log}`);
 
-    // og's CH_CANSEEK guard (edit.c:961)
+    // less's CH_CANSEEK guard (edit.c:961)
     expect(takeStartupLog()).toBe(null);
     expect(fs.existsSync(log)).toBe(false);
   });
@@ -452,7 +452,7 @@ describe('LESSANSIMIDCHARS / LESSANSIENDCHARS', () => {
     initAnsiChars();
   });
 
-  it('recognizes og default sequences without requiring [', () => {
+  it('recognizes less default sequences without requiring [', () => {
     initAnsiChars();
 
     // colon-separated SGR params and a bare ESC-m, like ansi_step

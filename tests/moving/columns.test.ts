@@ -91,7 +91,7 @@ describe('setHalfScreenRight', () => {
 
   it('uses half the full terminal width when a gutter is reserved', () => {
     // 80-column terminal with a 9-column -N/-J prefix leaves a
-    // 71-column text area, but OG A_RSHIFT still adds sc_width/2.
+    // 71-column text area, but less A_RSHIFT still adds sc_width/2.
     config.screenWidth = 71;
     config.halfScreenWidth = 40;
 

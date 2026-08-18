@@ -31,7 +31,7 @@ type LessOptionName = keyof LessOptions & string;
  * One less argument.
  *
  * The long names are spelled out so an editor can offer them, in all
- * three forms og accepts: `--name`, `--name=value`, and `--+name` to
+ * three forms less accepts: `--name`, `--name=value`, and `--+name` to
  * put an option back to its default. `(string & {})` keeps the union
  * suggestible while still accepting everything else that is legal on
  * a less command line - option letters (`-N`), bundled letters

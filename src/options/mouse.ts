@@ -24,7 +24,7 @@ export const mouse: OptionSpec = {
     set: value => {
       opt.mouseMode = value as number;
 
-      // og's opt_mouse drives the --emouse bitmap and, when enabled,
+      // less's opt_mouse drives the --emouse bitmap and, when enabled,
       // the --rmouse state ("vmove,click" or "-")
       opt.emouse = opt.mouseMode
         ? EMOUSE_VSCROLL | EMOUSE_VDRAG | EMOUSE_LCLICK | EMOUSE_RCLICK

@@ -6,7 +6,7 @@ import { getLayout, rowEndFrom } from './lineLayout';
 import { ScreenRow } from './screenTable';
 
 /**
- * og's position.c operations on the screen table.
+ * less's position.c operations on the screen table.
  *
  * The table is the screen: one entry per row, holding where that row
  * starts. `add_forw_pos` drops the front and appends at the bottom,
@@ -25,7 +25,7 @@ import { ScreenRow } from './screenTable';
 /**
  * Where the row containing `offset` begins.
  *
- * og's back_line reads back to the LINE's start and re-wraps forward
+ * less's back_line reads back to the LINE's start and re-wraps forward
  * from there (input.c:358), so it lands on the greatest row start
  * BELOW the position it was given. A top part-way into a row therefore
  * steps to the boundary it sits inside, and that IS one row - the same
@@ -115,7 +115,7 @@ export function subRowAt(line: string, offset: number): number {
  * Puts the top at a place in a line, deriving the sub-row index and
  * remainder the renderer still asks for.
  *
- * Movement works in offsets, like og's table entries; nothing outside
+ * Movement works in offsets, like less's table entries; nothing outside
  * this function may set the two halves independently, or they can
  * disagree about where the screen starts.
  */
@@ -145,7 +145,7 @@ function rowAfter(content: string[], cell: ScreenRow): ScreenRow | null {
 }
 
 /**
- * og's add_forw_pos (position.c:63), which forw() calls once per row
+ * less's add_forw_pos (position.c:63), which forw() calls once per row
  * DRAWN: it shifts the whole table up and appends the new bottom row
  * in ONE operation, so the table stays sc_height long and the top
  * moves BECAUSE of the shift.

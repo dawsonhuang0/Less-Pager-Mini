@@ -154,7 +154,7 @@ const EDIT_KEYS: Record<string, string | null> = {
 };
 
 /** \k special key names resolved to the terminal sequences our key
- *  splitter produces, standing in for og's SK_SPECIAL_KEY codes. */
+ *  splitter produces, standing in for less's SK_SPECIAL_KEY codes. */
 const SPECIAL_KEYS: Record<string, string> = {
   'b': '\x7F',
   'B': '\x08',
@@ -222,7 +222,7 @@ function specialKey(name: string): string | undefined {
   return SPECIAL_KEYS[name];
 }
 
-/** True for a \k name og's own tstr accepts, resolvable or not. */
+/** True for a \k name less's own tstr accepts, resolvable or not. */
 const knownSpecialKey = (name: string): boolean =>
   name in SPECIAL_KEY_CODES;
 
@@ -383,7 +383,7 @@ export const lesskeyForms = (): LesskeyForm[] => [...loadedForms];
 /**
  * Notes a lesskey that loaded. The ladder records its own; the option
  * scan records what the command line added, since that arrives after
- * loadLesskey has already run (og's init_cmds precedes scan_option).
+ * loadLesskey has already run (less's init_cmds precedes scan_option).
  */
 export function recordLesskeyForm(form: LesskeyForm): void {
   loadedForms.push(form);
@@ -410,7 +410,7 @@ export const userBinding = (seq: string): UserBinding | undefined =>
 
 /**
  * The sequence a user bound to an action, for the two that are read as
- * the INTRODUCER of a longer report rather than matched whole: og's
+ * the INTRODUCER of a longer report rather than matched whole: less's
  * A_X11MOUSE_IN and A_X116MOUSE_IN, which lesskey names "mouse" and
  * "mouse6" (lesskey_parse.c:72). Everything after the introducer is
  * the report's own bytes, so the dispatcher has to know the prefix.
@@ -452,8 +452,8 @@ export function resetLesskey(): void {
  * $LESSNOCONFIG skips everything.
  */
 /**
- * og's opt_k -> lesskey(filename, 0): read a COMPILED lesskey file and
- * add its tables. Returns false where og's lesskey() returns nonzero -
+ * less's opt_k -> lesskey(filename, 0): read a COMPILED lesskey file and
+ * add its tables. Returns false where less's lesskey() returns nonzero -
  * blocked by SECURE or LESSNOCONFIG, unopenable, or shorter than the
  * 3 bytes a valid file must have (decode.c).
  */
@@ -470,11 +470,11 @@ hook.loadLesskeyFile = (path: string): boolean => {
   }
 };
 
-// og parses the lesskey files ONCE, in init_cmds, and reports each
+// less parses the lesskey files ONCE, in init_cmds, and reports each
 // parse error once. We parse them TWICE for structural reasons: the
 // CLI needs the #env lines before it can classify argv, and the
 // session reset that follows clears the env table, so startupInit has
-// to read them again. Only the second pass is og's - the first is an
+// to read them again. Only the second pass is less's - the first is an
 // extra of ours, and it must not repeat the diagnostics.
 let quietParse = false;
 
@@ -484,7 +484,7 @@ export function loadLesskey(quiet: boolean = false): void {
 
   if (actualEnv('LESSNOCONFIG')) return;
 
-  // Tables are added in og's exact order. Later command definitions
+  // Tables are added in less's exact order. Later command definitions
   // win ties; environment lookup keeps user and system tables apart.
   const sysFile = lgetenv('LESSKEYIN_SYSTEM') || LESSKEYIN_SYS;
   let sysSourceLoaded = false;
@@ -503,7 +503,7 @@ export function loadLesskey(quiet: boolean = false): void {
       parseLesskeyBinary(fs.readFileSync(sysBinary), true);
       recordLesskeyForm({ kind: 'binary', origin: sysBinary, system: true });
     } catch {
-      // like og, a missing system binary is not an error
+      // like less, a missing system binary is not an error
     }
   }
 
@@ -516,12 +516,12 @@ export function loadLesskey(quiet: boolean = false): void {
       userSourceLoaded = true;
       recordLesskeyForm({ kind: 'source', origin: file, system: false });
     } catch {
-      // og opens the default file silently
+      // less opens the default file silently
     }
   }
 
   if (!userSourceLoaded) {
-    // without a source file og falls back to the compiled binary file,
+    // without a source file less falls back to the compiled binary file,
     // $LESSKEY or ~/.less (_less on Windows)
     const binary = lgetenv('LESSKEY') ??
       path.join(homeDir(), LESSKEYFILE_NAME);
@@ -530,7 +530,7 @@ export function loadLesskey(quiet: boolean = false): void {
       parseLesskeyBinary(fs.readFileSync(binary));
       recordLesskeyForm({ kind: 'binary', origin: binary, system: false });
     } catch {
-      // like og, a missing binary file is not an error
+      // like less, a missing binary file is not an error
     }
   }
 
@@ -555,7 +555,7 @@ export function loadLesskey(quiet: boolean = false): void {
  * Parses a compiled lesskey file, like decode.c's new_lesskey and
  * old_lesskey: the new format wraps c/e/v sections between the
  * "\0M+G" and "End" magics; the old format is one raw command table.
- * Invalid files are ignored silently, like og returning -1.
+ * Invalid files are ignored silently, like less returning -1.
  */
 export function parseLesskeyBinary(buf: Buffer, system: boolean = false): void {
   parsingSystem = system;
@@ -740,7 +740,7 @@ export function parseLesskey(
 }
 
 /**
- * Parses inline lesskey source, like og's parse_lesskey_content
+ * Parses inline lesskey source, like less's parse_lesskey_content
  * (lesskey_parse.c:738): lines end at a newline OR a semicolon, a
  * backslash escapes a literal semicolon, and a line hitting the
  * 1023-char cap SPLITS - the remainder becomes the next line.
@@ -800,11 +800,11 @@ function parseLesskeyText(text: string, filename: string): number {
     parseLine = n + 1;
     let line = lines[n];
 
-    // og's line is a C STRING: fgets keeps every byte it read, but
+    // less's line is a C STRING: fgets keeps every byte it read, but
     // control_line and clean_line walk it with strncmp and stop at the
     // first NUL (lesskey_parse.c:722), so the line IS what precedes
     // one. Handing a COMPILED lesskey to --lesskey-src is the case
-    // that shows it - the file opens with a NUL, so og reads an empty
+    // that shows it - the file opens with a NUL, so less reads an empty
     // line and says nothing, while we read the whole blob as one line
     // and refused the file over a "missing action"
     const nul = line.indexOf('\0');
@@ -965,11 +965,11 @@ function tstr(
         const seq = specialKey(name);
 
         if (seq === undefined) {
-          // og accepts every name its tstr lists and stores a blob for
+          // less accepts every name its tstr lists and stores a blob for
           // it; whether the TERMINAL can produce that key is decided
           // later, when the blob is resolved (decode.c). So a keypad
           // name on a terminal with no keypad binds nothing and says
-          // nothing - only a name og never had is an error
+          // nothing - only a name less never had is an error
           if (knownSpecialKey(name)) return { text: '', next, unresolved: true };
 
           parseError(`invalid escape sequence "\\k${name}"`);
@@ -1071,7 +1071,7 @@ function parseCmdLine(line: string, section: 'command' | 'edit'): void {
 }
 
 /**
- * Stores a #command binding; the first definition wins, like og's
+ * Stores a #command binding; the first definition wins, like less's
  * cmd_search finding the earliest table entry.
  */
 function addBinding(
@@ -1100,14 +1100,14 @@ export function userIsPrefix(seq: string): boolean {
  * in the session environment, `+=` appends to the last variable.
  */
 function parseVarLine(line: string): void {
-  // a broken ${ truncated og's whole var table: every later
+  // a broken ${ truncated less's whole var table: every later
   // variable in this file is dropped too
   if (varTableBroken) return;
 
   const eq = line.indexOf('=');
 
   if (eq > 0 && line[eq - 1] === '+') {
-    // og appends to the previously defined variable; a definition
+    // less appends to the previously defined variable; a definition
     // that lost to an earlier table stays invisible
     if (lastVarName && lastVarApplied) {
       lastVarRaw += varValue(line, eq + 1);
@@ -1201,7 +1201,7 @@ function evarMatch(evar: string, v: number, pat: string): number {
  * Expands `${NAME}` and `${NAME/pat/repl/...}` in a #env value, like
  * evar.c's expand_evars: each slash pair rewrites prefix matches of
  * the variable's value, later pairs tried first; a missing right
- * bracket truncates og's whole table, reported here as null.
+ * bracket truncates less's whole table, reported here as null.
  */
 function expandEvars(text: string): string | null {
   let out = '';
@@ -1254,7 +1254,7 @@ function expandEvars(text: string): string | null {
         e++;
       }
 
-      // og prepends to the list, so later pairs are tried first
+      // less prepends to the list, so later pairs are tried first
       replaces.unshift({ fm: fmStr, to: toStr });
     }
 

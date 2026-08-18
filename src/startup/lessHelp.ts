@@ -2,9 +2,9 @@
 /* eslint-disable max-len */
 
 /**
- * The help page, generated from og's less.hlp (707x): overstrike
+ * The help page, generated from less's less.hlp (707x): overstrike
  * sequences (X\bX bold, _\bX underline) render through the normal
- * content pipeline, like og paging its own help file.
+ * content pipeline, like less paging its own help file.
  */
 export const help: string[] = [
   "",

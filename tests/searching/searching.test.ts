@@ -439,14 +439,14 @@ describe('highlightLine', () => {
     );
   });
 
-  it('matches across a sequence og ABORTS, like cvt_text', () => {
+  it('matches across a sequence less ABORTS, like cvt_text', () => {
     // github265: cvt_text drops what ansi_step consumed, and an
     // ESC[K aborts (K is neither middle nor end), so the whole thing
     // goes - leaving "Why hello there" for the pattern to match
     doSearch('/', 'y he');
 
     const saved = opt.ctldisp;
-    opt.ctldisp = 2; // -R, og's only CVT_ANSI gate
+    opt.ctldisp = 2; // -R, less's only CVT_ANSI gate
 
     try {
       const line = 'Why \x1b[01;31m\x1b[Khello\x1b[m\x1b[K there';
@@ -457,7 +457,7 @@ describe('highlightLine', () => {
   });
 
   it('carries the file\'s own colour through a hilite', () => {
-    // og attributes each CHARACTER, so standout ending inside a
+    // less attributes each CHARACTER, so standout ending inside a
     // coloured run leaves the colour running underneath: "llo" stays
     // red after the hilite over "he" ends
     doSearch('/', 'y he');
@@ -605,7 +605,7 @@ describe('execFilter', () => {
 });
 
 describe('a search runs against the raw line', () => {
-  // og reads the line with forw_raw_line and folds only what cvt_text
+  // less reads the line with forw_raw_line and folds only what cvt_text
   // folds (search.c:1680), then turns the match's offsets into file
   // positions through chpos. Every displayed character carries the
   // position of the character it came from - a tab's expansion spaces

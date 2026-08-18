@@ -6,14 +6,14 @@ import { collapseRun } from '../../src/pager/core';
  * What the key queue throws away when a burst piles up against an
  * edge.
  *
- * og needs none of this: forw()/back() with nlines == 0 bell and
+ * less needs none of this: forw()/back() with nlines == 0 bell and
  * return (forwback.c:335), microseconds each, so a hundred queued keys
  * that all do nothing cost nothing. Ours renders a frame per key,
  * which is what made an overshoot into eof lock the pager up for as
  * long as the backlog took to drain.
  *
  * Dropping them is safe because they are indistinguishable: same wall,
- * same bell (rate limited to one a second, og's gate), same "(END)".
+ * same bell (rate limited to one a second, less's gate), same "(END)".
  * What is NOT safe is dropping past them, and that is what these pin
  * down - the collapse only ever eats a run of the SAME key.
  */
@@ -45,7 +45,7 @@ describe('the edge collapse', () => {
   });
 
   it('keeps a command typed behind the burst', () => {
-    // h at the bottom of a long scroll has to survive: og's help is
+    // h at the bottom of a long scroll has to survive: less's help is
     // one keystroke away however far behind the screen is
     const queue = ['j', 'j', 'j', 'h'];
 

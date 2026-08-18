@@ -121,8 +121,8 @@ describe('bounded pipe spooling', () => {
       // a dumb terminal's "Press RETURN to continue" gate is easily
       // long enough - and FileInput subscribes only afterwards, so the
       // event went to nobody and the length stayed unknown for the
-      // rest of the session: the prompt showed ":" where og shows
-      // "(END)". og cannot lose it, because ch_length becomes known on
+      // rest of the session: the prompt showed ":" where less shows
+      // "(END)". less cannot lose it, because ch_length becomes known on
       // the read that returns EOI and every read from here would.
       const text = Array.from({ length: 40 },
         (_, i) => `spooled line ${i + 1}`).join('\n') + '\n';

@@ -185,7 +185,7 @@ describe('short-content end jump (jump_loc null-row pad)', () => {
     expect(config.blankTop).toBe(config.window - 1 - short.length);
     expect(mode.EOF).toBe(true);
 
-    // og's bot_pos == end_pos on the anchored screen: eof_bell
+    // less's bot_pos == end_pos on the anchored screen: eof_bell
     expect(lastLine(short, 0)).toBe(false);
     expect(config.blankTop).toBe(config.window - 1 - short.length);
   });

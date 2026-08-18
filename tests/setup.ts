@@ -5,7 +5,7 @@ import fs from 'fs';
  *
  * Some display paths write straight to fd 1 with fs.writeSync — the
  * command-line clear before a blocking search, the pipe's wait
- * message, the keyboard's prompt erase — because og flushes those
+ * message, the keyboard's prompt erase — because less flushes those
  * synchronously. A vi.spyOn over process.stdout.write cannot see
  * them, so they used to land on the real screen and scramble it
  * (cursor jumps, cleared rows) while `npm t` ran.
@@ -32,7 +32,7 @@ fs.writeSync = ((fd: number, ...args: unknown[]): number => {
  * Pins the terminal size to whatever a test stubs.
  *
  * freshWindowSize() asks the kernel through `stty size` on /dev/tty,
- * like og's scrsize ioctl, and falls back to node's cached window.
+ * like less's scrsize ioctl, and falls back to node's cached window.
  * Neither route sees a test's stubbed process.stdout.columns/rows, so
  * a suite run FROM a terminal measured the developer's real window
  * and every screen assertion drifted with it — a chopped line stopped
@@ -61,7 +61,7 @@ process.stdout.getWindowSize = ((): [number, number] =>
  * The harnesses drive an INTERACTIVE pager: they fake a tty on stdin
  * and stdout, so the environment has to look like one too. A runner
  * has no $TERM (or sets it to 'dumb'), which makes dumbTerminal()
- * true; startup then prints og's missing_cap warning and holds the
+ * true; startup then prints less's missing_cap warning and holds the
  * screen at its "Press RETURN to continue" gate, which swallows the
  * keys the test sends. Locally $TERM is set, so the suite passed
  * while CI failed on eight tests.

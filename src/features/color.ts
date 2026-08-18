@@ -49,7 +49,7 @@ const NAME_CHARS: Record<string, ColorKind> = {
 };
 
 /** The attribute remaps -D may set without --use-color (no AT_COLOR
- *  bit in og's gate). */
+ *  bit in less's gate). */
 const ATTR_KINDS = new Set<ColorKind>(
   ['normal', 'standout', 'bold', 'underline', 'blink']
 );
@@ -117,7 +117,7 @@ const modeStrings = (attr: 'bold' | 'underline' | 'blink' | 'standout') => {
  * parse_color feeding tput_color: one or two 4-bit color chars (fg,
  * bg), or decimal `fg.bg` 256-color values, `-` leaving a side
  * unchanged, then attribute chars (`*~_&` or `dsul`). Trailing junk is
- * ignored, like og's cattr loop breaking out.
+ * ignored, like less's cattr loop breaking out.
  *
  * @returns The SGR codes (possibly empty), or null when invalid.
  */
@@ -169,7 +169,7 @@ export function colorSgr(text: string): string | null {
   let cattr = '';
 
   // trailing attribute chars; anything after them is ignored, like
-  // og's cattr loop breaking out of the string
+  // less's cattr loop breaking out of the string
   while (isAttr(s[0])) {
     cattr += `\x1B[${CATTR_CODES[s[0]]}m`;
     s = s.slice(1);
@@ -182,13 +182,13 @@ export function colorSgr(text: string): string | null {
  * Stores a -D color setting, like opt_D through set_color_map.
  *
  * @param text - The selector char followed by the color string.
- * @returns An og error message, or null on success.
+ * @returns An less error message, or null on success.
  */
 export function setColor(text: string): string | null {
   const kind = NAME_CHARS[text[0] ?? ''];
 
   if (!kind) {
-    // og's error() renders the char through the line buffer's caret
+    // less's error() renders the char through the line buffer's caret
     // transform: a stray control char shows as ^G, not a raw byte
     const char = text[0] ?? '';
     const code = char.charCodeAt(0);
@@ -240,7 +240,7 @@ export function colored(
     return open ? open + text + COLOR_RESET : text;
   }
 
-  // og's lowercase -D types recolor the base attributes regardless
+  // less's lowercase -D types recolor the base attributes regardless
   // of --use-color: a standout fallback honors a configured -Ds
   if (fallbackOn === INVERSE_ON && colorMap.standout) {
     return attrText('standout', text);

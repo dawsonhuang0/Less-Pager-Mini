@@ -8,7 +8,7 @@ import { search } from "./searching";
 import { lgetenv } from '../startup/environment';
 
 /**
- * The charset machinery, ported from og's charset.c: a per-byte class
+ * The charset machinery, ported from less's charset.c: a per-byte class
  * map built from $LESSCHARSET/$LESSCHARDEF, and the $LESSBINFMT /
  * $LESSUTFBINFMT display formats for binary characters.
  */
@@ -191,7 +191,7 @@ function parseUtfChardef(text: string): void {
   let i = 0;
 
   const hex = (): number => {
-    // og skips a U+ prefix before each number
+    // less skips a U+ prefix before each number
     if (text.slice(i, i + 2).toUpperCase() === 'U+') i += 2;
     const m = /^[0-9a-fA-F]+/.exec(text.slice(i));
     if (!m) return -1;
@@ -230,7 +230,7 @@ function parseUtfChardef(text: string): void {
         userTables.p.push(range);
         break;
       case 'p': case '.': userTables.p.push(range); break;
-      default: break; // unknown attributes are ignored, like og
+      default: break; // unknown attributes are ignored, like less
     }
 
     if (text[i] === ',') i++;
@@ -270,12 +270,12 @@ export function initCharset(): void {
     return;
   }
 
-  // og falls back to the locale tables; ours is natively UTF-8
+  // less falls back to the locale tables; ours is natively UTF-8
   useCharset('utf-8');
 }
 
 /**
- * og's omit table (omit.uni): characters DELETED from the output
+ * less's omit table (omit.uni): characters DELETED from the output
  * rather than drawn, "so that we never send them to the terminal.
  * Terminals do not display these characters consistently, so the
  * screen content cannot be known after printing them" (023bc640).
@@ -290,7 +290,7 @@ const OMIT_RANGES: [number, number][] = [
   [0xe0100, 0xe01ef],   // variation selectors supplement
 ];
 
-/** True for a character og omits from the display, like is_omit_char. */
+/** True for a character less omits from the display, like is_omit_char. */
 export function omitChar(code: number): boolean {
   for (const [lo, hi] of OMIT_RANGES) {
     if (code >= lo && code <= hi) return true;
@@ -419,7 +419,7 @@ export function rawByteOf(char: string): number {
 }
 
 /**
- * Decodes file bytes for display, like og reading through the
+ * Decodes file bytes for display, like less reading through the
  * charset: valid UTF-8 sequences become chars and invalid bytes
  * become private-use markers later rendered with $LESSBINFMT; other
  * charsets map bytes through latin1 with their chardef classes.
@@ -481,7 +481,7 @@ export function decodeContent(data: Buffer): string {
 }
 
 /**
- * Incrementally decodes pipe bytes into complete lines, like og's ch
+ * Incrementally decodes pipe bytes into complete lines, like less's ch
  * layer reading a non-seekable input: a multibyte sequence split
  * across chunks is held back rather than decoded as binary markers,
  * and the trailing partial line waits for its newline (or the end of

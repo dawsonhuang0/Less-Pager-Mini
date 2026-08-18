@@ -17,13 +17,13 @@ import { colored } from "../features/color";
 import { STYLE_RESET } from "../state/constants";
 
 /**
- * The "half char" og leaves at the left edge when the shift cuts a
+ * The "half char" less leaves at the left edge when the shift cuts a
  * wide character: add_linebuf(' ', rscroll_attr|AT_PLACEHOLDER)
  * (line.c:1002), so it wears the --rscroll attribute, standout by
  * default - the same attribute as the > marker at the other edge.
  *
  * @param seam - The style the orphaned cell inherits at a seam that is
- *   not the screen's left edge, where og adds no placeholder at all.
+ *   not the screen's left edge, where less adds no placeholder at all.
  *   There it paints the body shifted and then OVERLAYS the --header
  *   columns (forwback.c:184), so the wide char straddling the seam is
  *   half overwritten by the header's last cell - and the cell the
@@ -49,7 +49,7 @@ const getFillingSpace = (
 
 /**
  * The style the last visible cell of a rendered row was written under,
- * which is what og's overlay leaves on the cell it orphans.
+ * which is what less's overlay leaves on the cell it orphans.
  */
 function trailingCellStyle(row: string): string {
   let last = -1;
@@ -67,7 +67,7 @@ function trailingCellStyle(row: string): string {
   return last < 0 ? '' : openStyleAt(row, last);
 }
 
-// og pads with normal spaces and attributes only the rscroll char
+// less pads with normal spaces and attributes only the rscroll char
 // (standout by default, or the --rscroll "*x" attribute)
 const getMoreIndicator = (length: number): string => {
   const attr = optRscrollAttr();
@@ -157,7 +157,7 @@ function chop(
   placeholder: boolean = true,
   seam: string = ''
 ): void {
-  // og chops inside `if (backchars > 0)` - the branch pappend enters
+  // less chops inside `if (backchars > 0)` - the branch pappend enters
   // only when a char DOES NOT FIT (input.c:231) - and under -r
   // fits_on_screen answers TRUE for everything, so nothing ever fails
   // to fit. The horizontal shift still applies, since store_char skips
@@ -253,7 +253,7 @@ function chopAsciiLine(
 ): void {
   const end = start + width;
 
-  // og's pdone closes every line the same way whatever is in it, and
+  // less's pdone closes every line the same way whatever is in it, and
   // under -R that is three literal bytes rather than nothing - so even
   // a line with no style of its own goes through withReset. The
   // rscroll marker follows the close, like add_attr_normal running

@@ -134,7 +134,7 @@ describe('viewing lesskey files over a live session', () => {
   });
 
   it('makes an edit live without waiting for the quit', () => {
-    // og leaves the old text up after v until R flushes its buffers,
+    // less leaves the old text up after v until R flushes its buffers,
     // which is right for a file being READ and wrong here: the editor
     // was opened to change what the keys do
     openLesskeyView();
@@ -153,8 +153,8 @@ describe('viewing lesskey files over a live session', () => {
   });
 
   it('keeps what parsed and reports what did not, like the reader', () => {
-    // og's lesskey PROGRAM writes nothing when a source has errors;
-    // og's pager READING one reports each bad line and keeps every
+    // less's lesskey PROGRAM writes nothing when a source has errors;
+    // less's pager READING one reports each bad line and keeps every
     // binding that parsed. This is the reader's job, so one mistyped
     // action must not cost the rest of the file
     const binary = path.join(dir, 'keys.bin');
@@ -205,7 +205,7 @@ describe('viewing lesskey files over a live session', () => {
   });
 
   it('collects every bad line, so one gate covers them all', () => {
-    // og's main errmsgs gate prints each scan error and blocks ONCE.
+    // less's main errmsgs gate prints each scan error and blocks ONCE.
     // Left on the prompt row instead, the first would show and the
     // rest would queue invisibly behind a screen nobody is reading
     const binary = path.join(dir, 'many.bin');

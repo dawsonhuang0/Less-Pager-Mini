@@ -69,7 +69,7 @@ describe('J / K forced scrolling', () => {
     expect(config.blankTop).toBe(config.window - 2);
   });
 
-  it('K at the cap rings the eof bell, like og back with no lines', () => {
+  it('K at the cap rings the eof bell, like less back with no lines', () => {
     forceLineBackward(content, 99);
 
     resetBellTimer();
@@ -120,8 +120,8 @@ describe('K blank top with the end of file on screen', () => {
     expect(mode.EOF).toBe(true);
   });
 
-  it('K from the initial screen counts only og null rows over BOF', () => {
-    // og's row table is top-anchored from the start: the lower-left
+  it('K from the initial screen counts only less null rows over BOF', () => {
+    // less's row table is top-anchored from the start: the lower-left
     // first paint is a transient visual, not state, so K adds one
     // null row and the tail stays on screen
     mode.INIT = true;
@@ -197,7 +197,7 @@ describe('P byte offset jumps', () => {
   });
 });
 
-describe('--past-eof forces backward scrolls too, like og back()', () => {
+describe('--past-eof forces backward scrolls too, like less back()', () => {
   beforeEach(() => { opt.pastEof = 1; });
   afterEach(() => { opt.pastEof = 0; });
 
@@ -218,7 +218,7 @@ describe('--past-eof forces backward scrolls too, like og back()', () => {
   });
 });
 
-describe('a -z window of zero or less, like og forw/back nlines == 0', () => {
+describe('a -z window of zero or less, like less forw/back nlines == 0', () => {
   it('rings the eof bell and does not move', () => {
     config.row = 10;
 
@@ -239,7 +239,7 @@ describe('a -z window of zero or less, like og forw/back nlines == 0', () => {
   });
 });
 
-describe('-c full-window forward, like og forw with top_scroll', () => {
+describe('-c full-window forward, like less forw with top_scroll', () => {
   beforeEach(() => { opt.clearRepaint = 1; });
   afterEach(() => { opt.clearRepaint = 0; });
 

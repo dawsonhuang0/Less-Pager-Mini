@@ -62,7 +62,7 @@ describe('render', () => {
     config.row = 10;
     render(content, []);
 
-    // og's FIRST paint on the alternate screen homes nowhere:
+    // less's FIRST paint on the alternate screen homes nowhere:
     // term_init has parked the cursor on the bottom line and forw()
     // writes each line followed by a newline, scrolling the first
     // screenful up into place (screen.c:2061 + forwback.c)
@@ -73,7 +73,7 @@ describe('render', () => {
     config.row = 11;
     render(content, []);
 
-    // one line forward: og asks the terminal for no scroll at all -
+    // one line forward: less asks the terminal for no scroll at all -
     // forw() clears the prompt row, writes the new line THERE, and
     // the newline ending it scrolls the screen (forwback.c). So the
     // frame is clear_bot + the exposed line + its newline
@@ -98,14 +98,14 @@ describe('render', () => {
     expect(writes[1]).not.toContain('line 20');
   });
 
-  it("paints forward jumps with og's skipping marker", () => {
+  it("paints forward jumps with less's skipping marker", () => {
     config.row = 10;
     render(content, []);
 
     config.row = 36;
     render(content, []);
 
-    // og's forw() without top_scroll: clear the prompt row, print
+    // less's forw() without top_scroll: clear the prompt row, print
     // "...skipping..." and let the new lines scroll in — no homing
     expect(writes[1]).toContain('...skipping...');
     expect(writes[1]).not.toContain('\x1b[H');
@@ -116,7 +116,7 @@ describe('render', () => {
     config.row = 10;
     render(content, []);
 
-    // new top = old BOTTOM_PLUS_ONE: og-contiguous by position
+    // new top = old BOTTOM_PLUS_ONE: contiguous by position in less
     config.row = 10 + config.window - 1;
     render(content, []);
 
@@ -166,7 +166,7 @@ describe('render', () => {
     expect(writes[0]).toContain(' ^X');
     expect(writes[0]).not.toContain('^X1');
 
-    // og spells the escape character "ESC" (prchar, charset.c:533),
+    // less spells the escape character "ESC" (prchar, charset.c:533),
     // so a half-read arrow echoes " ESC" and then " ESCO". Whether it
     // is echoed AT ALL is the input layer's call - getcc_repl
     // swallows a bare ESC on any terminal whose kent starts with one.
@@ -203,7 +203,7 @@ describe('render', () => {
     expect(frame).not.toContain('(END)');
   });
 
-  it('combines the new-file title with the END marker like og', () => {
+  it('combines the new-file title with the END marker like less', () => {
     initFiles(['x1', 'x2']);
     files.index = 0;
     files.newFile = true;
@@ -231,15 +231,15 @@ describe('render', () => {
     config.row = 11;
     render(content, []);
 
-    // a scroll frame parks nothing: og's own newline has left the
+    // a scroll frame parks nothing: less's own newline has left the
     // cursor on the prompt row, right after the prompt it just wrote
     expect(writes[1].endsWith(':\x1b[K\x1b[?2026l')).toBe(true);
   });
 });
 
-describe('$LESS_LINES gives up og full_screen', () => {
+describe('$LESS_LINES gives up less full_screen', () => {
   // the rows below the window belong to whoever launched us, so
-  // scrolling into them is not allowed: og repaints where it would
+  // scrolling into them is not allowed: less repaints where it would
   // have scrolled and drops the marker (screen.c:966 and its readers)
   afterEach(() => {
     delete process.env.LESS_LINES;
@@ -296,11 +296,11 @@ describe('$LESS_LINES gives up og full_screen', () => {
 });
 
 describe('a width change keeps the top on the same text', () => {
-  // og's table[TOP] is a byte position: a width change re-wraps from
+  // less's table[TOP] is a byte position: a width change re-wraps from
   // the same byte, a forward move keeps that shifted grid, and a
   // backward move re-anchors to the absolute one (back_line lands on
   // the greatest row start below the position, input.c:358). All
-  // three measured against a live og at 79 columns with -N taking 8.
+  // three measured against a live less at 79 columns with -N taking 8.
   const long = Array.from({ length: 300 }, (_, i) => `w${i}`).join('-');
 
   beforeEach(() => {
@@ -332,7 +332,7 @@ describe('a width change keeps the top on the same text', () => {
   it('does not spill past the window when the span fills it', () => {
     // enough backward moves and the uncovered span alone is taller
     // than the screen; the grid below must simply not be reached, as
-    // og stops filling the position table. Emitting it anyway overran
+    // less stops filling the position table. Emitting it anyway overran
     // the row list and the screen jumped to the file's end.
     const w = config.screenWidth;
     const huge = 'x'.repeat(w * 60);
@@ -351,11 +351,11 @@ describe('a width change keeps the top on the same text', () => {
   });
 
   it('sends a horizontal shift back to the line start, for good', () => {
-    // og's pos_rehead: every shift command moves table[TOP] back to
+    // less's pos_rehead: every shift command moves table[TOP] back to
     // the beginning of its line first (command.c:2459 and friends)
     // and trashes the screen. Shifting right and back left therefore
     // leaves the screen at the line's start, not where it began -
-    // confirmed against og.
+    // confirmed against less.
     config.subRow = 3;
     config.subShift = 0;
 
@@ -369,7 +369,7 @@ describe('a width change keeps the top on the same text', () => {
   });
 
   it('pushes the partial row down, then scrolls it off', () => {
-    // og's add_back_pos prepends an entry per backward move and
+    // less's add_back_pos prepends an entry per backward move and
     // add_forw_pos drops table[0] per forward one (position.c:63-90),
     // so the short row walks down the screen and then away
     const w = config.screenWidth;
@@ -378,7 +378,7 @@ describe('a width change keeps the top on the same text', () => {
     config.subShift = 30;
 
     lineBackward([long], 1);
-    // og's add_back_pos prepends an ENTRY, whose end is the row that
+    // less's add_back_pos prepends an ENTRY, whose end is the row that
     // used to be on top - that is what makes the exposed row short
     expect(config.screen[0]).toEqual({ row: 0, offset: 4 * w, end: 4 * w + 30 });
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
@@ -396,7 +396,7 @@ describe('a width change keeps the top on the same text', () => {
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
 
     lineForward([long], 1);
-    // og's add_forw_pos drops table[0] and appends the newly drawn row
+    // less's add_forw_pos drops table[0] and appends the newly drawn row
     // in one operation, so the table does not shrink - "the entries
     // were walked off" means the top is no longer the SHORT row
     // back_line left, not that the table emptied
@@ -406,10 +406,10 @@ describe('a width change keeps the top on the same text', () => {
   });
 
   it('bounds the row a backward move exposes at the old top', () => {
-    // og's back_line stops appending once it reaches the old top -
+    // less's back_line stops appending once it reaches the old top -
     // "if (new_pos >= curr_pos) break" (input.c) - so the exposed row
     // is partial and the rows below keep the grid they had. Measured
-    // against og after a 80 -> 70 resize: a 30-column row, then the
+    // against less after a 80 -> 70 resize: a 30-column row, then the
     // shifted grid resuming.
     const w = config.screenWidth;
 
@@ -426,7 +426,7 @@ describe('a width change keeps the top on the same text', () => {
   });
 
   it('anchors the last screenful from the file end, not from the top', () => {
-    // og's jump_forw puts the file's LAST LINE on the bottom screen
+    // less's jump_forw puts the file's LAST LINE on the bottom screen
     // line and lets jump_loc fill upward (jump.c:62), so the anchor is
     // a back_line walk from the end - it never consults where the
     // screen currently starts. We used to COUNT each line's rows and
@@ -452,11 +452,11 @@ describe('a width change keeps the top on the same text', () => {
   });
 
   it('drops the partial row once it passes the last line', () => {
-    // og's position table holds exactly sc_height entries, so the
+    // less's position table holds exactly sc_height entries, so the
     // junction rides down as add_back_pos prepends more rows and is
     // gone the moment it falls off the bottom. Ours is an offset:
     // left standing it rose back INTO view the next time the screen
-    // moved forward, putting a short row far below a top og had long
+    // moved forward, putting a short row far below a top less had long
     // since regenerated whole (measured, 80 -> 70 at 25 rows).
     const w = config.screenWidth;
     const huge = 'x'.repeat(w * 200);

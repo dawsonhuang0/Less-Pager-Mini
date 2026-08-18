@@ -2,11 +2,11 @@
 """Compile lesskey sources with ours and with GNU lesskey, compare bytes.
 
 The pager needs a compiler for --edit-lesskey, which has to write a
-binary back where it found one. og ships the real thing in the vendored
+binary back where it found one. less ships the real thing in the vendored
 tree, so the port can be checked the only way worth checking: byte for
 byte, on the same source.
 
-og's lesskey writes NOTHING when a source has errors ("N errors; no
+less's lesskey writes NOTHING when a source has errors ("N errors; no
 output produced", lesskey.c:316), so a source that should fail is
 compared on its MESSAGES instead.
 
@@ -76,7 +76,7 @@ CASES = [
 
 
 def every_name():
-    """One binding per name og knows, so no entry goes unchecked."""
+    """One binding per name less knows, so no entry goes unchecked."""
     import re as _re
     src = open('less/lesskey_parse.c').read()
     body = _re.search(r'cmdnames\[\]\s*=\s*\{(.*?)\{ NULL', src, _re.S)
@@ -91,7 +91,7 @@ def every_name():
 
 
 def og_errors(text):
-    """og's stderr, minus the deprecation note and the error count."""
+    """less's stderr, minus the deprecation note and the error count."""
     drop = ('NOTE: lesskey', 'It is no longer necessary', 'when using less',
             'errors; no output produced')
     return [line for line in text.splitlines()
@@ -116,7 +116,7 @@ def main():
             source = every_name()
 
         src = os.path.join(tmp, 'in.src')
-        og_out = os.path.join(tmp, 'og.bin')
+        og_out = os.path.join(tmp, 'less.bin')
         us_out = os.path.join(tmp, 'us.bin')
 
         open(src, 'w').write(source)
@@ -124,7 +124,7 @@ def main():
             if os.path.exists(stale):
                 os.remove(stale)
 
-        og = subprocess.run([LESSKEY, '-o', og_out, src],
+        less = subprocess.run([LESSKEY, '-o', og_out, src],
                             capture_output=True, text=True)
         us = subprocess.run(['npx', 'tsx', driver, 'compile', src, us_out],
                             capture_output=True, text=True)
@@ -135,24 +135,24 @@ def main():
         if og_wrote and us_wrote:
             a, b = open(og_out, 'rb').read(), open(us_out, 'rb').read()
             ok = a == b
-            detail = '' if ok else 'og=%d ours=%d bytes' % (len(a), len(b))
+            detail = '' if ok else 'less=%d ours=%d bytes' % (len(a), len(b))
         elif not og_wrote and not us_wrote:
             # both refused: the messages have to agree, minus the
-            # file-name prefix og puts in front of every one
+            # file-name prefix less puts in front of every one
             a = [re.sub(r'^.*?: (line \d+: )', r'\1', l)
-                 for l in og_errors(og.stderr)]
+                 for l in og_errors(less.stderr)]
             b = og_errors(us.stderr)
             ok = a == b
             detail = '' if ok else '%r vs %r' % (a, b)
         else:
             ok = False
-            detail = 'og wrote %s, ours wrote %s' % (og_wrote, us_wrote)
+            detail = 'less wrote %s, ours wrote %s' % (og_wrote, us_wrote)
 
         same += ok
         print('%-22s %s %s' % (name, 'same' if ok else 'DIFFER', detail))
 
-        # phase two: a binary og accepted has to survive being rendered
-        # back to source and compiled again. Nothing in og does this -
+        # phase two: a binary less accepted has to survive being rendered
+        # back to source and compiled again. Nothing in less does this -
         # its lesskey only goes one way - so the check is against the
         # bytes themselves
         if og_wrote:

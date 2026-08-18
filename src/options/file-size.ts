@@ -17,7 +17,7 @@ export const fileSize: OptionSpec = {
     set: value => {
       opt.wantFileSize = value as number;
 
-      // og's opt_filesize runs scan_eof when the current input's
+      // less's opt_filesize runs scan_eof when the current input's
       // length is unknown; each session's hook carries its own
       // ch_length knowledge
       if (opt.wantFileSize) hook.scanFileSize();

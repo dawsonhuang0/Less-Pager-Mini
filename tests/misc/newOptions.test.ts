@@ -78,8 +78,8 @@ function toggle(keys: string): void {
 
 const longToggle = (name: string): void => toggle(`--${name}\x0D`);
 
-describe('og option table', () => {
-  it('toggles -a through its triple states with og messages', () => {
+describe('less option table', () => {
+  it('toggles -a through its triple states with less messages', () => {
     toggle('-a');
     expect(search.message).toBe('Search skips displayed screen');
 
@@ -126,12 +126,12 @@ describe('og option table', () => {
 
     expect(transformContent(['a\tb'])).toEqual(['a        b']);
 
-    // an empty answer queries instead of setting, like og's
+    // an empty answer queries instead of setting, like less's
     // toggle_option downgrading OPT_TOGGLE to OPT_NO_TOGGLE
     toggle('-x\x0D');
     expect(search.message).toBe('Tab stops 9,17 and then every 8 spaces');
 
-    // og's set_tabs skips non-increasing entries without ending the
+    // less's set_tabs skips non-increasing entries without ending the
     // list
     toggle('-x4,2,8\x0D');
     toggle('_x');
@@ -226,7 +226,7 @@ describe('display transforms', () => {
       ['a' + INVERSE_ON + '^A' + INVERSE_OFF + 'b']
     );
 
-    // og's default carets data escapes (prchar's "ESC", charset.c:534)
+    // less's default carets data escapes (prchar's "ESC", charset.c:534)
     expect(transformContent(['\x1b[31mred'])).toEqual(
       [INVERSE_ON + 'ESC' + INVERSE_OFF + '[31mred']
     );
@@ -246,7 +246,7 @@ describe('display transforms', () => {
     expect(gutterWidth()).toBe(8);
     expect(config.screenWidth).toBe(72);
 
-    // og pads AT_NORMAL and bolds only the digits (line.c:449)
+    // less pads AT_NORMAL and bolds only the digits (line.c:449)
     const rows = screenRows(content, []);
     expect(rows[0]).toBe('      ' + BOLD_ON + '1' + BOLD_OFF + ' m1');
     expect(rows[1]).toBe('      ' + BOLD_ON + '2' + BOLD_OFF + ' m2');
@@ -260,7 +260,7 @@ describe('display transforms', () => {
     startSetMark(false, 0);
     marksKey(content, 'a');
 
-    // the mark letter stands out (og's AT_HILITE|AT_COLOR_MARK);
+    // the mark letter stands out (less's AT_HILITE|AT_COLOR_MARK);
     // the padding stays normal
     toggle('-J');
     const rows = screenRows(content, []);
@@ -347,7 +347,7 @@ describe('search options', () => {
 });
 
 describe('-w unread highlight', () => {
-  it('tracks unread lines both directions, like og v693', () => {
+  it('tracks unread lines both directions, like less v693', () => {
     toggle('-W');
 
     // -W line moves need a count (command.c:1702: ONPLUS && n > 1)
@@ -390,7 +390,7 @@ describe('-w unread highlight', () => {
     windowBackward(content, []);
     expect(config.attnRow).toBe(9);
 
-    // og keeps the current highlight when -w turns off; the next
+    // less keeps the current highlight when -w turns off; the next
     // movement clears it (clear_attn), not the toggle
     toggle('-+w');
     expect(config.attnRow).toBe(9);
@@ -407,7 +407,7 @@ describe('prompt styles', () => {
     search.message = '';
 
     // a pipe's length is unknown mid-file, so the medium prompt falls
-    // back to "byte %bB" like og's ?pB conditional
+    // back to "byte %bB" like less's ?pB conditional
     let rows = screenRows(content, []);
     expect(rows[rows.length - 1]).toMatch(/byte \d+/);
 
@@ -415,7 +415,7 @@ describe('prompt styles', () => {
     expect(search.message).toBe('Short prompt');
     search.message = '';
 
-    // og reports the new prototype after the set (toggle_option's
+    // less reports the new prototype after the set (toggle_option's
     // string QUERY), then the redefined prompt shows
     toggle('-PsHI\x0D');
     expect(search.message).toBe('Prompt (short): HI');

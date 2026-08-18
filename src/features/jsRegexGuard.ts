@@ -7,7 +7,7 @@ import { Worker } from 'worker_threads';
  *
  * A JavaScript regex is one synchronous call into the engine: nothing
  * on that thread runs again until it returns, so the interrupt poll
- * that stops every other long search never gets a turn. og has the
+ * that stops every other long search never gets a turn. less has the
  * same limit with regexec, which is why it checks for the interrupt
  * BETWEEN lines (search.c) and can never break into one.
  *

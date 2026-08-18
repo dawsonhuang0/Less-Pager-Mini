@@ -42,7 +42,7 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     const text = rowText(cell, lineAt(cell.row));
     config.screenWidth += shrink;
 
-    // every emitted row of the line gets the same gutter, like og's
+    // every emitted row of the line gets the same gutter, like less's
     // per-row plinestart from base_pos; -w and --status-line
     // highlight the row in standout
     lines.push(decorated

@@ -19,7 +19,7 @@ export const procTab: OptionSpec = {
       opt.procTab = value as number;
       hook.rebuildContent();
 
-      // og's O_HL_REPAINT (opttbl.c): chg_hilite runs before the
+      // less's O_HL_REPAINT (opttbl.c): chg_hilite runs before the
       // option's message and repaints the screen through
       // repaint_hilite, so the new shape shows UNDER the message
       hook.hiliteRepaint();

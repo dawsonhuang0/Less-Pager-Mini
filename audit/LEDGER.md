@@ -1,4 +1,4 @@
-# og discipleship audit
+# less discipleship audit
 
 Walk every commit in `less/.git` in order, oldest first, and adjudicate each
 one against our code. **No skipping.** A commit is not "skipped" when it does
@@ -45,7 +45,7 @@ v241, 50 files, 19086 lines: the whole program. Not a feature but the floor
 every later commit edits. Subsystem→ours map (N/A reasons are permanent):
 `regexp.c` N/A we use V8 + a vm guard; `doscreen.c`/`defines.ds`/`Makefile*`/
 `install.sh`/`mkinstalldirs` N/A build+DOS port; `lesskey.c` N/A standalone
-compiler, and og itself removes it in v707; `*.nro`/`NEWS`/`README`/`help.c.old`/
+compiler, and less itself removes it in v707; `*.nro`/`NEWS`/`README`/`help.c.old`/
 `less.hlp.old` docs. Every remaining file has a counterpart in `src/`. The
 HEAD-state read of these files is tracked separately in the og-read-ledger
 memory (charset.c UNREAD; line.c/search.c/command.c/screen.c/main.c/input.c/
@@ -70,7 +70,7 @@ checks `buf[0]===0x00 && buf[1]===0x4D`; the compiled `#stop` sentinel
 
 ### 0005 `1b1513c` Add -f flag. — **N/A** (`SUPERSEDED`)
 The standalone `lesskey` compiler's -f (force overwrite). We ship no such
-binary, and og deletes the program outright in v707 ("Remove obsolete lesskey
+binary, and less deletes the program outright in v707 ("Remove obsolete lesskey
 program", NEWS 705→707).
 
 ### 0006 `f262f2e` Fix compile errors if TAB_COMPLETE_FILENAME not defined. — **N/A**
@@ -82,7 +82,7 @@ Conditional-compilation repair; no behaviour.
 ### 0009 `e14b6bb` Add WARNING about hilite_search with TAB chars. — **N/A**
 Man page only, and it documents a *limitation* ("Patterns which include a TAB
 character may not be highlighted correctly"), not a behaviour to implement.
-Noted: og does not promise correct hilite for TAB patterns, so a future
+Noted: less does not promise correct hilite for TAB patterns, so a future
 divergence there is not automatically our bug.
 
 ### 0010 `7190485` Doc -f flag and #stop. — **MATCH** (doc, but checked)
@@ -90,7 +90,7 @@ lesskey man page. `#stop` is a real directive; ours implements it
 (`features/lesskey.ts:369` `userStop()`, plus the compiled form at :545).
 
 ### 0011 `88cf6bf` Don't hilite_search line number displayed with -N. — **MATCH**
-og adds `lno_indent` and hilites from `linebuf + lno_indent`, so the -N gutter
+less adds `lno_indent` and hilites from `linebuf + lno_indent`, so the -N gutter
 is never standout. Ours cannot express the bug: `wrapLongLines.ts:49` builds a
 row as `gutterFor(...) + highlightRow(...)` — the gutter is prepended to the
 already-highlighted text, so hilite has no way to reach it.
@@ -113,7 +113,7 @@ the option-audit-findings memory — not a gap.
 ### 0018 `3502a8f` Update version number. — **N/A** README.
 
 ### 0019 `446987b` Remove lesskey -f; add -V; default .lesskey.in — **N/A** + **MATCH**
-lesskey-tool parts N/A (no such binary; og deletes it in v707). The command.c
+lesskey-tool parts N/A (no such binary; less deletes it in v707). The command.c
 hunk factors the `V` command into `dispversion()` — covered by 0016.
 
 ### 0020 `352f4f2` Lesskey input file "-" means stdin. — **N/A** lesskey tool.
@@ -126,7 +126,7 @@ convert.
 ### 0024 `364b9e1` Add version.obj to lesskey link. — **N/A** Makefile.
 
 ### 0025 `544238c` Deal with tags file when pattern has a backslash. — **MATCH**
-og rewrites the pattern in place, dropping each `\` and copying the char after
+less rewrites the pattern in place, dropping each `\` and copying the char after
 it, then strips a trailing `$`. `features/tags.ts:218-228` is that loop
 verbatim (`if (line[i] === '\\') i++;` then copy), with the leading `^` skipped
 at :214 and `$` turned into `endline` at :225.

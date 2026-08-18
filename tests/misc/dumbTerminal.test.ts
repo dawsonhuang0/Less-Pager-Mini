@@ -23,7 +23,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('dumbTerminal, like og get_term/missing_cap', () => {
+describe('dumbTerminal, like less get_term/missing_cap', () => {
   it('unix: a missing $TERM loads the "unknown" entry and is dumb', () => {
     setPlatform('linux');
 
@@ -37,7 +37,7 @@ describe('dumbTerminal, like og get_term/missing_cap', () => {
     expect(dumbTerminal()).toBe(false);
   });
 
-  it('windows consoles never consult $TERM, like og MSDOS builds', () => {
+  it('windows consoles never consult $TERM, like less MSDOS builds', () => {
     setPlatform('win32');
     vi.spyOn(os, 'release').mockReturnValue('10.0.19045');
 

@@ -91,7 +91,7 @@ afterEach(() => {
 const writes = (): unknown[] => stdoutWrite.mock.calls.map(call => call[0]);
 
 describe('terminal mode transitions', () => {
-  it('leaves mouse, paste, keypad, and alternate modes in og order', () => {
+  it('leaves mouse, paste, keypad, and alternate modes in less order', () => {
     opt.mouseMode = 1;
     opt.noPaste = 1;
     hook.screenActive = true;
@@ -110,13 +110,13 @@ describe('terminal mode transitions', () => {
   });
 
   it('flushes the deinit codes before a child process can write', () => {
-    // og's lsystem: `term_deinit(); flush(); /* Make sure the deinit
+    // less's lsystem: `term_deinit(); flush(); /* Make sure the deinit
     // chars get out */` (lsystem.c:97).
     //
     // spawnSync inherits fd 1, so the child writes DIRECTLY while
     // anything of ours still in the output buffer waits behind it -
     // including the alternate-screen exit. `!echo hi` then printed hi
-    // inside the alt screen and leaving it threw the line away: og
+    // inside the alt screen and leaving it threw the line away: less
     // showed "hi", we showed nothing.
     //
     // Buffering only happens on a tty (output.ts writes through
@@ -176,7 +176,7 @@ describe('terminal mode transitions', () => {
       KEYPAD_ON,
       MOUSE_SGR_ON + MOUSE_ON,
       BRACKETED_PASTE_ON,
-      // og's term_init ends by parking the cursor at column 1
+      // less's term_init ends by parking the cursor at column 1
       '\r',
     ]);
     expect(hook.screenActive).toBe(true);
@@ -187,7 +187,7 @@ describe('terminal mode transitions', () => {
 
     enterScreen();
 
-    // term_init's closing line_left is not a capability: og runs it
+    // term_init's closing line_left is not a capability: less runs it
     // whatever the terminal is (screen.c:2071)
     expect(writes()).toEqual(['\r']);
     expect(hook.screenActive).toBe(true);
@@ -202,7 +202,7 @@ describe('terminal dimensions', () => {
 
     expect(config.window).toBe(41);
     expect(config.screenWidth).toBe(101);
-    // og rounds the vertical half UP - wscroll = (sc_height + 1) / 2
+    // less rounds the vertical half UP - wscroll = (sc_height + 1) / 2
     // (screen.c:998) - and the horizontal one DOWN, sc_width / 2
     // (command.c:2456)
     expect(config.halfWindow).toBe(21);
@@ -255,7 +255,7 @@ describe('terminal dimensions', () => {
     calculateDimensions();
 
     expect(config.screenWidth).toBe(71);
-    // OG's ESC-(/ESC-) default is half of full sc_width, not half
+    // less's ESC-(/ESC-) default is half of full sc_width, not half
     // of the text area left after line_pfx_width is reserved.
     expect(config.halfScreenWidth).toBe(40);
     expect(opt.appliedGutter).toBe(9);

@@ -16,7 +16,7 @@ import { initTerminalCapabilities, INVERSE_ON, INVERSE_OFF, BOLD_ON,
 
 import { resetTerminfo } from '../../src/tty/terminal';
 
-// mode.DUMB alone is a state no terminal is ever in: og reaches it by
+// mode.DUMB alone is a state no terminal is ever in: less reaches it by
 // loading an entry with no capabilities, which is also what empties
 // its attribute strings. Setting the flag while the CAPABILITIES still
 // come from a real xterm (tests/setup.ts forces one) leaves standout
@@ -74,15 +74,15 @@ beforeEach(() => {
   resetRender();
   // resetRender does not clear it: dumbPainted is what tells the dumb
   // painter a screen is already up, and it survives a session the way
-  // og's own statics do. Left standing between tests, the first paint
+  // less's own statics do. Left standing between tests, the first paint
   // of the next one opens with a repaint's CR
   resetDumbPaint();
   written.length = 0;
 });
 
 describe('dumb terminal rendering', () => {
-  it('has no attribute strings to draw with, like og tmodes', () => {
-    // the entry has no smso, so og's tmodes leaves standout empty -
+  it('has no attribute strings to draw with, like less tmodes', () => {
+    // the entry has no smso, so less's tmodes leaves standout empty -
     // and hands that same empty pair to underline and bold
     // (screen.c:1645). Nothing on this terminal stands out, which is
     // why the frames below carry no attribute bytes of their own
@@ -93,9 +93,9 @@ describe('dumb terminal rendering', () => {
   });
 
   it('still passes the file\'s own -R escapes to the terminal', () => {
-    // og's put_line hands an AT_ANSI char to putchr whatever the
+    // less's put_line hands an AT_ANSI char to putchr whatever the
     // terminal is (line.c:1300), so -R colours a dumb terminal just
-    // as it colours an xterm; measured against og at TERM=dumb. Its
+    // as it colours an xterm; measured against less at TERM=dumb. Its
     // pdone closes every line with a literal "\033[m" too
     const coloured = ['\x1b[31mred', 'plain'];
     opt.ctldisp = 2;
@@ -116,7 +116,7 @@ describe('dumb terminal rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // the first paint prints directly, like og's initial forw,
+    // the first paint prints directly, like less's initial forw,
     // behind the CR term_init has already written
     expect(frame.startsWith('d1')).toBe(true);
 
@@ -132,7 +132,7 @@ describe('dumb terminal rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og lets the terminal scroll: CR, the newly exposed line, prompt
+    // less lets the terminal scroll: CR, the newly exposed line, prompt
     expect(frame.startsWith('\r')).toBe(true);
     expect(frame).toContain('d6\n');
     expect(frame).not.toContain('d2\n');
@@ -155,7 +155,7 @@ describe('dumb terminal rendering', () => {
   });
 
   it('never marks its own first screen, whatever was echoed first', () => {
-    // og clears first_time at the END of the first forw (forwback.c:381)
+    // less clears first_time at the END of the first forw (forwback.c:381)
     // and tests it before printing the marker (:272), so nothing
     // written before that first paint can make the paint look like a
     // repaint. The startup error gate ungets whatever key was typed
@@ -168,7 +168,7 @@ describe('dumb terminal rendering', () => {
     expect(written.join('')).not.toBe('');
     written.length = 0;
 
-    // the mca closing repaints through og's pos_clear'd forw, which
+    // the mca closing repaints through less's pos_clear'd forw, which
     // is the path that carries the marker
     markPosClear();
     render(content, []);
@@ -178,8 +178,8 @@ describe('dumb terminal rendering', () => {
     expect(frame).not.toContain('...skipping...');
   });
 
-  it('repaints behind "...skipping..." on backward moves, like og', () => {
-    // og's repaint() forw is non-contiguous and, without top_scroll,
+  it('repaints behind "...skipping..." on backward moves, like less', () => {
+    // less's repaint() forw is non-contiguous and, without top_scroll,
     // prints the skipping marker instead of clearing
     config.row = 3;
     render(content, []);

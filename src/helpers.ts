@@ -122,7 +122,7 @@ export function bufferToNum(buffer: string[]): number {
  * @returns An array of existing file paths.
  */
 /**
- * Flattens input into file paths WITHOUT dropping missing ones: og's
+ * Flattens input into file paths WITHOUT dropping missing ones: less's
  * main passes every name to edit, which errors per file ("b: No such
  * file or directory") and quits with an error when none opened.
  */
@@ -192,13 +192,13 @@ export function inputToString(
 /**
  * Builds the left gutter for a display row: the -J status column and
  * the -N line number field, identical on a wrapped line's every row
- * (og's per-row plinestart from the line's base_pos). Empty when
+ * (less's per-row plinestart from the line's base_pos). Empty when
  * neither option is on.
  *
  * @param content - Display lines.
  * @param row - The content row of this display row.
  * @param from - Cluster index where this screen row starts in the line.
- * @param to - Where it ends. og's status column asks whether a match
+ * @param to - Where it ends. less's status column asks whether a match
  *   falls in THIS row's range, so a wrapped line's rows differ.
  */
 export function gutterFor(
@@ -213,12 +213,12 @@ export function gutterFor(
     let char = ' ';
     let kind: 'mark' | 'attn' | 'search' | '' = '';
 
-    // og builds EVERY row's prefix from the line's start position
+    // less builds EVERY row's prefix from the line's start position
     // (forw_line_seg walking to base_pos before plinestart,
     // input.c:149), so a wrapped line's continuation rows repeat
     // the mark letter and the number alike
     {
-      // og's plinestart: the mark letter in the M color, else an
+      // less's plinestart: the mark letter in the M color, else an
       // attn-colored cell for the -w line
       const mark = markAtRow(row);
 
@@ -239,7 +239,7 @@ export function gutterFor(
       }
     }
 
-    // og attributes only the status char; the padding stays normal
+    // less attributes only the status char; the padding stays normal
     gutter += (kind
       ? colored(kind, char, INVERSE_ON, INVERSE_OFF)
       : char) + ' '.repeat(Math.max(optStatusColWidth() - 1, 0));
@@ -251,9 +251,9 @@ export function gutterFor(
     const num = vlinenum(row + 1);
     const digits = String(num);
 
-    // og pads AT_NORMAL only up to --line-num-width and prints the
+    // less pads AT_NORMAL only up to --line-num-width and prints the
     // digits AT_BOLD (line.c:446-449): numbers wider than the
-    // option stick to the left edge unpadded, og's ragged field —
+    // option stick to the left edge unpadded, less's ragged field —
     // the RESERVE uses the effective width so rows still fit
     gutter += num
       ? ' '.repeat(Math.max(optLinenumWidth() - digits.length, 0)) +
@@ -265,7 +265,7 @@ export function gutterFor(
 }
 
 /**
- * Columns a line's -N number overflows the nominal field by: og pads
+ * Columns a line's -N number overflows the nominal field by: less pads
  * only to linenum_width and the wider digits eat into the LINE's
  * text area — the line buffer holds the actual prefix and fills the
  * rest to sc_width (line.c:446, the ragged field its :457 comment
@@ -300,13 +300,13 @@ export function highlightRow(
   sindex?: number
 ): string {
   // --hilite-target keeps the -j target screen line highlighted, like
-  // og's command loop calling draw_target_attn on every display
+  // less's command loop calling draw_target_attn on every display
   const target = optHiliteTarget() && sindex !== undefined &&
     sindex === jumpSindex();
   const marked = optStatusLine() && markAtRow(row) !== '';
 
   // with -J the attn line marks in the status column instead of
-  // standing out, like og's is_hilited_attr checking !status_col
+  // standing out, like less's is_hilited_attr checking !status_col
   // (--status-line still colors the whole line)
   const attn = row === config.attnRow &&
     (!optStatusCol() || optStatusLine());
@@ -326,14 +326,14 @@ export function highlightRow(
     ? 'target'
     : attn ? 'attn' : 'mark';
 
-  // og underlines the target line without color; attn and marks
+  // less underlines the target line without color; attn and marks
   // stand out
   return kind === 'target'
     ? colored(kind, text, UNDERLINE_ON, UNDERLINE_OFF)
     : colored(kind, text, INVERSE_ON, INVERSE_OFF);
 }
 
-// the second of the last eof/bof bell, like og rate limiting eof_bell
+// the second of the last eof/bof bell, like less rate limiting eof_bell
 let lastEofBell = 0;
 
 /** Forgets the eof bell rate limit, like a fresh less process. */
@@ -353,23 +353,23 @@ export function resetBellTimer(): void {
 export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   const quiet = optQuiet();
 
-  // This is og's `nlines == 0` (forwback.c:335, :372): forw()/back()
+  // This is less's `nlines == 0` (forwback.c:335, :372): forw()/back()
   // broke out before moving a single line, so no line was read, so
   // check_poll never ran and nothing was ungot - and prompt() then
   // writes ":" or "(END)" normally, however many keys are still
-  // queued behind it. The hold exists because of that unget; where og
+  // queued behind it. The hold exists because of that unget; where less
   // cannot have one, we must not have one either.
   //
   // Not gated on the one-per-second rate limit below: that silences
   // the BELL, never the prompt.
   //
-  // ARRIVING at the edge, as against already sitting on it. og cannot
+  // ARRIVING at the edge, as against already sitting on it. less cannot
   // tell these apart and does not try: it grinds every queued no-op
   // command and the gate below collapses them into one bell per
   // second, which is right when the user is leaning on the key.
   //
   // But we DISCARD that queue, so a burst that hits the bottom is a
-  // single command where og had hundreds - and if the last bell was
+  // single command where less had hundreds - and if the last bell was
   // under a second ago (scrolled off the edge and straight back onto
   // it, which is exactly the down-then-up burst) the gate eats the
   // only one we were going to ring. A fresh arrival therefore rings
@@ -378,18 +378,18 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   // armStall at the top of each command, so on its own it would let
   // any caller that rings twice without a command in between - a
   // direct call, a path that does not go through the key loop - claim
-  // a fresh arrival each time and ring straight past og's gate.
+  // a fresh arrival each time and ring straight past less's gate.
   // Already being stalled IS already being at the edge.
   const freshEdge = kind === 'eof' && !edgeHeld && !stalled;
   if (kind === 'eof') markStalled();
 
-  // og's clear_bot before a bell comes from cmd_exec, which runs when
+  // less's clear_bot before a bell comes from cmd_exec, which runs when
   // a COMMAND executes (command.c:124), so it goes out whether or not
   // eof_bell's one-per-second gate then lets the bell through: the
   // gate silences the bell, never the clear. A bell raised while the
   // command line is still being edited (an invalid mark letter, a
   // completion with no match) is lbell alone -- no command ran.
-  // og's clear_bot comes from cmd_exec, so a bell that a COMMAND
+  // less's clear_bot comes from cmd_exec, so a bell that a COMMAND
   // raised carries one and a bell raised while the command line is
   // still being edited does not. A completed two-key command has
   // already left cmd_exec's clear waiting as the frame's opening -
@@ -405,12 +405,12 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
 
     // the clear wiped the prompt row without going through a frame,
     // so the next paint must write it again rather than dedupe it --
-    // og's prompt() runs every command loop, after cmd_exec cleared
+    // less's prompt() runs every command loop, after cmd_exec cleared
     dirtyBottomRow();
   }
 
   if (kind === 'eof') {
-    // og's `if (now == last_eof_bell) return;` (forwback.c:56), with
+    // less's `if (now == last_eof_bell) return;` (forwback.c:56), with
     // the fresh-arrival exception above
     const now = Math.floor(Date.now() / 1000);
     if (now === lastEofBell && !freshEdge) return;
@@ -431,11 +431,11 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
 }
 
 /**
- * Flashes the screen with ~100ms of reverse video, like og's vbell
+ * Flashes the screen with ~100ms of reverse video, like less's vbell
  * writing the terminfo flash capability.
  */
 function visualBell(): void {
-  // a dumb terminal has no flash capability, like og's empty vb
+  // a dumb terminal has no flash capability, like less's empty vb
   if (optNoVbell() || mode.DUMB) return;
 
   // cmd_exec's clear_bot precedes the flash too when a marker fires
@@ -444,9 +444,9 @@ function visualBell(): void {
     putstr((epr ? epr + clearBot() : '') + VISUAL_BELL);
     return;
   }
-  // og's flash is the terminfo capability run through tputs, and it
+  // less's flash is the terminfo capability run through tputs, and it
   // passes setupterm(term, -1, NULL) so ospeed is 0 and the padding
-  // in "\E[?5h$<100/>\E[?5l" emits nothing: og's bytes are the two
+  // in "\E[?5h$<100/>\E[?5l" emits nothing: less's bytes are the two
   // halves back to back. Deferring the second half by a timer also
   // meant a pager that quit first never sent it, leaving the terminal
   // in reverse video.
@@ -463,7 +463,7 @@ function visualBell(): void {
  * @returns A formatted string array ready for rendering.
  */
 /**
- * og's empty_screen(): the position table holds nothing, because forw
+ * less's empty_screen(): the position table holds nothing, because forw
  * never drew a line. A file with no lines is always in that state, and
  * our content array still carries one synthetic empty line for it.
  */
@@ -475,7 +475,7 @@ function noContentDrawn(content: string[]): boolean {
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
 
-  // a file with no lines draws none: og's forw_line EOFs at once, so
+  // a file with no lines draws none: less's forw_line EOFs at once, so
   // the whole screen below is null lines (tildes), not one blank row
   // and then tildes
   if (noContentDrawn(content)) {
@@ -483,7 +483,7 @@ export function formatContent(content: string[]): string[] {
     return lines;
   }
 
-  // rows above BOF from a forced back or a bracket jump are og null
+  // rows above BOF from a forced back or a bracket jump are less's null
   // lines: gline draws them as "~" or "" by the twiddle flag, just
   // like the ones past EOF; only ever set with the top at (0,0), so
   // pre-seeding does not disturb sub-row emission
@@ -497,7 +497,7 @@ export function formatContent(content: string[]): string[] {
     wrapLongLines(content, lines);
   }
 
-  // og's put_line_hilite opens with `if (ABORT_SIGS()) return;` - it
+  // less's put_line_hilite opens with `if (ABORT_SIGS()) return;` - it
   // draws NOTHING while an interrupt is pending (output.c:64), and
   // forw()'s loop breaks on the same test (forwback.c:312). So a ^C
   // stops the paint where it stands rather than at the next command
@@ -511,7 +511,7 @@ export function formatContent(content: string[]): string[] {
 /**
  * Replaces the top screen rows with the --header lines, like less's
  * overlay_header: rendered from the header start row WITH the live
- * horizontal shift (og's forw_line honors hshift; --header's column
+ * horizontal shift (less's forw_line honors hshift; --header's column
  * count freezes the left cols via the chop prefix), the last one
  * underlined unless the screen top sits exactly at the header start
  * (no gap below it).
@@ -522,7 +522,7 @@ export function formatContent(content: string[]): string[] {
  */
 function overlayHeaderLines(content: string[], lines: string[]): string[] {
   const header = optHeader();
-  // og keeps the header machinery live on the help file too: its own
+  // less keeps the header machinery live on the help file too: its own
   // top lines pin and underline while help scrolls (probed v707,
   // --header=2 + h + j: \e[4m SUMMARY stays at the top)
   if (header.lines <= 0) return lines;
@@ -564,7 +564,7 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
   for (let i = 0; i < header.lines && i < flat.length; i++) {
     const raw = rows[i] ?? '';
 
-    // og keeps plinestart's -J/-N prefix in a separate buffer.
+    // less keeps plinestart's -J/-N prefix in a separate buffer.
     // set_attr_line starts at linebuf.print, so header color and the
     // boundary underline apply only to the file text, never its gutter.
     // A configured header forces chopped rows, making each overlay row
@@ -595,7 +595,7 @@ function overlayHeaderLines(content: string[], lines: string[]): string[] {
  * @param key - Character to append.
  */
 export function addBufferChar(buffer: string[], key: string): void {
-  // the digit prompt is the BOTTOM row, so it measures against og's
+  // the digit prompt is the BOTTOM row, so it measures against less's
   // sc_width like the rest of cmdbuf - never the gutter-reduced
   // config.screenWidth, which shifted it a whole gutter early
   if (visibleBufferLength(buffer.length) + 1 === fullScreenWidth() - 1) {
@@ -630,8 +630,8 @@ let prevRows: string[] | null = null;
  * Forgets the previously rendered frame, forcing the next render to redraw
  * the whole screen. Call when entering a fresh screen (session start).
  *
- * @param keepPainted - keep the "something has been drawn" flag, og's
- *   !first_time. og clears the position table on every content swap
+ * @param keepPainted - keep the "something has been drawn" flag, less's
+ *   !first_time. less clears the position table on every content swap
  *   (pos_clear) but sets first_time only at STARTUP and for
  *   redraw_on_quit (main.c:592) — swapping in the help file is an
  *   ordinary edit(), so the "...skipping..." marker still prints
@@ -671,7 +671,7 @@ export function resetRender(keepPainted = false): void {
   lastEofBell = 0;
 }
 
-/** Forgets an owed --end-prompt marker: a NEW session only — og's
+/** Forgets an owed --end-prompt marker: a NEW session only — less's
  *  prompting flag survives edits (help entry included) and clears
  *  solely by firing. */
 export function resetPrompting(): void {
@@ -702,7 +702,7 @@ export function lastScreen(): string[] | null {
 let prevCursorCol = -1;
 
 // set when frames must keep the old content rows and update only the
-// bottom line, like og's error() drawing the message over the
+// bottom line, like less's error() drawing the message over the
 // untouched screen: get_return ungets the dismissing key, so the mca
 // it starts never reaches the prompt()/make_display that repaints the
 // trashed screen — repeated toggles keep the stale rows until a
@@ -712,23 +712,23 @@ let frozenFrame = false;
 // whether any real (unfrozen) paint has happened
 let contentPainted = false;
 
-// og's first_time: set while the FIRST screen of output is printing
+// less's first_time: set while the FIRST screen of output is printing
 // and cleared at the end of forw(). It gates the skipping marker,
-// which og never shows on the screen it is drawing first.
+// which less never shows on the screen it is drawing first.
 let firstOutput = true;
 
-// the unlatching repaint is og's make_display with top_scroll forced,
+// the unlatching repaint is less's make_display with top_scroll forced,
 // which a dumb terminal shows as clear+home instead of "...skipping"
 let frozenHome = false;
 let dumbHomePending = false;
 
-/** Arms og's post-toggle repaint(), run at the next true prompt. */
+/** Arms less's post-toggle repaint(), run at the next true prompt. */
 export function markFullRepaint(): void {
   fullRepaintPending = true;
 }
 
 /**
- * og's O_HL_REPAINT: toggle_option calls chg_hilite BEFORE it prints
+ * less's O_HL_REPAINT: toggle_option calls chg_hilite BEFORE it prints
  * the option's message (option.c:463), and chg_hilite re-highlights
  * the screen through repaint_hilite, which redraws every row
  * (search.c:1119). So the new rendering is on screen UNDER the
@@ -771,7 +771,7 @@ export function freezeFrame(homeOnUnfreeze: boolean = false): void {
   frozenHome = homeOnUnfreeze;
 }
 
-// --incsearch repaints while the pattern is typed (og's mca_search
+// --incsearch repaints while the pattern is typed (less's mca_search
 // jumping to the match), which clears the pending trash
 export function unfreezeFrame(): void {
   frozenFrame = false;
@@ -779,7 +779,7 @@ export function unfreezeFrame(): void {
 
 /**
  * Seeds the previous frame as a blank screen, so frozen frames show
- * og's unpainted display while startup ungot commands (the errmsgs
+ * less's unpainted display while startup ungot commands (the errmsgs
  * gate key, +cmds) collect input before the first make_display.
  */
 export function seedBlankFrame(): void {
@@ -800,7 +800,7 @@ export function seedFrameRows(rows: string[]): void {
 /**
  * Marks the bottom line as clobbered by a raw writeSync (a mid-scan
  * ierror like "Calculating line numbers..."): the next render must
- * repaint the prompt row instead of deduping it, og's prompt()
+ * repaint the prompt row instead of deduping it, less's prompt()
  * rewriting the cleared bottom line at every command loop.
  */
 export function dirtyBottomRow(): void {
@@ -813,7 +813,7 @@ export function dirtyBottomRow(): void {
 let nulCollapsed = 0;
 
 /**
- * Applies og's put_line truncation to a built frame (output.c:72):
+ * Applies less's put_line truncation to a built frame (output.c:72):
  * the loop writing a line stops at the first NUL, and since the
  * newline ending the line lives in the same buffer, NOTHING after
  * the NUL reaches the terminal — not the rest of the text, not the
@@ -842,7 +842,7 @@ function collapseNulRows(rows: string[]): string[] {
       continue;
     }
 
-    // og wrote the text before the NUL and left the cursor there
+    // less wrote the text before the NUL and left the cursor there
     carry += row.slice(0, nul);
   }
 
@@ -852,7 +852,7 @@ function collapseNulRows(rows: string[]): string[] {
 }
 
 /**
- * og's squish_check (forwback.c:88), which error() calls before it
+ * less's squish_check (forwback.c:88), which error() calls before it
  * writes anything: a squished first paint - a short file stuck to the
  * bottom of the screen with nothing above it - is un-squished and
  * repainted, so the message lands over a normal screen with the text
@@ -867,12 +867,12 @@ export function squishCheck(): void {
 
   mode.INIT = false;
 
-  // og's squish_check IS repaint() and nothing else (forwback.c:121),
+  // less's squish_check IS repaint() and nothing else (forwback.c:121),
   // and repaint -> jump_loc -> forw paints ROWS: it writes no prompt,
   // because prompt() runs at the top of the command loop and error()
   // is about to clear_bot and put its message on that line anyway
   // (output.c:719-722). Painting our prompt row here put an "(END)"
-  // on the wire that og never sends.
+  // on the wire that less never sends.
   //
   // It brings no clear_bot of its own either: cmd_exec already sent
   // one for the command that got here, and error() sends the next.
@@ -886,16 +886,16 @@ export function squishCheck(): void {
   forwPrompt = true;
 }
 
-// og's `first_time` (forwback.c): TRUE until the first forw() has
+// less's `first_time` (forwback.c): TRUE until the first forw() has
 // painted, and never set again for the life of the session
 let firstPaintDone = false;
 
-/** Arms og's first_time for a new session. */
+/** Arms less's first_time for a new session. */
 export function resetFirstPaint(): void {
   firstPaintDone = false;
 }
 
-// og's forw()/back() paint their rows and return; currline(BOTTOM)
+// less's forw()/back() paint their rows and return; currline(BOTTOM)
 // and then prompt() come after, so the command line is BLANK for the
 // whole line-number walk and the prompt is written once, at the end.
 // A caller that has to paint before that walk asks for the bare frame
@@ -908,7 +908,7 @@ let cmdExecOpened = false;
  * different fixes, which is why every single-knob attempt traded one
  * for the other.
  *
- * og's cmd_exec (command.c:124) blanks the command line, runs the
+ * less's cmd_exec (command.c:124) blanks the command line, runs the
  * command, and prompt() writes the ":" back, so the line is blank for
  * exactly the duration of the work. On top of that, a read that goes
  * to disk with a key waiting ungets the key (check_poll, os.c:164) and
@@ -918,25 +918,25 @@ let cmdExecOpened = false;
  * (ch.c:616): it is never polled, nothing is ever ungot for it, and
  * its prompt is written at the end of every single command.
  *
- * So og's help prompt is steady because it is REWRITTEN every time and
+ * So less's help prompt is steady because it is REWRITTEN every time and
  * the gap in between is microseconds. Ours is milliseconds, so writing
  * it every time is exactly what made it blink. Two fixes:
  *
  *   1. The gap. Our output is buffered, so an unflushed clear_bot is
  *      overwritten by the frame that follows and the pair reaches the
- *      terminal as ONE write, with no blank state in between - og's
+ *      terminal as ONE write, with no blank state in between - less's
  *      microsecond gap, for free. cmd_exec therefore flushes its clear
  *      only when we mean the blank to be seen (core.ts).
  *   2. The burst. Behind the keyboard on a real file is our version of
- *      og's poll-and-unget, and it holds the prompt off for as long as
+ *      less's poll-and-unget, and it holds the prompt off for as long as
  *      it lasts.
  *
  * Neither applies to help: (1) leaves its prompt rewritten inside one
- * atomic frame, and (2) is declined for it outright, as og's ch does.
+ * atomic frame, and (2) is declined for it outright, as less's ch does.
  */
 let promptHold = false;
 
-/** og's `nlines == 0`: the last command moved nothing, so it read
+/** less's `nlines == 0`: the last command moved nothing, so it read
  *  nothing, so there is nothing to suppress the prompt. */
 let stalled = false;
 
@@ -967,10 +967,10 @@ let heldPrompt = false;
  * Tells the paint we are BEHIND the keyboard - another key was already
  * waiting when this one started.
  *
- * That is the state og is in whenever it polls mid-read and ungets,
+ * That is the state less is in whenever it polls mid-read and ungets,
  * and it is the honest signal for "the user is scrolling faster than
  * the screen can follow", which is when the ":" must stay out of the
- * way. The help file declines it: og's ch never polls CH_HELPFILE, so
+ * way. The help file declines it: less's ch never polls CH_HELPFILE, so
  * no help command ever finds its prompt suppressed.
  */
 export function markBurst(burst: boolean): void {
@@ -979,7 +979,7 @@ export function markBurst(burst: boolean): void {
 
 /**
  * A command that took long enough to stall the key loop - our own
- * version of og going to disk.
+ * version of less going to disk.
  */
 export function markCommandTime(took: number): void {
   if (took >= SLOW_MS && !mode.HELP && !stalled) heavyWork = true;
@@ -1000,15 +1000,15 @@ export function markBehind(): void {
  * A key waiting is only half. Terminals deliver a burst in CHUNKS, so
  * several keys sit in the queue for a few milliseconds even when we
  * are comfortably ahead - which is why hiding on the backlog alone
- * took the ":" off a one-screen file where og's stays put all day.
+ * took the ":" off a one-screen file where less's stays put all day.
  *
  * The other half is being BEHIND, and it has two sources:
  *
- *   - sawSourceRead(), og's literal one. check_poll runs before an
+ *   - sawSourceRead(), less's literal one. check_poll runs before an
  *     iread and nowhere else (os.c:303), so a file already in ch's
  *     pool is never polled however hard the keyboard bursts. Kept for
- *     parity: og suppresses on the read whether or not it was slow.
- *   - heavyWork, ours. og's read IS og's slow path - that is what
+ *     parity: less suppresses on the read whether or not it was slow.
+ *   - heavyWork, ours. less's read IS less's slow path - that is what
  *     check_poll exists for - but ours is not the only one. A file of
  *     enormous lines is served entirely from the line memo, so not one
  *     block is read while each command still costs enough to stall the
@@ -1016,7 +1016,7 @@ export function markBehind(): void {
  *     pager is visibly unresponsive, ":" and all.
  *
  * So: the cause is not the burst, it is the work the burst provokes -
- * but a burst there must be. og suppresses by ungetting a key that was
+ * but a burst there must be. less suppresses by ungetting a key that was
  * WAITING (os.c:164); with nothing waiting there is nothing to unget
  * and prompt() writes as usual, however long the command took. Letting
  * slow work hold on its own hid the prompt after a single G on a big
@@ -1027,10 +1027,10 @@ const pollWouldFire = (): boolean =>
   promptHold && (sawSourceRead() || heavyWork);
 
 /**
- * og's `nlines == 0` (forwback.c:335, :372): THIS command broke out
+ * less's `nlines == 0` (forwback.c:335, :372): THIS command broke out
  * before moving a line, so it read nothing and ungot nothing.
  *
- * Raised by eof_bell, which og calls at exactly those points, and
+ * Raised by eof_bell, which less calls at exactly those points, and
  * cleared at the start of the next command (armStall) - so it always
  * describes the command that just ran and nothing older.
  */
@@ -1046,7 +1046,7 @@ export function markStalled(): void {
  * otherwise.
  *
  * This used to be a latch cleared by comparing painted rows, on the
- * theory that changed content is og's `nlines > 0`. It is - but only
+ * theory that changed content is less's `nlines > 0`. It is - but only
  * where a comparable frame exists: a frozen frame, an mca holding the
  * screen, or any path that does not repaint leaves the flag standing,
  * and a stale flag means the collapse below starts eating keys while
@@ -1064,7 +1064,7 @@ export const isStalled = (): boolean => stalled;
 
 /**
  * Whether the ":" is being held off - so cmd_exec flushes its clear
- * like og, and the frame leaves the row alone.
+ * like less, and the frame leaves the row alone.
  */
 export const promptHolding = (): boolean => pollWouldFire();
 
@@ -1076,7 +1076,7 @@ export function endPromptHold(): void {
 
 
 
-/** Paints the content with no prompt row, like og mid-command. */
+/** Paints the content with no prompt row, like less mid-command. */
 export function renderBare(rawContent: string[], buffer: string[]): void {
   bareFrame = true;
 
@@ -1088,12 +1088,12 @@ export function renderBare(rawContent: string[], buffer: string[]): void {
 }
 
 /**
- * og's repaint_hilite (search.c:276): every row redrawn IN PLACE -
+ * less's repaint_hilite (search.c:276): every row redrawn IN PLACE -
  * goto_line, clear_eol, put_line - and then lower_left. It addresses
  * each row rather than homing once, which matters when a row is wider
  * than the screen: the terminal wraps it and the following addressed
  * rows land INSIDE the wrapped text, which is exactly the interleaving
- * og produces under -r.
+ * less produces under -r.
  */
 export function renderHiliteRepaint(
   rawContent: string[],
@@ -1102,17 +1102,17 @@ export function renderHiliteRepaint(
   const rows = screenRows(rawContent, buffer);
   let out = '';
 
-  // `if (pos == NULL_POSITION) continue;` - og redraws only the rows
+  // `if (pos == NULL_POSITION) continue;` - less redraws only the rows
   // that HAVE a position. A tilde past the end of the file and a blank
   // above the beginning have none, so it never touches them: whatever
   // the terminal is showing there stays. That is not cosmetic under
-  // -r, where the row above wrapped over them - og leaves the wrapped
+  // -r, where the row above wrapped over them - less leaves the wrapped
   // remnants alone and we were wiping them with tildes
   const first = config.blankTop;
 
   // one row PAST the content still has an entry: forw() closes with
   // `add_forw_pos(pos, FALSE)`, so the position table always carries
-  // the spot after the last line drawn (og's BOTTOM_PLUS_ONE). Its
+  // the spot after the last line drawn (less's BOTTOM_PLUS_ONE). Its
   // forw_line returns NULL, so repaint_hilite draws it as a null line
   // - one tilde, and only one, however many the screen shows
   const last = Math.min(rows.length - 1 - padRows + 1, rows.length - 1);
@@ -1130,13 +1130,13 @@ export function renderHiliteRepaint(
   putstr(out);
 
   // these rows ARE what the screen now shows, so the next paint may
-  // diff against them - og's own table is equally unbothered that the
+  // diff against them - less's own table is equally unbothered that the
   // terminal wrapped a row, and a reset here would cost a full repaint
-  // og never makes
+  // less never makes
   prevRows = rows;
   prevCursorCol = -1;
 
-  // the loop stops one row short of the bottom: og's repaint_hilite
+  // the loop stops one row short of the bottom: less's repaint_hilite
   // never touches the prompt line, which prompt() writes afterwards.
   // Claiming we painted it would make the next frame skip it
   dirtyBottomRow();
@@ -1160,7 +1160,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // twelfth line
   beginGuardedRun();
 
-  // og's error() runs squish_check first (unless --old-bot): a
+  // less's error() runs squish_check first (unless --old-bot): a
   // message over a squished short first paint repaints the whole
   // screen, tildes and all, before showing (output.c:719)
   const squishMessage = mode.INIT && !!search.message && !optOldBot();
@@ -1168,7 +1168,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   if (squishMessage) mode.INIT = false;
 
   // a still-filling first screen of a pipe paints its lines bare,
-  // like og's initial forw: the prompt appears only with the
+  // like less's initial forw: the prompt appears only with the
   // screenful or the learned length — or as the wait message when
   // the read stalls (pipeFilling(), inlined: importing
   // features/pipe here would run its module body too early)
@@ -1195,8 +1195,8 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   prevBottomEcho = !!option.pending || cmd.active || !!config.keyPrefix;
 
   // the armed repaint waits for a frame back at the true prompt, like
-  // og's toggle_option resuming after error() returns. Without a full
-  // screen EVERY prompt repaints: og's make_display takes the same
+  // less's toggle_option resuming after error() returns. Without a full
+  // screen EVERY prompt repaints: less's make_display takes the same
   // branch as a trashed screen (command.c:863), because a scroll would
   // print into the rows below the window that are not ours
   const trashedRepaint = (fullRepaintPending || !fullScreen()) &&
@@ -1215,7 +1215,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     hiliteErasePending_ = false;
   }
 
-  // og answers a trashed screen with repaint(), and repaint pos_clears
+  // less answers a trashed screen with repaint(), and repaint pos_clears
   // (jump.c) - so the rows a backward move exposed go with it. The
   // command runs FIRST, because error()'s get_return ungets the key
   // that dismissed the toggle's message (output.c:687) and only the
@@ -1228,7 +1228,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   }
 
   if (hideHilite) setHiliteHidden(true);
-  // og's make_display repaints whenever the position table is EMPTY:
+  // less's make_display repaints whenever the position table is EMPTY:
   // `if (empty_screen()) jump_loc(...)` runs before EVERY prompt
   // (command.c), and for a file with no lines the table is always
   // empty. The FIRST paint squishes those null rows away (first_time);
@@ -1236,7 +1236,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // showed blank rows shows tildes once any command has run
   // ...but make_display is called from prompt(), so it only runs when
   // a TRUE command prompt is being drawn: a search or option prompt
-  // is an MCA loop that never reaches it, and og's screen stays as it
+  // is an MCA loop that never reaches it, and less's screen stays as it
   // was until the prompt closes
   if (firstPaintDone && mode.INIT && noContentDrawn(rawContent) &&
       !search.message && !option.pending && !search.input &&
@@ -1245,7 +1245,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     mode.INIT = false;
   }
 
-  // og reached this paint but not prompt(): the read it needed polled
+  // less reached this paint but not prompt(): the read it needed polled
   // the tty, found a key and ungot it, so prompt() returned early.
   //
   // Held for the whole burst, not just while a key happens to be
@@ -1256,26 +1256,26 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // ...but never over the question. The hold keeps the ":" from
   // blinking through a burst, and it ends when the key loop next
   // turns - which, after a search the watcher interrupted, it does
-  // not: the interrupt is taken off the terminal and dropped where og
+  // not: the interrupt is taken off the terminal and dropped where less
   // drops it (getcc_clear), so no key arrives to settle anything. The
   // question then sat behind a blank row until the user pressed
   // something, and what they pressed was aimed at a question they
   // could not see.
   //
-  // Nothing of og's is at stake: og has no hold, and this question is
-  // not og's prompt but a query, which og writes and flushes on the
+  // Nothing of less's is at stake: less has no hold, and this question is
+  // not less's prompt but a query, which less writes and flushes on the
   // spot (query/error, output.c)
   const promptHeld = !filling && pollWouldFire() && !posixRetry.pending;
 
-  // a command that already wrote og's cmd_exec clear_bot itself
+  // a command that already wrote less's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
   // frame's opening; error() then adds its own and the pair matches
-  // og. Consumed HERE, not inside scrollFrame: the early returns
+  // less. Consumed HERE, not inside scrollFrame: the early returns
   // there would strand it and suppress a later frame's opening.
   // NOT consumed here: a single key can render more than once (a bare
   // fill frame, then the real one), and whichever ran first used to
   // eat the flag - so the second frame wrote a SECOND clear_bot where
-  // og spends one per command. It stays up for the whole command and
+  // less spends one per command. It stays up for the whole command and
   // act() clears it when the next one starts.
   cmdExecOpened = search.cmdExecOpened;
 
@@ -1288,25 +1288,25 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 
   let rows = screenRows(rawContent, buffer, filling);
 
-  // og's start_mca never runs make_display: while a multichar command
+  // less's start_mca never runs make_display: while a multichar command
   // is collecting, prompt() is not reached at all - A_OPT_TOGGLE is
   // `start_mca(...); c = getcc(); goto again;` (command.c:2499) - and
-  // og's prompt() would return early anyway while the ungotten
+  // less's prompt() would return early anyway while the ungotten
   // dismissing key is pending (command.c:924). So the CONTENT rows
   // stay exactly as the last real paint left them and only the bottom
   // line moves.
   //
   // Ours rebuilt session.content the moment -S toggled, so the newly
   // chopped rows reached the screen while the "-" prompt was open -
-  // og still shows the OLD wrapped screen there and repaints only
+  // less still shows the OLD wrapped screen there and repaints only
   // once the mca closes and the owed screen_trashed is honoured.
   //
-  // The same holds the moment the option's MESSAGE goes up: og's
+  // The same holds the moment the option's MESSAGE goes up: less's
   // error() is squish_check + clear_bot + the text (output.c:705) and
   // touches no content row, while the screen_trashed toggle_option
   // owes is honoured only by a later make_display. `fullRepaintPending
   // && !trashedRepaint` IS that owed-but-deferred state - which is why
-  // -S showed its chopped rows under the message where og still shows
+  // -S showed its chopped rows under the message where less still shows
   // the old wrapped ones.
   //
   // A command that paints for itself (a search's jump_loc, a scroll)
@@ -1323,14 +1323,14 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 
   // the withheld line still has to BE something, and what it is is
   // BLANK: cmd_exec cleared it and flushed that clear (core.ts), and
-  // no prompt() has written over it since. That is og's state exactly
+  // no prompt() has written over it since. That is less's state exactly
   // - the command line between clear_bot and the prompt.
   //
   // It used to be pinned to the previous frame's bottom row instead,
   // which is the same thing only while the recorded row happens to be
   // right. dirtyBottomRow leaves a NUL there to force a repaint, and
   // that NUL then reached the frame builders as the row's text: a
-  // truthy row that writes nothing and, through og's put_line
+  // truthy row that writes nothing and, through less's put_line
   // truncation, swallows the rest of the frame with it.
   if (promptHeld && rows.length > 0) {
     rows = rows.slice();
@@ -1340,11 +1340,11 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   heldPrompt = promptHeld;
   if (hideHilite) setHiliteHidden(false);
 
-  // that squish_check repaint OUTRANKS the freeze: og paints the
+  // that squish_check repaint OUTRANKS the freeze: less paints the
   // whole screen (marker, tildes and all) and only then writes the
   // message over the bottom line, so the stale squished rows the
   // freeze would restore must not come back
-  // og's position table stays empty until make_display paints; a
+  // less's position table stays empty until make_display paints; a
   // frozen frame is prompt() returning early, which paints nothing.
   // The blank seed under an ungot startup key is exactly that, so it
   // must not count as a paint.
@@ -1357,7 +1357,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   }
 
   if (frozenFrame) {
-    // og's prompt() returns early on ungot input and MCA_MORE loops
+    // less's prompt() returns early on ungot input and MCA_MORE loops
     // without reaching it, so the stale rows survive any message,
     // prompt or echo on the bottom line; only a render back at the
     // true prompt - with NO ungot command pending - runs
@@ -1376,28 +1376,28 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     }
   }
 
-  // og (v618+) starts at the lower left of the alt screen and lets
+  // less (v618+) starts at the lower left of the alt screen and lets
   // the first paint scroll upward: a short first screen sits just
   // above the bottom prompt, its blank rows on top; -X never homes,
-  // so a short first screen prints in place (og's squished screen).
+  // so a short first screen prints in place (less's squished screen).
   // Rows a NUL will collapse take no space, so the fill counts the
-  // PHYSICAL rows og's scroll-up actually produces.
+  // PHYSICAL rows less's scroll-up actually produces.
   //
-  // The lower_left that causes it is og's alt-screen guard, not the
+  // The lower_left that causes it is less's alt-screen guard, not the
   // -X one: term_init homes only when BOTH "ti" and "te" exist and
   // "NR" does not deny the switch (screen.c:2061), so on a terminal
   // that cannot switch, a short first screen prints at the top.
-  // og's FIRST paint on the alternate screen is always sequential,
+  // less's FIRST paint on the alternate screen is always sequential,
   // whether or not the file fills it: term_init has parked the cursor
   // on the bottom line and forw() just writes lines, each newline
   // scrolling the last screenful up. A short file ends up with blank
-  // rows above it - og's "squished" screen - but that is a
+  // rows above it - less's "squished" screen - but that is a
   // consequence of the same paint, not a different one.
   const onAlt = !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN;
 
-  // og's `first_time`, not "the previous frame is gone": a repaint
+  // less's `first_time`, not "the previous frame is gone": a repaint
   // mid-session (R, a shell's return, a message wider than the
-  // screen) also starts from no known screen, but og gets there
+  // screen) also starts from no known screen, but less gets there
   // through repaint() -> forw(), which prints "...skipping..." and
   // does NOT re-park at the bottom. Only the session's very first
   // paint follows term_init's lower_left
@@ -1405,7 +1405,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   let squishBlanks = 0;
 
   // the pad is the SCREEN MODEL, so it lasts as long as the screen is
-  // squished (og's `squished` flag), not just for the paint that
+  // squished (less's `squished` flag), not just for the paint that
   // produced it: the next frame has to diff against the same rows the
   // terminal is showing
   if (mode.INIT && onAlt && rows.length < config.window) {
@@ -1413,7 +1413,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     rows.unshift(...Array(squishBlanks).fill(''));
   }
 
-  // og's G repaints through its pos_clear even when nothing moved
+  // less's G repaints through its pos_clear even when nothing moved
   // visibly, so the identical-rows shortcut below must not eat it
   const posClear = posClearPending;
   posClearPending = false;
@@ -1425,7 +1425,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // and the parked cursor untouched, like less — but arrow movement
   // inside the command buffer must still move the cursor
   if (!forceFull && !posClear && prevRows && sameRows(prevRows, rows)) {
-    // og reprints clear_bot + the prompt after every command — an
+    // less reprints clear_bot + the prompt after every command — an
     // identical reprint we normally compress away. A configured
     // --end-prompt makes it matter: the marker precedes the reprint
     // (putchr), and an SGR marker visibly recolors it, so paint it
@@ -1441,7 +1441,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
       return;
     }
 
-    // og reprints the prompt through clear_bot on every command;
+    // less reprints the prompt through clear_bot on every command;
     // with --old-bot the first reprint after a forw_prompt visibly
     // jumps it from mid-screen to the bottom row, stale copy behind
     if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
@@ -1457,7 +1457,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     if (col >= 0 && col !== prevCursorCol) {
       prevCursorCol = col;
       // -X owns no absolute rows: rewrite the prompt line in place
-      // and backspace to the editing position, like og's cmdbuf
+      // and backspace to the editing position, like less's cmdbuf
       putstr(eprPrefix() + (scrollMode()
         ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), col)));
@@ -1477,7 +1477,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     return;
   }
 
-  // -X stays on the main screen, where og's real paint model shows
+  // -X stays on the main screen, where less's real paint model shows
   if (scrollMode()) {
     nulCollapsed = 0;
     const frame =
@@ -1493,7 +1493,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   }
 
   // only the bottom (prompt) line changed — a command prompt
-  // opening, its per-key echo, a message: og's cmd_startup writes
+  // opening, its per-key echo, a message: less's cmd_startup writes
   // clear_bot + the command line ALONE (cmdbuf.c), never touching
   // the content rows (whose painted colors survive, visibly so
   // under a leaked --end-prompt SGR)
@@ -1505,24 +1505,24 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
 
-    // og's clear_bot uses line_left() - a bare CR to column 1 of
+    // less's clear_bot uses line_left() - a bare CR to column 1 of
     // WHEREVER the cursor is (screen.c) - not an absolute address:
     // every paint leaves the cursor on the prompt row, so there is
     // nothing to address. --old-bot is the exception, and clearBot
-    // already carries it. Nor does og park afterwards, since writing
+    // already carries it. Nor does less park afterwards, since writing
     // the prompt leaves the cursor exactly where the park would put
     // it; only an open command line positions inside its own text
     const bot = rows[rows.length - 1];
 
     // cmd_exec has already put this frame's opening on the terminal
-    // (og's clear_bot before the command ran, command.c:124), so the
-    // frame must not write a SECOND one. og spends one clear per
+    // (less's clear_bot before the command ran, command.c:124), so the
+    // frame must not write a SECOND one. less spends one clear per
     // scroll key; without this we spent two, and the extra blank of
-    // the bottom row is a flicker og does not have.
-    // og's set_mca is `mca = action; clear_bot(); clear_cmd();`
+    // the bottom row is a flicker less does not have.
+    // less's set_mca is `mca = action; clear_bot(); clear_cmd();`
     // (command.c:134) - start_mca clears UNCONDITIONALLY. forw_prompt
     // gates prompt()'s clear (command.c:993), never an mca's: that is
-    // why og shows " Z" after a j and we showed ": Z", the prefix
+    // why less shows " Z" after a j and we showed ": Z", the prefix
     // echo appended to a ":" the forward paint had told us to keep.
     const mcaOpening = prevBottomEcho && !shownBottomEcho;
 
@@ -1540,7 +1540,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     return;
   }
 
-  // a squished screen unlatching is og's squish_check calling
+  // a squished screen unlatching is less's squish_check calling
   // repaint(): pos_clear + jump_loc paint EVERY row through the
   // skipping shape (jump.c:124) — never a diff-scroll, which would
   // leave the old rows' colors behind (visible under a leaked
@@ -1549,13 +1549,13 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   prevInitAlt = mode.INIT;
 
   // an addressed repaint re-places the prompt absolutely, clearing a
-  // drift an earlier NUL collapse left (og's lower_left); the two
+  // drift an earlier NUL collapse left (less's lower_left); the two
   // sequential painters set it again when they lose a row. The
   // bottom-line shortcuts above return before this, keeping the
-  // drift, like og writing the prompt with a bare \r
+  // drift, like less writing the prompt with a bare \r
   nulCollapsed = 0;
 
-  // -c repaints instead of scrolling (og's top_scroll homes; the
+  // -c repaints instead of scrolling (less's top_scroll homes; the
   // skipping scroll paint is the !top_scroll default)
   const frame = (firstPaint && !optClearRepaint()
     ? squishFrame(rows, squishBlanks)
@@ -1572,7 +1572,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   prevRows = rows;
   prevCursorCol = cmd.active ? cursorCol(rows) : -1;
 
-  // og has no synchronized-update wrapper: its marker bytes sit
+  // less has no synchronized-update wrapper: its marker bytes sit
   // directly in the paint stream. Keep ours INSIDE the batch — a
   // terminal that isolates the ?2026 batch would otherwise drop
   // SGR state written just before it
@@ -1586,18 +1586,18 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 }
 
 /**
- * Repaints for a terminal without cursor addressing, like og drawing
+ * Repaints for a terminal without cursor addressing, like less drawing
  * with the dumb entry's caps: nothing is ever erased.
  *
- * The rows arrive as they are. og's own attributes went dark in
+ * The rows arrive as they are. less's own attributes went dark in
  * initTerminalCapabilities, where the missing "smso" empties them the
  * way tmodes does; what is left is the FILE's escapes under -R, which
- * og's put_line hands to putchr untouched whatever the terminal is
+ * less's put_line hands to putchr untouched whatever the terminal is
  * (line.c:1300 stores them AT_ANSI, and at_switch ignores that bit).
  * Stripping here took those with it, so -R lost its colour.
  *
  * - A bottom-line change overwrites in place after a bare `\r`; a
- *   shorter line leaves the old tail visible, like og without `el`.
+ *   shorter line leaves the old tail visible, like less without `el`.
  * - A forward scroll prints only the newly exposed lines and the
  *   prompt, letting the terminal scroll.
  * - Anything else repaints behind the dumb `clear` of two newlines.
@@ -1611,7 +1611,7 @@ function dumbFrame(
   const plain = rows;
   const last = plain.length - 1;
 
-  // og's start_mca has run for a command line that was already open,
+  // less's start_mca has run for a command line that was already open,
   // so this key is a cmd_ichar echo; the engine's own scroll count is
   // the only proof of a whole-screenful advance, which shares no row
   // with the frame before it
@@ -1626,7 +1626,7 @@ function dumbFrame(
   const prefix = scrollPrefix;
   scrollPrefix = null;
 
-  // og's pos_clear'd repaint redraws whole even when nothing moved,
+  // less's pos_clear'd repaint redraws whole even when nothing moved,
   // so the incremental shapes below must not swallow it
   if (prev && !posClear && prev.length === plain.length) {
     const prevPlain = prev;
@@ -1634,7 +1634,7 @@ function dumbFrame(
     let same = 0;
     while (same < last && plain[same] === prevPlain[same]) same++;
 
-    // only the bottom (prompt) line changed: og's prompt() skips
+    // only the bottom (prompt) line changed: less's prompt() skips
     // clear_bot after a forward paint, which is all this CR is -
     // except that start_mca clear_bots unconditionally, and the
     // characters after it are cmd_ichar echoes (clear_eol is empty
@@ -1656,12 +1656,12 @@ function dumbFrame(
 
     // scrolled forward: the old rows moved up by k. At k === last
     // the frames share no row at all and only the engine's count can
-    // name the distance og's forw still writes line by line
+    // name the distance less's forw still writes line by line
     for (let k = 1; k <= last; k++) {
       if (k < last
         ? plain[0] === prevPlain[k] && shifted(plain, prevPlain, k)
         : k === forwDist) {
-        // og's forw sets forw_prompt after every line it puts
+        // less's forw sets forw_prompt after every line it puts
         // (forwback.c:368), so the prompt that follows skips
         // clear_bot - here a bare CR, since dumb has no "el". A frame
         // carrying its own prompt row has already spent it
@@ -1671,7 +1671,7 @@ function dumbFrame(
     }
   }
 
-  // the first paint just prints, like og's initial forw; a later
+  // the first paint just prints, like less's initial forw; a later
   // full paint is repaint()'s non-contiguous forw, which without
   // top_scroll prints "...skipping..." — only -c or a trashed
   // make_display (top_scroll forced) clears with two newlines and
@@ -1684,11 +1684,11 @@ function dumbFrame(
   dumbPainted = true;
 
   // a dumb terminal cannot reverse-scroll, so EVERY paint that gets
-  // here is og's forw() - through repaint() for a backward move - and
+  // here is less's forw() - through repaint() for a backward move - and
   // forw sets forw_prompt after every line it puts
   forwPrompt = !plain[last];
 
-  // og's FIRST forw leads with neither: first_time still holds, so
+  // less's FIRST forw leads with neither: first_time still holds, so
   // there is no marker (forwback.c:272) and no lower_left CR in front
   // of one. A command line open before anything is painted echoes
   // frame after frame - the "-" the startup error gate ungets opens
@@ -1707,7 +1707,7 @@ function dumbFrame(
 }
 
 /**
- * WHICH of og's mca prompts owns the command line, or "" for none.
+ * WHICH of less's mca prompts owns the command line, or "" for none.
  *
  * The identity matters, not just the fact: start_mca runs again for
  * every new mca, so a `5` that opens the digit prompt and then an ESC
@@ -1727,7 +1727,7 @@ function mcaOpen(buffer: string[]): string {
 }
 
 /**
- * og's get_back_scroll (forwback.c:535): zero when the terminal can
+ * less's get_back_scroll (forwback.c:535): zero when the terminal can
  * neither add a line nor reverse-index (no_back_scroll, so every
  * backward movement repaints), -h when it is set, a whole screen
  * minus two under -c, where every repaint starts a new screen anyway,
@@ -1739,12 +1739,12 @@ export const backScrollCap = (): number =>
       : optClearRepaint() ? config.window - 2
         : 10000;
 
-/** True when -X keeps the pager on the main screen with og's
+/** True when -X keeps the pager on the main screen with less's
  *  scroll-model painting (a dumb terminal keeps its own painter). */
 const scrollMode = (): boolean => !mode.DUMB && optNoInit();
 
 /**
- * og's clear_bot: erase from the left of the current (prompt) line,
+ * less's clear_bot: erase from the left of the current (prompt) line,
  * or jump to the physical bottom row first with --old-bot
  * (screen.c's lower_left vs line_left).
  */
@@ -1761,22 +1761,22 @@ let keepPrevRows = false;
 // keystroke is a cmd_ichar echo and not another start_mca
 let prevMca = '';
 
-// og's forw_prompt (forwback.c): forw() sets it after every line it
+// less's forw_prompt (forwback.c): forw() sets it after every line it
 // puts, and prompt() then SKIPS clear_bot - "the forward movement
 // guarantees that we're in the right position to display the prompt"
 // (command.c). The row the scroll brought in is blank and the cursor
 // is at its start, so clearing it would only cost bytes
 let forwPrompt = false;
 
-// og's forw_prompt leaves the prompt directly after forward-painted
+// less's forw_prompt leaves the prompt directly after forward-painted
 // lines, possibly mid-screen; --old-bot's next clear_bot then visibly
-// jumps it to the bottom row. og reprints the prompt through
+// jumps it to the bottom row. less reprints the prompt through
 // clear_bot on every command — we compress identical reprints away,
 // except that first old-bot jump, which changes the screen.
 let promptAtBottom = false;
 
 // true while the last scroll-mode frame was an open pipe fill:
-// og's initial forw prints arriving lines bare, and the prompt
+// less's initial forw prints arriving lines bare, and the prompt
 // waits for the screenful or the learned length (forw_prompt)
 let scrollOpen = false;
 
@@ -1789,8 +1789,8 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
 }
 
 /**
- * Ends a painted row like og's pdone: a row that exactly fills the
- * width gets no newline — og forces the deferred wrap with space +
+ * Ends a painted row like less's pdone: a row that exactly fills the
+ * width gets no newline — less forces the deferred wrap with space +
  * backspace instead (line.c), so the terminal's auto-wrap carries
  * to the next row without doubling.
  */
@@ -1798,7 +1798,7 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
  * The clear-to-end that follows a painted bottom line - EMPTY when
  * the line already fills the width.
  *
- * og clears before it writes (prompt's clear_bot, error's leading
+ * less clears before it writes (prompt's clear_bot, error's leading
  * \r + clear_eol), never after. Clearing after is harmless while the
  * cursor still sits mid-row, but a full-width line leaves it parked
  * on the last column with the wrap deferred, and erasing from there
@@ -1808,7 +1808,7 @@ function prefixEqual(prev: string[], rows: string[]): boolean {
  * Whether a rendered row reached the right edge, leaving the cursor
  * parked there with the wrap deferred.
  *
- * og compares end_column against sc_width (line.c:1523), and
+ * less compares end_column against sc_width (line.c:1523), and
  * end_column STARTS at linebuf.pfx_end - plinestart sets it there
  * (line.c:452), so the -N/-J gutter counts and sc_width is the whole
  * terminal. Ours is the same row, gutter and all, but
@@ -1832,7 +1832,7 @@ function tailClear(row: string): string {
 }
 
 /**
- * True while an open command line still reads exactly as og's
+ * True while an open command line still reads exactly as less's
  * start_mca left it: clear_bot, clear_cmd, cmd_putstr(prompt), and
  * nothing after (command.c:196).
  *
@@ -1852,7 +1852,7 @@ function mcaBare(): boolean {
 /**
  * How a row ends, like pdone (line.c:1523).
  *
- * og answers three ways for a row that reached the right edge, and
+ * less answers three ways for a row that reached the right edge, and
  * only the first is xterm's:
  *
  * - defer_wrap: the cursor is parked on the last column with the wrap
@@ -1861,12 +1861,12 @@ function mcaBare(): boolean {
  * - auto_wrap without defer_wrap: it has ALREADY wrapped, so send
  *   nothing. Anything at all costs a whole blank line here.
  *
- * (og also ends a full row with a newline when the LINE ends there and
+ * (less also ends a full row with a newline when the LINE ends there and
  * defer_wrap is set. On xterm the nudge lands the cursor in the same
  * place, which is why our output has always matched.)
  */
 function rowEnd(row: string): string {
-  // og ends every -r row with a newline: pdone's first branch takes
+  // less ends every -r row with a newline: pdone's first branch takes
   // "ctldisp == OPT_ON" (line.c:1523), because nothing was counted and
   // it cannot know whether the row reached the edge
   if (optCtldisp() === 1) return '\n';
@@ -1889,7 +1889,7 @@ function frameRowEnd(row: string): string {
 }
 
 /**
- * Row terminator for reverse-indexed (ESC M) rows: og's back() leaves
+ * Row terminator for reverse-indexed (ESC M) rows: less's back() leaves
  * a full-width row bare - pdone skips the deferred-wrap ' \b' going
  * backward, and emitting it here would wrap onto the row BELOW and
  * overwrite its first column.
@@ -1899,12 +1899,12 @@ function revRowEnd(row: string): string {
   return end === '\n' ? end : '';
 }
 
-// og's cursor rests where the prompt print ended; editing inside the
+// less's cursor rests where the prompt print ended; editing inside the
 // command buffer moves it left with backspaces, like cmdbuf's putbs —
 // -X can't address the prompt row absolutely (the screen may have
 // started mid-terminal and never filled)
 function scrollPark(rows: string[]): string {
-  // og's query() (output.c:786) closes with lower_left(), so the
+  // less's query() (output.c:786) closes with lower_left(), so the
   // cursor leaves a y/n question parked on the BOTTOM row and not on
   // the question. Everything that clear_bots next lands there: the
   // quit path's, so the question survives on screen, and a re-asked
@@ -1921,7 +1921,7 @@ function scrollPark(rows: string[]): string {
 }
 
 // the top of the last scroll-mode frame, so far paints know their
-// direction like og's jump_loc comparing pos against position(TOP)
+// direction like less's jump_loc comparing pos against position(TOP)
 let prevTopRow = -1;
 
 // whether prevTopRow holds a real paint (it may be NEGATIVE when a
@@ -1929,7 +1929,7 @@ let prevTopRow = -1;
 let prevTopKnown = false;
 
 // whether the last frame's bottom line was a command-buffer echo (an
-// open option or search prompt) rather than the ordinary prompt: og's
+// open option or search prompt) rather than the ordinary prompt: less's
 // repaint marker is a bare putstr at the cursor, so such an echo stays
 // on the line and the marker appends to it
 let prevBottomEcho = false;
@@ -1938,7 +1938,7 @@ let prevBottomEcho = false;
 // still shows while this frame is painted)
 let shownBottomEcho = false;
 
-// og's O_REPAINT options call repaint() when the toggle finishes -
+// less's O_REPAINT options call repaint() when the toggle finishes -
 // AFTER error()'s get_return, so the toggle's message shows over the
 // old screen first and the fresh paint lands when it is dismissed
 let fullRepaintPending = false;
@@ -1947,7 +1947,7 @@ let hiliteErasePending_ = false;
 
 let prevTopSub = 0;
 
-// og's trashed-screen repaints print from wherever the cursor sits:
+// less's trashed-screen repaints print from wherever the cursor sits:
 // only a command's cmd_exec adds a clear_bot before them. This
 // overrides that prefix — term_init's bare CR after a screen
 // re-entry (shell return), or nothing at all when quitting the help
@@ -1960,7 +1960,7 @@ let prevInit = false;
 // whether the previous scroll-mode frame was a bare (promptless) one
 let prevBare = false;
 
-// Display rows the last move covered. og reads this off its position
+// Display rows the last move covered. less reads this off its position
 // table; the array-backed core reads it off config.row. The
 // block-backed one can do neither -- it advances its WINDOW and
 // leaves config.row where it was -- so it reports the distance here.
@@ -1977,7 +1977,7 @@ export function screenEntered(): void {
 }
 
 /**
- * og's jump_loc far-backward branch clearing before back():
+ * less's jump_loc far-backward branch clearing before back():
  * cmd_exec's clear_bot for the command, then `if (!top_scroll)
  * lclear(); else home();` (jump.c:353). back() repaints from there
  * when a whole screen exceeds get_back_scroll, and the repaint brings
@@ -1989,7 +1989,7 @@ export function markFarBackClear(): void {
 }
 
 /**
- * og's DO_SEARCH (command.c:1973): a repeated search runs
+ * less's DO_SEARCH (command.c:1973): a repeated search runs
  * `mca_search(); cmd_exec();` first, so the search prompt is written
  * over the command line and then cleared away again before anything
  * is painted - a visible "/" flash on every n and N.
@@ -2003,13 +2003,13 @@ export function markBareRepaint(prefix: string = ''): void {
   scrollPrefix = prefix;
 }
 
-/** Forces the next full paint to clear and home, like og's forw
+/** Forces the next full paint to clear and home, like less's forw
  *  with top_scroll (also jump_loc's !full_screen lclear). */
 export function markClearHome(): void {
   dumbHomePending = true;
 }
 
-// og's prompting flag (output.c): display_prompt sets it, and the
+// less's prompting flag (output.c): display_prompt sets it, and the
 // FIRST putchr of whatever prints next emits the --end-prompt
 // expansion before it — a marker for "output resumed after the
 // prompt". Only the true prompt arms it; messages and input lines
@@ -2019,8 +2019,8 @@ let prompting = false;
 // true while the frame being built bottoms out in the real prompt
 let promptPainted = false;
 
-// whether the armed prompt belonged to the help file: og's
-// end_pr_string checks CH_HELPFILE at FIRE time. og's fire moments
+// whether the armed prompt belonged to the help file: less's
+// end_pr_string checks CH_HELPFILE at FIRE time. less's fire moments
 // straddle the edits — 'h' fires at cmd_exec BEFORE the help edit
 // (marking the help's first paint), an in-help scroll fires with
 // the helpfile current (suppressed), and the help-quit repaint
@@ -2030,7 +2030,7 @@ let promptPainted = false;
 let promptedInHelp = false;
 
 /**
- * The --end-prompt string owed to the next output, like og's putchr
+ * The --end-prompt string owed to the next output, like less's putchr
  * checking `prompting` (output.c:496): consumed once per prompt,
  * suppressed for prompts painted on the help file.
  */
@@ -2042,7 +2042,7 @@ export function eprPrefix(): string {
   return proto ? prExpand(session.content, proto) : '';
 }
 
-// og's jump_forw (G) runs pos_clear() before jump_loc: the paint
+// less's jump_forw (G) runs pos_clear() before jump_loc: the paint
 // sees an empty position table and repaints with the skipping
 // marker even when the target rows overlap the current screen —
 // unlike a scroll or a search jump reaching the same place
@@ -2055,7 +2055,7 @@ let prevInitAlt = false;
 /**
  * Whether anything has been painted yet.
  *
- * og's position table is empty until the first make_display, and a
+ * less's position table is empty until the first make_display, and a
  * forward move asks position(BOTTOM_PLUS_ONE) before anything else --
  * with no table there is no row past the bottom, so it bells rather
  * than moving. That only happens before the FIRST paint: a key ungot
@@ -2064,7 +2064,7 @@ let prevInitAlt = false;
 export const screenPainted = (): boolean => contentPainted;
 
 /**
- * Marks the next paint as og's jump_loc far-BACKWARD branch: lclear()
+ * Marks the next paint as less's jump_loc far-BACKWARD branch: lclear()
  * then back(sc_height-1) from the target (jump.c:353), a cleared
  * screen painted upward through home + reverse index.
  */
@@ -2075,19 +2075,19 @@ export function markBackPaint(): void {
 // set by markBackPaint, consumed by the next render
 let backPaintPending = false;
 
-/** Marks the next paint as og's pos_clear'd jump (G). */
+/** Marks the next paint as less's pos_clear'd jump (G). */
 export function markPosClear(): void {
   posClearPending = true;
 
-  // og's pos_clear wipes the whole position table, so the entries a
+  // less's pos_clear wipes the whole position table, so the entries a
   // backward move prepended go with it and every row is regenerated
   // whole. Everything that reaches this - jump_loc, a search landing,
-  // a repaint - has already cleared them in og.
+  // a repaint - has already cleared them in less.
   config.screen = [];
 }
 
 /**
- * og's cmd_ichar echo (cmdbuf.c:520): the inserted character is not
+ * less's cmd_ichar echo (cmdbuf.c:520): the inserted character is not
  * painted as part of a rewritten row. cmd_repaint clear_eols at the
  * insertion point and prints the tail from there, backs the cursor up
  * to where it was, and cmd_right then RE-PRINTS the character to
@@ -2098,7 +2098,7 @@ export function markPosClear(): void {
  *          not a plain insertion.
  */
 function cmdInsertEcho(row: string, buffer: string[]): string | null {
-  // a digit prefix goes through og's mca number mode, which is the
+  // a digit prefix goes through less's mca number mode, which is the
   // same cmd_char path as a prompt's own text; a held A_PREFIX
   // character is inserted as its prchar REPRESENTATION, so what was
   // echoed is "ESC" and not one byte
@@ -2112,7 +2112,7 @@ function cmdInsertEcho(row: string, buffer: string[]): string | null {
 }
 
 /**
- * Paints like og on the main screen for -X (no-init): og never
+ * Paints like less on the main screen for -X (no-init): less never
  * redraws frames in place — forw() prints the new lines and lets the
  * terminal scroll, back() inserts rows with home + reverse index
  * (painted nearest-first), and far jumps either print
@@ -2120,7 +2120,7 @@ function cmdInsertEcho(row: string, buffer: string[]): string | null {
  * without top_scroll) or clear and paint backward (jump_loc's
  * lclear + back for targets above the screen). The alt screen hides
  * this model behind our full frames; the main screen preserves the
- * scrollback, so these shapes match og's bytes.
+ * scrollback, so these shapes match less's bytes.
  */
 function scrollFrame(
   prev: string[] | null,
@@ -2133,18 +2133,18 @@ function scrollFrame(
 ): string {
   const effRow = config.row - config.blankTop;
 
-  // og's pos_clear'd G never looks like a backward jump: the empty
+  // less's pos_clear'd G never looks like a backward jump: the empty
   // position table sends jump_loc down the forward/skipping path.
   //
   // config.row is a row of the MATERIALIZED WINDOW, not of the file,
   // so for a source engine whose window slid under the jump it says 0
   // on both sides and the comparison cannot see the direction at all.
-  // backPaint is the engine naming og's branch outright.
+  // backPaint is the engine naming less's branch outright.
   const backJump = !posClear && (backPaint ||
     (prevTopRow >= 0 && (effRow < prevTopRow ||
       (effRow === prevTopRow && config.subRow < prevTopSub))));
 
-  // the display-row distance the top advanced, like og comparing
+  // the display-row distance the top advanced, like less comparing
   // pos against position(BOTTOM_PLUS_ONE): a full-screenful move
   // shares no visible rows yet forw still scrolls it contiguously
   let forwDist = -1;
@@ -2165,14 +2165,14 @@ function scrollFrame(
 
   // a backward move reports itself negative; a whole screenful back
   // shares NO row with the frame before it, so nothing else can name
-  // the distance og's back() still walks row by row
+  // the distance less's back() still walks row by row
   const backDist = scrolledRows < 0 ? -scrolledRows : 0;
   scrolledRows = 0;
 
   prevTopRow = effRow;
   prevTopSub = config.subRow;
 
-  // a squished screen unlatching is og's squish_check calling
+  // a squished screen unlatching is less's squish_check calling
   // repaint(): the tilde pad rows appear through the full skipping
   // paint, never as an appended forward scroll
   const unsquished = prevInit && !mode.INIT;
@@ -2182,7 +2182,7 @@ function scrollFrame(
   scrollOpen = open;
 
   // whether the SAME command line was already open in the previous
-  // frame: og's start_mca has run for it, so this key is only an echo
+  // frame: less's start_mca has run for it, so this key is only an echo
   const nowMca = mcaOpen(buffer);
   const wasMca = nowMca !== '' && prevMca === nowMca;
   prevMca = nowMca;
@@ -2200,8 +2200,8 @@ function scrollFrame(
     promptAtBottom = false;
 
     if (prev) {
-      // a closed wait frame parked og's message on the bot row;
-      // resuming data clear_bots it and prints there (og capture:
+      // a closed wait frame parked less's message on the bot row;
+      // resuming data clear_bots it and prints there (less capture:
       // "\r ESC[K 3" over the wait message)
       const base = wasOpen ? prev : prev.slice(0, -1);
 
@@ -2215,10 +2215,10 @@ function scrollFrame(
     return '\r' + rows.map(r => r + rowEnd(r)).join('');
   }
 
-  // the fill completed: remaining lines print, then og's forw_prompt
+  // the fill completed: remaining lines print, then less's forw_prompt
   // appends the prompt with no clear_bot — under --old-bot it stays
   // right there, mid-screen, until the next command's clear_bot; the
-  // stall's wait message instead arrives like og's ixerror, behind a
+  // stall's wait message instead arrives like less's ixerror, behind a
   // clear_bot and without the prompt's trailing clear
   if (wasOpen && prev) {
     const grown = rows.slice(0, -1);
@@ -2239,7 +2239,7 @@ function scrollFrame(
   // How this frame OPENS. Normally cmd_exec's clear_bot for the
   // command that ran; but something may have positioned the cursor
   // there already - a repaint_hilite pass addresses the bottom row
-  // itself, and jump_loc's far-back branch lclear()s - and then og
+  // itself, and jump_loc's far-back branch lclear()s - and then less
   // sends nothing at all
   const prefix = scrollPrefix;
   scrollPrefix = null;
@@ -2253,17 +2253,17 @@ function scrollFrame(
   const promptless = bareFrame;
 
   // only the trailing `bot` goes: the rows still scroll, exactly as
-  // og's forw() wrote them before it went back for more data
+  // less's forw() wrote them before it went back for more data
   const holdBot = heldPrompt && !promptless;
 
-  // a -h-capped backward scroll repaints forward, like og's back()
+  // a -h-capped backward scroll repaints forward, like less's back()
   let capped = false;
 
-  // og's G pos_clears: the overlap shapes below assume a live
+  // less's G pos_clears: the overlap shapes below assume a live
   // position table and must not swallow its skipping repaint
   if (prev && !wasOpen && !unsquished && !posClear) {
     // The bare frame just painted these content rows and left the
-    // cursor on the fresh bottom line; og writes the prompt there and
+    // cursor on the fresh bottom line; less writes the prompt there and
     // nothing else (forw, then currline, then prompt). Reprinting the
     // content here is what doubled every scrolled line.
     if (wasBare && !bareFrame && rows.length === prev.length + 1 &&
@@ -2272,7 +2272,7 @@ function scrollFrame(
     }
 
     // and the mirror: a bare frame whose rows the screen already
-    // shows has nothing to draw. og's forw()/back() write only the
+    // shows has nothing to draw. less's forw()/back() write only the
     // rows they scroll in, so a command that moved NOTHING - a failed
     // search, say - paints nothing before its line-number walk. The
     // length mismatch alone would otherwise send it to a full repaint
@@ -2291,16 +2291,16 @@ function scrollFrame(
       return '';
     }
 
-    // only the bottom (prompt) line changed: og's clear_bot + reprint
+    // only the bottom (prompt) line changed: less's clear_bot + reprint
     if (prev.length === rows.length) {
       let same = 0;
       while (same < last && rows[same] === prev[same]) same++;
 
       if (same === last) {
-        // og's error() clear_bots itself (output.c:722), on top of the
+        // less's error() clear_bots itself (output.c:722), on top of the
         // clear_bot cmd_exec already did for the command that failed:
         // its bytes carry TWO before a message, and we carried one
-        // og's error() clear_bots itself (output.c:722), on top of
+        // less's error() clear_bots itself (output.c:722), on top of
         // the one cmd_exec did for the command that failed - unless
         // something already positioned the cursor there, which is
         // what a repaint_hilite pass leaves behind
@@ -2318,26 +2318,26 @@ function scrollFrame(
           const c = rows[last].slice(head.length);
           const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
 
-          // og's start_mca runs when the command line OPENS, not per
+          // less's start_mca runs when the command line OPENS, not per
           // character, so the FIRST key of an mca carries clear_bot
           // and the prompt string and the rest are the echo alone.
           // Comparing the prompt TEXT instead was right for a second
           // digit ("1" -> ":1" -> ":12") and wrong whenever the main
-          // prompt already read ":" - a second N g dropped og's
+          // prompt already read ":" - a second N g dropped less's
           // "\r ESC[K :" entirely.
           return wasMca ? echo : clearBot() + head + echo;
         }
 
         // NOT opening(): a carried prefix belongs to the PAINT that
-        // follows it. og's prompt() clear_bots only when the previous
+        // follows it. less's prompt() clear_bots only when the previous
         // action did NOT paint forward (command.c:993) - a search that
         // moved ran forw(), so the cursor is already parked at the
         // lower left repaint_hilite left it on and the prompt goes
         // straight there; a search that moved nothing never ran forw,
-        // and og does clear_bot.
+        // and less does clear_bot.
         // ...and cmd_exec has already put this frame's opening on the
         // terminal (command.c:124), so writing another blanks the
-        // prompt row a second time per key - 6 clears against og's 3
+        // prompt row a second time per key - 6 clears against less's 3
         // on "jjj", and 6 against 4 scrolling the help. That second
         // blank IS the flicker.
         const open = (forwPrompt || cmdExecOpened) ? '' : clearBot();
@@ -2347,7 +2347,7 @@ function scrollFrame(
     }
 
     // forward: the old content rows survive shifted up by k (k = 0
-    // while a short screen is still filling); og clear_bots the
+    // while a short screen is still filling); less clear_bots the
     // prompt row and prints only the new lines, letting the
     // terminal scroll (forw)
     for (let k = 0; k < prev.length - 1; k++) {
@@ -2361,7 +2361,7 @@ function scrollFrame(
       if (!ok) continue;
 
       const appended = rows.slice(overlap, last);
-      // -y caps the scroll before og repaints instead — except an
+      // -y caps the scroll before less repaints instead — except an
       // exact screenful, "since repainting itself involves
       // scrolling forward a screenful" (forw, forwback.c:244)
       if (optForwScroll() >= 0 && appended.length > optForwScroll() &&
@@ -2383,7 +2383,7 @@ function scrollFrame(
         (holdBot ? '' : bot);
     }
 
-    // an exact-screenful advance: og-contiguous by position (the new
+    // an exact-screenful advance: contiguous by position in less (the new
     // top is the old BOTTOM_PLUS_ONE), and exempt from -y since
     // "repainting itself involves scrolling forward a screenful"
     if (forwDist === prev.length - 1 && !optClearRepaint() &&
@@ -2397,7 +2397,7 @@ function scrollFrame(
         (holdBot ? '' : bot);
     }
 
-    // backward: k rows scrolled in at the top; og back()'s home +
+    // backward: k rows scrolled in at the top; less back()'s home +
     // reverse index per line, then lower_left before the prompt
     // a bare frame is one row shorter, so its rows line up against
     // the previous frame's CONTENT rows rather than all of them
@@ -2417,7 +2417,7 @@ function scrollFrame(
           : k === backDist;
 
         if (overlap) {
-          // og's get_back_scroll caps it: -h when set, a screen minus
+          // less's get_back_scroll caps it: -h when set, a screen minus
           // two under -c, and no limit otherwise (forwback.c:535).
           // Past the cap back() sets do_repaint and repaint() paints
           // forward with the skipping marker — never the far-backward
@@ -2427,13 +2427,13 @@ function scrollFrame(
             break;
           }
 
-          // og's cmd_exec clear_bots before back() starts inserting
+          // less's cmd_exec clear_bots before back() starts inserting
           let frame = opening();
           for (let i = k - 1; i >= 0; i--) {
             frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
           }
 
-          // og lower_lefts and THEN clear_bots before the prompt on a
+          // less lower_lefts and THEN clear_bots before the prompt on a
           // backward scroll (the forward one lands on a fresh line
           // the newline already cleared, so it needs no clear)
           if (promptless) {
@@ -2459,7 +2459,7 @@ function scrollFrame(
     .map(r => r + rowEnd(r)).join('');
 
   // -c and the freeze-unlatching make_display (top_scroll forced)
-  // clear and paint forward, like og's forw calling clear() + home().
+  // clear and paint forward, like less's forw calling clear() + home().
   // The FIRST paint has no command behind it, so no clear_bot either -
   // term_init has just scrolled a whole screen in
   if (clearHome) {
@@ -2480,7 +2480,7 @@ function scrollFrame(
     let frame = clearBot() + CLEAR_SCREEN;
 
     // a bare frame's last row is CONTENT, so back() paints it too -
-    // counting from `last - 1` there dropped og's topmost row
+    // counting from `last - 1` there dropped less's topmost row
     for (let i = (promptless ? last : last - 1); i >= 0; i--) {
       frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
     }
@@ -2489,7 +2489,7 @@ function scrollFrame(
     return promptless || holdBot ? frame : frame + bot;
   }
 
-  // forward far jumps and repaints print og's skipping marker over
+  // forward far jumps and repaints print less's skipping marker over
   // the cleared prompt row and scroll (repaint() without top_scroll);
   // trashed-screen repaints carry their own prefix instead of a
   // command's clear_bot. The rows still print without a full screen,
@@ -2500,11 +2500,11 @@ function scrollFrame(
 }
 
 /**
- * Joins dumb rows like og's pdone: a row that exactly fills the
+ * Joins dumb rows like less's pdone: a row that exactly fills the
  * screen width gets no newline (auto-margins wrap it), and a bottom
  * line following such a row starts with clear_bot's bare CR — which
  * a deferred-wrap terminal puts on the hanging row, overwriting it
- * like og.
+ * like less.
  */
 function joinDumb(plain: string[]): string {
   let out = '';
@@ -2516,7 +2516,7 @@ function joinDumb(plain: string[]): string {
     if (visualWidth(plain[i]) < config.screenWidth) {
       out += '\n';
     } else if (i === plain.length - 2 && search.message) {
-      // og's error() leads with clear_bot's CR, overwriting the
+      // less's error() leads with clear_bot's CR, overwriting the
       // hanging row; a prompt appends directly instead (forw_prompt
       // skips clear_bot) and the deferred wrap moves it down a line
       out += '\r';
@@ -2527,7 +2527,7 @@ function joinDumb(plain: string[]): string {
 }
 
 // true once a dumb session painted, so a repaint after resetRender
-// (^L) still shows og's skipping marker for identical content
+// (^L) still shows less's skipping marker for identical content
 let dumbPainted = false;
 
 export function resetDumbPaint(): void {
@@ -2536,8 +2536,8 @@ export function resetDumbPaint(): void {
 
 /**
  * Counts the dumb screen as painted, so the next full frame carries
- * og's "...skipping..." marker: a search executing before any paint
- * compresses og's paint-repaint sequence, whose final repaint is
+ * less's "...skipping..." marker: a search executing before any paint
+ * compresses less's paint-repaint sequence, whose final repaint is
  * always past first_time.
  */
 export function markDumbPaint(): void {
@@ -2559,16 +2559,16 @@ export function screenRows(
 ): string[] {
   const content = formatContent(rawContent);
 
-  // an open pipe fill has no prompt row yet, like og's initial forw;
+  // an open pipe fill has no prompt row yet, like less's initial forw;
   // the alt screen still owns a blank bottom row so the cursor parks
-  // at og's lower left below the newest line (-X frames must not
+  // at less's lower left below the newest line (-X frames must not
   // gain a row: scrollFrame counts them)
   if (open) {
     if (!scrollMode()) content.push('');
     return content.join('\n').split('\n');
   }
 
-  // og's lclear leaves rows it never redraws: back() drew fewer null
+  // less's lclear leaves rows it never redraws: back() drew fewer null
   // lines than the screen holds, and what is under them is the
   // CLEARED screen, not a tilde
   if (config.blankBelow > 0) {
@@ -2580,9 +2580,9 @@ export function screenRows(
   const prompt = getPrompt(rawContent);
 
   // an echoed prefix replaces the number echo, like less's cmd_reset;
-  // a pending prefix owns the command line (og's A_PREFIX mca resets
+  // a pending prefix owns the command line (less's A_PREFIX mca resets
   // cmdbuf first), so counted digits do not show behind it; a pipe
-  // drain's blank line still owns the bottom row, cursor at og's
+  // drain's blank line still owns the bottom row, cursor at less's
   // lower left
   if (prompt) {
     content.push(config.keyPrefix ? prompt : prompt + getBuffer(buffer));
@@ -2625,7 +2625,7 @@ function sameRows(a: string[], b: string[]): boolean {
   return true;
 }
 
-// og reads these through ltgetstr, so LESS_TERMCAP_SUSPEND and
+// less reads these through ltgetstr, so LESS_TERMCAP_SUSPEND and
 // LESS_TERMCAP_RESUME override them (screen.c:1596). They exist
 // because the sequences are not in termcap/terminfo at all. We named
 // them in a comment and then emitted our own pair unconditionally, so
@@ -2636,7 +2636,7 @@ const syncOff = (): string =>
   terminalCapability(null, 'RESUME') ?? TERMINAL_RESUME;
 
 /**
- * og's squished first paint (forw()'s `first_time && pos ==
+ * less's squished first paint (forw()'s `first_time && pos ==
  * NULL_POSITION && !top_scroll`): term_init has already left the
  * cursor on the BOTTOM line, and put_line writes each line followed by
  * a newline, so the terminal SCROLLS the short file up into place.
@@ -2646,7 +2646,7 @@ const syncOff = (): string =>
  * which is why the two agreed for so long - but not for content that
  * moves the cursor itself, and under -r it can: an ESC D in the file
  * scrolls the terminal too, and only the sequential paint carries that
- * through the way og does.
+ * through the way less does.
  *
  * @param rows - The padded window, blanks first, prompt last.
  * @param blanks - How many leading rows the pad added.
@@ -2662,16 +2662,16 @@ function squishFrame(rows: string[], blanks: number): string {
   const bottom = physical[physical.length - 1] ?? '';
   let content = physical.slice(blanks, -1);
 
-  // og draws one line per line it READ, and a zero-byte file has
+  // less draws one line per line it READ, and a zero-byte file has
   // none - forw_line returns EOF straight away. Our content array
   // still carries one synthetic empty row for such a file, and
-  // drawing it would scroll a row og never scrolls
+  // drawing it would scroll a row that less never scrolls
   if (content.length === 1 && content[0] === '' &&
       (files.list[files.index]?.size ?? 0) <= 0) {
     content = [];
   }
 
-  // og's prompt() skips clear_bot when the last action was a forward
+  // less's prompt() skips clear_bot when the last action was a forward
   // movement, "since the forward movement guarantees that we're in
   // the right position" (command.c): every drawn line ends with a
   // newline, so the cursor is already at the start of the prompt row.
@@ -2693,7 +2693,7 @@ function fullFrame(rows: string[]): string {
       (i === physical.length - 1 ? '' : frameRowEnd(row)))
     .join('');
 
-  // CLEAR_BELOW blanks the rows the collapse freed, like og's paint
+  // CLEAR_BELOW blanks the rows the collapse freed, like less's paint
   // ending early and clear_eos wiping what the screen still showed
   return syncOn() + CURSOR_HOME + body + CLEAR_BELOW + parkCursor(rows) +
     syncOff();
@@ -2701,7 +2701,7 @@ function fullFrame(rows: string[]): string {
 
 /**
  * The display-row distance the screen top moved since the last frame,
- * positive forward, like og comparing paint positions in jump_loc.
+ * positive forward, like less comparing paint positions in jump_loc.
  *
  * @returns The signed distance, or null when it is unknown or larger
  *          than a screenful.
@@ -2730,7 +2730,7 @@ function topDelta(src: string[], cap: number): number | null {
 /**
  * Builds a minimal frame when the screen content only scrolled.
  *
- * - og's jump_loc picks scrolling by POSITION, never by matching
+ * - less's jump_loc picks scrolling by POSITION, never by matching
  *   screen text: only the shift matching the top's actual movement
  *   is considered, so repeated text (blank runs) cannot fake one.
  * - The bottom (prompt) row is excluded from shift matching and always
@@ -2744,13 +2744,13 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
 
   if (!prev || prev.length !== n || n < 3) return null;
 
-  // og derives the distance from its position table, which moves with
+  // less derives the distance from its position table, which moves with
   // the file. config.row does the same for the array-backed core, but
   // the block-backed one moves its WINDOW and leaves config.row at 0,
   // so topDelta sees nothing and every scroll became a full repaint -
   // the same screen, so nothing caught it, until a physically drifted
   // screen (a wrapped prompt under -r) showed the repaint resetting
-  // drift that og carries. The shift is still there to be read off the
+  // drift that less carries. The shift is still there to be read off the
   // rows, and shifted() below proves whichever k we pick.
   const delta = topDelta(src, n) || shiftDelta(rows, prev, n);
   if (delta === null || delta === 0) return null;
@@ -2763,23 +2763,23 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     if (k < n - 1 && rows[0] === prev[k] && shifted(rows, prev, k)) {
       if (optForwScroll() >= 0 && k > optForwScroll()) return null;
 
-      // og never asks the terminal to scroll: forw() writes each new
+      // less never asks the terminal to scroll: forw() writes each new
       // line ON the bottom line - the prompt row, cleared by the
       // deferred clear_bot the first putchr triggers - and the
       // NEWLINE ending it scrolls the screen. Then prompt() writes
       // the prompt where the cursor already sits. Byte for byte:
       //   \r ESC[K  (line \r\n) x k  prompt ESC[K
-      // og's forw() opens with the clear_bot cmd_exec already sent
+      // less's forw() opens with the clear_bot cmd_exec already sent
       // (command.c:124) - it does not send a second. Ours did, so
       // every scroll key blanked the prompt row twice: 6 clears
-      // against og's 3 on "jjj", 6 against 4 in the help. That extra
+      // against less's 3 on "jjj", 6 against 4 in the help. That extra
       // blank is the flicker.
       let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
       for (let r = n - 1 - k; r < n - 1; r++) frame += rows[r] + '\n';
 
       // a bare frame's bottom row is the blank command line, and the
-      // row the scroll just brought in is blank already - og writes
+      // row the scroll just brought in is blank already - less writes
       // nothing for it
       const bottom = rows[n - 1];
       forwPrompt = !bottom;
@@ -2799,7 +2799,7 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     // back() is the mirror: home(), add_line() - a REVERSE INDEX,
     // which scrolls the screen down - then the line and its newline,
     // once per exposed row, newest first. Afterwards the cursor is
-    // mid-screen, so og addresses the bottom row before its prompt.
+    // mid-screen, so less addresses the bottom row before its prompt.
     //   \r ESC[K  (ESC[H ESC M line \r\n) x k  ESC[24;1H \r ESC[K
     //   prompt ESC[K
     let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
@@ -2809,11 +2809,11 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
     }
 
     // The reverse index scrolls the WHOLE screen down, so the last
-    // content row lands on the command line - og has the same leak and
+    // content row lands on the command line - less has the same leak and
     // wipes it in prompt(), whose clear_bot (command.c:993) runs
     // before the prompt text. Held, there is no prompt() to do it, and
     // the leaked row then sits there for the whole scroll. So the
-    // clear is unconditional here, exactly as og's lower_left +
+    // clear is unconditional here, exactly as less's lower_left +
     // clear_bot pair is: it is what keeps that row blank, not the
     // prompt that usually follows it.
     //
@@ -2861,14 +2861,14 @@ function shifted(top: string[], bottom: string[], k: number): boolean {
 }
 
 /**
- * Paints a far-forward jump like og's forw() without top_scroll,
+ * Paints a far-forward jump like less's forw() without top_scroll,
  * which the alt screen runs all the same: the prompt row clears,
  * "...skipping..." prints over it, and the new lines scroll in
  * (forwback.c:274) — except an exact-screenful advance, contiguous
  * by position (the new top is the old BOTTOM_PLUS_ONE), which
  * scrolls without the marker; a -y-capped scroll instead repaints
  * WITH it (do_repaint, forwback.c:244). Backward jumps and
- * same-position repaints keep the home repaint (og's make_display
+ * same-position repaints keep the home repaint (less's make_display
  * forces top_scroll for those).
  *
  * @returns The frame, or null when this is not a forward jump.
@@ -2881,7 +2881,7 @@ function skippedFrame(
   const prev = prevRows;
   const effRow = config.row - config.blankTop;
 
-  // og guards: !first_time, full_screen, !is_filtering
+  // less guards: !first_time, full_screen, !is_filtering
   // the squished first paint stores one row per collapse MORE than
   // the window (its loss is absorbed at the top), so require a full
   // screen on both sides rather than an exact match
@@ -2890,9 +2890,9 @@ function skippedFrame(
     return null;
   }
 
-  // og's G paints skipping through its pos_clear no matter the
+  // less's G paints skipping through its pos_clear no matter the
   // direction or distance — the position table looks empty
-  // og prints the marker only when it is NOT drawing the first
+  // less prints the marker only when it is NOT drawing the first
   // screen of output (forwback.c:272 tests !first_time)
   let marker = firstOutput ? '' : '...skipping...\n';
 
@@ -2904,7 +2904,7 @@ function skippedFrame(
       return null;
     }
 
-    // the display-row distance the top advanced, like og comparing
+    // the display-row distance the top advanced, like less comparing
     // the paint position against position(BOTTOM_PLUS_ONE)
     let dist = -prevTopSub;
     const cap = prev.length + 1;
@@ -2932,7 +2932,7 @@ function skippedFrame(
   const last = physical.length - 1;
   const body = physical.slice(0, last).map(r => r + rowEnd(r)).join('');
 
-  // og prints the marker with a bare putstr at the cursor
+  // less prints the marker with a bare putstr at the cursor
   // (forwback.c:274). A normal command has already cleared the
   // bottom line by then, but an option prompt's echo has not, so the
   // marker lands after it: "-...skipping..."
@@ -2956,7 +2956,7 @@ export function getLastRow(content: string[]): {
   lastRow: number,
   lastSubRow: number
 } {
-  // og's jump_forw puts the file's LAST LINE on the bottom screen line
+  // less's jump_forw puts the file's LAST LINE on the bottom screen line
   // and lets jump_loc fill upward from there (jump.c:62), so the anchor
   // is a back_line walk, not a sum. Counting whole-line rows instead
   // needed a correction whenever the walk reached a top that sits
@@ -2996,7 +2996,7 @@ export function calculateEOF(content: string[]): void {
   config.endRow = lastRow;
   config.endSubRow = lastSubRow;
 
-  // og answers "is the end displayed" from ONE place - eof_displayed
+  // less answers "is the end displayed" from ONE place - eof_displayed
   // reads position(BOTTOM_PLUS_ONE) off the position table
   // (forwback.c:95). We had two answers: this one, derived from
   // whether the CONTENT ARRAY fits a screen, and the source engine's
@@ -3026,16 +3026,16 @@ export function calculateEOF(content: string[]): void {
  * @returns The prompt string.
  */
 export function getPrompt(content: string[]): string {
-  // only the branches below that paint og's display_prompt re-arm
+  // only the branches below that paint less's display_prompt re-arm
   // the --end-prompt marker
   promptPainted = false;
 
 
-  // during a pipe drain og leaves the command line blank for G and
+  // during a pipe drain less leaves the command line blank for G and
   // shows ierror's interruptible note for % (jump.c/output.c), and
   // a forward move blocked in forw_line waits behind its command's
   // clear_bot the same way; a 4s data stall prints ch.c's
-  // wait_message over any of them — og's last ixerror owns the
+  // wait_message over any of them — less's last ixerror owns the
   // bottom line
   if (pipeDraining.active || pendingScroll.rows) {
     if (session.pipeWaiting) {
@@ -3055,7 +3055,7 @@ export function getPrompt(content: string[]): string {
   const inputPrompt = searchPrompt();
   if (inputPrompt !== null) return inputPrompt;
 
-  // the binary file question replaces the prompt, like og's query
+  // the binary file question replaces the prompt, like less's query
   if (binaryConfirm.pending) {
     return `"${binaryConfirm.path}" may be a binary file.  ` +
       'See it anyway? ';
@@ -3074,7 +3074,7 @@ export function getPrompt(content: string[]): string {
         (cmd.active ? cmdDisplay() : option.param);
     }
 
-    // ^P shows "(P)" and -+/-! their flag, like og's mca_opt_toggle
+    // ^P shows "(P)" and -+/-! their flag, like less's mca_opt_toggle
     const marks = (option.noPrompt ? '(P)' : '') + option.flag;
 
     if (option.name !== null) {
@@ -3116,7 +3116,7 @@ export function getPrompt(content: string[]): string {
 
   if (examine.pending) return 'Examine: ' + cmdDisplay();
 
-  // pending multi-key prefix, echoed like og's A_PREFIX: the mca
+  // pending multi-key prefix, echoed like less's A_PREFIX: the mca
   // opens with a " " prompt and every held char goes through prchar
   // (command.c:2506), which spells the escape character "ESC"
   // (charset.c:533) - so a half-read arrow shows " ESC", then " ESCO"
@@ -3129,7 +3129,7 @@ export function getPrompt(content: string[]): string {
       INVERSE_ON, INVERSE_OFF);
   }
 
-  // a stalled initial fill shows og's wait_message the same way
+  // a stalled initial fill shows less's wait_message the same way
   // (ch.c ixerror while the blocked read polls)
   if (session.pipeWaiting) {
     return colored('prompt',
@@ -3147,7 +3147,7 @@ export function getPrompt(content: string[]): string {
       INVERSE_ON, INVERSE_OFF);
   }
 
-  // og's ':' carries AT_NORMAL|AT_COLOR_PROMPT: colored under
+  // less's ':' carries AT_NORMAL|AT_COLOR_PROMPT: colored under
   // --use-color, never standout (command.c:1007)
   if (mode.BUFFERING) return colored('prompt', ':');
 
@@ -3168,7 +3168,7 @@ export function getPrompt(content: string[]): string {
   // the bottom line expands the -P prototype of the -m/-M style; the
   // short prompt shows a new file's name once (?n) and the (END)
   // marker with the next file, like s_proto
-  // og hands pr_string's result to load_line, which pappends it like
+  // less hands pr_string's result to load_line, which pappends it like
   // any file line: tabs reach their stops and control chars take
   // caret notation rather than the terminal (command.c:1027)
   const text = transformPrompt(prExpand(content, prProto(displayPrType())));
@@ -3176,7 +3176,7 @@ export function getPrompt(content: string[]): string {
 
   promptPainted = true;
 
-  // og marks a filtered session on the prompt line: prompt() writes
+  // less marks a filtered session on the prompt line: prompt() writes
   // "& " plain and loads the prompt itself two columns in
   // (command.c:1019), so the marker never takes the standout
   const amp = search.filters.length ? '& ' : '';
@@ -3194,12 +3194,12 @@ export function getPrompt(content: string[]): string {
 
 /**
  * Truncates the BEGINNING of an overlong prompt so its tail fits the
- * screen minus one reserved column, like og's load_line shifting the
- * head off (line.c:1924). Error messages are never clipped - og
+ * screen minus one reserved column, like less's load_line shifting the
+ * head off (line.c:1924). Error messages are never clipped - less
  * prints those full and lets them trash the screen.
  */
 function clipPrompt(text: string, indent: number = 0): string {
-  // under -r og counts no widths at all: fits_on_screen returns TRUE
+  // under -r less counts no widths at all: fits_on_screen returns TRUE
   // outright for ctldisp == OPT_ON ("We're not counting, so say that
   // everything fits", line.c), so load_line's hshift loop breaks on
   // its first pass and the prompt is never truncated - it just wraps,
@@ -3207,7 +3207,7 @@ function clipPrompt(text: string, indent: number = 0): string {
   // "display may be messed up" means
   if (optCtldisp() === 1) return text;
 
-  // load_line reserves ONE column of og's sc_width (command.c:1027).
+  // load_line reserves ONE column of less's sc_width (command.c:1027).
   // sc_width is the terminal's width: the -N/-J gutter is added by
   // plinenum, per content line, and never comes out of the prompt's
   // room. config.screenWidth already has it subtracted, so asking it
@@ -3269,21 +3269,21 @@ function visibleBufferLength(bufferLength: number): number {
  * @param lines - The array of formatted lines to pad.
  */
 // how many trailing rows the last frame padded past the end of the
-// file. og needs no such count: those rows simply have no entry in the
+// file. less needs no such count: those rows simply have no entry in the
 // position table, and everything that walks the screen skips them
 let padRows = 0;
 
 function padToEOF(lines: string[]): void {
   padRows = 0;
 
-  // og's gline draws a null line as "~" or "" by the twiddle flag, so
+  // less's gline draws a null line as "~" or "" by the twiddle flag, so
   // -~ pads with blank rows and the prompt keeps the bottom line
   if (!mode.INIT && config.window - lines.length > 1) {
     const rows = config.window - lines.length - 1;
     padRows = rows;
 
     // one self-contained row per tilde, like the blankTop pad above
-    // and like og attributing every null line it draws. A single
+    // and like less attributing every null line it draws. A single
     // wrapped block would leave the attribute on the first row and
     // the reset on the last, so identical rows would carry DIFFERENT
     // strings depending on where they sat — and the scroll paints,

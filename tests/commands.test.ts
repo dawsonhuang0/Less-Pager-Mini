@@ -155,10 +155,10 @@ describe('file command orchestration', () => {
     expect(files.newFile).toBe(true);
   });
 
-  it('starts the new file at column 0, like og edit_ifile hshift = 0', () => {
-    // og's edit_ifile zeroes hshift (edit.c:680) in the same block as
+  it('starts the new file at column 0, like less edit_ifile hshift = 0', () => {
+    // less's edit_ifile zeroes hshift (edit.c:680) in the same block as
     // pos_clear and clr_hilite: a switch starts at the left edge
-    // however far the file being left was shifted. It has to - og
+    // however far the file being left was shifted. It has to - less
     // saves a scrpos per ifile (ifile.c:35) and the shift is not in
     // it, so there is nothing to restore to.
     //

@@ -86,7 +86,7 @@ function toggle(keys: string): void {
   for (const key of keys.slice(1)) optionKey(content, key);
 }
 
-describe('state toggles with og messages', () => {
+describe('state toggles with less messages', () => {
   it.each([
     ['file-size', 'Get size of each file', "Don't get size of each file"],
     ['no-vbell', "Don't display visual bell", 'Display visual bell'],
@@ -100,7 +100,7 @@ describe('state toggles with og messages', () => {
       "Don't redraw screen when quitting"],
     ['no-paste', 'Ignore pasted input', 'Accept pasted input'],
     ['hilite-target', 'Highlight target line', "Don't highlight target line"],
-  ])('--%s toggles like og', (name, onMsg, offMsg) => {
+  ])('--%s toggles like less', (name, onMsg, offMsg) => {
     toggle(`--${name}\x0D`);
     expect(search.message).toBe(onMsg);
 
@@ -249,7 +249,7 @@ describe('--form-feed', () => {
     calculateEOF(paged);
     toggle('--form-feed\x0D');
 
-    // og's forw checks each NEWLY printed bottom line
+    // less's forw checks each NEWLY printed bottom line
     // (forwback.c:366): the scroll stops with \f as the last
     // visible row
     lineForward(paged, 4);
@@ -262,7 +262,7 @@ describe('--form-feed', () => {
     lineForward(paged, 2);
     expect(config.row).toBe(7);
 
-    // og's back prints at the top and stops on the \f line there
+    // less's back prints at the top and stops on the \f line there
     lineBackward(paged, 5);
     expect(config.row).toBe(5);
   });
@@ -324,7 +324,7 @@ describe('--wordwrap', () => {
   });
 
   it('keeps the screen on the same text when toggled', () => {
-    // og's --wordwrap is O_BOOL|O_REPAINT with no ofunc at all
+    // less's --wordwrap is O_BOOL|O_REPAINT with no ofunc at all
     // (opttbl.c:754), so it never touches table[TOP]: the screen keeps
     // its byte and forw_line re-wraps from there. Ours indexes wrap
     // BOUNDARIES and this option reshapes them, so the offset has to
@@ -415,7 +415,7 @@ describe('--tag-file', () => {
   });
 });
 
-describe('_i query reports the caseless triple, like og', () => {
+describe('_i query reports the caseless triple, like less', () => {
   it('shows the state-2 message from either flag', () => {
     toggle('-I\x0D');
     search.message = '';

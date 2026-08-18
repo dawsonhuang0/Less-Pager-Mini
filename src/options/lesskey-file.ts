@@ -14,7 +14,7 @@ export const lesskeyFile: OptionSpec = {
     defaultValue: '',
     get: () => '',
     set: value => {
-      // og's opt_k at INIT: `if (lesskey(s, 0)) error("Cannot use
+      // less's opt_k at INIT: `if (lesskey(s, 0)) error("Cannot use
       // lesskey file \"%s\"")` (optfunc.c:283). We accepted -k and
       // silently did nothing, even though the compiled-lesskey reader
       // it needs already existed for the default files.

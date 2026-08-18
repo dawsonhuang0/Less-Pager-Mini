@@ -46,7 +46,7 @@ const goMark = (char: string, n = 0, c = content): void => {
 };
 
 beforeEach(() => {
-  // eof/bof bells rate limit to one per second, like og's eof_bell
+  // eof/bof bells rate limit to one per second, like less's eof_bell
   resetBellTimer();
 
   config.row = 0;

@@ -52,14 +52,14 @@ export function osc8Links(lines: string[], param?: string): Osc8Link[] {
           uri: match[2],
         };
       } else if (opened) {
-        // og requires the closing sequence to start strictly AFTER
+        // less requires the closing sequence to start strictly AFTER
         // the opening ends - op2.osc8_start > op1.osc8_end
         // (search.c:1417) - so a link with no TEXT between the two is
         // not a link at all and the scan moves on. Files generated
         // from man pages are full of them: an anchor like
         // "ESC]8;:id=1;# ESC\ ESC]8;; ESC\" marks a position and
         // shows nothing
-        // searching for a PARAMETER lifts the rule: og's two guards
+        // searching for a PARAMETER lifts the rule: less's two guards
         // both end in "|| param != NULL" (search.c:1412 and :1417),
         // because an id= anchor is exactly an empty link
         if (match.index > opened.after || param !== undefined) {
@@ -83,13 +83,13 @@ export function osc8Links(lines: string[], param?: string): Osc8Link[] {
 }
 
 /** Selects the Nth OSC 8 link in either direction, wrapping once. */
-/** True while the selected link's row is displayed, og's onscreen(). */
+/** True while the selected link's row is displayed, less's onscreen(). */
 export function osc8Visible(lines: string[]): boolean {
   if (!selected) return false;
   return selected.row >= config.row && selected.row <= bottomRow(lines);
 }
 
-/** og's osc8_search (search.c:2005): continue from an on-screen
+/** less's osc8_search (search.c:2005): continue from an on-screen
  *  selection (same line first — link order covers it); an off-screen
  *  or absent selection starts at the -j line like search_pos; no
  *  wrap — a miss errors and KEEPS the old selection. */
@@ -125,7 +125,7 @@ export function searchOsc8(
   remaining = 0;
 
   if (at < 0 || at >= links.length) {
-    // og errors and returns: the old selection survives
+    // less errors and returns: the old selection survives
     search.message = 'OSC 8 link not found';
     return false;
   }
@@ -133,7 +133,7 @@ export function searchOsc8(
   selected = links[at];
   setOsc8Display({ row: selected.row, start: selected.start });
 
-  // og saves the URI at every selection; the next prompt cycle
+  // less saves the URI at every selection; the next prompt cycle
   // reports it (command.c:905 "Link: %s")
   search.message = `Link: ${selected.uri}`;
   return true;
@@ -145,7 +145,7 @@ export function jumpOsc8(lines: string[]): boolean {
     search.message = 'No OSC8 link selected';
     return false;
   }
-  // og's osc8_jump: an unconditional jump_loc to the -j line
+  // less's osc8_jump: an unconditional jump_loc to the -j line
   jumpLoc(lines, selected.row, 0, jumpSindex());
   return true;
 }
@@ -175,7 +175,7 @@ export function osc8CommandForUri(
 }
 
 /**
- * True when the selected link points INSIDE the file: og treats a URI
+ * True when the selected link points INSIDE the file: less treats a URI
  * with no scheme that starts with "#" as a link to an "id=" anchor
  * and searches for it forward with wrap, running no handler at all
  * (search.c:1942).
@@ -189,7 +189,7 @@ export function osc8Internal(): string | null {
   return colon < 0 && uri.startsWith('#') ? `id=${uri.slice(1)}` : null;
 }
 
-/** Selects the anchor an internal link names, wrapping like og. */
+/** Selects the anchor an internal link names, wrapping like less. */
 export function osc8SearchParam(lines: string[], param: string): boolean {
   const links = osc8Links(lines, param);
 

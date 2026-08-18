@@ -3,7 +3,7 @@
  * behind PagerConfig: `npm run gen:options`.
  *
  * The key map comes from the live option table, each key's description
- * from og's own --help text, and a value option's @default from the
+ * from less's own --help text, and a value option's @default from the
  * table entry. tests/misc/api.test.ts fails while the snapshot lags
  * the table, and this script is what fixes it.
  */
@@ -17,7 +17,7 @@ import { help } from '../src/startup/lessHelp';
 
 const TARGET = path.join(__dirname, '..', 'src/state/lessOptionTypes.ts');
 
-/** Drops the overstrike underlining og's help text carries. */
+/** Drops the overstrike underlining less's help text carries. */
 const plain = (line: string): string => line.replace(/.\x08/g, '');
 
 // --- descriptions, read out of the help text ---------------------------
@@ -65,7 +65,7 @@ for (const spec of specs) {
 
 /**
  * The default this KEY carries, for value options only. A flag's table
- * default describes og's VARIABLE, not the named behavior: -B
+ * default describes less's VARIABLE, not the named behavior: -B
  * --auto-buffers starts at 1 while its text reads "don't allocate", a
  * triple's 2 is not its uppercase key, and --no-shell starts ON for
  * library calls. Those are documented on the interface instead of
@@ -115,7 +115,7 @@ function docComment(doc: string): string {
 const props = Object.entries(map).map(([name, kind]) => {
   const spec = specOf.get(name);
 
-  // og's help, then the lowercase entry an uppercase triple name is
+  // less's help, then the lowercase entry an uppercase triple name is
   // folded into, then the option's own toggle message
   const desc = described.get(name) ??
     (name === name.toUpperCase()
@@ -140,7 +140,7 @@ const values = Object.entries(map)
 fs.writeFileSync(TARGET, `// GENERATED FILE - do not edit. Snapshot of \
 buildLessOptionMap over
 // the live option table (src/options), with each key's description
-// taken from og's --help text and its default from the option table.
+// taken from less's --help text and its default from the option table.
 // Regenerate with \`npm run gen:options\`; tests/misc/api.test.ts fails
 // until the snapshot matches the table again.
 
@@ -156,7 +156,7 @@ ${values}
  * the default as you pick the name out of the completion list.
  *
  * A flag left out keeps less's startup state, which for nearly every
- * option means off; the exceptions are og's own inverted names (-B
+ * option means off; the exceptions are less's own inverted names (-B
  * --auto-buffers, -G --HILITE-SEARCH) and --no-shell, which a library
  * call starts ON. Only value options carry an @default, since a
  * triple's table state does not map onto one key's boolean.
@@ -167,7 +167,7 @@ ${props}
 
 /**
  * Every option LETTER the scan accepts, so \`-R\` and \`-N\` are offered
- * beside the long names. A letter carries no doc comment: og's help
+ * beside the long names. A letter carries no doc comment: less's help
  * describes the option, and the letter is one spelling of it.
  */
 export type LessOptionLetter =

@@ -44,9 +44,9 @@ const CACHE_LIMIT = 5000;
  * A count of ENTRIES does not bound anything: a layout carries a
  * chars/widths/rowStyle entry per character, so it costs roughly a
  * hundred times the line it describes, and 5000 of them off a file of
- * 2 KB lines reached 228 MB against og's 16 MB. og has no layout cache
+ * 2 KB lines reached 228 MB against less's 16 MB. less has no layout cache
  * at all - it keeps one linebuf and rebuilds - so any budget here is
- * memory og never spends; the point is only that it be A budget.
+ * memory less never spends; the point is only that it be A budget.
  *
  * Half a million characters holds a screenful of the longest line we
  * will ever build (MAX_LINE) many times over, and everything an
@@ -61,7 +61,7 @@ let cacheWidth = 0;
 let cacheWordwrap = false;
 let cacheCtldisp = -1;
 
-// Which layout the cached extents came from. og never needs this: its
+// Which layout the cached extents came from. less never needs this: its
 // position table holds STARTS only and forw_line re-derives the extent
 // at every draw, so a width or ctldisp change re-extents every row for
 // free. Ours stores each row's end - the bottom row has no next entry
@@ -135,7 +135,7 @@ function buildLayout(line: string): LineLayout {
   const codeIdx: number[] = [];
   const codes: string[] = [];
 
-  // og's pwidth: a control character under -r moves the cursor by an
+  // less's pwidth: a control character under -r moves the cursor by an
   // unpredictable amount, "so we don't even try to guess; say it
   // doesn't move ... this can only happen if the -r flag is in
   // effect" (line.c:545). It is still a CHARACTER in the line buffer.
@@ -173,7 +173,7 @@ function buildLayout(line: string): LineLayout {
       for (const cluster of splitChars(segment)) {
         chars.push(cluster);
 
-        // a raw -u backspace counts og's pwidth: -1, or -2 when it
+        // a raw -u backspace counts less's pwidth: -1, or -2 when it
         // overprints a wide char (line.c:535)
         if (cluster === '\b') {
           const prev = widths.length ? widths[widths.length - 1] : 0;
@@ -185,7 +185,7 @@ function buildLayout(line: string): LineLayout {
     }
   };
 
-  // og's do_append only starts the ANSI state machine when ctldisp is
+  // less's do_append only starts the ANSI state machine when ctldisp is
   // OPT_ONPLUS (line.c:1300); under -r an ESC is not the beginning of
   // a sequence at all - store_control_char stores it as an ordinary
   // AT_NORMAL character (line.c:1193) and the "[31m" after it is
@@ -196,7 +196,7 @@ function buildLayout(line: string): LineLayout {
     pushChars(line);
   } else {
     // a charset designation counts here too: sgr0 leads with "\E(B"
-    // on xterm and it is not a sequence by og's rule, so laying it out
+    // on xterm and it is not a sequence by less's rule, so laying it out
     // as three printing columns wrapped lines that fit
     STYLE_OR_CHARSET_G.lastIndex = 0;
     let i = 0;
@@ -258,7 +258,7 @@ const SGR_CLOSERS = new Map<number, (open: number) => boolean>([
  * inverse ESC[7m opened before it, and SGR_CLOSERS above knows every
  * such pairing. withReset used to look for a reset code alone, so a
  * line that closed its inverse properly looked unterminated and got a
- * second, redundant reset appended -- which og does not emit.
+ * second, redundant reset appended -- which less does not emit.
  *
  * @param text - The text to scan.
  */
@@ -321,7 +321,7 @@ const isSpace = (char: string): boolean => char === ' ' || char === '\t';
  * buildRowStarts, taken from an arbitrary character rather than from a
  * boundary.
  *
- * og's forw_line reads from wherever table[TOP] points and stops when
+ * less's forw_line reads from wherever table[TOP] points and stops when
  * the line no longer fits, so a row's extent depends on where it
  * STARTS. Under a plain width that is just from + width, but
  * --wordwrap breaks at spaces, so the answer cannot be translated from
@@ -330,7 +330,7 @@ const isSpace = (char: string): boolean => char === ' ' || char === '\t';
 export function rowEndFrom(layout: LineLayout, from: number): number {
   const { chars, widths } = layout;
 
-  // og's fits_on_screen answers TRUE for everything under -r: "We're
+  // less's fits_on_screen answers TRUE for everything under -r: "We're
   // not counting" (line.c:842). The whole line is then ONE screen row,
   // however wide, and the terminal wraps it - which is exactly what
   // the manual warns about -r splitting lines in the wrong place.
@@ -423,7 +423,7 @@ export function charIndexAt(layout: LineLayout, at: number): number {
 
 /**
  * The drawn text of the characters in [from, to), with the style in
- * force at `from` reopened so the row stands alone like og's (og
+ * force at `from` reopened so the row stands alone like less's (less
  * re-emits attributes per row through at_switch).
  *
  * A space run --wordwrap swallowed at the break is inside the range

@@ -317,11 +317,11 @@ let pagerInput: PagerInput | null = null;
  * @param examineFile - If true, treats input as file path(s) and reads from
  *                      disk.
  */
-// a pipe still delivering data into the session (og's non-seekable
+// a pipe still delivering data into the session (less's non-seekable
 // ch input); set by pagerPipe before the session starts
 
 
-// og's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
+// less's MAX_PASTE_IGNORE_SEC: a lost end marker stops eating input
 const MAX_PASTE_IGNORE_MS = 5000;
 
 /**
@@ -342,17 +342,17 @@ export async function contentPager(
   resetSession(initialContent);
 
   // $LESS and command line options are already applied for file
-  // sessions (og's main scans them before edit_first opens anything);
+  // sessions (less's main scans them before edit_first opens anything);
   // in-memory and pipe sessions scan here with their content
   const startup = startupOverride ?? startupInit(session.fullContent);
 
-  // -V prints the version and never starts the pager, like og
+  // -V prints the version and never starts the pager, like less
   if (startup.version) {
     printVersion();
     return;
   }
 
-  // the $LESSOPEN "-" forms preprocess even in-memory content, like og
+  // the $LESSOPEN "-" forms preprocess even in-memory content, like less
   // handing the input pipe to the preprocessor with %s as "-"
   const pseudo = files.list[files.index];
 
@@ -380,7 +380,7 @@ export async function contentPager(
   hook.hiliteErase = markHiliteErase;
   hook.reheadSource = () => pagerInput?.retopOffset(0);
 
-  // og's table[TOP] survives a width change untouched; ours indexes
+  // less's table[TOP] survives a width change untouched; ours indexes
   // wrap boundaries, so the offset is captured before and restored
   // after (options/ cannot reach the layout directly)
   hook.topOffset = (content: string[]) => {
@@ -388,16 +388,16 @@ export async function contentPager(
 
     if (top === undefined) return () => {};
 
-    // og's table[TOP] is a byte into the FILE, so an option that
+    // less's table[TOP] is a byte into the FILE, so an option that
     // changes what a line DISPLAYS cannot move it. A display-character
     // offset can: -r turns the escape codes into visible characters
     // and -x re-expands tabs, so the same offset names a different
     // place in the new display line. Carry the SOURCE index across,
-    // which is what og's byte is, and re-derive the display offset
+    // which is what less's byte is, and re-derive the display offset
     // from it afterwards.
     // Three spaces meet here and only one is stable across an option:
     // the layout's CHARACTER offset (what the top is kept in), the
-    // display STRING index, and the RAW string index - og's byte. A
+    // display STRING index, and the RAW string index - less's byte. A
     // line the transform left alone has no source mapping, and then
     // the display string IS the raw one, so the conversion is
     // stringIndexAt rather than the identity: on a styled line under
@@ -433,7 +433,7 @@ export async function contentPager(
   };
 
   onRebuild(() => {
-    // inside the help screen the help itself repaints (og's -D and
+    // inside the help screen the help itself repaints (less's -D and
     // friends carry O_REPAINT on the current file); the main content
     // rebuild lands in the parked copy for when help exits
     if (mode.HELP) {
@@ -443,7 +443,7 @@ export async function contentPager(
       return;
     }
 
-    // og's O_REPAINT: the option's repaint() runs once the toggle
+    // less's O_REPAINT: the option's repaint() runs once the toggle
     // returns, painting the whole screen fresh
     markFullRepaint();
 
@@ -462,7 +462,7 @@ export async function contentPager(
   });
 
   // -F prints a file that fits on one screen to the main display and
-  // quits, like og's term_init skipping the init strings; more than
+  // quits, like less's term_init skipping the init strings; more than
   // one file disables it, like main.c checking nifile()
   calculateDimensions();
   config.row = 0;
@@ -475,7 +475,7 @@ export async function contentPager(
   const shellLines = shellReserveLines();
 
   // --file-size reads a pipe to its end before any terminal init,
-  // like edit() calling scan_eof under want_filesize: og blocks the
+  // like edit() calling scan_eof under want_filesize: less blocks the
   // first paint until the length is known
   if (opt.wantFileSize > 0 && !startup.dohelp &&
       files.list[files.index]?.streaming &&
@@ -484,7 +484,7 @@ export async function contentPager(
   }
 
   // -F on a pipe keeps reading until a screenful or EOF before any
-  // terminal init, like og's get_one_screen under F_UNTIL_SCREEN: an
+  // terminal init, like less's get_one_screen under F_UNTIL_SCREEN: an
   // input that ends within one screen falls through to the cat below
   if (
     optQuitIfOneScreen() && !startup.dohelp && files.list.length <= 1 &&
@@ -521,7 +521,7 @@ export async function contentPager(
     return;
   }
 
-  // a terminal without cursor capabilities runs degraded, like og's
+  // a terminal without cursor capabilities runs degraded, like less's
   // missing_cap set from the dumb/unknown termcap entry; -d suppresses
   // the warning (know_dumb) but not the degradation
   mode.DUMB = dumbTerminal();
@@ -532,7 +532,7 @@ export async function contentPager(
     const answer = await warnReturn();
     putstr('\n');
 
-    // og's query() quits on a capital Q only (output.c:808)
+    // less's query() quits on a capital Q only (output.c:808)
     if (answer === 'Q') {
       keyboard().setRawMode(false);
       closeTtyKeyboard();
@@ -542,12 +542,12 @@ export async function contentPager(
     return answer;
   }
 
-  // og's use_logfile (edit.c:954) runs at edit time, BEFORE the
+  // less's use_logfile (edit.c:954) runs at edit time, BEFORE the
   // errmsgs gate and term_init: the -o overwrite query asks on the
   // plain screen, one raw key per ask, and only a capital Q quits
   // (query() itself, output.c:808) - lowercase q retypes like any
   // other invalid answer. A failed open error()s into the same
-  // pre-screen message flow below, like og's errmsgs.
+  // pre-screen message flow below, like less's errmsgs.
   const startupLog = takeStartupLog();
 
   if (startupLog) {
@@ -592,7 +592,7 @@ export async function contentPager(
     search.message = '';
   }
 
-  // og main's errmsgs gate blocks in get_return, which ungets any
+  // less main's errmsgs gate blocks in get_return, which ungets any
   // key other than RETURN or space to become the first command
   if (startupErrors.count > 0) {
     startupErrors.count = 0;
@@ -600,13 +600,13 @@ export async function contentPager(
     const answer = await warnReturn();
     putstr('\n');
 
-    // ^C is og's READ_INTR at get_return: swallowed, not ungot
+    // ^C is less's READ_INTR at get_return: swallowed, not ungot
     if (answer && answer !== '\x0D' && answer !== '\x0A' &&
         answer !== ' ' && answer !== '\x03') {
       session.ungotStartKey = answer;
     }
 
-    // og's pending S_INTERRUPT: psignals runs getcc_clear at the
+    // less's pending S_INTERRUPT: psignals runs getcc_clear at the
     // top of the command loop, discarding the gate's ungot key
     if (session.intrPending) {
       session.intrPending = false;
@@ -617,12 +617,12 @@ export async function contentPager(
   init();
 
   // a command-line --header applies now that the file is open, like
-  // og's deferred init_header (find_pos works, the view opens at the
+  // less's deferred init_header (find_pos works, the view opens at the
   // header start via the first jump's after_header_pos)
   pagerInput?.ready();
   applyPendingHeader(session.fullContent);
 
-  // -? pages the help file first, like og's dohelp registering
+  // -? pages the help file first, like less's dohelp registering
   // FAKE_HELPFILE as an input file: quitting that help quits the
   // pager, unlike the h command's overlay.
   //
@@ -650,24 +650,24 @@ export async function contentPager(
   }
 
 
-  // og never squishes the first paint with a header configured
+  // less never squishes the first paint with a header configured
   // (forwback.c's squish condition requires header_lines == 0 &&
   // header_cols == 0): a short first screen paints top-anchored
   // with tildes instead of the lower-left scroll-up
   if (optHeader().lines > 0 || optHeader().cols > 0) mode.INIT = false;
 
   // the initial open ran before the dimensions were known: a short
-  // pipe-form $LESSOPEN alt reveals its length now (og's first
+  // pipe-form $LESSOPEN alt reveals its length now (less's first
   // paint reading to EOI shows (END))
   revealAltEnd(session.content);
 
   // + commands (and -p searches) run at the first file, followed by
-  // the ++cmd every-file command, like og's ungotten startup input
+  // the ++cmd every-file command, like less's ungotten startup input
   session.pendingFirstCmds = startup.firstCmds;
   const everyCmd = getFirstCmd();
   if (everyCmd) session.pendingFirstCmds.push(everyCmd);
 
-  // og paints TWICE before a new pattern's search runs -
+  // less paints TWICE before a new pattern's search runs -
   // repaint_hilite(FALSE) to erase what is on screen, then
   // hilite_screen() to paint the new matches (search.c:2137, :2147).
   // Neither is conditional: hilite_search is OPT_ONPLUS by default,
@@ -685,7 +685,7 @@ export async function contentPager(
     setHiliteHidden(true);
     renderHiliteRepaint(content, session.buffer);
 
-    // og clears hide_hilite BETWEEN the two paints (search.c:2146),
+    // less clears hide_hilite BETWEEN the two paints (search.c:2146),
     // so the second one already shows the new pattern's matches and
     // the search itself has nothing left to paint
     setHiliteHidden(false);
@@ -701,12 +701,12 @@ export async function contentPager(
   // -t from $LESS queued a tag jump before the pager could run it
   onTagJump(gotoCurrentTag);
 
-  // a still-delivering pipe keeps feeding the session (og's ch
+  // a still-delivering pipe keeps feeding the session (less's ch
   // reads); wired after init so appends can repaint
   if (pipeInput.source) attachPipe();
 
   // -e/-E: a forward move at end-of-file edits the next file, or
-  // quits on the last one, like og's forward() calling edit_next --
+  // quits on the last one, like less's forward() calling edit_next --
   // only when EOF is already DISPLAYED: a pipe whose length is still
   // unknown takes the EOI-discovering read (and the bell) instead
   onEofForward(() => {
@@ -726,7 +726,7 @@ export async function contentPager(
 
   keyboard().on('data', keyHandler);
 
-  // og's getchr on an exhausted keyboard: "EOF on the tty means there
+  // less's getchr on an exhausted keyboard: "EOF on the tty means there
   // is no more keyboard input. Don't loop forever waiting for a byte
   // which cannot arrive" - quit(QUIT_ERROR) (ttyin.c:220). It happens
   // AFTER the first screen is painted, which is why less with no
@@ -739,7 +739,7 @@ export async function contentPager(
   // deferred fill keys replay through the same handler
   session.feedKeys = data => keyHandler(Buffer.from(data));
 
-  // a silent probe abort's pending interrupt dies here, like og's
+  // a silent probe abort's pending interrupt dies here, like less's
   // psignals at the first command iteration (the gate consumed it
   // for messaged aborts above)
   session.intrPending = false;
@@ -754,7 +754,7 @@ export async function contentPager(
       resolve();
     };
 
-    // og's prompt() skips make_display while ungot startup input
+    // less's prompt() skips make_display while ungot startup input
     // (the errmsgs gate key, +cmds) collects a command: the screen
     // stays blank under the command echo until the command finishes
     if (session.pendingFirstCmds.length || session.ungotStartKey) {
@@ -767,7 +767,7 @@ export async function contentPager(
 
     if (session.ungotStartKey && !session.exited) {
       // the gate's key is ordinary terminal input after the +cmds
-      // (og's ungetsc stacking), with no end-command newline
+      // (less's ungetsc stacking), with no end-command newline
       const gateKey = session.ungotStartKey;
       session.ungotStartKey = '';
       handleKey(gateKey);
@@ -775,7 +775,7 @@ export async function contentPager(
       render(session.content, session.buffer);
     }
 
-    // --cmd runs once at the first prompt, like og's prompt() unget
+    // --cmd runs once at the first prompt, like less's prompt() unget
     for (const sequence of splitKeys(takeCmdAtPrompt())) {
       if (session.exited) break;
       handleKey(sequence);
@@ -804,11 +804,11 @@ function startShellFeature(
 }
 
 /**
- * Shifts the view --wheel-lines columns, og's A_L_MOUSE/A_R_MOUSE.
+ * Shifts the view --wheel-lines columns, less's A_L_MOUSE/A_R_MOUSE.
  *
  * Both cases open with pos_rehead(), like the keyboard shifts
  * (command.c:1740 and :1754), and the left one floors at column 0
- * where og's `if (wheel_lines > hshift) hshift = 0` does.
+ * where less's `if (wheel_lines > hshift) hshift = 0` does.
  *
  * @param direction -1 to shift left, 1 to shift right.
  */
@@ -850,10 +850,10 @@ const acts: Record<Actions, () => void> = {
   NEWLINE_BACKWARD: () =>
     newlineBackward(session.content, bufferToNum(session.buffer) || 1),
   GO_POS: () => goPos(session.content, bufferToNum(session.buffer)),
-  // og's four wheel cases (command.c:1720-1755). They take no count
+  // less's four wheel cases (command.c:1720-1755). They take no count
   // and read no option: whoever produced the action already decided
   // the direction, so a lesskey file bound to code 66 scrolls with
-  // --emouse off entirely - og's decoder never sees the key
+  // --emouse off entirely - less's decoder never sees the key
   MOUSE_FORWARD: () => lineForward(session.content, optWheelLines()),
   MOUSE_BACKWARD: () => lineBackward(session.content, optWheelLines()),
   MOUSE_LEFT: () => mouseShift(-1),
@@ -871,7 +871,7 @@ const acts: Record<Actions, () => void> = {
   NEXT_TAG: () => tagStep(1),
   PREV_TAG: () => tagStep(-1),
   // "If new link is on screen, just highlight it without scrolling."
-  // (og search.c:2049)
+  // (less search.c:2049)
   OSC8_FORWARD: () => {
     if (searchOsc8(session.fullContent, 1,
       bufferToNum(session.buffer) || 1) &&
@@ -886,7 +886,7 @@ const acts: Record<Actions, () => void> = {
   OSC8_OPEN: () => {
     if (!secureAllow('osc8')) return;
 
-    // a link into the same file runs nothing: og searches for the
+    // a link into the same file runs nothing: less searches for the
     // "id=" anchor it names, forward with wrap (search.c:1942)
     const param = osc8Internal();
 
@@ -915,10 +915,10 @@ const acts: Record<Actions, () => void> = {
   SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(session.buffer),
   LAST_COL: () => lastCol(session.content),
   FIRST_COL: () => firstCol(),
-  // og's repaint() unsquishes a short first paint: the screen comes
+  // less's repaint() unsquishes a short first paint: the screen comes
   // back top-anchored with tilde fill (pos_clear + jump_loc), so a
   // squished screen ends at r/^L/^R — not at the eof bell
-  // og's repaint() keeps the top's POSITION and pos_clears the table
+  // less's repaint() keeps the top's POSITION and pos_clears the table
   // (jump.c:131), so the rows a backward move exposed are regenerated
   // whole - the shifted top survives, the partial row does not
   REPAINT: () => {
@@ -955,28 +955,28 @@ const acts: Record<Actions, () => void> = {
   },
   HIGHLIGHT_TOGGLE: () => toggleHighlight(),
   CLEAR_SEARCH: () => clearHighlight(),
-  // og's A_FILTER has no helpfile guard: the & prompt opens in
+  // less's A_FILTER has no helpfile guard: the & prompt opens in
   // help; is_filtering() is FALSE on the helpfile, so the pattern
   // stores for the file and the help view stays unfiltered
   PATTERN_ONLY: () => startSearch('&', bufferToNum(session.buffer) || 1),
   TAG_COMMAND: () => startOption(session.key === '_' ? '_' : '-'),
-  // og binds :t to toggle-option with an extra 't', opening the
+  // less binds :t to toggle-option with an extra 't', opening the
   // -t tag prompt (decode.c A_OPT_TOGGLE|A_EXTRA)
   OPTION_TAG: () => { startOption('-'); optionKey(session.content, 't'); },
   FIRST_LINE: () => firstLine(session.content, bufferToNum(session.buffer)),
   LAST_LINE: () => {
-    // a streaming pipe reads to its end first, like og's G with a
+    // a streaming pipe reads to its end first, like less's G with a
     // blank command line (jump_forw's ch_end_seek)
     const n = bufferToNum(session.buffer);
 
-    // og's bare G is jump_forw, which pos_clears past its eof_bell:
+    // less's bare G is jump_forw, which pos_clears past its eof_bell:
     // the paint repaints with the skipping marker however close the
     // end is; a numbered G is jump_back and scrolls when on screen
     const jump = (): void => {
       if (lastLine(session.content, n)) markPosClear();
     };
 
-    // an interrupted end scan is not og's error case: ch_end_seek's
+    // an interrupted end scan is not less's error case: ch_end_seek's
     // loop exits on the READ_INTR EOI before ABORT_SIGS is checked,
     // returns success, and jump_forw jumps to the BUFFERED end — the
     // "Cannot seek to end of file" error needs a real seek failure
@@ -988,7 +988,7 @@ const acts: Record<Actions, () => void> = {
     }
   },
   PERCENT_LINE: () => {
-    // og's % shows ierror's interruptible note (jump_percent)
+    // less's % shows ierror's interruptible note (jump_percent)
     const n = bufferToNum(session.buffer);
 
     if (!pipeDrain(() => percentLine(session.content, n),
@@ -1039,13 +1039,13 @@ const acts: Record<Actions, () => void> = {
   FOLLOW: () => beginFollow('forever'),
   FOLLOW_BELL: () => beginFollow('bell'),
   FOLLOW_HILITE: () => beginFollow('hilite'),
-  // og's A_EXAMINE has no helpfile guard: :e works from help and
+  // less's A_EXAMINE has no helpfile guard: :e works from help and
   // the edit leaves the help screen
   OPEN_FILE: () => {
     if (secureAllow('examine')) startExamine();
   },
-  // og's :n/:p carry no helpfile guard: stepping the file list
-  // leaves help; with no target og stays (error on the help screen)
+  // less's :n/:p carry no helpfile guard: stepping the file list
+  // leaves help; with no target less stays (error on the help screen)
   NEXT_FILE: () => {
     if (mode.HELP &&
         stepFileTarget(1, bufferToNum(session.buffer) || 1) !== null) {
@@ -1060,7 +1060,7 @@ const acts: Record<Actions, () => void> = {
     }
     stepFile(-1);
   },
-  // og's A_INDEX_FILE has no helpfile guard either: :x edits the
+  // less's A_INDEX_FILE has no helpfile guard either: :x edits the
   // n-th file, leaving help
   INDEX_FILE: () => {
     const target = indexFileTarget(bufferToNum(session.buffer) || 1);
@@ -1085,7 +1085,7 @@ const acts: Record<Actions, () => void> = {
 // helpers
 
 /**
- * Exactly the commands og runs cmd_exec() for, read off command.c's
+ * Exactly the commands less runs cmd_exec() for, read off command.c's
  * switch (:1694, :1707, :1759, ...).
  */
 const CMD_EXEC_ACTIONS = new Set<Actions>([
@@ -1104,12 +1104,12 @@ function act(action: Actions | undefined): void {
   // a new command: the previous one's cmd_exec opening is spent
   search.cmdExecOpened = false;
 
-  // og's cmd_exec (command.c:124): `clear_attn(); clear_bot();
+  // less's cmd_exec (command.c:124): `clear_attn(); clear_bot();
   // flush();` before the command runs, so the ":" is off the screen
   // while the work happens - which on a burst scroll is exactly when
   // the line-number walk is still going. The frame that follows sees
   // cmdExecOpened and does not write a second clear.
-  // No mode.INIT guard: og's cmd_exec is unconditional at every one of
+  // No mode.INIT guard: less's cmd_exec is unconditional at every one of
   // these cases (command.c:1694, :1707, ...), and first_time gates
   // only the "...skipping..." marker inside forw(), never the clear.
   // Skipping it on the first keys left the ":" standing through their
@@ -1118,9 +1118,9 @@ function act(action: Actions | undefined): void {
       !session.shellPause) {
     putstr(clearBot());
 
-    // og's cmd_exec ends with flush() (command.c:128): the clear goes
+    // less's cmd_exec ends with flush() (command.c:128): the clear goes
     // to the terminal BEFORE the command runs, so the ":" is off the
-    // screen while the work happens. og can flush unconditionally
+    // screen while the work happens. less can flush unconditionally
     // because its work is microseconds - the blank IS on the glass,
     // just never long enough to catch.
     //
@@ -1128,10 +1128,10 @@ function act(action: Actions | undefined): void {
     // blank in front of the user on every key: the flicker, and the
     // half-second the help prompt went missing. Held back, the clear
     // stays in the buffer and the frame overwrites it in the same
-    // write - og's imperceptible gap, made actually imperceptible.
+    // write - less's imperceptible gap, made actually imperceptible.
     //
     // When the ":" is meant to be gone (promptHolding), we flush like
-    // og and it really does leave the screen for the work.
+    // less and it really does leave the screen for the work.
     if (promptHolding()) flush();
 
     search.cmdExecOpened = true;
@@ -1163,26 +1163,26 @@ function act(action: Actions | undefined): void {
   const drained = drainFirstCmd();
 
   // a paused pipe resumes when the view nears the buffered end,
-  // like og reading more of a non-seekable input on demand
+  // like less reading more of a non-seekable input on demand
   pipeDemand();
 
   // a forward move that clamped short of a live pipe's data blocks
-  // reading like og's forw_line: the render below paints og's
+  // reading like less's forw_line: the render below paints less's
   // cleared command line while the wait runs
   if (pendingScroll.rows) startPendingScroll();
 
   // -E quits as soon as end-of-file DISPLAYS on the last file,
-  // like og's prompt() checking get_quit_at_eof()==OPT_ONPLUS
+  // like less's prompt() checking get_quit_at_eof()==OPT_ONPLUS
   // against eof_displayed (a pipe's end must have been read)
   // before drawing anything; -e acts on forward moves at EOF
-  // instead (og's forward())
+  // instead (less's forward())
   if (!session.exited && optQuitAtEof() === 2 && mode.EOF && sizeIsKnown() &&
       !mode.HELP && files.list[files.index + 1] === undefined) {
     session.exit();
     return;
   }
 
-  // og's forw()/back() end with currline(BOTTOM) (forwback.c:382,
+  // less's forw()/back() end with currline(BOTTOM) (forwback.c:382,
   // 457): the moved rows are already up, the eager line-number walk
   // runs now, and the prompt below paints only after it completes
   if (!session.exited && !drained && !session.shellPause) {
@@ -1190,7 +1190,7 @@ function act(action: Actions | undefined): void {
 
     // quitting must not repaint over the final prompt, like less —
     // and a shell done-message pause owns the screen until its key
-    // (og's lsystem blocks inside the command; ours resumes at the
+    // (less's lsystem blocks inside the command; ours resumes at the
     // shellPause dismissal, which repaints)
     render(session.content, session.buffer);
   }
@@ -1236,7 +1236,7 @@ function endFirstCmd(): void {
   }
 }
 
-// og reads ONE character at a time and, when what it has so far is
+// less reads ONE character at a time and, when what it has so far is
 // only a prefix of some binding, waits for the next one (A_PREFIX,
 // command.c:2499). A terminal is free to split an escape sequence
 // across reads - a slow link does it, and lesstest feeds byte by
@@ -1247,9 +1247,9 @@ const PARTIAL_SEQUENCE = /\x1b(?:\[[\x20-\x3f]*|O)?$/;
 let heldKeyBytes = '';
 
 /**
- * og's flush point, and the only one the command loop needs.
+ * less's flush point, and the only one the command loop needs.
  *
- * og buffers everything a command emits and flushes when it is about
+ * less buffers everything a command emits and flushes when it is about
  * to make the user wait (cmd_exec, command.c:128). Returning from
  * here IS that moment: the chunk is fully processed and we go back to
  * waiting on the tty. One write per input chunk, so a key that echoes
@@ -1268,7 +1268,7 @@ function keyHandler(data: Buffer): void {
 }
 
 function keyHandlerKeys(data: Buffer): void {
-  // og's psignals clears sigs before handling it (signal.c:290), so
+  // less's psignals clears sigs before handling it (signal.c:290), so
   // the flag lives only for the work the interrupt was meant to stop.
   // Clearing it at the top of every input chunk makes that fail-safe:
   // a stuck flag would abort every paint forever, and any keystroke
@@ -1284,7 +1284,7 @@ function keyHandlerKeys(data: Buffer): void {
     heldKeyBytes = partial[0];
     text = text.slice(0, partial.index);
 
-    // og echoes what it is holding through the A_PREFIX mca: a " "
+    // less echoes what it is holding through the A_PREFIX mca: a " "
     // prompt and the char through prchar (command.c:2506). But it
     // only gets that far if getcc RETURNED the char, and getcc_repl
     // swallows anything that is still a partial match of kent (the
@@ -1309,19 +1309,19 @@ function keyHandlerKeys(data: Buffer): void {
   }
 
 
-  // og's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
+  // less's raw mode keeps ISIG: a typed ^C is a kernel SIGINT to the
   // foreground group, killing a pipe's writer along the way — the
   // driver semantics node's raw mode dropped
-  // NOT raiseAbort() here: og's signal fires at the DRIVER, but og
+  // NOT raiseAbort() here: less's signal fires at the DRIVER, but less
   // has already read and run the bytes ahead of the ^C - which is why
   // "jjjj^Cjjjj" leaves it on line 5, not line 1. Raising the flag on
   // the whole chunk aborted the paints of those first four j's too.
   // It is raised where the ^C is actually reached: in the key loop
   // below, or by the poll when one is typed during the work.
   if (text.includes('\x03')) {
-    // og's ISIG: the tty driver FLUSHES the input queue when it
+    // less's ISIG: the tty driver FLUSHES the input queue when it
     // generates SIGINT, so every key typed before the ^C is thrown
-    // away by the KERNEL and og never sees them.
+    // away by the KERNEL and less never sees them.
     //
     // Ours are already out of the kernel - node's stream drained them
     // into userspace the moment they arrived - so a signal has nothing
@@ -1332,13 +1332,13 @@ function keyHandlerKeys(data: Buffer): void {
     raiseSigint();
   }
 
-  // og's initial fill blocks in read: check_poll queues typed tty
+  // less's initial fill blocks in read: check_poll queues typed tty
   // chars (ungetcc_back) until the screenful or the learned length;
   // only the --intr char or an interrupt breaks out (READ_INTR),
   // and the first queued key surfaces the wait message (READ_AGAIN)
   // — a forward move blocked on the pipe (forw_line) gates the same
   if ((pipeFilling() || pendingScroll.rows > 0) && !session.shellPause) {
-    // OG does not poll the tty while acquiring the first screen until
+    // less does not poll the tty while acquiring the first screen until
     // LESS_SCREENFILL_TIME expires. Queue ordinary keys for the command
     // loop, but let ^C interrupt the fill immediately.
     if (pipeFilling() && screenFillGrace() && !text.includes('\x03')) {
@@ -1350,14 +1350,14 @@ function keyHandlerKeys(data: Buffer): void {
       if (pendingScroll.rows) {
         abortPendingScroll(text.includes('\x03'));
       } else {
-        // og's ^C is a SIGINT whose u_interrupt handler bells; the
+        // less's ^C is a SIGINT whose u_interrupt handler bells; the
         // --intr char reaches the read silently
         if (text.includes('\x03')) ringBell();
         abortPipeFill();
       }
 
       // getcc_clear discards the QUEUED keys; chars typed after the
-      // interrupt are still unread in og's tty buffer and run as
+      // interrupt are still unread in less's tty buffer and run as
       // commands
       const cut = Math.max(
         text.lastIndexOf('\x03'), text.lastIndexOf(optIntrChar()));
@@ -1379,7 +1379,7 @@ function keyHandlerKeys(data: Buffer): void {
 
   // a movement/search/G wait over a growing spool is the pipe read
   // itself: ^C or --intr abandons it and restores bounded read-ahead,
-  // like og's READ_INTR breaking out of a blocked pipe read
+  // like less's READ_INTR breaking out of a blocked pipe read
   if ((text.includes('\x03') || text.includes(optIntrChar())) &&
       pagerInput?.interrupt?.()) {
     if (text.includes('\x03')) ringBell();
@@ -1397,19 +1397,19 @@ function keyHandlerKeys(data: Buffer): void {
     text = filterPaste(text);
   }
 
-  // one write per COMMAND, which is og's granularity: cmd_exec flushes
+  // one write per COMMAND, which is less's granularity: cmd_exec flushes
   // before each command runs (command.c:128), so a burst of forty keys
   // reaches the terminal as forty paints and scrolls smoothly. Holding
   // the whole chunk back instead would be one jump at the end — the
   // buffer is there to stop a single command arriving in fragments,
   // not to merge commands together.
 
-  // og reads a byte at a time, so a chunk carrying more than one
+  // less reads a byte at a time, so a chunk carrying more than one
   // command always has something left in the tty when it stops to
   // read - and the prompt it writes is overwritten in the buffer
   // before any of it is flushed. Marked PER KEY: the last one has
-  // nothing behind it and gets its prompt, like og's.
-  // og's command loop is ONE key at a time:
+  // nothing behind it and gets its prompt, like less's.
+  // less's command loop is ONE key at a time:
   //
   //     for (;;) { c = getcc(); ... commands(); }
   //
@@ -1420,11 +1420,11 @@ function keyHandlerKeys(data: Buffer): void {
   // next byte until the last key was done - the root cause behind the
   // uninterruptible scroll AND the prompt flicker.
   //
-  // The queue below IS og's tty queue, held explicitly because ours
+  // The queue below IS less's tty queue, held explicitly because ours
   // has already left the kernel.
   const chunk = splitKeys(text);
 
-  // og's ISIG: when the driver generates SIGINT it flushes the input
+  // less's ISIG: when the driver generates SIGINT it flushes the input
   // QUEUE - everything typed BEFORE the ^C, which is what is sitting
   // in it. Bytes after the ^C are enqueued afterwards and survive.
   // Measured across four shapes, and it is the leading keys that go:
@@ -1460,7 +1460,7 @@ function keyHandlerKeys(data: Buffer): void {
  * The pause matters when the keys that scroll BACK are already queued
  * behind the ones that hit the edge, which is what a fast down-then-up
  * burst is: without it the discarded tail lets them run immediately
- * and the screen leaves the bottom the instant it arrives. og needs
+ * and the screen leaves the bottom the instant it arrives. less needs
  * none of this because its backlog drains at microseconds a key and
  * the edge holds for however long the user keeps pressing.
  *
@@ -1473,7 +1473,7 @@ export const EDGE_DWELL_MS = 120;
  * How long the queue must still rest at an edge, 0 when it may run.
  *
  * A FLOOR, not a target: the edge is guaranteed to hold this long and
- * holds longer while the user keeps pressing. og needs none of it -
+ * holds longer while the user keeps pressing. less needs none of it -
  * its no-op costs microseconds, so the edge naturally holds for as
  * long as keys arrive - but we discard the backlog, so without a rest
  * the keys that scroll BACK run the instant the bottom is reached and
@@ -1494,7 +1494,7 @@ export const BEHIND_MS = 80;
  * without one. A terminal hands a burst over in chunks, so a queue
  * length on its own cannot tell "losing the race" from "briefly
  * holding five keys" - which is why hiding the ":" on queue length
- * alone took it off a one-screen file where og's stays put.
+ * alone took it off a one-screen file where less's stays put.
  *
  * @param since - When the CURRENT unbroken backlog began, 0 when the
  *   queue is empty. Not "when the queue was last empty": after a quiet
@@ -1538,13 +1538,13 @@ export function collapseRun(queue: string[], key: string): void {
   while (queue.length && queue[0] === key) queue.shift();
 }
 
-/** og's tty input queue: keys read but not yet run. */
+/** less's tty input queue: keys read but not yet run. */
 let pendingKeys: string[] = [];
 let draining = false;
 
 /**
- * og's ISIG queue flush: the driver throws away everything typed
- * before the ^C, so og never sees it. Ours is an array.
+ * less's ISIG queue flush: the driver throws away everything typed
+ * before the ^C, so less never sees it. Ours is an array.
  */
 function dropQueuedKeys(): void {
   pendingKeys = [];
@@ -1554,7 +1554,7 @@ function dropQueuedKeys(): void {
 }
 
 /**
- * One key, then back to the event loop - og's `commands()` returning
+ * One key, then back to the event loop - less's `commands()` returning
  * to `getcc()`.
  */
 function drainKeys(): void {
@@ -1599,12 +1599,12 @@ function drainKeys(): void {
 
     cancelPromptSettle();
 
-    // og's tty still holds the rest of the burst while it runs this
+    // less's tty still holds the rest of the burst while it runs this
     // one, and its reads poll and unget from it - which is what keeps
     // the ":" off the screen for the whole scroll.
     //
     // Read BEFORE armStall clears it: at an edge the previous command
-    // moved nothing, so this one will not read either and og's prompt
+    // moved nothing, so this one will not read either and less's prompt
     // stays up. Re-arming the hold here is what flickered "(END)".
     markBurst(pendingKeys.length > 0);
 
@@ -1628,11 +1628,11 @@ function drainKeys(): void {
     // this command has not hit an edge yet - its own eof_bell decides
     armStall();
 
-    // ...and it has not read anything yet either, so og would not yet
+    // ...and it has not read anything yet either, so less would not yet
     // have polled for it
     armReadWatch();
 
-    // og's cmd_exec/prompt() pair leaves the command line blank for
+    // less's cmd_exec/prompt() pair leaves the command line blank for
     // exactly as long as the work takes. This is that long: a command
     // slow enough to see holds the ":" off even without a backlog.
     const started = Date.now();
@@ -1640,7 +1640,7 @@ function drainKeys(): void {
     flush();
     markCommandTime(Date.now() - started);
 
-    // The command moved nothing (og's nlines == 0, forwback.c:335,
+    // The command moved nothing (less's nlines == 0, forwback.c:335,
     // :372) and the queue's head is the SAME key: it will hit the
     // same wall, bell into the same rate limit, and repaint the same
     // "(END)". Running it is indistinguishable from dropping it,
@@ -1650,7 +1650,7 @@ function drainKeys(): void {
     //
     // Dropped only up to the first DIFFERENT key, which runs at once:
     // holding j into EOF then pressing k moves back immediately
-    // instead of after the j's finish. og needs none of this because
+    // instead of after the j's finish. less needs none of this because
     // its no-op costs microseconds; ours is a whole render.
     //
     // Not done by skipping the paint instead: the frame is also what
@@ -1661,9 +1661,9 @@ function drainKeys(): void {
     // EDGE_DWELL_MS before anything else runs - see EDGE_DWELL_MS for
     // why the rest is a clock and not a few surviving keys.
     // Only while BEHIND. Both halves below are compensation for not
-    // keeping up: the discard throws away work og would have done, and
+    // keeping up: the discard throws away work less would have done, and
     // the rest gives back the dwell that discard removed. When the
-    // loop is keeping up there is nothing to compensate for - og runs
+    // loop is keeping up there is nothing to compensate for - less runs
     // those few no-op commands and so do we, and resting anyway would
     // delay an ordinary keypress for no reason (press j at the bottom,
     // then k, and the k waits). Same condition that hides the ":", so
@@ -1684,7 +1684,7 @@ function drainKeys(): void {
   }
 
   if (pendingKeys.length) {
-    // back to the read, exactly as og does - and THIS is the yield
+    // back to the read, exactly as less does - and THIS is the yield
     // that lets a ^C typed mid-scroll be delivered at all. A rest
     // started by the key just run is honoured at the top.
     setImmediate(drainKeys);
@@ -1694,8 +1694,8 @@ function drainKeys(): void {
   armPromptSettle();
 
   // keys the interrupt poll queued during a blocking walk run now,
-  // like og's command loop draining the ungot queue - except while a
-  // message waits: og's get_return reads the raw tty, so queued keys
+  // like less's command loop draining the ungot queue - except while a
+  // message waits: less's get_return reads the raw tty, so queued keys
   // stay behind it until a fresh key dismisses
   // ...unless the queue holds a key typed while this very screen was
   // up: the watcher takes those off the terminal mid-work, and the
@@ -1718,7 +1718,7 @@ function cancelPromptSettle(): void {
 /**
  * Brings the ":" back once the work has actually stopped.
  *
- * og needs nothing here: its prompt() writes the ":" at the end of
+ * less needs nothing here: its prompt() writes the ":" at the end of
  * every command, and the next command's clear_bot takes it away again
  * microseconds later, so "hidden while working" and "back when idle"
  * are the same instant. Ours holds the line blank across the whole
@@ -1750,7 +1750,7 @@ function armPromptSettle(): void {
   }, PROMPT_SETTLE_MS);
 }
 
-/** True while a prompt is collecting input, like og's mca != 0. */
+/** True while a prompt is collecting input, like less's mca != 0. */
 function promptOpen(): boolean {
   return cmd.active || !!option.pending || examine.pending ||
     !!miscInput.pending || !!brackets.pending || !!marks.pending ||
@@ -1758,7 +1758,7 @@ function promptOpen(): boolean {
 }
 
 /**
- * Applies --no-paste to bracketed paste markers, like og: a paste
+ * Applies --no-paste to bracketed paste markers, like less: a paste
  * at the main prompt is ignored whole (A_START_PASTE calling
  * start_ignoring_input), but a command buffer accepts the text up
  * to the first pasted newline, which starts ignoring instead of
@@ -1810,7 +1810,7 @@ function filterPaste(text: string): string {
 function handleKey(sequence: string): void {
   dispatchKey(sequence);
 
-  // og's prompt() checks -F after every command returns to a true
+  // less's prompt() checks -F after every command returns to a true
   // prompt: quit when the entire file is displayed, and either way
   // the flag gets only one chance at this
   if (!session.exited && optQuitIfOneScreen()) oneScreenQuit();
@@ -1818,7 +1818,7 @@ function handleKey(sequence: string): void {
 
 /**
  * Quits at a true prompt when -F is set and the entire file is on
- * screen, like og prompt()'s quit_if_one_screen check; whether it
+ * screen, like less prompt()'s quit_if_one_screen check; whether it
  * quits or not, the flag is cleared afterwards.
  */
 function oneScreenQuit(): void {
@@ -1843,7 +1843,7 @@ function oneScreenQuit(): void {
   opt.quitIfOneScreen = 0;
 }
 
-// og's forw_line clears quit_if_one_screen whenever a chopped or
+// less's forw_line clears quit_if_one_screen whenever a chopped or
 // shifted line hides columns, so -F never quits over hidden text
 function choppedColumns(): boolean {
   if (!chopLine() && !config.col) return false;
@@ -1851,7 +1851,7 @@ function choppedColumns(): boolean {
   return session.content.some(line => visualWidth(line) > config.screenWidth);
 }
 
-// og's x11mouse_action keeps the last button pressed in a static,
+// less's x11mouse_action keeps the last button pressed in a static,
 // because the X10 report says only "a button came up" (button 3) and
 // never which one (decode.c:773)
 let prevMouseButton = 0;
@@ -1860,9 +1860,9 @@ let prevMouseButton = 0;
  * An X10/X11 mouse report rewritten in the SGR shape, or null when the
  * key is not one.
  *
- * og decodes the two formats separately and calls the same handlers;
+ * less decodes the two formats separately and calls the same handlers;
  * rewriting is the same thing with one decoder. The byte arithmetic is
- * og's: the button and both coordinates are offset by 32, and og then
+ * less's: the button and both coordinates are offset by 32, and less then
  * takes one more off each coordinate (X11MOUSE_OFFSET-1) where SGR
  * counts from 1 - so an SGR parameter is just the raw byte minus 32.
  */
@@ -1881,7 +1881,7 @@ function x11ToSgr(rest: string): string | null {
   const x = rest.charCodeAt(1) - 32;
   const y = rest.charCodeAt(2) - 32;
 
-  // og's X11MOUSE_BUTTON_REL: a release names no button, so the one
+  // less's X11MOUSE_BUTTON_REL: a release names no button, so the one
   // remembered from the press is the one that came up. The drag bit
   // rides along in the SGR parameter, which is why only the BARE
   // button is compared here
@@ -1889,14 +1889,14 @@ function x11ToSgr(rest: string): string | null {
 
   if (bare === 3) return `\x1b[<${prevMouseButton};${x};${y}m`;
 
-  // og remembers the BARE button (its `b` has the drag bit already
+  // less remembers the BARE button (its `b` has the drag bit already
   // stripped, decode.c:777), so a release after a drag reports the
   // button that was held, not the drag bit
   if (bare <= 2) prevMouseButton = bare;
   return `\x1b[<${button};${x};${y}M`;
 }
 
-// a mouse report whose INTRODUCER a lesskey file moved: og reads the
+// a mouse report whose INTRODUCER a lesskey file moved: less reads the
 // rest with getcc from inside x11mouse_action/x116mouse_action, so the
 // binding names only the introducer and the decoder discovers the
 // length. Ours arrives pre-split, so the bytes are collected here.
@@ -1912,7 +1912,7 @@ function dispatchKey(sequence: string): void {
     const report = mouseReport;
     report.buf += sequence;
 
-    // og's getcc_int gives up on a char that cannot belong to the
+    // less's getcc_int gives up on a char that cannot belong to the
     // report (decode.c), and so does this
     const ok = report.sgr
       ? /^[\d;]*[Mm]?$/.test(report.buf)
@@ -1949,21 +1949,21 @@ function dispatchKey(sequence: string): void {
   }
 
   // a report that arrives while a prompt - or a COUNT - is open is
-  // read and thrown away. og's line editor decodes it through
+  // read and thrown away. less's line editor decodes it through
   // editchar, which hands it to x116mouse_action(skip=TRUE), and
   // that returns A_NOACTION before it ever looks at the button
   // (decode.c:818). cmd_char turns A_NOACTION into CC_OK and the
   // digit prompt turns it into MCA_MORE, "ignore this char and get
   // another one" (command.c:690) - so the prompt keeps its text,
   // nothing scrolls, and nothing repaints. Measured: with ":5" up,
-  // og swallows a wheel tick whole and still shows ":5" at exit.
+  // less swallows a wheel tick whole and still shows ":5" at exit.
   if (!session.escCount && (promptOpen() || mode.BUFFERING)) {
     const report = normalizeMouse(session.key) ?? session.key;
 
     if (/^\x1b\[<\d+;\d+;\d+[Mm]$/.test(report)) return;
   }
 
-  // the interrupt key abandons a G/% pipe drain: og's interrupted
+  // the interrupt key abandons a G/% pipe drain: less's interrupted
   // ch_end_seek returns SUCCESS (the loop exits on the READ_INTR
   // EOI), so G jumps to the buffered end and paints — only % still
   // fails its ch_length check and errors ("Don't know length of
@@ -1993,7 +1993,7 @@ function dispatchKey(sequence: string): void {
       enterScreen();
     } else {
       // the | screen was already re-entered before the done message,
-      // so this only forgets the frame - not og's first_time
+      // so this only forgets the frame - not less's first_time
       resetRender(true);
     }
 
@@ -2007,7 +2007,7 @@ function dispatchKey(sequence: string): void {
   }
 
   // a dumb terminal has no special key capabilities: arrows and
-  // other CSI/SS3 sequences are unknown commands everywhere (og's
+  // other CSI/SS3 sequences are unknown commands everywhere (less's
   // SK bindings resolve to nothing without termcap) and just bell
   if (
     mode.DUMB &&
@@ -2017,7 +2017,7 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // -K exits on ctrl-C, like less's quit_on_intr; og's psignals
+  // -K exits on ctrl-C, like less's quit_on_intr; less's psignals
   // quits with QUIT_INTERRUPT = 2 (signal.c:296)
   if (session.key === '\x03' && optQuitOnIntr()) {
     process.exitCode = 2;
@@ -2025,14 +2025,14 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // og's u_interrupt (signal.c:41) is a SIGNAL handler, so it runs
+  // less's u_interrupt (signal.c:41) is a SIGNAL handler, so it runs
   // whatever the pager was doing: it lbell()s and calls
   // set_filter_pattern(NULL, 0) - which drops any & filter and, at
   // its end, screen_trashed() UNCONDITIONALLY (search.c). The next
   // prompt therefore repaints through make_display with top_scroll
   // forced: clear, home, redraw. We only cleared the filter, and only
   // when there was one, and never repainted. It does NOT return: a
-  // command line still cancels below, exactly as og's ABORT_SIGS does
+  // command line still cancels below, exactly as less's ABORT_SIGS does
   // ...but not while something is already WAITING on the interrupt:
   // F, a pipe drain and a pending scroll each read it as their own
   // stop signal below, ring their own bell and repaint their own way
@@ -2050,7 +2050,7 @@ function dispatchKey(sequence: string): void {
     // repaint() is pos_clear + jump_loc (jump.c:124), and
     // make_display forces top_scroll for a trashed screen
     // (command.c:865), so the paint clears and homes
-    // the mca's number goes with it: og's command loop starts the
+    // the mca's number goes with it: less's command loop starts the
     // next iteration from cmd_reset, and the interrupt never reaches
     // an action that could consume the count
     session.buffer.length = 0;
@@ -2063,7 +2063,7 @@ function dispatchKey(sequence: string): void {
     // ran, so nothing clear_bots in front of it
     markBareRepaint();
 
-    // og's getcc_clear (signal.c:299) throws the interrupt away, so
+    // less's getcc_clear (signal.c:299) throws the interrupt away, so
     // no command runs behind it. A command LINE still has to cancel,
     // which the branches below do, but an idle ^C ends here - it was
     // ringing a second bell through the unbound-key path
@@ -2077,8 +2077,8 @@ function dispatchKey(sequence: string): void {
     }
   }
 
-  // ^Z suspends like og's psignals S_STOP: the tty driver would
-  // stop og anywhere, prompts included; restore the terminal, stop
+  // ^Z suspends like less's psignals S_STOP: the tty driver would
+  // stop less anywhere, prompts included; restore the terminal, stop
   // the process, and repaint when the shell resumes it
   if (session.key === '\x1A') {
     suspendSelf();
@@ -2086,7 +2086,7 @@ function dispatchKey(sequence: string): void {
   }
 
   // during the F wait only ctrl-C and the --intr char return to the
-  // prompt; other keys queue as commands for afterwards, like og's
+  // prompt; other keys queue as commands for afterwards, like less's
   // read poll ungetting them
   if (follow.active) {
     // a pending message (the LESSOPEN warning) waits for RETURN
@@ -2095,7 +2095,7 @@ function dispatchKey(sequence: string): void {
       search.message &&
       (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
     ) {
-      // og: a message wider than the screen wrapped and trashed the
+      // less: a message wider than the screen wrapped and trashed the
       // rows above the prompt (command.c:998 calls make_display
       // again) - the dismissal repaint must be full, not a scroll
       if (visualWidth(search.message + '  (press RETURN)') >
@@ -2109,7 +2109,7 @@ function dispatchKey(sequence: string): void {
     }
 
     if (session.key === '\x03' || session.key === optIntrChar()) {
-      // ^C arrives as og's SIGINT, whose u_interrupt handler rings
+      // ^C arrives as less's SIGINT, whose u_interrupt handler rings
       // the bell; the --intr char (READ_INTR) leaves silently — and
       // both run getcc_clear, discarding the keys typed in the wait
       if (session.key === '\x03') ringBell();
@@ -2127,7 +2127,7 @@ function dispatchKey(sequence: string): void {
   // consecutive blocking error() calls
   const hadMessage = search.message !== '';
 
-  // og: a message wider than the screen wrapped and trashed the rows
+  // less: a message wider than the screen wrapped and trashed the rows
   // above the prompt (command.c:998 calls make_display again) - the
   // dismissal repaint must be full, never a scroll shortcut
   if (hadMessage && visualWidth(search.message + '  (press RETURN)') >
@@ -2137,14 +2137,14 @@ function dispatchKey(sequence: string): void {
 
   search.message = search.messageQueue.shift() ?? '';
 
-  // og's error() ends get_return with lower_left() + clear_eol()
+  // less's error() ends get_return with lower_left() + clear_eol()
   // (output.c:731): the message row is addressed absolutely and
   // cleared the moment the key arrives, before whatever the key then
   // does repaints. We left it to the repaint alone.
   if (hadMessage && !search.message && !mode.DUMB) {
     putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE);
 
-    // and OUT, not into the buffer. og's error() ends with flush()
+    // and OUT, not into the buffer. less's error() ends with flush()
     // there, and the difference shows the moment the repaint behind
     // it is slow: highlighting a screenful through a host RegExp can
     // take seconds, and the message sat under the cursor for all of
@@ -2160,11 +2160,11 @@ function dispatchKey(sequence: string): void {
     //
     // ...but only when the key was CONSUMED. get_return ungets
     // anything that is not RETURN, space or an interrupt
-    // (output.c:687), and og's prompt() then returns before
+    // (output.c:687), and less's prompt() then returns before
     // make_display while that key is pending (command.c:924) - so a
     // deferred screen_trashed (toggle_option's, unlike A_SETMARK's
     // immediate repaint()) waits for it too. Dismissing "Chop long
-    // lines" with "-" repainted the chopped screen here; og keeps
+    // lines" with "-" repainted the chopped screen here; less keeps
     // showing the old one behind the "-" prompt.
     const consumed = session.key === '\x0D' || session.key === '\x0A' ||
       session.key === ' ';
@@ -2184,7 +2184,7 @@ function dispatchKey(sequence: string): void {
   ) {
     /* raw get_return: the kent conversion below never applies */
     // dismissing the LESSOPEN warning continues into the editor,
-    // like og's error() returning before the edit
+    // like less's error() returning before the edit
     if (session.pendingEditWarn) {
       runEditor();
     }
@@ -2193,7 +2193,7 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // og's kent translation happens at getcc, below error()'s raw
+  // less's kent translation happens at getcc, below error()'s raw
   // get_return: keypad Enter is '\n' for every prompt and command,
   // while at a message the raw ESC ungot above already dismissed
   session.key = kentToNewline(session.key);
@@ -2221,7 +2221,7 @@ function dispatchKey(sequence: string): void {
     const result = searchInputKey(session.key);
 
     if (result === 'run') {
-      // og's search execution repaints a dumb screen (clear_attn
+      // less's search execution repaints a dumb screen (clear_attn
       // and friends fall back to repaint() without can_goto_line):
       // the content paints in the same frame as the result, on a
       // fresh screen rather than over the frozen echo
@@ -2247,7 +2247,7 @@ function dispatchKey(sequence: string): void {
         pagerInput?.restoreSearchOrigin();
       }
     } else if (optIncrSearch()) {
-      // incsearch paints mid-mca, clearing the trash like og's
+      // incsearch paints mid-mca, clearing the trash like less's
       // repaint resetting screen_trashed
       unfreezeFrame();
       pagerInput?.restoreSearchOrigin();
@@ -2264,7 +2264,7 @@ function dispatchKey(sequence: string): void {
   if (option.pending) {
     optionKey(session.content, session.key);
 
-    // a completed toggle reports like og's error(): the message
+    // a completed toggle reports like less's error(): the message
     // draws over the old screen and any repaint waits for the
     // dismissing keystroke (toggle_option's screen_trashed, whose
     // make_display repaint homes a dumb terminal).
@@ -2290,14 +2290,14 @@ function dispatchKey(sequence: string): void {
   }
 
   if (marks.pending) {
-    // og's gomark has no helpfile guard: jumping to a mark from
+    // less's gomark has no helpfile guard: jumping to a mark from
     // help edits the mark's file, leaving the help screen
     if (marks.pending === "'" && mode.HELP && session.key !== '\x1b') {
       exitHelp();
     }
 
     // --autosave with `m` writes changed marks right away, inside
-    // setMark/clearMark like og (gomark never saves immediately)
+    // setMark/clearMark like less (gomark never saves immediately)
     marksKey(session.content, session.key);
 
     render(session.content, session.buffer);
@@ -2306,7 +2306,7 @@ function dispatchKey(sequence: string): void {
 
   if (examine.pending) {
     if (examineKey(session.key) === 'run') {
-      // og's edit from the help file leaves it (even an empty
+      // less's edit from the help file leaves it (even an empty
       // answer re-examines the current file)
       exitHelp();
       runExamine();
@@ -2341,7 +2341,7 @@ function dispatchKey(sequence: string): void {
     if (answer === 'overwrite' || answer === 'append') {
       writeLogFile(session.content, answer === 'append');
     } else if (answer === 'none') {
-      // og's 'D' just `return`s from use_logfile, straight back into
+      // less's 'D' just `return`s from use_logfile, straight back into
       // opt_o's TOGGLE and on to toggle_option, which prints the
       // option's own message like every other toggle. With no log
       // opened that is _o's "No log file" (optfunc.c).
@@ -2349,7 +2349,7 @@ function dispatchKey(sequence: string): void {
         ? `Log file "${logFileName()}"`
         : 'No log file';
     } else if (answer === 'quit') {
-      // og quits from INSIDE query(), before it has repainted
+      // less quits from INSIDE query(), before it has repainted
       // anything: the warning it asked with is still the last thing
       // on the screen. Painting here wipes it.
       session.exit();
@@ -2360,8 +2360,8 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // the binary file confirmation proceeds on y/Y, like og's query
-  // the same question shape as og's binary file query: y retries the
+  // the binary file confirmation proceeds on y/Y, like less's query
+  // the same question shape as less's binary file query: y retries the
   // search with the engine that can finish it, anything else lets the
   // failure stand
   if (posixRetry.pending) {
@@ -2419,12 +2419,12 @@ function dispatchKey(sequence: string): void {
       return;
     }
 
-    // the built-in prefix already echoed itself when it opened; og
+    // the built-in prefix already echoed itself when it opened; less
     // echoes the byte that COMPLETES it the same way (A_PREFIX,
     // command.c:2499) before the pair is looked up
     echoPrefix(prefix + session.key, prefix.length + 1);
 
-    // og's DO the command: the mca completing runs cmd_exec(), whose
+    // less's DO the command: the mca completing runs cmd_exec(), whose
     // clear_bot opens whatever the command then writes - a paint, or
     // just a bell
     markBareRepaint(clearBot());
@@ -2444,11 +2444,11 @@ function dispatchKey(sequence: string): void {
 
     const action = userStop() ? undefined : getAction(prefix + session.key);
 
-    // og's tail cascade covers the ^X/: prefixed bytes all the same
+    // less's tail cascade covers the ^X/: prefixed bytes all the same
     // (the ":" entries live in the same cmd_decode tables); the
     // prefix ages out WITH the cascade — leaving it set would feed
     // every re-dispatched piece back into this branch forever
-    // og's cmd_decode tail-matches whatever the pair accumulated,
+    // less's cmd_decode tail-matches whatever the pair accumulated,
     // one byte or several: "^X q" runs the tail `q` and quits
     if (action === undefined && !userStop() && !mode.DUMB) {
       config.keyPrefix = '';
@@ -2476,7 +2476,7 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // og reads mouse reports in TWO wire formats, each introduced by
+  // less reads mouse reports in TWO wire formats, each introduced by
   // its own bound sequence: A_X11MOUSE_IN for the three-byte X10/X11
   // form and A_X116MOUSE_IN for SGR/1006 (decode.c:78). Both decode
   // into the same handlers, so the X11 one is normalized into the SGR
@@ -2491,7 +2491,7 @@ function dispatchKey(sequence: string): void {
   // is ignored without the vscroll --emouse feature (decode.c)
   if (!session.escCount && (session.key.startsWith('\x1b[<64;') ||
       session.key.startsWith('\x1b[<65;'))) {
-    // og's command loop returns to prompt() for EVERY key it consumed,
+    // less's command loop returns to prompt() for EVERY key it consumed,
     // even one whose action does nothing: the report is swallowed but
     // the prompt is still reprinted, which is visible on the first one
     // because that is when the filename prompt gives way to ":"
@@ -2499,10 +2499,10 @@ function dispatchKey(sequence: string): void {
 
     const up = session.key.startsWith('\x1b[<64;');
 
-    // og's mouse_wheel_up/down (decode.c:613): the DECODER picks
+    // less's mouse_wheel_up/down (decode.c:613): the DECODER picks
     // which of the two actions the report becomes, and --rmouse
     // swaps them there, not in the handler. The action then runs the
-    // ordinary way - a wheel tick is a command like any other in og's
+    // ordinary way - a wheel tick is a command like any other in less's
     // loop, so it gets cmd_exec, the input's own mover, and the
     // prompt that follows
     act(up !== optMouseReverse() ? 'MOUSE_BACKWARD' : 'MOUSE_FORWARD');
@@ -2510,7 +2510,7 @@ function dispatchKey(sequence: string): void {
   }
 
   // a horizontal wheel shifts --wheel-lines columns when the
-  // hscroll --emouse feature is on (og's A_L_MOUSE/A_R_MOUSE)
+  // hscroll --emouse feature is on (less's A_L_MOUSE/A_R_MOUSE)
   if (!session.escCount &&
       (session.key.startsWith('\x1b[<66;') ||
         session.key.startsWith('\x1b[<67;'))) {
@@ -2524,7 +2524,7 @@ function dispatchKey(sequence: string): void {
     return;
   }
 
-  // --emouse clicks and drags, like og's mouse_button_left/right:
+  // --emouse clicks and drags, like less's mouse_button_left/right:
   // left press records the drag origin, motion events drag the text
   // (hdrag/vdrag), a same-row release sets the mouse mark '#', and
   // a right-click release jumps to it
@@ -2597,7 +2597,7 @@ function dispatchKey(sequence: string): void {
   }
 
   if (session.key === '\x1B') {
-    // og-dumb echoes every ESC immediately (no pending unechoed
+    // dumb-terminal less echoes every ESC immediately (no pending unechoed
     // first ESC) and stacks the prefix without the " ESC"/" ESCESC"
     // cycle or any bells (probed); the echo shows length-1 ESCs
     if (mode.DUMB) {
@@ -2607,20 +2607,20 @@ function dispatchKey(sequence: string): void {
       return;
     }
 
-    // og's A_PREFIX (command.c:2499): an incomplete command opens an
+    // less's A_PREFIX (command.c:2499): an incomplete command opens an
     // mca with the " " prompt and echoes the character through
     // cmd_char "so the user knows what's going on", and every later
     // held character echoes the same way from the top of the loop.
     // EVERY ESC shows, from the first - there is no unechoed leading
     // one, no " ESC"/" ESCESC" cycle and no bell. (The old model had
-    // all three; none of them appears in og's bytes.)
+    // all three; none of them appears in less's bytes.)
     session.escCount++;
     config.keyPrefix = '\x1B'.repeat(session.escCount);
     render(session.content, session.buffer);
   } else {
-    // og-dumb echoes the terminating key into the pending ESC line
+    // dumb-terminal less echoes the terminating key into the pending ESC line
     // as caret notation before the sequence resolves; without clear
-    // caps the echo stays behind as leftovers, like og
+    // caps the echo stays behind as leftovers, like less
     if (mode.DUMB && session.escCount && session.key.length === 1) {
       putstr(session.key < ' ' || session.key === '\x7F'
         ? '^' + String.fromCharCode((session.key.charCodeAt(0) + 0x40) & 0x7F)
@@ -2630,11 +2630,11 @@ function dispatchKey(sequence: string): void {
     const seq = session.userSeq +
       (session.escCount ? '\x1B' + session.key : session.key);
 
-    // og reads one byte at a time, and every byte of an INCOMPLETE
+    // less reads one byte at a time, and every byte of an INCOMPLETE
     // command echoes into an mca opened with the " " prompt
     // (A_PREFIX, command.c:2499) before the action is looked up at
     // all - the terminating byte included. Our reader hands the whole
-    // sequence over at once, so the echo is replayed here; og's bytes
+    // sequence over at once, so the echo is replayed here; less's bytes
     // are the same either way (measured: an arrow key chunked and
     // byte-by-byte produce identical output).
     echoPrefix(seq);
@@ -2659,7 +2659,7 @@ function dispatchKey(sequence: string): void {
     }
 
     // a partial match on a longer binding collects and echoes, like
-    // og's A_PREFIX state (the built-in ^X/: prefixes own theirs)
+    // less's A_PREFIX state (the built-in ^X/: prefixes own theirs)
     if (
       seq[0] !== ':' && seq[0] !== '\x18' && seq[0] !== '\x0F' &&
       userIsPrefix(seq)
@@ -2672,12 +2672,12 @@ function dispatchKey(sequence: string): void {
     }
 
     if (session.userSeq) {
-      // the collected sequence completes no binding. og does NOT
+      // the collected sequence completes no binding. less does NOT
       // treat that as a bad command: cmd_decode matches against the
       // TAIL of what has accumulated (decode.c:943, cmd_match:845),
       // so the bytes that led nowhere age out silently and the last
       // one runs as a command of its own. With "5e forw-line" bound,
-      // typing 5 then j moves a line in og - the 5 was a prefix, not
+      // typing 5 then j moves a line in less - the 5 was a prefix, not
       // a count, and the j is still a j. Belling here dropped it
       const last = session.key;
 
@@ -2694,13 +2694,13 @@ function dispatchKey(sequence: string): void {
 
     let action = userStop() ? undefined : getAction(seq);
 
-    // og-dumb resolves an unbound ESC sequence by running the last
+    // dumb-terminal less resolves an unbound ESC sequence by running the last
     // key as a plain command (probed: ESC ESC RETURN still scrolls)
     if (action === undefined && mode.DUMB && session.escCount) {
       action = userStop() ? undefined : getAction(session.key);
     }
 
-    // og's cmd_decode matches bindings against the TAIL of the
+    // less's cmd_decode matches bindings against the TAIL of the
     // accumulated bytes (decode.c:943, cmd_match:845): stray prefix
     // bytes age out silently, a completed tail binding runs as its
     // own command (ESC j scrolls, ESC + arrow arrows), and an
@@ -2730,7 +2730,7 @@ function dispatchKey(sequence: string): void {
 }
 
 /**
- * og's A_PREFIX echo for a multi-byte key sequence: " " for the mca,
+ * less's A_PREFIX echo for a multi-byte key sequence: " " for the mca,
  * then each byte through cmd_char as its prchar representation.
  */
 function echoPrefix(seq: string, from: number = 1): void {
@@ -2746,7 +2746,7 @@ function echoPrefix(seq: string, from: number = 1): void {
   config.keyPrefix = held;
 }
 
-/** og's `search_type = last_search_type; mca_search(); cmd_exec();` */
+/** less's `search_type = last_search_type; mca_search(); cmd_exec();` */
 function searchFlash(reverse: boolean): void {
   if (!search.regex) return;
 
@@ -2767,7 +2767,7 @@ function init() {
   onShellHistTouch(touchShellList);
   onShellHistRecord(recordShellEntry);
 
-  // og's gomark edits the mark's file: switch to an open entry, or
+  // less's gomark edits the mark's file: switch to an open entry, or
   // open a restored mark's file by name (mark_get_ifile + edit_ifile)
   onMarkSwitch(
     (mark, sline) => {
@@ -2784,7 +2784,7 @@ function init() {
     }
   );
 
-  // og's init_cmdhist runs before edit_first, so the restored marks
+  // less's init_cmdhist runs before edit_first, so the restored marks
   // bind to the first file as it opens; ours opened it already -
   // bind them now (mark_check_ifile)
   if (files.index >= 0 && session.fullContent.length) {
@@ -2794,7 +2794,7 @@ function init() {
   resetRender();
   resetDumbPaint();
 
-  // fresh terminal dimensions (and the -N/-J gutter), like og's
+  // fresh terminal dimensions (and the -N/-J gutter), like less's
   // get_term at startup
   calculateDimensions();
 
@@ -2813,13 +2813,13 @@ function init() {
   refreshWindowTitle();
 
   // a dumb terminal gets no title, init or keypad strings, like
-  // og's empty termcap capabilities
+  // less's empty termcap capabilities
   if (!mode.DUMB) {
     // -X leaves the init/deinit strings unsent, like less
     if (!optNoInit()) {
       putstr(ALTERNATE_CONSOLE_ON);
 
-      // og's term_init lower_lefts after switching to the alternate
+      // less's term_init lower_lefts after switching to the alternate
       // screen (screen.c:2061), which is what makes a short first
       // screen scroll up from the bottom instead of printing at the
       // top. It guards on both "ti" and "te" existing, the same
@@ -2833,26 +2833,26 @@ function init() {
   }
 
   // mouse tracking and bracketed paste enable with the screen,
-  // like og's init()/init_mouse, not during the option scan
+  // like less's init()/init_mouse, not during the option scan
   hook.screenActive = true;
   applyMouse();
   applyBracketedPaste();
   termInitTail();
 
-  // SIGTERM/SIGHUP quit cleanly, restoring the terminal like og's
+  // SIGTERM/SIGHUP quit cleanly, restoring the terminal like less's
   // terminate() calling quit(15); an external SIGINT acts like the
-  // interrupt key (og's u_interrupt)
+  // interrupt key (less's u_interrupt)
   process.on('SIGTERM', onTerminate);
   process.on('SIGHUP', onTerminate);
   process.on('SIGINT', onSigint);
 
-  // a SIGUSR1 runs the $LESS_SIGUSR1 keys, like og's sigusr()
+  // a SIGUSR1 runs the $LESS_SIGUSR1 keys, like less's sigusr()
   process.on('SIGUSR1', onSigusr1);
 
   process.on('uncaughtException', onUncaught);
 
   // node's tty emits 'resize' on every platform (SIGWINCH never
-  // fires on Windows, where og polls the console size instead)
+  // fires on Windows, where less polls the console size instead)
   watchWinch(onResize);
 
   calculateEOF(session.content);
@@ -2865,20 +2865,20 @@ function onUncaught(error: unknown): void {
   process.exit(1);
 }
 
-/** Repaints for the new size on SIGWINCH, like og's winch(). */
+/** Repaints for the new size on SIGWINCH, like less's winch(). */
 function onResize(): void {
   if (session.shellPause) return;
 
   mode.INIT = false;
 
-  // og's lwinch longjmps out of get_return: a waiting error message
+  // less's lwinch longjmps out of get_return: a waiting error message
   // dismisses on resize without a key, the repaint erasing it
   search.message = '';
   unfreezeFrame();
 
   resetRender();
 
-  // og keeps table[TOP] across a resize - screen_size_changed and
+  // less keeps table[TOP] across a resize - screen_size_changed and
   // screen_trashed touch neither (signal.c:288) - so the top stays on
   // the same byte and only the wrapping changes. Ours indexes wrap
   // boundaries, so carry the OFFSET across and keep the remainder as
@@ -2890,7 +2890,7 @@ function onResize(): void {
   calculateDimensions();
   pagerInput?.rebuild();
 
-  // og's pos_init keeps exactly ONE entry across a resize - the top,
+  // less's pos_init keeps exactly ONE entry across a resize - the top,
   // at its screen line - and pos_clears the rest (position.c:100), so
   // every other row regenerates at the new width. Ours must drop them
   // whatever the top's offset: their ends were measured at the OLD
@@ -2912,7 +2912,7 @@ function onResize(): void {
   // one screen. For a source engine that array is a materialized
   // window of several screens, so the answer is always "no" and it
   // wipes the mode.EOF that the engine's own sync() just derived from
-  // the file. og has no such conflict: eof_displayed reads
+  // the file. less has no such conflict: eof_displayed reads
   // position(BOTTOM_PLUS_ONE) off the one table (forwback.c:95), so a
   // resize that does not move the top cannot change the answer. Keep
   // the endRow/endSubRow anchors it computes and put the engine's
@@ -2934,12 +2934,12 @@ function onResize(): void {
   render(session.content, session.buffer);
 }
 
-/** Quits cleanly on SIGTERM/SIGHUP, like og's terminate(). */
+/** Quits cleanly on SIGTERM/SIGHUP, like less's terminate(). */
 function onTerminate(): void {
   if (!session.exited) session.exit();
 }
 
-/** Treats an external SIGINT as the ^C key, like og's u_interrupt. */
+/** Treats an external SIGINT as the ^C key, like less's u_interrupt. */
 function onSigint(): void {
   // our own raiseSigint echo: the typed ^C's byte path already ran
   if (wasSelfSigint()) return;
@@ -2947,7 +2947,7 @@ function onSigint(): void {
   if (!session.exited) handleKey('\x03');
 }
 
-/** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like og's sigusr(). */
+/** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like less's sigusr(). */
 function onSigusr1(): void {
   if (session.exited) return;
 
@@ -2958,7 +2958,7 @@ function onSigusr1(): void {
 }
 
 /**
- * Suspends on ^Z, like og's psignals S_STOP handling: the terminal
+ * Suspends on ^Z, like less's psignals S_STOP handling: the terminal
  * restores, the process stops, and the screen repaints when the
  * shell resumes it.
  */
@@ -2971,7 +2971,7 @@ function suspendSelf(): void {
 
   // execution continues here when the shell resumes us — or right
   // away when the kernel discards the stop (orphaned process
-  // group); og's psignals resumes the same way after its kill()
+  // group); less's psignals resumes the same way after its kill()
   keyboard().setRawMode(true);
   keyboard().resume();
   enterScreen();
@@ -2984,13 +2984,13 @@ function suspendSelf(): void {
 function exitHelp(): boolean {
   if (!mode.HELP) return false;
 
-  // a --help/-? screen is og's FAKE_HELPFILE input, not the h
+  // a --help/-? screen is less's FAKE_HELPFILE input, not the h
   // command's overlay: quitting it quits the pager
   if (session.startupHelp) return false;
 
   const helpConfig = config;
 
-  // og restores save_bs_mode/save_proc_backspace on quit-help
+  // less restores save_bs_mode/save_proc_backspace on quit-help
   if (helpSavedBs) {
     opt.bsMode = helpSavedBs.bs;
     opt.procBackspace = helpSavedBs.pb;
@@ -3001,14 +3001,14 @@ function exitHelp(): boolean {
   applyConfig(session.prevConfig);
   applyMode(session.prevMode);
 
-  // Quitting help re-edits the file, and og's edit_ifile sets
-  // `hshift = 0` (edit.c:680) for that switch like any other - so og
+  // Quitting help re-edits the file, and less's edit_ifile sets
+  // `hshift = 0` (edit.c:680) for that switch like any other - so less
   // comes back at column 0 however far the file was shifted before h.
   // Entering help already matched (resetConfig zeroes it); leaving
   // restored the whole saved config, shift included.
   config.col = 0;
 
-  // og's option variables (shift_count, swindow, wscroll,
+  // less's option variables (shift_count, swindow, wscroll,
   // chop_line) are globals: a change made inside the help screen
   // persists after leaving it
   config.setCol = helpConfig.setCol;
@@ -3016,9 +3016,9 @@ function exitHelp(): boolean {
   config.halfWindow = helpConfig.halfWindow;
   config.chopLongLines = helpConfig.chopLongLines;
 
-  // og's help exit re-edits the file: a $LESSOPEN preprocessor runs
+  // less's help exit re-edits the file: a $LESSOPEN preprocessor runs
   // again, arming a fresh altpipe whose status can report at the
-  // next close (a second q prompts the error again, like og)
+  // next close (a second q prompts the error again, like less)
   if (helpClosedAlt) {
     helpClosedAlt = false;
     const entry = files.list[files.index];
@@ -3031,7 +3031,7 @@ function exitHelp(): boolean {
         session.fullContent = lines;
         session.content = deriveContent();
 
-        // og's repaint reads the fresh altpipe to EOI when the
+        // less's repaint reads the fresh altpipe to EOI when the
         // content ends on screen: the length is learned and the
         // prompt shows (END) again, like eof_displayed
         if (session.content.length <= config.window - 1) {
@@ -3058,11 +3058,11 @@ function exitHelp(): boolean {
   files.newFile = true;
 
   // the re-edit repaints the whole screen: a squished short first
-  // paint is abandoned (tildes fill in), and og's trashed-screen
+  // paint is abandoned (tildes fill in), and less's trashed-screen
   // repaint prints bare — the q never reaches the file's screen as
   // a clear_bot
   mode.INIT = false;
-  // quitting help is another edit(), not a new session: og's
+  // quitting help is another edit(), not a new session: less's
   // first_time stays false, so the file's screen comes back with
   // "...skipping..." (forwback.c:272)
   resetRender(true);
@@ -3071,25 +3071,25 @@ function exitHelp(): boolean {
   return true;
 }
 
-// -u/-U and --proc-backspace saved across the help view, like og's
+// -u/-U and --proc-backspace saved across the help view, like less's
 // save_bs_mode: help renders with BS_SPECIAL, quit-help restores the
 // entry values (discarding in-help toggles)
 let helpSavedBs: { bs: number, pb: number } | null = null;
 
 // the preproc gate at help entry released with an ungot command:
-// og's prompt() skips make_display while ungot input pends, so the
+// less's prompt() skips make_display while ungot input pends, so the
 // command (a - option, a search...) runs over the STALE file screen
 // and help paints only when the interaction returns to the prompt
 let helpGateUngot = false;
 
-// the help entry closed a $LESSOPEN altpipe: og's help exit re-edits
+// the help entry closed a $LESSOPEN altpipe: less's help exit re-edits
 // the file, running the preprocessor AGAIN (edit_prev -> edit_ifile)
 let helpClosedAlt = false;
 
 /**
- * Opens a help screen as og's h does: a full edit of the FAKE_HELPFILE.
+ * Opens a help screen as less's h does: a full edit of the FAKE_HELPFILE.
  *
- * `text` is ours, not og's - og has exactly one help file. The lesskey
+ * `text` is ours, not less's - less has exactly one help file. The lesskey
  * syntax page rides the same path so it scrolls, searches and exits
  * identically; only the content differs.
  */
@@ -3105,7 +3105,7 @@ hook.viewLesskey = (): void => {
   //
   // NO render here: the command that ran this renders when it
   // returns, and a frame drawn now would be the one that spends
-  // og's new_file - pr_string clears it as it builds the prompt
+  // less's new_file - pr_string clears it as it builds the prompt
   // (prompt.c:630), and the whole "?n?f%f .?m(%T %i of %m) .." group
   // hangs off it. Rendering twice meant the screen the user actually
   // saw had neither the name nor the file count
@@ -3121,15 +3121,15 @@ function openHelp(text: string[] = help): void {
   // less's edit_ifile calling lastmark when switching to the help file
   recordLastPosition();
 
-  // og's h is a full edit(FAKE_HELPFILE): leaving the file closes
+  // less's h is a full edit(FAKE_HELPFILE): leaving the file closes
   // its $LESSOPEN altpipe, whose exit status reports here (the
-  // error gates before the help shows). og has already painted the
+  // error gates before the help shows). less has already painted the
   // NEW file's still-empty screen - ...skipping... over null-line
   // tildes - when the close's error() blocks
   const helpEntry = files.list[files.index];
   helpClosedAlt = !!helpEntry?.alt;
 
-  // og's error() runs squish_check (output.c:720): with a squished
+  // less's error() runs squish_check (output.c:720): with a squished
   // short first paint, the un-squish repaints the JUST-CLOSED file -
   // an empty skipping frame of tildes; a full screen stays intact
   if (helpEntry?.alt && helpEntry.preprocError &&
@@ -3154,16 +3154,16 @@ function openHelp(text: string[] = help): void {
   closeAlt(helpEntry);
   helpGateUngot = gateReleaseKind() === 'unget';
 
-  // og's winch-released gate resumes a half-open edit that the
+  // less's winch-released gate resumes a half-open edit that the
   // resize broke: jump_loc's seek fails and a SECOND gated error
-  // chains before the help paints (og-verified byte shape:
+  // chains before the help paints (less-verified byte shape:
   // lower-left + clear, then the standout message)
   if (gateReleasedByWinch()) {
     fs.writeSync(1, CURSOR_TO(config.window, 1) + CLEAR_LINE);
     gateReturn('Cannot seek to that file position');
   }
 
-  // og forces BS_SPECIAL + proc_backspace off for the help file
+  // less forces BS_SPECIAL + proc_backspace off for the help file
   // (command.c:2115) so its overstrike bold/underline always renders
   helpSavedBs = { bs: opt.bsMode, pb: opt.procBackspace };
   opt.bsMode = 0;
@@ -3172,15 +3172,15 @@ function openHelp(text: string[] = help): void {
   session.prevConfig = config;
   resetConfig();
 
-  // the og globals follow into the help screen too
+  // the less globals follow into the help screen too
   config.setCol = session.prevConfig.setCol;
   config.setWindow = session.prevConfig.setWindow;
   config.halfWindow = session.prevConfig.halfWindow;
   config.chopLongLines = session.prevConfig.chopLongLines;
 
-  // the helpfile is a normal file to og's line prefix: -N/-J
+  // the helpfile is a normal file to less's line prefix: -N/-J
   // reserve their gutter columns inside the help's width too, so
-  // its long lines wrap where og's do (plinestart runs on the
+  // its long lines wrap where less's do (plinestart runs on the
   // helpfile like any other)
   calculateDimensions();
 
@@ -3189,10 +3189,10 @@ function openHelp(text: string[] = help): void {
 
   session.prevContent = session.content;
   // the help file renders through the normal content pipeline, so
-  // its nroff overstrikes become bold/underline like og
+  // its nroff overstrikes become bold/underline like less
   session.content = transformContent(text);
 
-  // Help is og's CH_HELPFILE pseudo-file, but edit_ifile still calls
+  // Help is less's CH_HELPFILE pseudo-file, but edit_ifile still calls
   // set_header(ch_zero()) for it: headers remain active and re-anchor
   // at the beginning of the help text just like any newly opened file.
   resetHeaderStart();
@@ -3205,7 +3205,7 @@ function openHelp(text: string[] = help): void {
 
   // the content swap is a fresh screen: scroll deltas against the
   // parked file rows would misread the jump's direction - except
-  // when the preproc gate released with an ungot command: og's
+  // when the preproc gate released with an ungot command: less's
   // prompt() skips make_display while ungot input pends, so the
   // stale FILE rows stay while the command's prompt runs on the
   // bottom line, and help paints when it returns to the prompt
@@ -3213,7 +3213,7 @@ function openHelp(text: string[] = help): void {
     helpGateUngot = false;
     freezeFrame();
   } else {
-    // the swap is a fresh screen, but NOT a fresh session: og's
+    // the swap is a fresh screen, but NOT a fresh session: less's
     // first_time stays false through edit(), so the incoming screen
     // still prints "...skipping..."
     resetRender(true);
@@ -3228,52 +3228,52 @@ function cleanUp(): void {
   // what does both, and it costs nothing when no view is open
   exitLesskeyView(LESS_VERSION);
 
-  // og's quit() runs check_altpipe_error before restoring the
+  // less's quit() runs check_altpipe_error before restoring the
   // terminal: closeAlt's inline gate blocks at (press RETURN) on
   // the way out, like error()'s get_return before term_deinit
   closeAlt(files.list[files.index]);
 
-  // og's quit() edit-closes the file, whose lastmark raises
+  // less's quit() edit-closes the file, whose lastmark raises
   // marks_modified (edit.c:385) - every clean tty quit with a screen
   // position rewrites the history file, even a plain j session
   if (process.stdout.isTTY && session.content.length) recordLastPosition();
   saveHistory();
 
-  // og's putchr fires --end-prompt on the first output after the
+  // less's putchr fires --end-prompt on the first output after the
   // prompt: the quit's clear_bot is that output (output.c:496)
   putstr(eprPrefix());
 
-  // og's quit() clear_bots the prompt line before deinit whenever the
+  // less's quit() clear_bots the prompt line before deinit whenever the
   // session is interactive - `if (interactive()) clear_bot()`
   // (main.c), with no test for which screen we are on. We used to do
   // it only under -X, on the reasoning that the alternate screen is
-  // about to vanish anyway, but og's bytes carry it either way and a
+  // about to vanish anyway, but less's bytes carry it either way and a
   // capture sees it: the ":" prompt survived into the restored screen.
   // A dumb terminal has no clear_eol and gets the bare CR below
   if (!mode.DUMB) putstr(clearBot());
 
-  // mouse, paste, keypad and the alternate screen, in og's order --
+  // mouse, paste, keypad and the alternate screen, in less's order --
   // the same sequences suspendTerminal sends, and shared with it so
   // the two ways out of the screen cannot drift apart
   leaveScreenCodes();
 
   if (mode.DUMB) {
-    // og-dumb quits with just lower_left (a bare CR) and no newline,
+    // dumb-terminal less quits with just lower_left (a bare CR) and no newline,
     // so the shell prompt overwrites the last prompt line
     putstr('\r');
   }
 
   // --redraw-on-quit leaves the last screen on the main display,
-  // like og's quit() repaint after term_deinit: only the content
+  // like less's quit() repaint after term_deinit: only the content
   // rows print (no prompt row -- prompt() never runs while
-  // quitting), so the shell prompt overwrites the ":" line; og
+  // quitting), so the shell prompt overwrites the ":" line; less
   // also requires term_addrs, which a dumb terminal lacks and -X
   // never sets (the last screen already sits on the main display)
   const screen =
     optRedrawOnQuit() && !mode.DUMB && !optNoInit() ? lastScreen() : null;
   if (screen) putstr(screen.slice(0, -1).join('\n') + '\n');
 
-  // og's term_deinit is the last flush of the session: nothing may
+  // less's term_deinit is the last flush of the session: nothing may
   // still be sitting in the buffer once the terminal is restored
   flush();
 
@@ -3297,7 +3297,7 @@ function cleanUp(): void {
   onEofForward(null);
   onTagJump(null);
 
-  // a streaming pipe closes so the writer sees EPIPE, like og
+  // a streaming pipe closes so the writer sees EPIPE, like less
   session.detachPipe();
 
   // a /dev/tty keyboard holds the event loop open until destroyed
@@ -3306,6 +3306,6 @@ function cleanUp(): void {
 
 
 /**
- * Reads the keystroke answering the dumb terminal warning, like og's
+ * Reads the keystroke answering the dumb terminal warning, like less's
  * get_return before the screen initializes.
  */

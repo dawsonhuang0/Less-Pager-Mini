@@ -25,7 +25,7 @@ import { homeDir } from '../tty/platform';
 /**
  * Opens this session's lesskey files in a pager of their own.
  *
- * NOT an og feature. og documents lesskey in a man page and leaves you
+ * NOT a less feature. less documents lesskey in a man page and leaves you
  * to find your own files, which works when a distribution put them
  * there; an npm install did not, and by the time six sources have
  * merged (system and user, source and compiled, and two environment
@@ -101,7 +101,7 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
     } else {
       text = lgetenv(form.origin) ?? '';
       // a content variable is one line with ";" separators, which is
-      // unreadable; og's own parser treats those as line breaks
+      // unreadable; less's own parser treats those as line breaks
       text = text.split(';').join('\n') + '\n';
     }
 
@@ -142,11 +142,11 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
  *
  * The compiler is the checker for both kinds of form. It parses the
  * same grammar the reader does and words its errors identically
- * (tests/lksweep.py compares them against og's own lesskey), and it
+ * (tests/lksweep.py compares them against less's own lesskey), and it
  * has no side effects - so a source file can be checked without
  * being loaded, which the reader could not do.
  *
- * @returns One message per bad line, in og's wording.
+ * @returns One message per bad line, in less's wording.
  */
 export function checkLesskeyEdits(
   view: ViewFile[],
@@ -180,7 +180,7 @@ export function checkLesskeyEdits(
  * A source file was edited in place and needs nothing but the reload.
  * A rendered binary is compiled back over the file it came from - the
  * one job the compiler exists for. A content variable goes back into
- * the variable, its lines rejoined with the ";" separators og's own
+ * the variable, its lines rejoined with the ";" separators less's own
  * parser splits on; that cannot outlive the process, which is all an
  * environment variable ever could.
  *
@@ -218,17 +218,17 @@ export function applyLesskeyEdits(
       continue;
     }
 
-    // errors and all: og's lesskey PROGRAM refuses to write output
+    // errors and all: less's lesskey PROGRAM refuses to write output
     // when a source has any ("N errors; no output produced",
-    // lesskey.c:316), but og's pager READING a lesskey does the
+    // lesskey.c:316), but less's pager READING a lesskey does the
     // opposite - parse_lesskey reports each bad line and keeps every
     // binding that parsed (lesskey_parse.c). This is the reader's
     // job, so it takes the reader's rule: one mistyped action does
     // not cost the user the rest of what they wrote. Only a table too
     // large to encode leaves nothing to write
-    // errors and all: og's lesskey PROGRAM refuses to write output
+    // errors and all: less's lesskey PROGRAM refuses to write output
     // when a source has any ("N errors; no output produced",
-    // lesskey.c:316), but og's pager READING a lesskey keeps every
+    // lesskey.c:316), but less's pager READING a lesskey keeps every
     // binding that parsed. This is the reader's job, so one mistyped
     // action does not cost the user the rest of what they wrote - and
     // checkLesskeyEdits has already reported it
@@ -253,7 +253,7 @@ export function applyLesskeyEdits(
   return messages;
 }
 
-/** Seeds a missing default file with og's built-in bindings. */
+/** Seeds a missing default file with less's built-in bindings. */
 export function seedDefaultKeymap(file: string): boolean {
   if (fs.existsSync(file)) return false;
 
@@ -348,7 +348,7 @@ export const inLesskeyView = (): boolean => stash !== null;
 /**
  * Re-reads what `v` just edited, and makes it live.
  *
- * og does neither: its A_VISUAL is `lsystem(editproto)` and nothing
+ * less does neither: its A_VISUAL is `lsystem(editproto)` and nothing
  * else (command.c:2137), so the screen keeps the text it had until R
  * flushes the buffers (clear_buffers, command.c:1846). That is right
  * for a file you are reading and wrong for this screen, where the

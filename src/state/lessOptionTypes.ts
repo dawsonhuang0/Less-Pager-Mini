@@ -1,6 +1,6 @@
 // GENERATED FILE - do not edit. Snapshot of buildLessOptionMap over
 // the live option table (src/options), with each key's description
-// taken from og's --help text and its default from the option table.
+// taken from less's --help text and its default from the option table.
 // Regenerate with `npm run gen:options`; tests/misc/api.test.ts fails
 // until the snapshot matches the table again.
 
@@ -121,7 +121,7 @@ export const LESS_OPTION_VALUES = {
  * the default as you pick the name out of the completion list.
  *
  * A flag left out keeps less's startup state, which for nearly every
- * option means off; the exceptions are og's own inverted names (-B
+ * option means off; the exceptions are less's own inverted names (-B
  * --auto-buffers, -G --HILITE-SEARCH) and --no-shell, which a library
  * call starts ON. Only value options carry an @default, since a
  * triple's table state does not map onto one key's boolean.
@@ -343,7 +343,7 @@ export interface LessOptions {
 
 /**
  * Every option LETTER the scan accepts, so `-R` and `-N` are offered
- * beside the long names. A letter carries no doc comment: og's help
+ * beside the long names. A letter carries no doc comment: less's help
  * describes the option, and the letter is one spelling of it.
  */
 export type LessOptionLetter =

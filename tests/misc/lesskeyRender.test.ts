@@ -23,7 +23,7 @@ const binary = (...body: number[]): Buffer => Buffer.from([
 /*
  * Rendering a compiled lesskey back as source (lesskeyRender.ts).
  *
- * og has no such thing - its lesskey only compiles - so there is no
+ * less has no such thing - its lesskey only compiles - so there is no
  * oracle for the TEXT. What can be checked is that the text means the
  * same file, which tests/lksweep.py does over the whole corpus by
  * compiling the render and comparing bytes. These pin the notation.
@@ -57,7 +57,7 @@ describe('rendering a compiled lesskey as source', () => {
   });
 
   it('keeps an extra string, with no \\k translation', () => {
-    // og parses an extra with tstr's xlate off, so "\ku" there was
+    // less parses an extra with tstr's xlate off, so "\ku" there was
     // never a key name and must not come back as one
     expect(trip('#command\nx forw-line \\ku\n'))
       .toBe('#command\nx\tforw-line\tku\n');
@@ -76,7 +76,7 @@ describe('rendering a compiled lesskey as source', () => {
   });
 
   it('comments an action no lesskey name reaches', () => {
-    // A_F_MOUSE(66) is what og's decoder resolves a wheel report to,
+    // A_F_MOUSE(66) is what less's decoder resolves a wheel report to,
     // so lesskey_parse.c never names it: only a hand-written binary
     // carries one, and it cannot be written back as a binding
     const source = renderLesskeyBinary(binary(0x78, 0x00, 66)) as string;

@@ -115,7 +115,7 @@ describe('log file (s / -o)', () => {
     initFiles(['whatever.txt']);
     files.index = 0;
 
-    // the prompt never opens for a file, like og's immediate error
+    // the prompt never opens for a file, like less's immediate error
     startLogFile(false);
     expect(miscInput.pending).toBe('');
     expect(search.message).toBe('Input is not a pipe');
@@ -275,7 +275,7 @@ describe('misc input editing', () => {
 
     startMiscInput('+');
 
-    // ESC is an edit prefix now, like og; ^G aborts the prompt
+    // ESC is an edit prefix now, like less; ^G aborts the prompt
     expect(miscInputKey('\x1B')).toBe('pending');
     expect(miscInputKey('\x07')).toBe('cancel');
     expect(miscInput.pending).toBe('');

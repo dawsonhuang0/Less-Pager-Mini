@@ -29,11 +29,11 @@ interface AltFile {
   /** `-` for pipe preprocessors, the temp file name otherwise. */
   alt: string;
   /** The preprocessor's output as it arrived, for the byte copy a
-   *  non-terminal session makes (og's cat_file reads the altpipe
+   *  non-terminal session makes (less's cat_file reads the altpipe
    *  through ch_forw_get, doing no line processing at all). */
   raw: string;
   /** The pipe preprocessor's failure message, reported when the
-   *  file is LEFT (og's close_altfile, edit.c:288), not at open. */
+   *  file is LEFT (less's close_altfile, edit.c:288), not at open. */
   preprocError?: string;
 }
 
@@ -49,7 +49,7 @@ interface AltStream {
 
 /**
  * Reports through the message line, queueing behind a pending message
- * like consecutive og error() calls.
+ * like consecutive less error() calls.
  */
 function report(message: string): void {
   if (search.message) {
@@ -70,16 +70,16 @@ function pctS(text: string): number {
   return count;
 }
 
-/** Runs a preprocessor command through the shell, like og's shellcmd
- *  ($SHELL -c on unix, %COMSPEC% /c on Windows like og's popen); the
- *  pseudo-file's content feeds the child's stdin, like og letting
+/** Runs a preprocessor command through the shell, like less's shellcmd
+ *  ($SHELL -c on unix, %COMSPEC% /c on Windows like less's popen); the
+ *  pseudo-file's content feeds the child's stdin, like less letting
  *  the preprocessor inherit the input pipe. */
 function shellCmd(cmd: string, input?: string): SpawnSyncReturns<Buffer> {
   const argv = shellArgv(cmd);
 
-  // og's popen child inherits stderr: a failing preprocessor's own
+  // less's popen child inherits stderr: a failing preprocessor's own
   // complaint ("cat: b: No such file or directory") reaches the
-  // terminal before og's open error. The output stays BYTES: og's
+  // terminal before less's open error. The output stays BYTES: less's
   // cat_file copies the altpipe verbatim, so a decode here would
   // destroy every byte that is not valid UTF-8
   return spawnSync(argv[0], argv[1], {
@@ -114,7 +114,7 @@ function exitMessage(
     return `Input preprocessor failed (status ${status})`;
   }
 
-  // shells add 128 to a fatal signal, like og assuming the tradition
+  // shells add 128 to a fatal signal, like less assuming the tradition
   return `Input preprocessor terminated: signal ${status - 128}`;
 }
 
@@ -135,7 +135,7 @@ const toLines = (data: string): string[] =>
  *
  * @param filename - The file being opened.
  * @param input - The pseudo-file's content, fed to the preprocessor's
- *                stdin for the `-` forms, like og's inherited pipe.
+ *                stdin for the `-` forms, like less's inherited pipe.
  * @returns The replacement, or null to open the file itself.
  */
 /** The command $LESSOPEN wants run for this file, and how many pipe
@@ -164,7 +164,7 @@ function resolveLessopen(
   }
 
   // a "-" prefix lets the preprocessor accept standard input; without
-  // it the pseudo-file keeps its in-memory lines, like og
+  // it the pseudo-file keeps its in-memory lines, like less
   if (lessopen.startsWith('-')) {
     lessopen = lessopen.slice(1);
   } else if (filename === '-') {
@@ -192,7 +192,7 @@ export function openAltFile(
 
   // through the charset, like every other input: a byte that is not
   // valid in it survives as a raw-byte marker for $LESSBINFMT, where
-  // toString('utf8') would have replaced it with U+FFFD and og would
+  // toString('utf8') would have replaced it with U+FFFD and less would
   // still be showing <FF>
   const output = decodeContent(bytes);
 
@@ -202,7 +202,7 @@ export function openAltFile(
 
   if (pipes > 0) {
     if (!output) {
-      // an abandoned pipe (no replacement) closes right here, so og
+      // an abandoned pipe (no replacement) closes right here, so less
       // reports its status at open (close_pipe from the open path)
       if (optShowPreprocError()) {
         const message = preprocStatusMessage(result);
@@ -210,7 +210,7 @@ export function openAltFile(
       }
 
       // with "||" a clean exit means the file really is empty, like
-      // og's FAKE_EMPTYFILE; with "|" it means no replacement
+      // less's FAKE_EMPTYFILE; with "|" it means no replacement
       if (pipes > 1 && result.status === 0) {
         return { lines: [''], size: 0, alt: '-', raw };
       }
@@ -218,7 +218,7 @@ export function openAltFile(
       return null;
     }
 
-    // a USED replacement keeps its altpipe: og reports the exit
+    // a USED replacement keeps its altpipe: less reports the exit
     // status only when the file is left (close_altfile, edit.c:288)
     return {
       lines: toLines(output),
@@ -251,7 +251,7 @@ export function openAltFile(
 }
 
 /** The first data the pipe produces, or null when it produces none -
- *  og reads a single byte for this decision and ungets it. */
+ *  less reads a single byte for this decision and ungets it. */
 function firstChunk(stream: Readable): Promise<Buffer | null> {
   return new Promise(resolve => {
     const onData = (chunk: Buffer): void => {
@@ -273,14 +273,14 @@ function firstChunk(stream: Readable): Promise<Buffer | null> {
 /**
  * The $LESSOPEN pipe forms for a session that CATS its input.
  *
- * og keeps the popen stream open and reads through it as it copies
+ * less keeps the popen stream open and reads through it as it copies
  * (open_altfile's returnfd branch hands edit_ifile the live FILE),
  * so the preprocessor is still running while its output is written -
  * which is why its own stderr lands interleaved rather than all in
  * front. Collecting the output first, as the display path must, gets
  * the bytes right and the order wrong, so this streams instead.
  *
- * The one-byte peek is og's: an empty pipe means no replacement, and
+ * The one-byte peek is less's: an empty pipe means no replacement, and
  * only then does the exit status decide between an EMPTY file (the
  * "||" form) and no alt file at all.
  *
@@ -316,7 +316,7 @@ export async function streamAltFile(
   );
 
   if (first === null) {
-    // an abandoned pipe reports its status right here, like og's
+    // an abandoned pipe reports its status right here, like less's
     // close_pipe from the open path
     if (optShowPreprocError()) {
       const message = exitMessage(status, signal);
@@ -324,13 +324,13 @@ export async function streamAltFile(
     }
 
     // with "||" a clean exit means the file really is empty, like
-    // og's FAKE_EMPTYFILE; with "|" it means no replacement
+    // less's FAKE_EMPTYFILE; with "|" it means no replacement
     if (resolved.pipes > 1 && status === 0) return { alt: '-', empty: true };
 
     return null;
   }
 
-  // a USED replacement keeps its altpipe: og reports the exit status
+  // a USED replacement keeps its altpipe: less reports the exit status
   // only when the file is left (close_altfile, edit.c:288)
   return {
     alt: '-',
@@ -351,13 +351,13 @@ export function closeAltFile(
   filename: string,
   preprocError?: string
 ): void {
-  // og's close_altfile checks the altpipe status as the file is
+  // less's close_altfile checks the altpipe status as the file is
   // left, the flag read at close time (a mid-session toggle counts);
   // error() gates INLINE - the message blocks on the current screen
   // and the interrupted action (help, quit, :n) continues after
   if (preprocError && optShowPreprocError()) gateReturn(preprocError);
 
-  // the error report above is close_altpipe's, which og runs
+  // the error report above is close_altpipe's, which less runs
   // unguarded; SF_LESSOPEN gates only LESSCLOSE, ahead of reading it
   // so a secure session stays silent about a malformed one
   if (!secureAllow('lessopen')) return;

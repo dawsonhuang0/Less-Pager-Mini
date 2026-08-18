@@ -21,7 +21,7 @@ const SLOW_PAINT_BYTES = 8 * 1024 * 1024;
 
 /**
  * The visible-screen model for file-backed sessions, ported from
- * og's position.c + forwback.c: the view is a position INSIDE the
+ * less's position.c + forwback.c: the view is a position INSIDE the
  * file where the screen starts, and movement walks rows from there —
  * no global line index exists.
  */
@@ -33,7 +33,7 @@ export interface ViewTop {
    * Where in that line the screen starts, as a display-character
    * offset — the same space the layout's rowStart indexes.
    *
-   * og's table[TOP] is a BYTE and forw_line wraps from THERE, so the
+   * less's table[TOP] is a BYTE and forw_line wraps from THERE, so the
    * top is a PLACE in the line, never an index into a wrapping that
    * something else may recompute differently. A sub-row index goes
    * stale the moment an option reshapes how the line breaks (-r, -S,
@@ -77,7 +77,7 @@ export class BigView {
    * past the line's length means the line is finished.
    *
    * Chopped lines are one row however long they are, so the answer is
-   * always the whole line - og's fits_on_screen never gets asked.
+   * always the whole line - less's fits_on_screen never gets asked.
    */
   rowEnd(text: string, offset: number): number {
     const layout = this.layoutOf(text);
@@ -93,7 +93,7 @@ export class BigView {
     return end < this.lineLength(text) && end > offset ? end : null;
   }
 
-  /** og's back_line, on this line's display text (see screenOps). */
+  /** less's back_line, on this line's display text (see screenOps). */
   rowStartBelow(text: string, offset: number): number {
     return rowStartBelow(displayText(text), offset);
   }
@@ -121,14 +121,14 @@ export class BigView {
   }
 
   /**
-   * Materializes the visible screen, like og filling the position
+   * Materializes the visible screen, like less filling the position
    * table: returns the raw line texts with their positions/offsets,
    * exactly `count` display rows unless the file ends first.
    *
    * Never more than that. sync() used to ask for three windows and
    * keep the extra as read-ahead, which bought nothing the tests can
    * see and cost a line read per row nobody would look at - on a file
-   * whose next line was a terabyte away, seventeen minutes of it. og
+   * whose next line was a terabyte away, seventeen minutes of it. less
    * has no read-ahead: its position table is exactly sc_height.
    *
    * @param onSlow - Called with the rows already gathered when the
@@ -153,7 +153,7 @@ export class BigView {
       // Every row here is a row the screen shows, so its line has to
       // be read whatever that costs - reading one means finding its
       // END, and for a newline-less run that is a scan to wherever the
-      // next one is (og does the same, input.c:241).
+      // next one is (less does the same, input.c:241).
       //
       // The probe IS the read: forwLine returns the line when its end
       // is within reach and null only when finding it would mean that
@@ -163,12 +163,12 @@ export class BigView {
       let line = forwLine(this.bf, pos, true);
 
       if (!line && !this.bf.atEnd(pos)) {
-        // The rows above are already known, and og would have them
+        // The rows above are already known, and less would have them
         // drawn: it paints each row as forw_line returns it, so a
         // costly row delays only the rows below it. We build the
         // screen and paint once, so without this a single expensive
         // line left the terminal blank for the whole scan - a
-        // terabyte hole showed nothing where og showed its first line.
+        // terabyte hole showed nothing where less showed its first line.
         //
         // Only when the wait is one the eye would catch: the scan runs
         // about a gigabyte a second, and painting twice below that
@@ -222,7 +222,7 @@ export class BigView {
   }
 
   /**
-   * The position shown at a screen row, like og's position(): row k
+   * The position shown at a screen row, like less's position(): row k
    * counted from the top of the window, the end-of-file position
    * just past the last line, or null beyond that on a short screen.
    */
@@ -250,7 +250,7 @@ export class BigView {
   }
 
   /**
-   * The top whose screen bottoms at the last line — og's jump_forw
+   * The top whose screen bottoms at the last line — less's jump_forw
    * anchor: plain forward moves never pass it (forward() finds
    * nothing to read past the eof and rings the bell instead).
    */
@@ -263,7 +263,7 @@ export class BigView {
   }
 
   /**
-   * og's position(BOTTOM_PLUS_ONE): whether a row exists just past the
+   * less's position(BOTTOM_PLUS_ONE): whether a row exists just past the
    * screen's bottom. forward() bells when it does not (forwback.c:481)
    * and forw() stops as soon as a read hits EOF unless the move is
    * forced (bc798f8 cut that test down to `ABORT_SIGS() || !force`).
@@ -271,7 +271,7 @@ export class BigView {
    * That question is asked on the CURRENT top's own grid. An anchor
    * walked back from the file's END instead answers on the absolute
    * grid, and from a top part-way into a row the two disagree by one
-   * row - which is exactly how far past og's eof bell we used to go.
+   * row - which is exactly how far past less's eof bell we used to go.
    */
   private hasRowPastBottom(window: number): boolean {
     const at = this.screenPos(window - 1);
@@ -279,9 +279,9 @@ export class BigView {
   }
 
   /** Scrolls forward n display rows, like forw(): a plain move
-   *  stops once the bottom row ends the file (og's eof bell spot); a
+   *  stops once the bottom row ends the file (less's eof bell spot); a
    *  FORCED move (J, ESC-SPACE) passes window as undefined and runs on
-   *  until the last line reaches the top, like og's force=TRUE. */
+   *  until the last line reaches the top, like less's force=TRUE. */
   lineForward(n: number, window?: number): number {
     let moved = 0;
 
@@ -354,10 +354,10 @@ export class BigView {
 
   /**
    * Jumps to a byte percentage of the file, snapped back to a line
-   * start, like og's jump_percent over find_pos.
+   * start, like less's jump_percent over find_pos.
    */
   gotoPercent(percent: number): void {
-    // og's percent_pos: integer division per step, round-up remainder
+    // less's percent_pos: integer division per step, round-up remainder
     const size = this.bf.size;
     const pos = Math.min(
       Math.floor(size / 100) * percent +

@@ -79,9 +79,9 @@ describe('#command bindings', () => {
   });
 
   it('resolves \\k special key names to terminal sequences', () => {
-    // og resolves \ku through the ku/kcuu1 capability, so the answer
+    // less resolves \ku through the ku/kcuu1 capability, so the answer
     // is whatever the TERMINAL says -- on xterm that is ESC O A, not
-    // ESC [ A, and og really does ignore ESC [ A (measured against
+    // ESC [ A, and less really does ignore ESC [ A (measured against
     // less/less). Pin the capability so this asserts the RESOLUTION
     // rather than whichever terminfo entry the machine happens to have
     process.env.LESS_TERMCAP_ku = '\x1B[A';
@@ -109,7 +109,7 @@ describe('#command bindings', () => {
     }
   });
 
-  it('reports an invalid \\k name like og', () => {
+  it('reports an invalid \\k name like less', () => {
     parse('\\kz quit');
     expect(search.message).toBe(
       'test: line 1: invalid escape sequence "\\kz"'
@@ -136,10 +136,10 @@ describe('#command bindings', () => {
     expect(userBinding('T')?.key).toBe('_');
   });
 
-  it('accepts unsupported og actions as invalid bindings', () => {
-    // og names "debug" in lesskey_parse.c:47 but writes no case for
+  it('accepts unsupported less actions as invalid bindings', () => {
+    // less names "debug" in lesskey_parse.c:47 but writes no case for
     // A_DEBUG, so commands() falls to its default and rings
-    // (command.c:2517). A key bound to it is dead in og too
+    // (command.c:2517). A key bound to it is dead in less too
     parse('P debug');
     expect(search.message).toBe('');
     expect(userBinding('P')).toEqual({
@@ -149,8 +149,8 @@ describe('#command bindings', () => {
     });
   });
 
-  it('binds the actions og reaches only from a lesskey file', () => {
-    // goto-pos and the two tag steps have handlers in og
+  it('binds the actions less reaches only from a lesskey file', () => {
+    // goto-pos and the two tag steps have handlers in less
     // (command.c:1918, :2216, :2241) and here, and are bindable by
     // name; nothing but a stale table entry made them ring
     parse('P goto-pos\nx next-tag\ny prev-tag');
@@ -160,12 +160,12 @@ describe('#command bindings', () => {
     expect(userBinding('y')?.action).toBe('PREV_TAG');
   });
 
-  it('ends a line at a NUL, because og\'s line is a C string', () => {
+  it('ends a line at a NUL, because less\'s line is a C string', () => {
     // fgets keeps every byte it read, but control_line and clean_line
     // walk the buffer with strncmp and stop at the first NUL
     // (lesskey_parse.c:722). Handing a COMPILED lesskey to
     // --lesskey-src is the case that shows it: the file opens with a
-    // NUL, so og reads an empty line and reports nothing at all
+    // NUL, so less reads an empty line and reports nothing at all
     parse('x quit\0 this is never seen\nq help');
 
     expect(search.message).toBe('');
@@ -173,7 +173,7 @@ describe('#command bindings', () => {
     expect(userBinding('q')?.action).toBe('HELP');
   });
 
-  it('reports unknown actions and missing actions like og', () => {
+  it('reports unknown actions and missing actions like less', () => {
     parse('q blah\nq');
     expect(search.message).toBe('test: line 1: unknown action: "blah"');
     expect(search.messageQueue).toContain('test: line 2: missing action');
@@ -207,10 +207,10 @@ describe('#env section', () => {
   });
 
   it('loses to a library caller\'s overlay', () => {
-    // og's lgetenv puts a #env line above the real environment, but
+    // less's lgetenv puts a #env line above the real environment, but
     // the file belongs to whoever RUNS the application while the
     // overlay is the application's own configuration, so the overlay
-    // sits above og's whole ladder
+    // sits above less's whole ladder
     parse('#env\nLPM_TEST_VAR = from lesskey');
     setSessionEnv({ LPM_TEST_VAR: 'from caller' });
 
@@ -222,7 +222,7 @@ describe('#env section', () => {
     }
   });
 
-  it('appends with +=, like og', () => {
+  it('appends with +=, like less', () => {
     parse('#env\nLPM_TEST_VAR = -i\nLPM_TEST_VAR += " -S"');
     expect(lgetenv('LPM_TEST_VAR')).toBe('-i" -S"');
   });
@@ -248,7 +248,7 @@ describe('#env section', () => {
   });
 
   it('drops the var and all later vars on a missing }', () => {
-    // probed: og's expand_evars break truncates the whole table
+    // probed: less's expand_evars break truncates the whole table
     process.env.LPM_SRC = 'value';
     parse(
       '#env\nLPM_TEST_VAR = keep${LPM_SRC\nLPM_AFTER = later'
@@ -291,7 +291,7 @@ describe('#line-edit section', () => {
     expect(translateEditKey('a')).toBe('a');
   });
 
-  it('accepts og edit names our prompts cannot honor', () => {
+  it('accepts less edit names our prompts cannot honor', () => {
     parse('#line-edit\n^W word-left');
     expect(search.message).toBe('');
     expect(translateEditKey('\x17')).toBe('\x17');
@@ -309,7 +309,7 @@ describe('#stop and #version', () => {
     expect(userStop()).toBe(true);
   });
 
-  it('guards lines with #version, like og at 707', () => {
+  it('guards lines with #version, like less at 707', () => {
     parse('#version >= 600 x quit\n#version < 600 y quit');
 
     expect(userBinding('x')?.action).toBe('EXIT');
@@ -371,9 +371,9 @@ describe('binary lesskey files', () => {
 
   it('reads the four mouse codes, which have no name at all', () => {
     // A_F_MOUSE(66)/A_B_MOUSE(67)/A_L_MOUSE(78)/A_R_MOUSE(79) are what
-    // og's decoder RESOLVES a wheel report to (decode.c:613), so
+    // less's decoder RESOLVES a wheel report to (decode.c:613), so
     // lesskey_parse.c never names them - a hand-written binary is the
-    // only way to bind one, and og runs it with no mouse involved
+    // only way to bind one, and less runs it with no mouse involved
     parseLesskeyBinary(binary(section('c', [
       0x61, 0x00, 66,
       0x62, 0x00, 67,
@@ -450,7 +450,7 @@ describe('loadLesskey', () => {
     expect(userBinding('x')?.action).toBe('EXIT');
   });
 
-  it('prefers $LESSKEY_CONTENT bindings over the file, like og', () => {
+  it('prefers $LESSKEY_CONTENT bindings over the file, like less', () => {
     const file = path.join(dir, 'keys2');
     fs.writeFileSync(file, 'x help\ny quit\n');
     process.env.LESSKEYIN = file;
@@ -522,8 +522,8 @@ describe('loadLesskey', () => {
 });
 
 describe('lesskey content splitting', () => {
-  it('splits lines on semicolons with backslash escapes, like og', () => {
-    // og parse_lesskey_content (lesskey_parse.c:738): \n or ';'
+  it('splits lines on semicolons with backslash escapes, like less', () => {
+    // less parse_lesskey_content (lesskey_parse.c:738): \n or ';'
     // ends a line, a backslash escapes a literal semicolon
     parseLesskeyContent('#command;z quit;\\; forw-line');
 

@@ -51,7 +51,7 @@ import {
 export function maxSubRow(line: string): number {
   if (chopLine()) return 0;
 
-  // under -r og counts no widths at all - fits_on_screen returns TRUE
+  // under -r less counts no widths at all - fits_on_screen returns TRUE
   // outright for ctldisp == OPT_ON (line.c) - so however long the line
   // is, it is ONE row and the terminal does the wrapping. The plain
   // ASCII shortcut below divides by the screen width and would answer
@@ -68,7 +68,7 @@ export function maxSubRow(line: string): number {
 }
 
 // controls, raw-byte markers and unicode binaries all transform
-// og's omit set (U+00AD, U+200D, variation selectors, skin-tone and
+// less's omit set (U+00AD, U+200D, variation selectors, skin-tone and
 // hair modifiers) is \p{Cf}/\p{Sk}, none of which the classes below
 // cover - so a line carrying only those skipped the transform entirely
 // and shipped them straight to the terminal. They are alternated
@@ -94,7 +94,7 @@ let charCache = new Map<string, [string, number]>();
  * @param lines - Raw content lines.
  * @returns The display lines.
  */
-// og paints every OSC8 link's TEXT with AT_UNDERLINE (AT_COLOR_OSC8
+// less paints every OSC8 link's TEXT with AT_UNDERLINE (AT_COLOR_OSC8
 // under --use-color) while the escape bytes pass through as AT_ANSI,
 // and the selected link additionally hilites (line.c:880-886); the
 // selection coordinates arrive via setter to keep imports one-way
@@ -111,15 +111,15 @@ export function setOsc8Display(
 }
 
 /** Styles a line's OSC8 link text on the RAW line, sentinel-coded so
- *  the styles ride through every ctldisp mode: the underline is og's
+ *  the styles ride through every ctldisp mode: the underline is less's
  *  CD_ANSI in_osc8_link attr (ANSI mode only — probed, -r emits no
- *  \e[4m), while the SELECTION standout is og's hilite machinery and
+ *  \e[4m), while the SELECTION standout is less's hilite machinery and
  *  paints over caret and raw renderings alike (line.c:880). */
 /**
  * Re-opens the run's own attribute after every escape sequence the
  * FILE contributed, so a reset inside a link does not end it.
  *
- * og never has this problem: store_char ORs link_attr into each
+ * less never has this problem: store_char ORs link_attr into each
  * CHARACTER's attribute (line.c:885) and put_line emits whatever
  * transitions that implies, while the file's own sequences ride
  * along as AT_ANSI. Wrapping the run once cannot express that.
@@ -169,7 +169,7 @@ function styleOsc8Line(
         osc8SelectedAt.row === row && osc8SelectedAt.start === linkStart;
 
       if (isSelected) {
-        // og's selection paints underline+standout in EVERY ctldisp
+        // less's selection paints underline+standout in EVERY ctldisp
         // mode (probed: caret mode too emits \e[4m\e[7m text)
         out += own(UNDERLINE_ON) + own(INVERSE_ON) + text +
           own(INVERSE_OFF) + own(UNDERLINE_OFF);
@@ -194,7 +194,7 @@ function styleOsc8Line(
 }
 
 // the raw line behind each DISPLAY line, kept because a search runs
-// against the raw text (og's forw_raw_line + cvt_text, search.c:1680)
+// against the raw text (less's forw_raw_line + cvt_text, search.c:1680)
 // while the hilite lands on displayed columns.
 //
 // Keyed by the displayed text, not by row: callers hand rows from
@@ -212,7 +212,7 @@ export const sourceLine = (display: string): string | undefined =>
  * How many DISPLAYED characters the first `count` raw characters
  * produce, style codes excluded.
  *
- * og needs no such function: it stores one display char at a time and
+ * less needs no such function: it stores one display char at a time and
  * tags each with its source position - a tab's spaces all carry the
  * tab's (store_tab, line.c:1056), a caret pair the control char's
  * (store_prchar, line.c:1069). Transforming the prefix answers the
@@ -230,7 +230,7 @@ export function displayPrefixLength(raw: string, count: number): number {
 /**
  * The raw index whose displayed prefix is `shown` characters long -
  * the inverse of displayPrefixLength, for turning a display position
- * back into the source position og would have used.
+ * back into the source position less would have used.
  */
 export function sourceIndexAt(raw: string, shown: number): number {
   if (shown <= 0) return 0;
@@ -244,7 +244,7 @@ export function sourceIndexAt(raw: string, shown: number): number {
 
 /**
  * The style codes still in force at a character index, so a line can
- * be resumed part-way and still look right - og carries the same
+ * be resumed part-way and still look right - less carries the same
  * state forward in shifted_ansi (line.c:282) when it shifts a line.
  */
 export function openStyleAt(line: string, index: number): string {
@@ -270,7 +270,7 @@ export function openStyleAt(line: string, index: number): string {
 
 // One line's display text, remembered.
 //
-// og transforms a line's bytes ONCE, as forw_line pappends them into
+// less transforms a line's bytes ONCE, as forw_line pappends them into
 // linebuf, and never goes back to them. The stream engine has to ask
 // the same question repeatedly instead - how long is this line, where
 // does the row at this offset end, which sub-row is this - and each
@@ -379,7 +379,7 @@ export function transformContent(lines: string[]): string[] {
  * do_append: caret notation in standout unless -r passes them raw; -R
  * (the default here) lets ANSI style sequences through.
  */
-/** og's is_ansi_middle: a $LESSANSIMIDCHARS char that is not an end. */
+/** less's is_ansi_middle: a $LESSANSIMIDCHARS char that is not an end. */
 function ansiMiddle(char: string): boolean {
   return ansiMidChars().includes(char) && !ansiEndChars().includes(char);
 }
@@ -420,13 +420,13 @@ export function ansiRunEnd(line: string, start: number): number {
 
 /**
  * The prompt line through the same char machinery as content, like
- * og's prompt() handing pr_string's result to load_line (command.c),
+ * less's prompt() handing pr_string's result to load_line (command.c),
  * which pappends it character by character exactly as forw_line does
  * a file line: tabs expand to their stops and control characters take
  * caret notation instead of reaching the terminal.
  *
  * The prototype's literal bytes are NOT converted while the prompt is
- * being built - og's ap_char stores them raw (5a369ed, whose whole
+ * being built - less's ap_char stores them raw (5a369ed, whose whole
  * point was that routing them through ap_str corrupts multibyte
  * chars). The conversion belongs here, at the draw.
  */
@@ -436,7 +436,7 @@ export function transformPrompt(line: string): string {
 }
 
 /**
- * og's do_append recognizes an ANSI sequence when ctldisp is ONPLUS
+ * less's do_append recognizes an ANSI sequence when ctldisp is ONPLUS
  * *or* the char has no file position (line.c:1302) - and a prompt is
  * appended with NULL_POSITION, so its escapes are always live. When one
  * is there, load_line then leaves the line's own attributes alone
@@ -453,20 +453,20 @@ function transformLine(line: string, ctldispOverride?: number): string {
   let i = 0;
 
   // backspace handling, like line.c: --proc-backspace overrides the
-  // -u/-U mode; og's DEFAULT is overstrike processing (BS_SPECIAL)
+  // -u/-U mode; less's DEFAULT is overstrike processing (BS_SPECIAL)
   if (line.includes('\x08')) {
     const pb = optProcBackspace();
 
     if (pb === 1 || (pb === 0 && optBsMode() === 0)) {
       line = procBackspaces(line);
     }
-    // -u (BS_NORMAL) keeps the raw \b: og stores the byte and the
+    // -u (BS_NORMAL) keeps the raw \b: less stores the byte and the
     // terminal overprints it; the layout counts it as pwidth -1/-2
     // otherwise (--proc-backspace off, or -U with it unset) \b
     // falls through to the ^H control display, like store_bs
   }
 
-  // og pends a CR seen before the newline and discards it
+  // less pends a CR seen before the newline and discards it
   // (line.c:1106) under --proc-return or the default -u/-U mode;
   // -u and -U render it as ^M instead. Mid-line CRs are ^M in
   // EVERY mode - the pend only eats the one before the newline.
@@ -498,7 +498,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
     }
 
     // styling WE injected (overstrike bold/underline): swap the
-    // sentinel back to a real ESC in every ctldisp mode — og keeps
+    // sentinel back to a real ESC in every ctldisp mode — less keeps
     // these attrs out-of-band, so only DATA escapes caret
     if (char === OWN_STYLE) {
       // CSI SGR, or a charset designation: terminfo's sgr0 is
@@ -515,7 +515,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       }
     }
 
-    // og expands tabs unless --proc-tab (or -U with it unset) says
+    // less expands tabs unless --proc-tab (or -U with it unset) says
     // control display (line.c:1389) - then ^I falls through below
     const pt = optProcTab();
 
@@ -538,7 +538,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
         continue;
       }
 
-      // og's ansi machine recognizes a COMPLETE OSC8 sequence and
+      // less's ansi machine recognizes a COMPLETE OSC8 sequence and
       // stores it AT_ANSI (line.c osc_return): the whole sequence —
       // BEL terminator and ST alike — passes through at zero width
       OSC8_ONE.lastIndex = i;
@@ -553,7 +553,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       // An OSC intro (ESC ] or a $LESSANSIOSCCHARS char) runs its own
       // state machine to the terminator; the allowed types matched
       // above, so reaching here means the type is not allowed and
-      // og's ANSI_ERR removes the WHOLE sequence, terminator included
+      // less's ANSI_ERR removes the WHOLE sequence, terminator included
       const intro = line[i + 1];
 
       if (intro === ']' ||
@@ -565,7 +565,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
             : Math.min(bel, st);
 
         if (end < 0) {
-          // og USED to close an unterminated OSC with a synthesised ST
+          // less USED to close an unterminated OSC with a synthesised ST
           // at end of line; 254fefb calls that unsafe and removes the
           // whole sequence instead - add_attr_normal sends every OSC
           // state except OSC_START/OSC_END to remove_ansi(), which
@@ -582,7 +582,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
         continue;
       }
 
-      // Neither: og's ansi_step walks the middle characters and the
+      // Neither: less's ansi_step walks the middle characters and the
       // first one that is neither middle nor end returns ANSI_ERR,
       // whose remove_ansi() deletes everything the sequence stored —
       // the aborting character with it (line.c:1252). So ESC[K and
@@ -592,7 +592,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       while (scan < line.length && ansiMiddle(line[scan])) scan++;
 
       if (scan >= line.length) {
-        // og emits what the unfinished sequence stored (ESC[31 goes
+        // less emits what the unfinished sequence stored (ESC[31 goes
         // out raw), but a LONE trailing ESC never reaches the screen:
         // pdone's attribute exit takes its place. Passing it through
         // would swallow the newline after it and merge two rows
@@ -605,7 +605,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       continue;
     }
 
-    // a raw undecodable byte displays with $LESSBINFMT, like og's
+    // a raw undecodable byte displays with $LESSBINFMT, like less's
     // binary chars (<XX> in standout / the BIN color)
     const rawByte = rawByteOf(char);
 
@@ -624,10 +624,10 @@ function transformLine(line: string, ctldispOverride?: number): string {
       continue;
     }
 
-    // og's is_omit_char (line.c:1373): these are DROPPED entirely, so
+    // less's is_omit_char (line.c:1373): these are DROPPED entirely, so
     // they never reach the terminal - only -U (BS_CONTROL) shows them,
     // as the hex form. A ZWJ left in the stream joins emoji into one
-    // glyph, which is exactly the unpredictable screen content og is
+    // glyph, which is exactly the unpredictable screen content less is
     // avoiding.
     if (char >= '\x80') {
       const point = line.codePointAt(i) ?? 0;
@@ -674,7 +674,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
         if (!entry) {
           const caret = char === '\x7F'
             ? '^?'
-            // og's prchar special-cases the escape byte as "ESC"
+            // less's prchar special-cases the escape byte as "ESC"
             // (charset.c:534), every other control ^X
             : char === '\x1B'
               ? 'ESC'
@@ -703,7 +703,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
 }
 
 /**
- * Merges adjacent same-attribute wraps into one run: og's at_switch
+ * Merges adjacent same-attribute wraps into one run: less's at_switch
  * writes a transition only when the attribute CHANGES, so "SUMMARY"
  * is a single bold span with a single exit — one full reset, which
  * is also where a leaked --end-prompt SGR dies.
@@ -779,7 +779,7 @@ function coalesceOwnRuns(text: string): string {
  * bold and `_\bX` underlined, leftover backspaces just erase.
  */
 // stands in for the ESC of styling WE generate mid-transform (the
-// overstrike bold/underline): og keeps such attrs out-of-band, so
+// overstrike bold/underline): less keeps such attrs out-of-band, so
 // they render in EVERY ctldisp mode while data ESCs caret — the
 // transform loop swaps the sentinel back to a real ESC on emission
 const OWN_STYLE = '\uE100';
@@ -788,7 +788,7 @@ function procBackspaces(line: string): string {
   const own = (kind: 'bold' | 'underline', c: string): string =>
     attrText(kind, c).replace(/\x1b/g, OWN_STYLE);
 
-  // og's do_append order: an identical pair is bold FIRST (so _\b_
+  // less's do_append order: an identical pair is bold FIRST (so _\b_
   // is bold, not underline), then an underscore on either side
   // underlines - X\b_ keeps the PREVIOUS char (line.c "we replace
   // prev_ch, but we keep its attributes" branch is only for
@@ -812,12 +812,12 @@ function procBackspaces(line: string): string {
 export function visualWidth(line: string): number {
   if (isStyled(line)) line = line.replace(STYLE_REGEX_G, '');
 
-  // og never measures its own attribute bytes: line.c keeps them in a
+  // less never measures its own attribute bytes: line.c keeps them in a
   // PARALLEL array (linebuf.attr[]) and pwidth() is handed the
   // CHARACTER, so an escape it emits can never become width. We put
   // ours inline in the text instead, and terminfo's sgr0 - what a
   // bold or underline run ends with - is "\E(B\E[m" on xterm. The
-  // "\E(B" half designates a charset and ends in "B", which og's ANSI
+  // "\E(B" half designates a charset and ends in "B", which less's ANSI
   // rule cannot close (is_ansi_end defaults to just "m", line.c:164),
   // so it survived the strip above and counted THREE columns. Two of
   // them on one help line made a 79-column line measure 85 and wrap
@@ -827,7 +827,7 @@ export function visualWidth(line: string): number {
   }
 
   if (line.includes('\x08')) {
-    // og's pwidth counts a raw -u backspace as -1 (-2 after a wide
+    // less's pwidth counts a raw -u backspace as -1 (-2 after a wide
     // char): measuring the overprinted result gives the same sum
     while (/[^\x08]\x08/.test(line)) {
       line = line.replace(/[^\x08]\x08/g, '');
@@ -839,10 +839,10 @@ export function visualWidth(line: string): number {
 }
 
 /**
- * Closes a display line, like og's add_attr_normal from pdone
+ * Closes a display line, like less's add_attr_normal from pdone
  * (line.c:1426, called at line.c:1482 and :1499).
  *
- * Under -R og appends a literal "\033[m" to EVERY line, open attribute
+ * Under -R less appends a literal "\033[m" to EVERY line, open attribute
  * or not - it writes those three bytes itself rather than asking
  * terminfo, and stores them zero-width, so they neither cost a column
  * nor depend on the terminal. That is what keeps an unclosed colour in
@@ -850,7 +850,7 @@ export function visualWidth(line: string): number {
  * goes out only inside an OSC 8 link, which we do not track across the
  * line end and so never emit.
  *
- * Every other ctldisp leaves the line alone in og, because no file
+ * Every other ctldisp leaves the line alone in less, because no file
  * escape survives to that point: only ours can be open, and the reset
  * below closes it.
  *
@@ -858,7 +858,7 @@ export function visualWidth(line: string): number {
  * @returns The line with styles guaranteed closed.
  */
 export function withReset(line: string): string {
-  // og's guard is is_ansi_end('m'): $LESSANSIENDCHARS can take "m"
+  // less's guard is is_ansi_end('m'): $LESSANSIENDCHARS can take "m"
   // away, and then the sequence it would write is not one
   if (optCtldisp() === 2 && ansiEndChars().includes('m')) {
     return line + COLOR_RESET;

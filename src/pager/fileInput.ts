@@ -46,7 +46,7 @@ import { flush } from '../tty/output';
  */
 const FLUSH_AHEAD = 8 * 1024 * 1024;
 
-/** og's LINENUM_POOL (defines.h:234): how many resolved line-number
+/** less's LINENUM_POOL (defines.h:234): how many resolved line-number
  *  positions the table keeps before it starts evicting. */
 const LINENUM_POOL = 1024;
 
@@ -145,7 +145,7 @@ export class FileInput implements PagerInput {
   /** The layout generation this.seam's extents were measured under. */
   private seamLayout = -1;
 
-  /** Rows at the bottom left blank by og's lclear. */
+  /** Rows at the bottom left blank by less's lclear. */
   private blankBelow = 0;
 
   /** The pad came from jump_loc's give-up branch, not from nblank. */
@@ -159,7 +159,7 @@ export class FileInput implements PagerInput {
   private activePath: string;
 
   // commands blocked at the provisional end of a still-growing spool,
-  // completed by onGrowth like og's forw_line read returning with data
+  // completed by onGrowth like less's forw_line read returning with data
   private pendingForward: { rows: number, clamp: boolean } | null = null;
   private pendingJump: { kind: 'end' } |
     { kind: 'percent', value: number } |
@@ -173,23 +173,23 @@ export class FileInput implements PagerInput {
   private growthPaint = false;
   private unsubscribeGrowth: (() => void) | null = null;
 
-  // og's interrupted drain leaves ch_length NULL even though the
+  // less's interrupted drain leaves ch_length NULL even though the
   // writer died: the residual pipe data sits unread, so prompts and
   // = keep showing an unknown length until the NEXT forward read
   // reaches EOI — the spool has actually read everything, but the
-  // og state machine must not know it yet
+  // less state machine must not know it yet
   private softEnd = false;
 
   // the view position of the previous resolveBottom, so only real
-  // moves re-enter the walk (og's find_linenum caches resolve this)
+  // moves re-enter the walk (less's find_linenum caches resolve this)
   private lastResolved = '';
 
   // the rows a backward move exposed, as offsets into the top's own
-  // line: og's add_back_pos entries, minus the row index the window
+  // line: less's add_back_pos entries, minus the row index the window
   // would invalidate on the next sync
   private seam: { offset: number, end: number }[] = [];
 
-  // og's forced back (K, ESC-b, --past-eof) pads null rows above
+  // less's forced back (K, ESC-b, --past-eof) pads null rows above
   // BOF; forward moves consume them first, any jump clears them
   private padTop = 0;
   private keepPad = false;
@@ -228,7 +228,7 @@ export class FileInput implements PagerInput {
     hook.sourceLineNumber = row => this.sourceActive()
       ? this.lineNumber(row)
       : undefined;
-    // og's curr_byte (prompt.c): a row past the screen's position
+    // less's curr_byte (prompt.c): a row past the screen's position
     // table falls back to ch_length — BOTTOM_PLUS_ONE at (END) is
     // the file size, never 0
     hook.sourceBytePosition = row => this.sourceActive()
@@ -237,7 +237,7 @@ export class FileInput implements PagerInput {
     hook.sourceLineCount = () => this.sourceActive()
       ? this.lineCount()
       : undefined;
-    // og's pipe_data reads the file between two positions; the block
+    // less's pipe_data reads the file between two positions; the block
     // file already does exactly that read
     hook.sourceReadRange = (from, to) => this.sourceActive() && to > from
       ? this.bf.readRange(from, to - from)
@@ -245,18 +245,18 @@ export class FileInput implements PagerInput {
     hook.sourceHeaderRow = () => this.sourceActive()
       ? this.headerRow
       : undefined;
-    // og's O_REPAINT toggle trashes the screen, and make_display then
+    // less's O_REPAINT toggle trashes the screen, and make_display then
     // repaints through jump_loc - which rebuilds from the position
     // table. Null lines a give-up jump drew are NOT in that table, so
     // they do not survive the repaint the way an nblank pad does
-    // og's curr_byte(where) reads position(where) - a SCREEN ROW's
+    // less's curr_byte(where) reads position(where) - a SCREEN ROW's
     // byte - and walks forward over rows the table has nothing for,
     // falling back to ch_length (prompt.c). A wrapped line owns
     // several rows, so the answer is usually mid-line
     hook.sourceRowByte = sindex => {
       if (!this.sourceActive()) return null;
 
-      // og reads position(where) FIRST and only then walks forward
+      // less reads position(where) FIRST and only then walks forward
       // over empty rows, so BOTTOM_PLUS_ONE - the last index - is read
       // rather than skipped
       for (let k = sindex; k <= config.window - 1; k++) {
@@ -266,7 +266,7 @@ export class FileInput implements PagerInput {
         const line = forwLine(this.bf, at.pos);
         if (!line || at.offset <= 0) return at.pos;
 
-        // the offset counts DISPLAY characters; og's table holds a
+        // the offset counts DISPLAY characters; less's table holds a
         // byte, so it converts through the raw line the display was
         // built from
         const shown = displayText(line.text);
@@ -288,7 +288,7 @@ export class FileInput implements PagerInput {
       // from it at that screen line, so the content lands right where
       // back() stopped drawing null lines - and the entry one row PAST
       // it (forw's closing add_forw_pos) draws as one more null line
-      // below. Counted off og's own output: 21 tildes, the row, then a
+      // below. Counted off less's own output: 21 tildes, the row, then a
       // single tilde
       this.blankGiveUp = false;
       this.blankBelow = 0;
@@ -320,33 +320,33 @@ export class FileInput implements PagerInput {
       // A short pipe can reach its end between the startup fill and
       // this subscribe - a dumb terminal's "Press RETURN to continue"
       // gate is easily long enough - and the spool never repeats that
-      // event, so the length it carried was lost. og cannot miss it:
+      // event, so the length it carried was lost. less cannot miss it:
       // ch_length becomes known on the read that returns EOI, and
       // every read from here on would return it. Unadopted, the
       // length stayed unknown for the whole session and the prompt
-      // showed ":" where og shows "(END)".
+      // showed ":" where less shows "(END)".
       if (this.spool.ended) {
         this.bf.refreshSize();
         this.adoptSpoolEnd();
       }
       // --file-size wants the pipe's true length: read it all, like
-      // og's scan_eof running the EOI-discovering read up front
+      // less's scan_eof running the EOI-discovering read up front
       if (opt.wantFileSize > 0 && this.spoolAlive()) this.spool.drain();
     }
 
     this.seekLine(config.row, false);
     this.sync();
 
-    // og's currline(BOTTOM) closes the STARTUP forw() too, so by the
+    // less's currline(BOTTOM) closes the STARTUP forw() too, so by the
     // time any command runs the bottom line's number is already known.
-    // Without this the first command to bell - which og answers with a
+    // Without this the first command to bell - which less answers with a
     // bell and nothing else - triggered our first resolution, and the
     // paint that precedes it repainted the screen
     this.lastResolved = this.view.top.pos + ':' + this.view.top.offset;
   }
 
   /** Marks the spool drain a command started, owning the command
-   *  line like og's ch_end_seek: blank for G, ierror's note for %. */
+   *  line like less's ch_end_seek: blank for G, ierror's note for %. */
   private startDrain(note: string, cancelMessage: string): void {
     pipeDraining.active = true;
     pipeDraining.note = note;
@@ -361,7 +361,7 @@ export class FileInput implements PagerInput {
   }
 
   /** A forward read reaching the spooled end after an interrupted
-   *  drain: og's ch_forw_get finally returns the real EOI and the
+   *  drain: less's ch_forw_get finally returns the real EOI and the
    *  length becomes known (ch_fsize learned). */
   private discoverEnd(): void {
     if (!this.softEnd || !this.spool?.ended) return;
@@ -375,7 +375,7 @@ export class FileInput implements PagerInput {
     }
   }
 
-  /** ^C or --intr during a wait on the growing spool: og's READ_INTR
+  /** ^C or --intr during a wait on the growing spool: less's READ_INTR
    *  surfaces as EOI at the current position, so ch_end_seek returns
    *  SUCCESS and G jumps to the BUFFERED end — only % fails its
    *  ch_length check and errors; a blocked move simply stops. */
@@ -394,7 +394,7 @@ export class FileInput implements PagerInput {
     this.spool?.cancelDrain();
     this.endDrain();
 
-    // og stops at READ_INTR without the residual read: the length
+    // less stops at READ_INTR without the residual read: the length
     // stays unknown until a later forward read reaches EOI
     this.softEnd = true;
 
@@ -423,7 +423,7 @@ export class FileInput implements PagerInput {
     return true;
   }
 
-  /** Takes the finished spool's length as the file's, like og's
+  /** Takes the finished spool's length as the file's, like less's
    *  ch_fsize after the read that returned EOI. */
   private adoptSpoolEnd(): void {
     const entry = files.list[this.fileIndex];
@@ -517,7 +517,7 @@ export class FileInput implements PagerInput {
       case 'LINE_BACKWARD':
         this.backward(count || 1);
         return true;
-      // og's A_F_MOUSE/A_B_MOUSE are forward()/backward() over
+      // less's A_F_MOUSE/A_B_MOUSE are forward()/backward() over
       // wheel_lines (command.c:1720), so on a file they have to move
       // the same view every other command moves. Left calling the
       // in-memory mover instead, ONE wheel tick landed right and the
@@ -529,11 +529,11 @@ export class FileInput implements PagerInput {
         this.backward(optWheelLines());
         return true;
       case 'FORCE_LINE_BACKWARD':
-        // og's K: back with force=TRUE, padding past BOF
+        // less's K: back with force=TRUE, padding past BOF
         this.backward(count || 1, true);
         return true;
       case 'FORCE_WINDOW_BACKWARD':
-        // og's ESC-b: A_BF_SCREEN, backward(force=TRUE)
+        // less's ESC-b: A_BF_SCREEN, backward(force=TRUE)
         this.backward(count || getSwindow(), true);
         return true;
       case 'WINDOW_FORWARD':
@@ -575,25 +575,25 @@ export class FileInput implements PagerInput {
         if (count) {
           this.gotoLine(count - 1);
         } else if (this.spoolAlive()) {
-          // G must read the pipe to its true end, like og's
+          // G must read the pipe to its true end, like less's
           // ch_end_seek, with a blank command line while it reads
           this.pendingJump = { kind: 'end' };
           this.startDrain('', '');
           this.spool?.drain();
         } else {
-          // og's jump_forw bells and returns when the end is already
+          // less's jump_forw bells and returns when the end is already
           // displayed, and 4e4dce3 widened that test to the FILTERED
           // end: `bot_pos == end_pos || (bot_pos == soft_eof &&
           // soft_eof != NULL_POSITION)` (jump.c:44). Without the
           // second half, G at the end of &-filtered input stayed
           // silent whenever the file's real last line was filtered
           // out, because bottom+1 never reaches the file's end.
-          // NOT simply "EOF is displayed": og compares
+          // NOT simply "EOF is displayed": less compares
           // position(BOTTOM_PLUS_ONE), so on a screen that ends in
           // tilde rows that entry is NULL_POSITION and no bell is
           // rung, even though the end is plainly visible. The screen
           // must be FULL as well as at the end.
-          // og's jump_forw calls ch_end_seek BEFORE the test below
+          // less's jump_forw calls ch_end_seek BEFORE the test below
           // (jump.c:37), and for a seekable file that re-stats the
           // file: end_pos is the length NOW. A file that grew since
           // the last paint therefore MOVES rather than belling, and
@@ -615,7 +615,7 @@ export class FileInput implements PagerInput {
           // be called later by jump_loc, but it fails because the
           // position table has been cleared" (jump.c:51). Ours never
           // did, so after G the ' mark was still unset -- '' did not
-          // come back to where G left, and |' piped one line where og
+          // come back to where G left, and |' piped one line where less
           // pipes the whole file
           recordLastPosition();
 
@@ -635,7 +635,7 @@ export class FileInput implements PagerInput {
         this.discoverEnd();
         if (this.spoolAlive()) {
           // a percent of a length still unknown drains first, like
-          // og's jump_percent behind ierror's interruptible note
+          // less's jump_percent behind ierror's interruptible note
           this.pendingJump = {
             kind: 'percent',
             value: Math.min(count, 100),
@@ -674,7 +674,7 @@ export class FileInput implements PagerInput {
       case 'OSC8_OPEN': {
         if (!secureAllow('osc8')) return true;
 
-        // a link into the same file runs no handler: og searches for
+        // a link into the same file runs no handler: less searches for
         // the "id=" anchor it names, forward with wrap (search.c:1942)
         const param = osc8Internal();
         if (param === null) return false;
@@ -686,7 +686,7 @@ export class FileInput implements PagerInput {
         if (this.selectedOscPos === null) {
           search.message = 'No OSC8 link selected';
         } else {
-          // og's osc8_jump is an unconditional jump_loc to the -j
+          // less's osc8_jump is an unconditional jump_loc to the -j
           // line (search.c:2002), on-screen or not
           this.view.top = { pos: this.selectedOscPos, offset: 0 };
           this.view.lineBackward(jumpSindex());
@@ -783,14 +783,14 @@ export class FileInput implements PagerInput {
     return true;
   }
 
-  /** Places a found match like og's search jump: normally the match
+  /** Places a found match like less's search jump: normally the match
    *  line at the -j target, a deep wrapped match bottoming its final
    *  sub-row (get_lastlinepos), a chopped off-screen match shifted
    *  into view (shift_visible). */
   private landMatch(found: number): void {
     const bSub = this.bottomSub(found);
 
-    // og's "pos != opos" (search.c:2211). Its default how_search is
+    // less's "pos != opos" (search.c:2211). Its default how_search is
     // OPT_ONPLUS (opttbl.c:222), so a forward search starts at
     // position(TOP) - a SCREEN row start, which on a wrapped line is a
     // byte in the middle of it - and search_range hands that same byte
@@ -800,7 +800,7 @@ export class FileInput implements PagerInput {
     const target = this.view.screenPos(jumpSindex());
 
     if (bSub === null && target && target.pos === found) {
-      // og runs jump_loc only `else if (pos != opos)` (search.c), so
+      // less runs jump_loc only `else if (pos != opos)` (search.c), so
       // a match already sitting on the -j target moves NOTHING - no
       // jump, and therefore no pos_clear and no repaint. The two
       // paints hilite_screen already made are the whole of it
@@ -820,7 +820,7 @@ export class FileInput implements PagerInput {
       };
       this.view.lineBackward(config.window - 2);
     } else {
-      // og's search ends in jump_loc(pos, jump_sline) (search.c), so
+      // less's search ends in jump_loc(pos, jump_sline) (search.c), so
       // the landing takes exactly the branches a `g` does: a match
       // ALREADY DISPLAYED is scrolled to, one just above the screen
       // is scrolled back to, and only a far one repaints
@@ -877,7 +877,7 @@ export class FileInput implements PagerInput {
     markPosClear();
   }
 
-  /** og's long-line landing (search.c plastlinepos + the
+  /** less's long-line landing (search.c plastlinepos + the
    *  end_off >= swidth*sheight/4 heuristic): a wrapped match ending
    *  deep in its line bottoms the final sub-row instead of topping. */
   private bottomSub(linePos: number): number | null {
@@ -897,7 +897,7 @@ export class FileInput implements PagerInput {
 
     if (end < Math.floor(config.screenWidth * sheight / 4)) return null;
 
-    // og 707's zeroed chpos sentinel: a match ending exactly at the
+    // less 707's zeroed chpos sentinel: a match ending exactly at the
     // line end computes tpos = linepos and never bottom-jumps
     if (end >= plain.length) return null;
 
@@ -908,7 +908,7 @@ export class FileInput implements PagerInput {
   /**
    * Shifts the screen horizontally so the match is visible, like
    * search.c's shift_visible: an off-screen match lands --match-shift
-   * columns from the left edge. og only shifts in the chop branch;
+   * columns from the left edge. less only shifts in the chop branch;
    * wrapped long lines bottom-jump instead (bottomSub).
    */
   private shiftMatch(linePos: number): void {
@@ -924,7 +924,7 @@ export class FileInput implements PagerInput {
 
   restoreSearchOrigin(): void {
     if (!this.incrementalOrigin || !this.sourceActive()) return;
-    // a restore, not a jump: og's abandoned incremental search returns
+    // a restore, not a jump: less's abandoned incremental search returns
     // to the byte the screen started at, part-way into a row or not
     this.view.top = { ...this.incrementalOrigin };
     this.incrementalOrigin = null;
@@ -939,7 +939,7 @@ export class FileInput implements PagerInput {
    * Puts the rows read so far on the screen, before a read that is
    * going to take a while.
    *
-   * og needs no equivalent: forw() writes each row as forw_line
+   * less needs no equivalent: forw() writes each row as forw_line
    * returns it, so the rows above a slow one are already drawn when
    * it stalls. We materialize the screen and paint once, which is
    * fewer writes for the ordinary case and a blank terminal for this
@@ -960,7 +960,7 @@ export class FileInput implements PagerInput {
     }
   }
 
-  /** og's currline(BOTTOM) closing every forw()/back(): the eager
+  /** less's currline(BOTTOM) closing every forw()/back(): the eager
    *  line-number resolution running after each move's paint. */
   resolveBottom(): void {
     if (opt.linenums === 0 || mode.HELP || !this.sourceActive()) return;
@@ -969,13 +969,13 @@ export class FileInput implements PagerInput {
     if (at === this.lastResolved) return;
     this.lastResolved = at;
 
-    // og paints the moved content BEFORE the walk: forw() puts its
+    // less paints the moved content BEFORE the walk: forw() puts its
     // rows up, currline(BOTTOM) runs after, and the prompt comes
     // last — so the screen always shows the move immediately, with
     // a blank command line while the count runs
-    // bare: og has not written a prompt at this point either, so
+    // bare: less has not written a prompt at this point either, so
     // painting one here only to blank it on the next line was two
-    // writes and a flicker that og never emits
+    // writes and a flicker that less never emits
     renderBare(session.content, session.buffer);
 
     this.lineScanMessaged = false;
@@ -986,12 +986,12 @@ export class FileInput implements PagerInput {
       if (this.countTo(this.view.top.pos) !== null) break;
 
       // abort_delayed_msg after the message showed: countTo turned
-      // line numbers off and queued the og error text
+      // line numbers off and queued the less error text
       if (opt.linenums === 0) break;
 
       if (retriedAfterEarlyInterrupt) {
         // A second early ^C interrupts jump_forw's recovery repaint.
-        // forw paints zero lines, leaving og's position table empty;
+        // forw paints zero lines, leaving less's position table empty;
         // make_display then falls back to jump_loc(ch_zero(), 1).
         ringBell('eof');
         this.view.gotoStart();
@@ -1182,7 +1182,7 @@ export class FileInput implements PagerInput {
       return false;
     }
 
-    // og's pos_rehead moves table[TOP] back to the line's beginning
+    // less's pos_rehead moves table[TOP] back to the line's beginning
     // (position.c:325); here the top's POSITION already is one, so
     // re-anchoring means dropping the sub-row the caller cleared
     if (config.subRow === 0 && config.subShift === 0) {
@@ -1221,7 +1221,7 @@ export class FileInput implements PagerInput {
 
     // "-" is standard input, which the session spooled to a private
     // file so it is seekable; everything below then treats it as the
-    // ordinary growing file it now is (og keeps fd0 and buffers it in
+    // ordinary growing file it now is (less keeps fd0 and buffers it in
     // ch - the spool is our ch)
     const path = entry.path === '-' ? entry.spoolPath : entry.path;
     if (path === undefined) return undefined;
@@ -1303,7 +1303,7 @@ export class FileInput implements PagerInput {
   }
 
   /**
-   * The null rows an end jump leaves above BOF, like og's jump_loc
+   * The null rows an end jump leaves above BOF, like less's jump_loc
    * walking back sindex lines to put the last one at the bottom: when
    * back_line hits BOF first it BREAKS and hands the shortfall to
    * forw() as its nblank argument - "rely on forw() below to draw the
@@ -1331,8 +1331,8 @@ export class FileInput implements PagerInput {
    * enough to the current screen that we can just scroll there after
    * all" -- before reaching the lastmark() below the loop (jump.c:294,
    * jump.c:347). Recording unconditionally instead made `''` twice in
-   * a row land in two different places from og, because our first jump
-   * left a mark og's scroll never wrote.
+   * a row land in two different places from less, because our first jump
+   * left a mark less's scroll never wrote.
    *
    * @param pos - The position being jumped to.
    * @param sindex - 0-based screen row the target will be placed on.
@@ -1372,7 +1372,7 @@ export class FileInput implements PagerInput {
   /**
    * jump_loc's lastmark for F's entry jump.
    *
-   * og's F is forw_loop, which opens with jump_forw_buffered ->
+   * less's F is forw_loop, which opens with jump_forw_buffered ->
    * jump_line_loc(end-1, sc_height-1) -> jump_loc. The ticks that
    * follow are forw(1), not a jump, so only the entry can mark.
    */
@@ -1388,7 +1388,7 @@ export class FileInput implements PagerInput {
     if (!this.sourceActive()) return false;
 
     // F on a pipe reads to the true end and keeps reading, like
-    // og's forw_loop with ignore_eoi
+    // less's forw_loop with ignore_eoi
     if (this.spoolAlive()) this.spool?.drain();
 
     this.bf.refreshSize();
@@ -1404,7 +1404,7 @@ export class FileInput implements PagerInput {
 
       // F is jump_forw_buffered, which reaches the same jump_loc with
       // the same sc_height-1 target as G: content shorter than the
-      // screen sits at the BOTTOM either way. og gets there through
+      // screen sits at the BOTTOM either way. less gets there through
       // the onscreen branch instead (no pos_clear), which back()s the
       // shortfall in as null lines rather than passing it as nblank -
       // a different route to the same screen
@@ -1468,7 +1468,7 @@ export class FileInput implements PagerInput {
     clampAtLastScreen: boolean,
     viaJump: boolean = false
   ): void {
-    // og's forward() opens with `if (past_eof) force = TRUE`
+    // less's forward() opens with `if (past_eof) force = TRUE`
     // (forwback.c:479), so --past-eof turns EVERY forward move into a
     // forced one and the last-screenful clamp simply does not apply.
     // backwardFrom already did this for its own direction; forward
@@ -1476,19 +1476,19 @@ export class FileInput implements PagerInput {
     // at the last screenful instead of running on past it.
     if (optPastEof()) clampAtLastScreen = false;
 
-    // og's forward() asks position(BOTTOM_PLUS_ONE) and bells BEFORE
+    // less's forward() asks position(BOTTOM_PLUS_ONE) and bells BEFORE
     // forw() gets a chance to consume anything (forwback.c:481). With
     // blank rows above BOF and the file's end already on screen there
     // is no row past the bottom, so the move bells and the blanks
     // stay put - consuming one of them first would scroll a screen
-    // that og leaves alone.
-    // og's forward() asks position(BOTTOM_PLUS_ONE) BEFORE anything
+    // that less leaves alone.
+    // less's forward() asks position(BOTTOM_PLUS_ONE) BEFORE anything
     // else, and an empty position table has no row past the bottom to
     // move to: it eof_bells and returns (forwback.c:481, where
     // empty_lines is true for a screen nothing has painted). A key
-    // ungot at the startup gate runs before the first paint, so og
+    // ungot at the startup gate runs before the first paint, so less
     // bells on it and paints the FIRST screen afterwards -- we moved.
-    // The guard is og's COMMAND-level forward() (forwback.c:481). A
+    // The guard is less's COMMAND-level forward() (forwback.c:481). A
     // jump does not come through there: jump_loc calls forw() itself,
     // forced, and paints from the target -- which is why +5g works on
     // a screen nothing has drawn yet while a bare j on the same screen
@@ -1510,7 +1510,7 @@ export class FileInput implements PagerInput {
     // like the array session's lineForward blankTop branch
     let want = rows;
 
-    // then the rows a backward move uncovered: og's forw() walks the
+    // then the rows a backward move uncovered: less's forw() walks the
     // entries add_back_pos prepended, dropping table[0] each time
     // (position.c:63), before the grid below resumes
     if (this.seam.length) {
@@ -1544,7 +1544,7 @@ export class FileInput implements PagerInput {
       }
     }
 
-    // og's forw() stops after printing a line that starts with \f, so
+    // less's forw() stops after printing a line that starts with \f, so
     // the form feed ends up the LAST visible row (forwback.c:366).
     // The array session caps the move for that; the byte-position
     // engine never did, so --form-feed simply had no effect here
@@ -1557,7 +1557,7 @@ export class FileInput implements PagerInput {
         clampAtLastScreen ? config.window : undefined
       );
 
-    // a short forward move read the end: og's forw discovers the
+    // a short forward move read the end: less's forw discovers the
     // EOI a post-interrupt length wait left unread
     if (moved < want) this.discoverEnd();
 
@@ -1574,7 +1574,7 @@ export class FileInput implements PagerInput {
 
     if ((moved || want < rows) && mode.INIT) mode.INIT = false;
 
-    // -y: og's forw() decides do_repaint from the REQUESTED count the
+    // -y: less's forw() decides do_repaint from the REQUESTED count the
     // same way back() does - `forw_scroll >= 0 && n > forw_scroll &&
     // n != sc_height-1` (forwback.c:243), the screenful exempt "since
     // repainting itself involves scrolling forward a screenful"
@@ -1589,7 +1589,7 @@ export class FileInput implements PagerInput {
   }
 
   private backward(rows: number, force: boolean = false): void {
-    // og's back() calls add_back_pos per row, and back_line bounds the
+    // less's back() calls add_back_pos per row, and back_line bounds the
     // row it exposes at the one that was on top (input.c) while the
     // rows below keep the extents they had. The entries say that; a
     // single anchor could only ever say it once.
@@ -1625,7 +1625,7 @@ export class FileInput implements PagerInput {
   /**
    * How far a backward move may go before a form feed stops it.
    *
-   * og's back() breaks after printing a line that starts with \f, so
+   * less's back() breaks after printing a line that starts with \f, so
    * the form feed ends up the TOP row (forwback.c:444).
    *
    * The array session answers this from session.content, which is the
@@ -1637,7 +1637,7 @@ export class FileInput implements PagerInput {
    * @returns The rows it may actually take.
    */
   private ffCapBack(rows: number): number {
-    // steps within the top's own line come first, and og stops once
+    // steps within the top's own line come first, and less stops once
     // that line's FIRST row is the one on top
     const topLine = forwLine(this.bf, this.view.top.pos);
     let taken = topLine
@@ -1667,7 +1667,7 @@ export class FileInput implements PagerInput {
   /** Re-expresses the seam in the row indices this paint will use. */
   private publishSeam(): void {
     // a seam cell is an EXTENT, measured under the layout that was in
-    // force when back_line bounded it. og never carries one across a
+    // force when back_line bounded it. less never carries one across a
     // layout change - its table holds starts only, and forw_line
     // re-extents every row at the draw - so a width, --wordwrap or
     // ctldisp change makes these ends describe a screen that no longer
@@ -1680,7 +1680,7 @@ export class FileInput implements PagerInput {
   }
 
   private backwardFrom(rows: number, force: boolean = false): void {
-    // og's back() opens with squish_check (forwback.c:394), BEFORE it
+    // less's back() opens with squish_check (forwback.c:394), BEFORE it
     // knows whether anything can scroll: a backward command repaints
     // the squished short first screen — filling the blank rows above
     // with tildes — and only then bells at BOF. forward() is not
@@ -1688,14 +1688,14 @@ export class FileInput implements PagerInput {
     // so a clamped forward leaves the squish alone
     if (mode.INIT) mode.INIT = false;
 
-    // --past-eof forces every backward scroll, like og's back()
+    // --past-eof forces every backward scroll, like less's back()
     if (optPastEof()) force = true;
 
-    // og's back() breaks after printing a \f line, leaving it as the
+    // less's back() breaks after printing a \f line, leaving it as the
     // TOP row (forwback.c:444) -- the mirror of the forward stop
     if (optStopOnFormFeed()) rows = this.ffCapBack(rows);
 
-    // og's back() decides do_repaint from the REQUESTED count, before
+    // less's back() decides do_repaint from the REQUESTED count, before
     // it moves anything (`n > get_back_scroll()`, forwback.c:397), so
     // a `b` that ran into the top of the file still repaints under -c
     // or -h - but only if it moved at all: nothing moved is
@@ -1708,7 +1708,7 @@ export class FileInput implements PagerInput {
 
     if (moved && doRepaint) markPosClear();
 
-    // og's forced back (K, ESC-b) keeps revealing null lines above
+    // less's forced back (K, ESC-b) keeps revealing null lines above
     // the beginning, capped one short of an empty screen — file
     // distance consumes first, like the array forceLineBackward
     if (force && moved < rows) {
@@ -1752,7 +1752,7 @@ export class FileInput implements PagerInput {
     };
   }
 
-  /** og's to_newline scroll (forwback.c:302): rows reveal at the
+  /** less's to_newline scroll (forwback.c:302): rows reveal at the
    *  bottom edge until `lines` of them end their file line, wrap
    *  continuations riding free; the top may land mid-wrap. */
   private newlineForward(lines: number): void {
@@ -2006,14 +2006,14 @@ export class FileInput implements PagerInput {
 
   /** Finds a 0-based file line without retaining the traversed text. */
   /**
-   * og's onscreen() (position.c:135): the screen row holding a byte,
+   * less's onscreen() (position.c:135): the screen row holding a byte,
    * or -1. Note it returns -1 when the byte is past EVERY row, not the
    * bottom row - the loop only ever answers from `pos < table[i]`, so
    * falling out the end means "not on screen". Getting that backwards
    * made a jump to the file's end look like a jump onto the screen.
    */
   private onScreenRow(target: number): number {
-    // og's table holds a BYTE PER ROW, so on a wrapped line its
+    // less's table holds a BYTE PER ROW, so on a wrapped line its
     // entries differ row to row. Ours holds the row's LINE START plus
     // an offset, and comparing the line starts alone collapses every
     // row of one long line to the same value - on a single-line file
@@ -2034,7 +2034,7 @@ export class FileInput implements PagerInput {
   }
 
   /**
-   * og's jump_loc near-target branch (jump.c:337): a target that is
+   * less's jump_loc near-target branch (jump.c:337): a target that is
    * ALREADY DISPLAYED is scrolled to with force=TRUE rather than
    * repainted, which keeps the junction a backward move leaves behind
    * instead of regenerating the screen from the target.
@@ -2058,7 +2058,7 @@ export class FileInput implements PagerInput {
     } else if (delta < 0) {
       this.backwardFrom(-delta, true);
     } else {
-      // og scrolls by the difference either way, so a target already
+      // less scrolls by the difference either way, so a target already
       // sitting on its own -j line is back(0): the loop never runs,
       // nlines stays 0 and back() eof_bells (forwback.c:388). g at
       // the top of the file is exactly that case, and we repainted
@@ -2075,15 +2075,15 @@ export class FileInput implements PagerInput {
     const want = Math.max(target, floor);
     const pos = this.findLinePosition(want);
 
-    // og's onscreen() compares BYTE positions, and its top under -r is
+    // less's onscreen() compares BYTE positions, and its top under -r is
     // a byte part-way into the line. Ours is that line's start plus an
     // offset, so a target at the line's beginning looks equal to the
-    // top when og would call it strictly before - and og's give-up
+    // top when less would call it strictly before - and less's give-up
     // branch below is what answers that case
     const before = pos !== null && (pos < this.view.top.pos ||
       (pos === this.view.top.pos && this.view.top.offset > 0));
 
-    // og's jump_loc splits three ways for a target above the screen;
+    // less's jump_loc splits three ways for a target above the screen;
     // only the last of them repaints, and none of them pos_clears
     let farBack = false;
 
@@ -2091,7 +2091,7 @@ export class FileInput implements PagerInput {
       const walk = this.backWalk(pos, jumpSindex());
 
       if (walk === 'scroll') {
-        // og's back(nline, tpos, TRUE, ...): the same scroll a k runs,
+        // less's back(nline, tpos, TRUE, ...): the same scroll a k runs,
         // forced, with add_back_pos keeping the seam it exposes
         this.backward(this.scrollRows, true);
         return;
@@ -2105,9 +2105,9 @@ export class FileInput implements PagerInput {
       farBack = true;
     }
 
-    // og's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
+    // less's jump_back ends in jump_loc(pos, jump_sline), and jump_loc
     // scrolls instead of repainting when the line is already on screen
-    // og's onscreen branch just scrolls and returns (jump.c:251): the
+    // less's onscreen branch just scrolls and returns (jump.c:251): the
     // position table stays live, and pos_clear belongs to the far
     // branch below. Clearing it here sent an ordinary short jump down
     // the skipping repaint instead of a scroll.
@@ -2116,7 +2116,7 @@ export class FileInput implements PagerInput {
       return;
     }
 
-    // og's jump_loc, for a target BEFORE the screen, walks FORWARD
+    // less's jump_loc, for a target BEFORE the screen, walks FORWARD
     // from it looking for a row that reaches the current top - and if
     // that walk runs off the end of the file first, it gives up,
     // lclear()s and back()s from the target with force (jump.c:353).
@@ -2124,7 +2124,7 @@ export class FileInput implements PagerInput {
     // draws a screenful of NULL LINES: the content is pushed off and
     // tildes are all that is left. -r is what makes the walk fail,
     // because the whole file is a single row
-    // og's jump_back errors when find_pos cannot place the line and
+    // less's jump_back errors when find_pos cannot place the line and
     // does not move at all (jump.c:117). We fell through to a clamped
     // seek, so N g past the end of the file landed on the last screen
     // instead of reporting. A still-spooling source is not "past the
@@ -2134,13 +2134,13 @@ export class FileInput implements PagerInput {
       return;
     }
 
-    // og's forw() pos_clears -- and prints "...skipping..." -- only
+    // less's forw() pos_clears -- and prints "...skipping..." -- only
     // when the target is NOT contiguous with what is displayed:
     // `if (pos != position(BOTTOM_PLUS_ONE) || empty_screen())`
     // (forwback.c:259). A jump landing exactly on the row after the
-    // bottom is an ordinary forward screenful, and og scrolls it. We
+    // bottom is an ordinary forward screenful, and less scrolls it. We
     // cleared for every jump, so 10g on a nine-row screen printed the
-    // marker and repainted where og simply scrolled on.
+    // marker and repainted where less simply scrolled on.
     const contiguous = pos !== null && !this.emptyScreen() &&
       pos === this.view.visible(config.window - 1).endPos;
 
@@ -2148,11 +2148,11 @@ export class FileInput implements PagerInput {
     this.sync();
     this.seam = [];
 
-    // og's far backward branch lclear()s and back()s: the screen is
+    // less's far backward branch lclear()s and back()s: the screen is
     // cleared and repainted upward, but the position table survives,
     // so the paint still knows it went BACKWARD. pos_clear belongs to
     // the forward/skipping path only
-    // og's far backward branch lclear()s and back()s a whole screen -
+    // less's far backward branch lclear()s and back()s a whole screen -
     // and back() itself repaints when that exceeds get_back_scroll
     // (-c, -h), which pos_clears and paints FORWARD instead
     if (contiguous) {
@@ -2160,7 +2160,7 @@ export class FileInput implements PagerInput {
     } else if (farBack && config.window - 1 <= backScrollCap()) {
       markBackPaint();
     } else {
-      // og's far backward branch lclear()s - home()s under -c - before
+      // less's far backward branch lclear()s - home()s under -c - before
       // back(), and back() then repaints because a whole screen
       // exceeds get_back_scroll. That clear stands where a command's
       // clear_bot would otherwise be
@@ -2170,23 +2170,23 @@ export class FileInput implements PagerInput {
     }
   }
 
-  /** og's empty_screen(): nothing has been painted yet. */
+  /** less's empty_screen(): nothing has been painted yet. */
   private emptyScreen(): boolean {
     return this.view.visible(config.window - 1).rows.length === 0;
   }
 
   /**
-   * og's jump_loc branch for a target BEFORE the screen (jump.c:353).
+   * less's jump_loc branch for a target BEFORE the screen (jump.c:353).
    *
-   * - `scroll`: the walk reached the old top within a screenful, so og
+   * - `scroll`: the walk reached the old top within a screenful, so less
    *   says "Surprise! ... we can just scroll there after all" and runs
    *   back(nline, tpos) - a forced backward SCROLL, no lclear and no
-   *   pos_clear. `rows` is og's nline: sindex plus the display-row
+   *   pos_clear. `rows` is less's nline: sindex plus the display-row
    *   distance from the target to the old top.
    * - `blank`: the walk ran off the END of the file first, so back()
    *   draws null lines over the screen.
    * - `far`: neither - the walk used up a screenful without arriving.
-   *   og lclear()s and back()s a whole screen from where the walk
+   *   less lclear()s and back()s a whole screen from where the walk
    *   stopped, which lands the same top the fall-through seek does.
    */
   private backWalk(pos: number, sindex: number): 'scroll' | 'blank' | 'far' {
@@ -2194,7 +2194,7 @@ export class FileInput implements PagerInput {
     let at = { pos, offset: 0 };
     let steps = 0;
 
-    // og walks forward by DISPLAY ROWS - `pos = forw_line(pos,
+    // less walks forward by DISPLAY ROWS - `pos = forw_line(pos,
     // &linepos, NULL)` once per screen line - and takes the scroll
     // shortcut the moment a row's start reaches the old top. Only a
     // walk that runs off the END of the file first leaves pos
@@ -2224,23 +2224,23 @@ export class FileInput implements PagerInput {
     return 'far';
   }
 
-  // og's nline from the walk above, handed to back()
+  // less's nline from the walk above, handed to back()
   private scrollRows = 0;
 
   /**
-   * og's give-up branch: back() from nowhere draws null lines, the
+   * less's give-up branch: back() from nowhere draws null lines, the
    * content is pushed off and the rows below keep what lclear left.
    */
   private blankBack(): boolean {
 
-    // og's back() stops when the entries the OLD table still holds
+    // less's back() stops when the entries the OLD table still holds
     // reach the bottom two slots - add_back_pos shifts them down one
     // per null line drawn - so it draws sc_height-1 minus however many
     // there were. The rest of the screen keeps what lclear left: blank
     const entries = this.view.visible(config.window - 1).rows.length + 1;
     const nulls = Math.max(config.window - 1 - entries, 0);
 
-    // the top does NOT move: og's backward branch add_back_pos's the
+    // the top does NOT move: less's backward branch add_back_pos's the
     // walk's end - NULL_POSITION here - and lets back() draw null
     // lines over the screen, while the entries for the OLD top stay in
     // the table, shifted down. A later repaint reads one back out of
@@ -2322,16 +2322,16 @@ export class FileInput implements PagerInput {
   }
 
   /**
-   * Remembers a resolved position, like og's add_lnum (linenum.c).
+   * Remembers a resolved position, like less's add_lnum (linenum.c).
    *
-   * Sorted by position and CAPPED, both for og's reasons. The list
+   * Sorted by position and CAPPED, both for less's reasons. The list
    * used to grow by one entry per resolution - and lineNumber() runs
    * once per rendered ROW - so a couple of hundred keys left thousands
    * of entries, each countTo scanning all of them linearly. Cost grew
    * with how long you had been scrolling: -N on a 113 MB file spent
-   * 0.68s of CPU on 200 keys where og spent 0.01s.
+   * 0.68s of CPU on 200 keys where less spent 0.01s.
    *
-   * When full, og drops the entry whose removal leaves the smallest
+   * When full, less drops the entry whose removal leaves the smallest
    * gap (calcgap: next->pos - prev->pos, linenum.c:185), so what
    * survives stays spread across the file rather than clustered where
    * the user happened to be.
@@ -2387,13 +2387,13 @@ export class FileInput implements PagerInput {
     // The destination screen is painted but still in obuf, and this
     // walk is synchronous - nothing will flush it until we return, so
     // a long count leaves the OLD page on the glass the whole time.
-    // og never notices: its repaint writes a whole screen into an 8K
+    // less never notices: its repaint writes a whole screen into an 8K
     // obuf and overflows (output.c:520), while our delta is a few
     // hundred bytes and never fills.
     //
     // Only when the walk is far enough to see. Flushing here
     // unconditionally cost an extra write on EVERY move - 10 writes
-    // to og's 8 on a five-key burst (tests/framesweep.py), and
+    // to less's 8 on a five-key burst (tests/framesweep.py), and
     // fragmentation on a burst is what flicker IS.
     if (target - pos > FLUSH_AHEAD) flush();
 
@@ -2457,7 +2457,7 @@ export class FileInput implements PagerInput {
     }
 
     if (mark.pos === Number.MAX_SAFE_INTEGER) {
-      // the '$' mark is og's other unconditional ch_end_seek
+      // the '$' mark is less's other unconditional ch_end_seek
       // (mark.c:179), so it lands on the file's length NOW
       this.bf.refreshSize();
       const end = backLine(this.bf, this.bf.size)?.start;
@@ -2534,9 +2534,9 @@ export class FileInput implements PagerInput {
     let noted = false;
 
     while (pos < stop && pos < this.bf.size) {
-      // og's delayed_msg shape (linenum.c:229): say nothing for the
+      // less's delayed_msg shape (linenum.c:229): say nothing for the
       // first LONGTIME seconds, then name the loop with ierror's
-      // suffix. og does this for line numbers and file length but not
+      // suffix. less does this for line numbers and file length but not
       // for a search - search.c has no message at all, so a long walk
       // over a big file sits silent. This is the same clock the line
       // scan above already uses.
@@ -2570,7 +2570,7 @@ export class FileInput implements PagerInput {
       if (hit !== 'miss') return candidatePositions[hit];
     }
 
-    // the scan read to the spooled end, og's EOI discovery
+    // the scan read to the spooled end, less's EOI discovery
     this.discoverEnd();
     return null;
   }
@@ -2610,13 +2610,13 @@ export class FileInput implements PagerInput {
   }
 
   /** Fable's byte-position OSC 8 walk over the complete file. */
-  /** The line-start positions currently displayed, og's onscreen(). */
+  /** The line-start positions currently displayed, less's onscreen(). */
   private onscreen(pos: number): boolean {
     if (pos < this.view.top.pos) return false;
     return pos < this.view.visible(config.window - 1).endPos;
   }
 
-  /** og's osc8_search (search.c:2005): continue within the selected
+  /** less's osc8_search (search.c:2005): continue within the selected
    *  line first; an off-screen selection restarts at the -j line; a
    *  found link only scrolls when it is NOT already on screen; a
    *  miss errors WITHOUT clearing the selection. */
@@ -2648,7 +2648,7 @@ export class FileInput implements PagerInput {
         ? line?.next ?? this.bf.size
         : this.selectedOscPos;
     } else {
-      // og starts at the -j line like a normal search (search_pos)
+      // less starts at the -j line like a normal search (search_pos)
       const start = this.view.screenPos(jumpSindex());
 
       if (start === null) {
@@ -2687,13 +2687,13 @@ export class FileInput implements PagerInput {
       }
     }
 
-    // og errors and RETURNS: osc8_linepos keeps the old selection
+    // less errors and RETURNS: osc8_linepos keeps the old selection
     search.message = 'OSC 8 link not found';
   }
 
   /**
    * Selects the anchor an internal link names, scanning forward from
-   * the current selection and wrapping once - og's osc8_search with
+   * the current selection and wrapping once - less's osc8_search with
    * SRCH_FORW|SRCH_WRAP and a param (search.c:1949). The param mode
    * is also what re-admits an empty link: an id= anchor is one.
    */
@@ -2763,7 +2763,7 @@ export class FileInput implements PagerInput {
       markPosClear();
     }
 
-    // sync resolves the selection's current row itself (the og
+    // sync resolves the selection's current row itself (the less
     // position-range model), so one materialization styles it
     this.sync();
     setSelectedOsc8({
@@ -2771,7 +2771,7 @@ export class FileInput implements PagerInput {
       row: Math.max(this.positions.indexOf(pos), 0),
     });
 
-    // og saves the URI at every selection; the next prompt cycle
+    // less saves the URI at every selection; the next prompt cycle
     // reports it (command.c:905 "Link: %s")
     search.message = `Link: ${link.uri}`;
   }
@@ -2782,14 +2782,14 @@ export class FileInput implements PagerInput {
    * to paint them after a distant seek.
    */
   /**
-   * og's delayed_msg (linenum.c:229) applied to the work a scroll
+   * less's delayed_msg (linenum.c:229) applied to the work a scroll
    * does: nothing for LONGTIME, then the loop names itself with
    * ierror's suffix (output.c:767).
    *
-   * og leaves the command line BLANK while a command runs - cmd_exec
+   * less leaves the command line BLANK while a command runs - cmd_exec
    * clear_bots before the walk (command.c:267) and prompt() writes
    * ":" only when it returns - so a long scroll shows an empty bottom
-   * line and no sign of life. This fills that gap; it is not og's,
+   * line and no sign of life. This fills that gap; it is not less's,
    * but the clock and the wording are.
    */
   private noteLongWork(started: number): void {
@@ -2835,7 +2835,7 @@ export class FileInput implements PagerInput {
 
     let bodyStart = positions.indexOf(this.view.top.pos);
     let atEof = false;
-    // where the bottom line ENDS in the file, for og's eof_displayed:
+    // where the bottom line ENDS in the file, for less's eof_displayed:
     // -1 when no filter hid anything, so atEof answers on its own
     let bottomNext = -1;
 
@@ -2892,19 +2892,19 @@ export class FileInput implements PagerInput {
         const screenful = Math.max(config.window - 1 - this.padTop, 1);
         atEof = accepted <= screenful && this.nextAccepted(pos) === null;
 
-        // og's soft_eof (forwback.c:310, and its comment: it "can
+        // less's soft_eof (forwback.c:310, and its comment: it "can
         // differ from actual EOF if & filtering is in effect"): forw
         // sets it where a read attempt RETURNED EOF, which only
         // happens when the filter leaves forw short of the lines it
         // wanted. A screen the filter fills exactly never attempts
         // that read, so the bottom line is not the end of anything
-        // and og prompts ":" with the hidden tail still behind it.
+        // and less prompts ":" with the hidden tail still behind it.
         if (accepted < screenful) session.softEofSeen = true;
       }
     } else {
-      // Exactly the screen, like og's sc_height position table. The
+      // Exactly the screen, like less's sc_height position table. The
       // callback puts the rows already read on the terminal when the
-      // next one turns out to be a long wait, the way og's
+      // next one turns out to be a long wait, the way less's
       // row-at-a-time painting does for free - same shape as
       // resolveBottom putting the destination up before its walk.
       const visible = this.view.visible(
@@ -2929,7 +2929,7 @@ export class FileInput implements PagerInput {
     // An empty file still has one display line in the array-backed core.
     if (!raw.length) raw.push('');
 
-    // og's osc8 hilite is a byte-position range checked at paint
+    // less's osc8 hilite is a byte-position range checked at paint
     // (is_hilited_attr, search.c:686): resolve the selected line's
     // CURRENT row before this materialization styles, so the
     // standout follows the text through scrolls and repaints
@@ -2979,7 +2979,7 @@ export class FileInput implements PagerInput {
     calculateEOF(session.content);
     mode.EOF = atEof;
 
-    // og's eof_displayed wants the bottom line to END the file, so a
+    // less's eof_displayed wants the bottom line to END the file, so a
     // & filter hiding the tail leaves real lines behind it and the
     // prompt stays ":" (forwback.c:76)
     session.filterHidesTail = !!session.lastFilter && bottomNext >= 0 &&

@@ -5,7 +5,7 @@ import { hook } from './shared';
 /**
  * Opens this session's lesskey files in a pager of their own.
  *
- * NOT an og option. og leaves you to find your own lesskey files,
+ * NOT a less option. less leaves you to find your own lesskey files,
  * which works when a distribution put them somewhere known; an npm
  * install did not, and six sources can be live at once (system and
  * user, source and compiled, and two content variables). This answers

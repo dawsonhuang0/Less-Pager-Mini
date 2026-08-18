@@ -17,7 +17,7 @@ export interface PagerInput {
   handle(action: Actions, count: number): boolean;
 
   /**
-   * og's pos_clear reaching a source engine: it keeps its own copy of
+   * less's pos_clear reaching a source engine: it keeps its own copy of
    * the rows a backward move exposed, because the materialized window
    * renumbers itself on every paint, so emptying config.screen alone
    * would let the next sync publish them straight back.
@@ -33,7 +33,7 @@ export interface PagerInput {
   /** Moves the top to a display-character offset in its own line,
    *  after a width change reshaped how that line breaks. The source's
    *  own view owns the top, so a rebuild would otherwise restore the
-   *  old one (og keeps table[TOP] across screen_size_changed). */
+   *  old one (less keeps table[TOP] across screen_size_changed). */
   retopOffset(offset: number): void;
 
   /** Matches brackets across the input's complete address space. */
@@ -46,7 +46,7 @@ export interface PagerInput {
    *  operation (a growing-spool move, jump or search) was abandoned. */
   interrupt?(): boolean;
 
-  /** og's currline(BOTTOM) at the end of every forw()/back(): the
+  /** less's currline(BOTTOM) at the end of every forw()/back(): the
    *  eager line-number walk running after the rows paint and before
    *  the prompt, with its delayed "Calculating..." and abort chain. */
   resolveBottom?(): void;

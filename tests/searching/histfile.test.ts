@@ -85,7 +85,7 @@ describe('saveHistory', () => {
     touchSearchList();
     saveHistory();
 
-    // og's save_marks always prints the .mark header, even empty
+    // less's save_marks always prints the .mark header, even empty
     expect(fs.readFileSync(file, 'utf8'))
       .toBe('.less-history-file:\n.search\n"zeta\n.mark\n');
   });
@@ -101,7 +101,7 @@ describe('saveHistory', () => {
   });
 
   it('writes header and empty .mark after only a mark action', () => {
-    // og: setmark raises marks_modified even without --save-marks,
+    // less: setmark raises marks_modified even without --save-marks,
     // so quit writes the file with a bare .mark section
     loadHistory();
     search.history = [];
@@ -130,8 +130,8 @@ describe('saveHistory', () => {
     process.env.LESSHISTSIZE = '2';
     search.history = ['a1', 'b2', 'c3'];
 
-    // og's write_mlist appends new entries UNCAPPED - the histsize
-    // skip only trims the DISK copy's head (og-verified)
+    // less's write_mlist appends new entries UNCAPPED - the histsize
+    // skip only trims the DISK copy's head (less-verified)
     for (const e of search.history) recordSearchEntry(e);
     touchSearchList();
     saveHistory();
@@ -141,7 +141,7 @@ describe('saveHistory', () => {
   });
 
   it('merges the current disk file like copy_hist', () => {
-    // og-verified: memory overflow skips the disk head (o1, o2), the
+    // less-verified: memory overflow skips the disk head (o1, o2), the
     // new entry lands under a SECOND .search header at EOF
     fs.writeFileSync(file,
       '.less-history-file:\n.search\n"o1\n"o2\n"o3\n');

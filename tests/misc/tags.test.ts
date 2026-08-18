@@ -94,7 +94,7 @@ describe('ctags lookup', () => {
     expect(tagRow(content)).toBe(3);
   });
 
-  it('reports og messages for misses', () => {
+  it('reports less messages for misses', () => {
     expect(findTag('nothing')).toBe('No such tag in tags file');
 
     toggle('-T/definitely/not/there\x0D');
@@ -164,7 +164,7 @@ describe('-T- ctags -x from stdin', () => {
       expect(ntags()).toBe(2);
       expect(tagRow(content)).toBe(0);
 
-      // og sets the ztags default: stdin cannot be read again
+      // less sets the ztags default: stdin cannot be read again
       expect(optTagsFile()).toBe('tags');
     } finally {
       restore();

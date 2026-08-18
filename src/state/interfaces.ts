@@ -12,10 +12,10 @@ export interface Config {
   /**
    * Characters PAST the sub-row boundary where the top row starts.
    *
-   * og's screen top is a byte position, so a width change re-wraps
+   * less's screen top is a byte position, so a width change re-wraps
    * from the same byte and the top keeps showing the same words. Ours
    * is a boundary index, which cannot say "start mid-boundary" - this
-   * carries the remainder. Measured against og (3000-char line, 79
+   * carries the remainder. Measured against less (3000-char line, 79
    * columns, -N taking 8): the top stays put, a forward move keeps
    * the shifted grid, and a backward move re-anchors to the absolute
    * one - which is why this is an overlay and not a replacement.
@@ -23,7 +23,7 @@ export interface Config {
   subShift: number;
   
   /**
-   * og's position table (position.c): one entry per screen row saying
+   * less's position table (position.c): one entry per screen row saying
    * where that row starts and ends. Empty means pos_clear - the next
    * paint regenerates it from the top alone.
    *
@@ -38,7 +38,7 @@ export interface Config {
   // padding the top when a jump target lands near BOF (jump_loc/forw)
   blankTop: number;
   /** Rows at the BOTTOM the screen was cleared to and never redrawn -
-   *  og's jump_loc lclear()ing and then back()ing fewer null lines
+   *  less's jump_loc lclear()ing and then back()ing fewer null lines
    *  than the screen holds. Blank, not tildes: nothing drew them. */
   blankBelow: number;
 
@@ -154,12 +154,12 @@ export type Actions =
   | 'INDEX_FILE'
   | 'REMOVE_FILE'
   | 'CURRENT_INFO'
-  /** og's A_X11MOUSE_IN / A_X116MOUSE_IN: the sequence that
+  /** less's A_X11MOUSE_IN / A_X116MOUSE_IN: the sequence that
    *  INTRODUCES a mouse report, in the X10/X11 three-byte form and
    *  the SGR (1006) form. lesskey names them "mouse" and "mouse6". */
   | 'MOUSE_X11_IN'
   | 'MOUSE_SGR_IN'
-  /** og's A_F_MOUSE / A_B_MOUSE / A_L_MOUSE / A_R_MOUSE: what a
+  /** less's A_F_MOUSE / A_B_MOUSE / A_L_MOUSE / A_R_MOUSE: what a
    *  decoded wheel report RESOLVES to. The --emouse gate and the
    *  --rmouse flip both live in the decoder (decode.c:613), so these
    *  four move unconditionally - which is what a lesskey file binding

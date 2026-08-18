@@ -5,13 +5,13 @@ import { opt } from '../options/state';
 import { sourceRead } from '../state/reads';
 
 /**
- * Windowed file access, ported from og's ch.c: the file is read in
+ * Windowed file access, ported from less's ch.c: the file is read in
  * fixed blocks kept in an LRU pool, so any position of an arbitrarily
  * large file is reachable without loading it. Positions are byte
- * offsets (og's POSITION), safe as JS numbers up to 2^53.
+ * offsets (less's POSITION), safe as JS numbers up to 2^53.
  */
 
-/** Block size, like og's LBUFSIZE. */
+/** Block size, like less's LBUFSIZE. */
 export const BLOCK_SIZE = 8192;
 
 export class BlockFile {
@@ -34,7 +34,7 @@ export class BlockFile {
 
     if (size !== this.size) {
       // short (tail) blocks may have grown: drop them so the next
-      // read refetches, like og refilling partial buffers
+      // read refetches, like less refilling partial buffers
       for (const [index, block] of this.blocks) {
         if (block.length < BLOCK_SIZE) this.blocks.delete(index);
       }
@@ -45,15 +45,15 @@ export class BlockFile {
   }
 
   /**
-   * Whether a read at `pos` really has nothing left, like og's ch_get
+   * Whether a read at `pos` really has nothing left, like less's ch_get
    * reaching the cached length: "Apparently at end of file. Double-check
    * the file size in case it has changed" (ch.c:236), and only then
    * returning EOI.
    *
-   * This is why og needs no command to follow a growing file - an
+   * This is why less needs no command to follow a growing file - an
    * ordinary forward scroll past the old end picks up whatever has
    * been appended. The stat costs nothing until a read is already at
-   * the end, which is exactly when og pays for it too.
+   * the end, which is exactly when less pays for it too.
    */
   atEnd(pos: number): boolean {
     if (pos < this.size) return false;
@@ -61,7 +61,7 @@ export class BlockFile {
   }
 
   /**
-   * The maximum resident blocks: -b caps the pool like og's bufspace
+   * The maximum resident blocks: -b caps the pool like less's bufspace
    * (in KB); -B off pins the cap, on lets it grow to a sane ceiling.
    */
   private maxBlocks(): number {
@@ -70,7 +70,7 @@ export class BlockFile {
     return opt.autoBuffers ? Math.max(capped, 2048) : capped;
   }
 
-  /** Evicts blocks beyond the -b cap, like og's ch_setbufspace
+  /** Evicts blocks beyond the -b cap, like less's ch_setbufspace
    *  releasing excess buffers as soon as the option changes. */
   trim(): void {
     while (this.blocks.size > this.maxBlocks()) {
@@ -90,7 +90,7 @@ export class BlockFile {
       return have;
     }
 
-    // og's ch_get reaching an iread, which is where check_poll runs
+    // less's ch_get reaching an iread, which is where check_poll runs
     // (os.c:303) - the ONE point at which a waiting key is read and
     // ungot, and so the only thing that suppresses the next prompt
     sourceRead();

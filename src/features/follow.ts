@@ -41,7 +41,7 @@ type FollowPoll =
 
 /**
  * F command state: the followed descriptor, the read offset, undisplayed
- * partial-line bytes, and keys typed during the wait (og ungets them;
+ * partial-line bytes, and keys typed during the wait (less ungets them;
  * they run as commands only when the loop ends without a signal —
  * READ_INTR exits run getcc_clear and discard them).
  */
@@ -74,7 +74,7 @@ export function onSourceFollow(hooks: SourceFollowHooks | null): void {
 /**
  * Opens the current file for the F command, like forw_loop entering
  * ignore_eoi mode. The in-memory pseudo-file has no descriptor and can
- * never grow, so it waits like og at the end of a closed pipe.
+ * never grow, so it waits like less at the end of a closed pipe.
  *
  * @param kind - Which F flavor runs.
  * @returns True when following started; false with a message set.
@@ -104,7 +104,7 @@ export function startFollow(kind: FollowKind): boolean {
   follow.queued = [];
 
   // a $LESSOPEN replacement's size is not the file's: new raw data
-  // starts at the real end (og warns that F "may not work correctly")
+  // starts at the real end (less warns that F "may not work correctly")
   if (entry.alt) {
     try {
       follow.readPos = fs.fstatSync(follow.fd).size;
@@ -164,17 +164,17 @@ export function stopFollow(): string[] {
  * - --follow-name reopens when the name points to a different file or
  *   the file shrank, like curr_ifile_changed.
  * - --exit-follow-on-close leaves the wait when a pipe's writer has
- *   closed and its data is drained (og's POLLHUP-without-POLLIN);
- *   like og it never fires for a regular file, which cannot HUP.
+ *   closed and its data is drained (less's POLLHUP-without-POLLIN);
+ *   like less it never fires for a regular file, which cannot HUP.
  */
 export function pollFollow(): FollowPoll {
   const entry = files.list[files.index];
   if (!entry) return { kind: 'close' };
 
-  // og's check_poll exits only on POLLHUP without POLLIN (os.c):
+  // less's check_poll exits only on POLLHUP without POLLIN (os.c):
   // the writer has closed AND every buffered byte is drained; a
   // still-open pipe keeps waiting no matter how idle it is — and
-  // only Linux's poll ever reports that bare POLLHUP, so og's F on
+  // only Linux's poll ever reports that bare POLLHUP, so less's F on
   // macOS keeps waiting on a closed pipe too
   if (entry.path === '-' || follow.fd < 0) {
     if (entry.streaming) return { kind: 'idle' };
@@ -193,7 +193,7 @@ export function pollFollow(): FollowPoll {
     return { kind: 'close' };
   }
 
-  // a regular file never raises POLLHUP, so og's
+  // a regular file never raises POLLHUP, so less's
   // --exit-follow-on-close has no effect here: a removed or
   // truncated file just waits like any other unchanged one
   if (size <= follow.readPos) return { kind: 'idle' };
@@ -249,15 +249,15 @@ function nameChanged(path: string): boolean {
 
 /**
  * Starts the F command, like forw_loop: jump to the end of the file,
- * then wait for new data, polling every 50ms like og's read layer.
+ * then wait for new data, polling every 50ms like less's read layer.
  *
  * @param kind - `forever` (F), `bell` (ESC-f) or `hilite` (ESC-F).
  */
 export function beginFollow(kind: FollowKind): void {
-  // og's forw_loop is a no-op on the help file
+  // less's forw_loop is a no-op on the help file
   if (mode.HELP || follow.active) return;
 
-  // og warns BEFORE forw_loop, and error() is a get_return gate: the
+  // less warns BEFORE forw_loop, and error() is a get_return gate: the
   // screen holds where it is until RETURN, and only then does the
   // jump-to-end happen. The script has already exited by now, so
   // further changes to the real file will not be seen (command.c:1813)
@@ -268,7 +268,7 @@ export function beginFollow(kind: FollowKind): void {
 
     // "Printing the message has probably scrolled the screen"
     // (output.c:733): a message that reaches the right margin wraps,
-    // and og answers that with screen_trashed, so the repaint lands
+    // and less answers that with screen_trashed, so the repaint lands
     // once the gate is dismissed rather than a scroll off the old rows
     if (gateEndColumn() >= config.screenWidth) markFullRepaint();
   }
@@ -278,17 +278,17 @@ export function beginFollow(kind: FollowKind): void {
     return;
   }
 
-  // og's forw_loop reads immediately: a completed pipe returns
+  // less's forw_loop reads immediately: a completed pipe returns
   // its EOI before the wait prompt shows
   revealPipeEnd();
 
-  // og marks the pre-follow bottom line for -w before jumping
+  // less marks the pre-follow bottom line for -w before jumping
   if (optShowAttn()) {
     const next = bottomRow(session.content) + 1;
     config.attnRow = next < session.content.length ? next : -1;
   }
 
-  // og's forw_loop enters through jump_forw_buffered: re-entering
+  // less's forw_loop enters through jump_forw_buffered: re-entering
   // F while already at the end rings the at-end bell (jump_loc's
   // back(0) hitting eof_bell); the first F just moves there
   if (!sourceFollowHooks?.pinEnd(true)) lastLine(session.content, 0);
@@ -320,7 +320,7 @@ function followTick(): void {
   if (result.kind === 'idle' || session.exited) return;
 
   if (result.kind === 'close') {
-    // og's close-exit is the READ_INTR path: iread runs getcc_clear,
+    // less's close-exit is the READ_INTR path: iread runs getcc_clear,
     // so keys typed during the wait are discarded, and no bell rings
     endFollow();
     render(session.content, session.buffer);
@@ -355,7 +355,7 @@ function followTick(): void {
     ringBell();
 
     if (follow.active === 'hilite') {
-      // a signal-less break: og keeps the ungot queue, so keys
+      // a signal-less break: less keeps the ungot queue, so keys
       // typed during the wait now run as commands
       const queued = endFollow();
       render(session.content, session.buffer);
@@ -369,12 +369,12 @@ function followTick(): void {
 
 /**
  * Reopens a rotated file under --follow-name and keeps following,
- * like og's screen_trashed=2 reopen after curr_ifile_changed.
+ * like less's screen_trashed=2 reopen after curr_ifile_changed.
  */
 function rotateFollow(): void {
   const kind = follow.active as FollowKind;
 
-  // og's reopen (screen_trashed=2) never leaves forw_loop: the
+  // less's reopen (screen_trashed=2) never leaves forw_loop: the
   // ungot queue survives the rotation
   const queued = endFollow();
 
@@ -409,7 +409,7 @@ export function endFollow(): string[] {
     session.followTimer = null;
   }
 
-  // og's prompt recomputes eof_displayed after the loop: the follow
+  // less's prompt recomputes eof_displayed after the loop: the follow
   // pinned the view to the end, but calculateEOF on arriving data
   // cleared the sticky flag movements normally set
   if (!mode.EOF) {

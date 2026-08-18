@@ -1,5 +1,5 @@
 /**
- * OG-compatible environment lookup.
+ * less-compatible environment lookup.
  *
  * less searches local lesskey variables first, then the real process
  * environment, then system lesskey variables. LESSNOCONFIG filters every
@@ -11,10 +11,10 @@ const userVars = new Map<string, string>();
 const systemVars = new Map<string, string>();
 
 // environment passed by a library caller: the embedding application's
-// own configuration, so it sits ABOVE og's whole ladder. A lesskey
+// own configuration, so it sits ABOVE less's whole ladder. A lesskey
 // #env belongs to whoever runs the application, not to the
 // application, which is why it does not outrank this the way it
-// outranks a real environment value in og.
+// outranks a real environment value in less.
 let sessionVars: Record<string, string | undefined> | null = null;
 
 /** A library caller's own value for a variable, if it set one. */
@@ -90,7 +90,8 @@ export function deleteLesskeyEnv(
   (system ? systemVars : userVars).delete(name);
 }
 
-/** Reads the unfiltered process environment, like OG's direct getenv calls. */
+/** Reads the unfiltered process environment, like less's direct
+ *  getenv calls. */
 export const actualEnv = (name: string): string | undefined =>
   process.env[name];
 
@@ -106,7 +107,7 @@ function ignored(name: string): boolean {
 }
 
 /**
- * Reads og's ladder alone: user lesskey #env, then the real process
+ * Reads less's ladder alone: user lesskey #env, then the real process
  * environment, then system lesskey #env, then the compiled defaults.
  *
  * This is what the ENVIRONMENT says with the caller's overlay taken
@@ -135,7 +136,7 @@ export function lgetenv(name: string): string | undefined {
   // a library caller's envVars are the application's own explicit
   // configuration: they outrank every ambient tier and LESSNOCONFIG
   // filters only the user's environment, never the caller's
-  // (og's isnullenv: an empty value reads as unset)
+  // (less's isnullenv: an empty value reads as unset)
   return sessionEnv(name) ?? ambientEnv(name);
 }
 
@@ -143,7 +144,7 @@ export function lgetenv(name: string): string | undefined {
 export const terminalEnv = (): string | undefined =>
   lgetenv('TERM') || actualEnv('TERM');
 
-/** Integer lookup with OG's atoi-style invalid fallback. */
+/** Integer lookup with less's atoi-style invalid fallback. */
 export function envInteger(name: string, fallback: number): number {
   const value = lgetenv(name);
   if (!value) return fallback;
@@ -158,7 +159,7 @@ export function envDelay(name: string, fallback: number): number {
   return value > 0 ? value : fallback;
 }
 
-/** True during og's initial no-poll screen-fill grace period. */
+/** True during less's initial no-poll screen-fill grace period. */
 export function screenFillGrace(): boolean {
   return Date.now() < invocationStart + envDelay('LESS_SCREENFILL_TIME', 3000);
 }

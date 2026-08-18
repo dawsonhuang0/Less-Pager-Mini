@@ -136,11 +136,11 @@ export * from './shared';
 export * from './spec';
 
 const OPTIONS: OptionSpec[] = [
-  // og's opttbl.c table order, entry for entry. It is not decoration:
+  // less's opttbl.c table order, entry for entry. It is not decoration:
   // findopts walks the table in order, so it decides which option an
   // ambiguous "--" prefix resolves to and the order TAB completion
-  // offers the matches in. Our two extras sit beside their og
-  // neighbours - -I with the -i it is the capital form of (og makes
+  // offers the matches in. Our two extras sit beside their less
+  // neighbours - -I with the -i it is the capital form of (less makes
   // them one TRIPLE entry), --no-shell after --no-edit-warn.
   searchSkipScreen,
   buffers,
@@ -388,7 +388,7 @@ export function optionKey(content: string[], key: string): void {
 
   const char = key[0];
 
-  // collecting a parameter for a number/string option: og's
+  // collecting a parameter for a number/string option: less's
   // A_OPT_TOGGLE falls through to the common cmd_char line editing
   if (option.spec) {
     if (!cmdBuf.prefix) {
@@ -435,7 +435,7 @@ export function optionKey(content: string[], key: string): void {
   // by the cmd buffer's line editing
   if (option.name !== null) {
     if (!cmdBuf.prefix) {
-      // an empty name buffer re-runs og's first-char dispatch
+      // an empty name buffer re-runs less's first-char dispatch
       // (mca_opt_char's `curropt == NULL && cmdbuf_empty()` gate):
       // extra dashes are swallowed, and the -+/-!/^P flags still
       // apply after the doubled dash
@@ -519,7 +519,7 @@ export function optionKey(content: string[], key: string): void {
     }
 
     // once the name completed, erase aborts the command and other
-    // characters are swallowed (og's curropt != NULL branch)
+    // characters are swallowed (less's curropt != NULL branch)
     if (option.match) {
       if (char === '\x08' || char === '\x7F') closeName();
       return;
@@ -540,7 +540,7 @@ export function optionKey(content: string[], key: string): void {
       const found = matchTyped();
 
       if (found.spec !== null) {
-        // og displays the full matched name (cmd_setstring)
+        // less displays the full matched name (cmd_setstring)
         cmdSetText(option.name ?? '');
       } else if (!found.ambig) {
         ringBell();
@@ -712,7 +712,7 @@ function applyOption(
   if (flag === '+') {
     next = spec.defaultValue as number;
   } else if (flag === '!') {
-    // og's OPT_SET is the inverse of the default, not the target
+    // less's OPT_SET is the inverse of the default, not the target
     // state: flip_triple(odefault, lower) / !odefault
     next = spec.type === 'triple'
       ? flipTriple(spec.defaultValue as number, !upper)
@@ -751,7 +751,7 @@ function applyParam(
     const before = search.message;
     spec.set(param, content);
 
-    // og's toggle_option reports the query message after setting a
+    // less's toggle_option reports the query message after setting a
     // string option; a handler error shows first, the state after
     if (!spec.noQuery && !option.noPrompt) {
       if (search.message === before) {
@@ -783,7 +783,7 @@ function applyParam(
   }
 
   if (spec.max !== undefined && value > spec.max) {
-    // og prints the limit error from the handler, then the regular
+    // less prints the limit error from the handler, then the regular
     // report with the fallback value
     spec.set(spec.maxFallback!, content);
     search.message = spec.maxMessage!.replace('%d', String(spec.max));
@@ -799,7 +799,7 @@ function applyParam(
 
   spec.set(value, content);
 
-  // og calls the option handler at TOGGLE before printing the report
+  // less calls the option handler at TOGGLE before printing the report
   if (spec.handler) spec.handler();
 
   if (!option.noPrompt) {
@@ -824,7 +824,7 @@ function stateOf(spec: OptionSpec): number {
 interface StartupCmds {
   /** `+`/`-p` commands replayed at the first file, in order. */
   firstCmds: string[];
-  /** True when `-?`/`--help` pages the help file first (og's dohelp). */
+  /** True when `-?`/`--help` pages the help file first (less's dohelp). */
   dohelp: boolean;
   /** The same, for --lesskey-help and the lesskey syntax page. */
   lesskeyHelp: boolean;
@@ -905,7 +905,7 @@ function findScanName(
           exact = len === name.length;
         }
 
-        // og only skips the uppercase pass once the first matched
+        // less only skips the uppercase pass once the first matched
         if (spec.type !== 'triple') break;
       }
     }
@@ -994,7 +994,7 @@ function getNum(
 
   if (text[i] === '-') {
     if (!negok) {
-      // og's num_error stays silent for a null printopt
+      // less's num_error stays silent for a null printopt
       if (printopt) {
         optScanError(`Negative number not allowed in ${printopt}`);
       }
@@ -1062,7 +1062,7 @@ function applyScanString(
   // --lesskey-src and --lesskey-content parse at startup (opt_ks/kc);
   // -k names the binary lesskey format, which is not supported
   if (spec.names[0] === 'lesskey-content') {
-    // og's parse_lesskey_content: semicolons separate lines. opt_kc
+    // less's parse_lesskey_content: semicolons separate lines. opt_kc
     // reports a summary of its own when the parse found anything
     // wrong, on top of the per-line messages (optfunc.c:322)
     if (parseLesskeyContent(param) !== 0) {
@@ -1074,14 +1074,14 @@ function applyScanString(
 
   if (spec.names[0] === 'lesskey-src') {
     try {
-      // og's lesskey_src returns the ERROR COUNT, so opt_ks reports
+      // less's lesskey_src returns the ERROR COUNT, so opt_ks reports
       // this for a file that parsed badly, not only one it could not
       // read (optfunc.c:307)
       if (parseLesskey(fs.readFileSync(param, 'utf8'), param) !== 0) {
         optScanError(`Cannot use lesskey source file "${param}"`);
       } else {
         // the ladder records its own; this one arrives after it ran,
-        // since og's init_cmds precedes scan_option (main.c:262)
+        // since less's init_cmds precedes scan_option (main.c:262)
         recordLesskeyForm({ kind: 'source', origin: param, system: false });
       }
     } catch {
@@ -1092,7 +1092,7 @@ function applyScanString(
   }
 
   // -k loads a compiled lesskey file at INIT, like opt_k calling
-  // lesskey(s, 0); any failure reports og's message (optfunc.c:293)
+  // lesskey(s, 0); any failure reports less's message (optfunc.c:293)
   if (spec.letter === 'k') {
     try {
       if (!secureAllow('lesskey')) throw new Error('secure');
@@ -1105,12 +1105,12 @@ function applyScanString(
     return;
   }
 
-  // -t only RECORDS the tag at startup: og's opt_t INIT is
+  // -t only RECORDS the tag at startup: less's opt_t INIT is
   // `tagoption = save(s)` with the comment "Do the rest in main()",
   // and main.c looks the tag up at line 408, after every option has
   // been scanned. Doing it here instead made the lookup depend on
   // argument order -- `-t tag -T file` could not see the -T yet and
-  // failed with "No tags file", while og handles either order.
+  // failed with "No tags file", while less handles either order.
   if (spec.letter === 't') {
     setPendingTag(param.replace(/^[ \t]+/, ''));
     return;
@@ -1126,7 +1126,7 @@ function applyScanString(
   spec.set(param, content);
 }
 
-/** Marks -i and -I together, since og folds them into one triple. */
+/** Marks -i and -I together, since less folds them into one triple. */
 function markUnsupported(spec: OptionSpec): void {
   spec.unsupported = true;
 
@@ -1178,11 +1178,11 @@ export function initUnsupport(env: string): void {
 }
 
 // a string/number option that ran out of characters waits for the
-// next scan_option call to supply its parameter, like og's pendopt
+// next scan_option call to supply its parameter, like less's pendopt
 let scanPendopt: OptionSpec | null = null;
 
 /**
- * Reports a still-dangling option after all startup scans, like og's
+ * Reports a still-dangling option after all startup scans, like less's
  * main calling nopendopt() when isoptpending() survives the argv loop.
  */
 export function flushPendopt(): void {
@@ -1200,7 +1200,7 @@ export const optionSpecs = (): OptionSpec[] => OPTIONS;
 
 /**
  * Walks one command line argument the way scan_option consumes it and
- * returns the option left waiting for a value, like og's isoptpending
+ * returns the option left waiting for a value, like less's isoptpending
  * classifying the next argv string as a parameter rather than a file.
  * Nothing is applied and no messages print.
  *
@@ -1290,7 +1290,7 @@ export function optionArgPending(
   return null;
 }
 
-// command line option strings handed over by the lmn CLI; og scans
+// command line option strings handed over by the lmn CLI; less scans
 // each argv string with its own scan_option call after $LESS
 let cliOptions: string[] = [];
 
@@ -1312,7 +1312,7 @@ export function takeCliOptions(): string[] {
  * and number parameters follow their option (`$` terminates a string),
  * `-+x` resets to the default, `+cmd` queues commands for the first
  * file (`++cmd` for every file), and `-r` acts as `-R` only in the
- * environment (og's is_env), not in a command line argument.
+ * environment (less's is_env), not in a command line argument.
  *
  * @param env - The $LESS string (or one command line argument).
  * @param content - Full content lines for display-affecting setters.
@@ -1372,18 +1372,18 @@ export function scanOptions(
   let i = 0;
 
   // a pending option takes this whole call's string as its value,
-  // like og's scan_option consuming the next argument for pendopt
+  // like less's scan_option consuming the next argument for pendopt
   if (scanPendopt !== null) {
     const spec = scanPendopt;
     scanPendopt = null;
 
     if (!spec.unsupported) {
       if (spec.type === 'string') {
-        // og hands the raw argument to the handler, without the
+        // less hands the raw argument to the handler, without the
         // optstring $/validchars processing
         applyScanString(spec, env, content, result);
       } else {
-        // og writes the number straight into the variable without
+        // less writes the number straight into the variable without
         // calling the option handler, so no clamping happens here
         const num = getNum(env, 0, optDesc(spec), spec.negok === true);
         if (num.value !== null) spec.set(num.value, content);
@@ -1454,7 +1454,7 @@ export function scanOptions(
         return result;
       }
     } else {
-      // og reports the raw remainder when a long name goes wrong
+      // less reports the raw remainder when a long name goes wrong
       const rest = env.slice(i);
       printopt = rest;
       lc = isLower(rest[0] ?? '');
@@ -1489,12 +1489,12 @@ export function scanOptions(
       }
     }
 
-    // a $LESS_UNSUPPORT option parses but is ignored: og consumes a
+    // a $LESS_UNSUPPORT option parses but is ignored: less consumes a
     // string parameter yet leaves number digits to rescan
     if (spec.unsupported) {
       if (spec.type === 'number' || spec.type === 'string') {
         if (i >= env.length) {
-          // wait for the next argument, like og's pendopt
+          // wait for the next argument, like less's pendopt
           scanPendopt = spec;
           return result;
         }
@@ -1523,14 +1523,14 @@ export function scanOptions(
       continue;
     }
 
-    // not og's: --lesskey-help pages our lesskey syntax page the way
+    // not less's: --lesskey-help pages our lesskey syntax page the way
     // -? pages the command help, through the same dohelp path
     if (spec.names.includes('lesskey-help')) {
       result.lesskeyHelp = true;
       continue;
     }
 
-    // also not og's: --view-lesskey pages the lesskey files THEMSELVES
+    // also not less's: --view-lesskey pages the lesskey files THEMSELVES
     // instead of the file it was given, the way -? pages the help
     if (spec.names.includes('view-lesskey')) {
       result.viewLesskey = true;
@@ -1538,7 +1538,7 @@ export function scanOptions(
     }
 
     if (spec.type === 'bool') {
-      // og folds -i/-I into one triple over caseless
+      // less folds -i/-I into one triple over caseless
       if (spec.letter === 'i' || spec.letter === 'I') {
         chgCaseless(setDefault ? 0 : lc ? 1 : 2);
         continue;
@@ -1577,8 +1577,8 @@ export function scanOptions(
     }
 
     // a string/number option ending the string waits for the next
-    // scan call's argument, like og's pendopt; flushPendopt reports
-    // it when nothing follows (og's nopendopt)
+    // scan call's argument, like less's pendopt; flushPendopt reports
+    // it when nothing follows (less's nopendopt)
     if (i >= env.length) {
       scanPendopt = spec;
       return result;
@@ -1606,7 +1606,7 @@ export function scanOptions(
       spec.set(num.value, content);
     }
 
-    // an attached value runs the option handler (og's INIT call)
+    // an attached value runs the option handler (less's INIT call)
     if (spec.handler) spec.handler();
   }
 

@@ -90,7 +90,7 @@ describe('editing a compiled lesskey through the view', () => {
     process.env.LESSKEYIN = path.join(dir, 'none');
     // the "editor": rewrites whatever file it is handed
     // a literal '.' in a prompt string is an ENDIF and vanishes
-    // (prompt.c:588), in og too - so the fixture has no extension
+    // (prompt.c:588), in less too - so the fixture has no extension
     process.env.LESSEDIT = 'cp /tmp/lpm-view-edit %g';
     initEnvironment();
     resetLesskey(); loadLesskey(true);

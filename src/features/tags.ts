@@ -60,7 +60,7 @@ export function resetTags(): void {
 let tagJumpHook: (() => void) | null = null;
 let pendingJump = false;
 
-// og's opt_t INIT stores the tag and defers: "Do the rest in main()".
+// less's opt_t INIT stores the tag and defers: "Do the rest in main()".
 // main.c looks it up at line 408, once every option has been scanned, so
 // -t and -T work in either order.
 let pendingTag: string | null = null;
@@ -72,7 +72,7 @@ export function setPendingTag(name: string): void {
 
 /**
  * Resolves a startup -t, the way main.c does after scan_option: look the
- * tag up and ask the pager to jump, reporting og's message on failure.
+ * tag up and ask the pager to jump, reporting less's message on failure.
  */
 export function resolvePendingTag(): string | null {
   const name = pendingTag;
@@ -109,7 +109,7 @@ export function onTagJump(fn: (() => void) | null): void {
  * named by -T, or global(1) output for the GTAGS-family names.
  *
  * @param tag - The tag to look up.
- * @returns null on success, or the og error message.
+ * @returns null on success, or the less error message.
  */
 export function findTag(tag: string): string | null {
   const tagsFile = optTagsFile();
@@ -122,7 +122,7 @@ export function findTag(tag: string): string | null {
     case '-': return findCtagsX();
   }
 
-  // a readable file is ctags format; otherwise og falls back to
+  // a readable file is ctags format; otherwise less falls back to
   // global(1), like gettagtype's open() probe
   return fs.existsSync(tagsFile)
     ? findCtag(tag, tagsFile)
@@ -168,7 +168,7 @@ export function tagRow(content: string[]): number | null {
   if (!tag) return null;
 
   if (tag.linenum > 0) {
-    // a line past EOF fails like og's find_pos returning NULL
+    // a line past EOF fails like less's find_pos returning NULL
     if (tag.linenum > content.length) return null;
     return tag.linenum - 1;
   }
@@ -176,7 +176,7 @@ export function tagRow(content: string[]): number | null {
   const pattern = tag.pattern ?? '';
 
   for (let row = 0; row < content.length; row++) {
-    // og strips ANSI before matching under -R (our native mode)
+    // less strips ANSI before matching under -R (our native mode)
     const line = content[row].replace(/\x1B\[[0-9;]*m/g, '');
 
     if (
@@ -184,7 +184,7 @@ export function tagRow(content: string[]): number | null {
       (!tag.endline || line.length === pattern.length ||
         line[pattern.length] === '\r')
     ) {
-      // og caches the found line number on the tag
+      // less caches the found line number on the tag
       tag.linenum = row + 1;
       return row;
     }

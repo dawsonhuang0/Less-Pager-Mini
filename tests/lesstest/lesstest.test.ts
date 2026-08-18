@@ -7,15 +7,15 @@ import { parseLt } from './ltFile';
 import { runLt } from './runLt';
 
 /**
- * Replays og's recorded lesstest sessions (less/lesstest/lt) against
- * this pager: each keystroke's screen must match the dump og produced.
+ * Replays less's recorded lesstest sessions (less/lesstest/lt) against
+ * this pager: each keystroke's screen must match the dump less produced.
  *
  * Failures print the first mismatching screen pair; they are the
- * canonical divergence list from og.
+ * canonical divergence list from less.
  */
 const corpus = path.join(process.cwd(), 'less/lesstest/lt');
 
-// the corpus is the og divergence burn-down list: run it on demand
+// the corpus is the less divergence burn-down list: run it on demand
 // with LESSTEST=1 so the main suite stays green meanwhile
 const enabled = !!process.env.LESSTEST && fs.existsSync(corpus);
 
@@ -23,7 +23,7 @@ const names = enabled
   ? fs.readdirSync(corpus).filter(name => name.endsWith('.lt')).sort()
   : [];
 
-describe('og lesstest corpus', () => {
+describe('less lesstest corpus', () => {
   if (!enabled) {
     it('is skipped without LESSTEST=1', () => { expect(true).toBe(true); });
     return;
@@ -40,7 +40,7 @@ describe('og lesstest corpus', () => {
         `${result.mismatches.length}/${result.compared} screens differ; ` +
           `first at step ${first.step} (key ${first.key}, ` +
           `${first.charDiffs} char / ${first.attrDiffs} attr cells):`,
-        '--- expected (og) ---',
+        '--- expected (less) ---',
         ...first.expected.map(row => JSON.stringify(row)),
         '--- actual (ours) ---',
         ...first.actual.map(row => JSON.stringify(row)),

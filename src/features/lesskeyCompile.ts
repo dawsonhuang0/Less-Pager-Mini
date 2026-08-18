@@ -10,20 +10,20 @@ import {
 
 /**
  * Compiles lesskey source into the binary a `-k` file carries, like
- * og's `lesskey` program (lesskey.c) over lesskey_parse.c's tables.
+ * less's `lesskey` program (lesskey.c) over lesskey_parse.c's tables.
  *
- * NOT exposed as a command. og ships `lesskey` as a separate program
+ * NOT exposed as a command. less ships `lesskey` as a separate program
  * and this pager deliberately does not: an npm install has no business
  * putting a compiler on anyone's PATH, and a source file is the better
  * thing to keep anyway. It exists for --edit-lesskey, which has to
  * write a binary back where it found one.
  *
  * It is a PORT, not a re-invention - the byte layout, the escape
- * handling and the error messages all follow og, and the tests compare
+ * handling and the error messages all follow less, and the tests compare
  * its output against the real `lesskey` binary byte for byte.
  */
 
-/** Where a parse error goes; --edit-lesskey shows them like og does. */
+/** Where a parse error goes; --edit-lesskey shows them like less does. */
 export interface CompileResult {
   /** The compiled file, or null when nothing could be written. */
   data: Buffer | null;
@@ -43,7 +43,7 @@ const FILE_TRAILER = [0x45, 0x6E, 0x64];      // "End"
 
 const isSpace = (c: string | undefined): boolean => c === ' ' || c === '\t';
 
-/** og's SK blob: the marker, the key, then 6 1 1 1. */
+/** less's SK blob: the marker, the key, then 6 1 1 1. */
 const skBlob = (code: number): number[] =>
   [SK_SPECIAL_KEY, code, 6, 1, 1, 1];
 
@@ -55,7 +55,7 @@ const skBlob = (code: number): number[] =>
  * ^K goes the same way (the tstr_control_k static), because the raw
  * byte is what opens a blob and could not mean itself.
  *
- * @param xlate - False inside an extra string or a variable, where og
+ * @param xlate - False inside an extra string or a variable, where less
  *   leaves `\k` alone and a control byte stays literal.
  */
 function tstr(
@@ -90,7 +90,7 @@ function tstr(
     }
 
     switch (e) {
-      // \b is the only one og does NOT run through its control-K
+      // \b is the only one that less does NOT run through its control-K
       // check: it returns the string "\b" directly (lesskey_parse.c)
       case 'b': return { bytes: [0x08], next: at + 2 };
       case 'e': return literal('\x1B', at + 2);
@@ -132,13 +132,13 @@ function tstr(
   return literal(c ?? '', at + 1);
 }
 
-/** Skips spaces and tabs, like og's skipsp. */
+/** Skips spaces and tabs, like less's skipsp. */
 function skipSp(line: string, at: number): number {
   while (isSpace(line[at])) at++;
   return at;
 }
 
-/** The three tables a compiled file holds, as og's lesskey_tables. */
+/** The three tables a compiled file holds, as less's lesskey_tables. */
 interface Tables {
   command: number[];
   edit: number[];
@@ -181,7 +181,7 @@ function compileCmdLine(
 
   if (action === undefined) {
     error(`unknown action: "${name}"`);
-    // og stores A_INVALID and carries on, so the rest of the file
+    // less stores A_INVALID and carries on, so the rest of the file
     // still compiles and the key is dead rather than missing
     action = 100;
   }
@@ -205,7 +205,7 @@ function compileCmdLine(
 }
 
 /**
- * A `NAME = VALUE` line, like parse_varline. `+=` is og's "rather ugly
+ * A `NAME = VALUE` line, like parse_varline. `+=` is less's "rather ugly
  * way": it erases the previous value's terminating NUL and appends,
  * ignoring the name it was given.
  */
@@ -262,7 +262,7 @@ function cleanLine(line: string): string {
   return s;
 }
 
-/** A section length, as og's fputint: two base-64 bytes, low first. */
+/** A section length, as less's fputint: two base-64 bytes, low first. */
 function putInt(out: number[], value: number): void {
   out.push(value % KRADIX, Math.floor(value / KRADIX) % KRADIX);
 }
@@ -272,7 +272,7 @@ function putInt(out: number[], value: number): void {
  *
  * @param text - The source, as the editor left it.
  * @param version - The running less version, for #version lines.
- * @returns The bytes, and any messages og's parser would have printed.
+ * @returns The bytes, and any messages less's parser would have printed.
  */
 export function compileLesskey(text: string, version: number): CompileResult {
   const tables: Tables = { command: [], edit: [], variable: [] };
@@ -284,7 +284,7 @@ export function compileLesskey(text: string, version: number): CompileResult {
   for (const raw of text.split('\n')) {
     lineNumber++;
 
-    // og's line is a C string: everything past a NUL is invisible
+    // less's line is a C string: everything past a NUL is invisible
     const nul = raw.indexOf('\0');
     let line = nul >= 0 ? raw.slice(0, nul) : raw;
 
@@ -354,7 +354,7 @@ function versionLine(
   version: number,
   error: (message: string) => void
 ): string | null {
-  // og reads the OPERATOR first and the number second, so a bad
+  // less reads the OPERATOR first and the number second, so a bad
   // number is reported as a bad number even when the operator was
   // fine (version_line, lesskey_parse.c)
   const rest = line.slice('#version'.length).replace(/^[ \t]+/, '');

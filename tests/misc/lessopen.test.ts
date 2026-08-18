@@ -115,7 +115,7 @@ describe('$LESSOPEN temp file form', () => {
   });
 });
 
-describe('$LESSOPEN "-" forms feed the pseudo-file, like og', () => {
+describe('$LESSOPEN "-" forms feed the pseudo-file, like less', () => {
   it('pipes the in-memory content through the preprocessor', () => {
     process.env.LESSOPEN = '|-cat %s | tr a-z A-Z';
 
@@ -135,7 +135,7 @@ describe('$LESSOPEN "-" forms feed the pseudo-file, like og', () => {
 });
 
 describe('$LESSOPEN validation and -L', () => {
-  it('requires exactly one %s, like og', () => {
+  it('requires exactly one %s, like less', () => {
     process.env.LESSOPEN = '|cat';
 
     expect(open()).toEqual(['one', 'two']);
@@ -165,7 +165,7 @@ describe('$LESSCLOSE', () => {
     expect(files.list[0].alt).toBeUndefined();
   });
 
-  it('rejects more than two %s markers, like og', () => {
+  it('rejects more than two %s markers, like less', () => {
     process.env.LESSOPEN = '|tr a-z A-Z < %s';
     process.env.LESSCLOSE = 'echo %s %s %s';
 
@@ -184,7 +184,7 @@ describe('$LESSCLOSE', () => {
 
     try {
       initSecure();
-      // og's close_altfile returns on SF_LESSOPEN before it even
+      // less's close_altfile returns on SF_LESSOPEN before it even
       // reads $LESSCLOSE, so the malformed value goes unreported
       closeAltFile('-', orig);
     } finally {

@@ -88,7 +88,7 @@ export function onShellHistRecord(fn: (entry: string) => void): void {
   recordHook = fn;
 }
 
-/** Registers the history modified-flag raiser (og's cmd_accept). */
+/** Registers the history modified-flag raiser (less's cmd_accept). */
 export function onShellHistTouch(fn: () => void): void {
   touchHook = fn;
 }
@@ -114,7 +114,7 @@ export const pipeMark = {
   num: '',
   /** Resolved rows: [first] or [first, second]. */
   rows: [] as number[],
-  /** The same marks as og POSITIONs, when the input is seekable. */
+  /** The same marks as less POSITIONs, when the input is seekable. */
   positions: [] as (number | undefined)[],
 };
 
@@ -166,7 +166,7 @@ export function resetMisc(): void {
  * Stores the log file named by -o/-O in $LESS, like opt_o at INIT
  * setting namelogfile.
  *
- * @param name - The log file name, kept unexpanded like og.
+ * @param name - The log file name, kept unexpanded like less.
  * @param force - True for -O: overwrite without asking.
  */
 export function setStartupLogFile(name: string, force: boolean): void {
@@ -174,7 +174,7 @@ export function setStartupLogFile(name: string, force: boolean): void {
 }
 
 /**
- * Opens the $LESS-named log file once the session starts, like og's
+ * Opens the $LESS-named log file once the session starts, like less's
  * use_logfile when the input pipe opens: regular files are not logged,
  * an existing file raises the overwrite query, and success is silent.
  *
@@ -186,7 +186,7 @@ export function takeStartupLog(): { name: string, force: boolean } | null {
 
   if (!log) return null;
 
-  // og's CH_CANSEEK guard: seekable input never logs (edit.c:961)
+  // less's CH_CANSEEK guard: seekable input never logs (edit.c:961)
   const entry = files.list[files.index];
   if (!entry || entry.path !== '-') return null;
 
@@ -194,7 +194,7 @@ export function takeStartupLog(): { name: string, force: boolean } | null {
 }
 
 /**
- * Appends newly streamed lines to the active log, like og's ch.c
+ * Appends newly streamed lines to the active log, like less's ch.c
  * writing the log file as each buffer is read from the pipe.
  *
  * @param lines - The decoded lines just added to the content.
@@ -205,7 +205,7 @@ export function appendLogLines(lines: string[]): void {
   try {
     fs.appendFileSync(logFile, lines.map(line => line + '\n').join(''));
   } catch {
-    // og writes blind after the open; a failed write is dropped
+    // less writes blind after the open; a failed write is dropped
   }
 }
 
@@ -221,7 +221,7 @@ export function startMiscInput(
   miscInput.text = '';
 
   // shell prompts carry the ml_shell history and, with the log file
-  // prompts, filename completion; `+cmd` has neither, like og
+  // prompts, filename completion; `+cmd` has neither, like less
   const shell = kind === '!' || kind === '#' || kind === '|';
 
   cmdOpen(miscPromptLabel(kind), {
@@ -385,7 +385,7 @@ export function pipeMarkKey(content: string[], key: string): boolean {
       const lnum = parseInt(pipeMark.num, 10);
       pipeMark.num = '';
 
-      // og calls find_pos(lnum) and complains only when THAT fails.
+      // less calls find_pos(lnum) and complains only when THAT fails.
       // session.content is the spooled window rather than the file, so
       // it bounds the line number only when there is no seekable
       // source to ask -- bounding by it always rejected every line
@@ -425,12 +425,12 @@ export function pipeMarkKey(content: string[], key: string): boolean {
     return false;
   }
 
-  // og special-cases '.' -- and the newline that just became one --
+  // less special-cases '.' -- and the newline that just became one --
   // as "pipe current screen": it takes the ':' and ';' marks TOGETHER
   // (command.c:2426) and hands pipe_pos both, so the two-mark branch
   // pipes exactly the visible rows. It is not the single '.' mark,
   // which is only the top line: reading it as one piped a single line
-  // where og pipes the whole screen.
+  // where less pipes the whole screen.
   if (pipeMark.stage === '' && c === '.') {
     const top = markRow(content, ':');
     const bot = markRow(content, ';');
@@ -495,14 +495,14 @@ export function getFirstCmd(): string {
 }
 
 /**
- * Stores the --cmd command, like og's opt_first_cmd_at_prompt.
+ * Stores the --cmd command, like less's opt_first_cmd_at_prompt.
  */
 export function setCmdAtPrompt(text: string): void {
   cmdAtPrompt = text;
 }
 
 /**
- * Consumes the --cmd command at the first prompt, like og's prompt()
+ * Consumes the --cmd command at the first prompt, like less's prompt()
  * ungetting first_cmd_at_prompt once and clearing it.
  */
 export function takeCmdAtPrompt(): string {
@@ -606,7 +606,7 @@ export function overwriteKey(
  *
  * @param content - Full content lines.
  * @param append - True to append instead of overwriting.
- * @param quiet - True to skip the success report, like og opening a
+ * @param quiet - True to skip the success report, like less opening a
  *                $LESS-named log file at startup.
  */
 export function writeLogFile(
@@ -627,7 +627,7 @@ export function writeLogFile(
     logFile = overwrite.file;
     if (!quiet) search.message = `Log file "${overwrite.file}"`;
   } catch {
-    // og's open-failure error, edit.c:1032
+    // less's open-failure error, edit.c:1032
     search.message = `Cannot write to "${overwrite.file}"`;
   }
 }
@@ -640,7 +640,7 @@ export function versionMessage(): void {
 }
 
 /**
- * Prints the version to stdout for -V in $LESS, like og's opt__V at
+ * Prints the version to stdout for -V in $LESS, like less's opt__V at
  * INIT printing and quitting before the pager starts.
  */
 export function printVersion(): void {

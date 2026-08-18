@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""og parity on a terminal with no capabilities at all (TERM=dumb).
+"""less parity on a terminal with no capabilities at all (TERM=dumb).
 
 The other sweeps all run on an xterm, and every bug this one exists to
 catch hid there:
 
   - -R colour was stripped, because the dumb painter stripped every
-    escape instead of letting og's empty attribute strings do it;
+    escape instead of letting less's empty attribute strings do it;
   - "...skipping..." printed over the FIRST screen, because a command
     line open before any paint (the "-" the startup error gate ungets)
     left a previous frame behind and made that first forw look like a
@@ -84,17 +84,18 @@ with tempfile.TemporaryDirectory() as tmp:
     bad = 0
 
     for groups, label, opts, piped in CASES:
-        og = f'{P}/less/less {opts}'.strip()
+        less = f'{P}/less/less {opts}'.strip()
         us = f'node {CLI} {opts}'.strip()
         shell = (f'cat {fixture} | %s' if piped else f'%s {fixture}')
 
-        a = run(shell % og, groups)
+        a = run(shell % less, groups)
         b = run(shell % us, groups)
         how = 'pipe' if piped else 'file'
 
         if a != b:
             bad += 1
-            print(f'DIFF {how:4} {opts:3} [{label}]  og={len(a)} ours={len(b)}')
+            print(f'DIFF {how:4} {opts:3} [{label}]  '
+                  f'less={len(a)} ours={len(b)}')
 
     print(f'dumb: {len(CASES) - bad}/{len(CASES)} identical')
 

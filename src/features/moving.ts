@@ -43,7 +43,7 @@ export const isFormFeed = (line: string): boolean =>
 /**
  * A cursor over display rows, parked on the bottom row of the screen.
  *
- * og's two forward-looking commands both start at the bottom edge and
+ * less's two forward-looking commands both start at the bottom edge and
  * step on from there -- the form-feed cap looking for the first
  * incoming \f line, newlineForward counting rows that end a file line
  * -- so both the walk down to the bottom and the stepping itself were
@@ -80,7 +80,7 @@ function bottomWalk(content: string[]): {
 }
 
 /**
- * Caps a forward scroll at og's --form-feed stop: forw() checks each
+ * Caps a forward scroll at less's --form-feed stop: forw() checks each
  * newly printed bottom line (forwback.c:366) and breaks with the \f
  * line as the LAST visible row on screen.
  */
@@ -99,7 +99,7 @@ export function ffCapForward(content: string[], offset: number): number {
 /**
  * How far a backward move may go before a form feed stops it.
  *
- * og's back() prints each newly exposed line at the TOP and breaks
+ * less's back() prints each newly exposed line at the TOP and breaks
  * after one that starts with \f (forwback.c:444), so the form feed
  * ends up the first visible row. Jumps pass do_stop_on_form_feed
  * FALSE and never stop.
@@ -133,13 +133,13 @@ export function ffCapBackward(content: string[], offset: number): number {
 }
 
 /**
- * og's attnpos for -w/-W: every move command first clears the old
+ * less's attnpos for -w/-W: every move command first clears the old
  * highlight (cmd_exec's clear_attn, command.c:126), then remembers
  * the first unread line under its own condition (command.c:1660+).
  * Forward marks the old bottompos - the first row below the screen.
  *
  * @param content - Full content lines.
- * @param cond - The og per-command show_attn condition.
+ * @param cond - The less per-command show_attn condition.
  */
 function setAttnForward(content: string[], cond: boolean): void {
   config.attnRow = -1;
@@ -154,7 +154,7 @@ function setAttnForward(content: string[], cond: boolean): void {
  * toppos-1 - the line just above the old top, or the same line's
  * earlier part when the top sat mid-line - guarded off at BOF.
  *
- * @param cond - The og per-command show_attn condition.
+ * @param cond - The less per-command show_attn condition.
  */
 function setAttnBackward(cond: boolean): void {
   config.attnRow = -1;
@@ -168,14 +168,14 @@ function setAttnBackward(cond: boolean): void {
 }
 
 /**
- * Records a forward shortfall as og's blocked read: forw_line on a
+ * Records a forward shortfall as less's blocked read: forw_line on a
  * live pipe waits for the missing lines instead of belling — the
  * owed rows go to pendingScroll and the pipe machinery advances the
  * view as data arrives.
  *
  * @param owed - Display rows the move still wants.
  * @param moved - True when this call already advanced the view
- *   (og's nlines > 0, suppressing the eof_bell).
+ *   (less's nlines > 0, suppressing the eof_bell).
  * @returns True when the wait was recorded (live pipe).
  */
 function streamingWait(owed: number, moved: boolean): boolean {
@@ -195,7 +195,7 @@ function streamingWait(owed: number, moved: boolean): boolean {
  */
 /**
  * Display rows between the top and the EOF anchor, 0 once it is
- * reached — the count og's forward() would have let forw() draw.
+ * reached — the count less's forward() would have let forw() draw.
  *
  * Walks with the same two primitives as the clamped loop below
  * (nextRowOffset within a line, row++ between them) rather than
@@ -246,33 +246,33 @@ export function lineForward(
 
   // a stale EOF: blank rows pad the top while undisplayed lines sit
   // below the viewport (a fill abort followed by more pipe data) —
-  // og's forw simply scrolls, consuming the blanks, so the EOF
+  // less's forw simply scrolls, consuming the blanks, so the EOF
   // branch must not run its bell or blocked wait
   if (config.blankTop && !fitsViewport(content)) mode.EOF = false;
 
   if (mode.EOF && !ignoreEOF) {
-    // a live pipe never bells here: og's position(BOTTOM_PLUS_ONE)
+    // a live pipe never bells here: less's position(BOTTOM_PLUS_ONE)
     // is real on a full screen, so forw's read simply blocks for
     // more data (and -e stays off — eof_displayed needs ch_length)
     if (streamingWait(offset, false)) return;
 
     // -e/-E move to the next file (or quit) on a forward move at
-    // end-of-file, like og's forward() checking get_quit_at_eof
+    // end-of-file, like less's forward() checking get_quit_at_eof
     // before the eof bell
     if (eofForwardHook && eofForwardHook()) return;
 
-    // og's forw still reads here: a completed pipe returns EOI and
+    // less's forw still reads here: a completed pipe returns EOI and
     // only now learns its length, lighting up (END). A squished
     // screen stays squished: forward() bells and returns BEFORE
     // forw()'s squish_check when BOTTOM_PLUS_ONE is null (the short
-    // screen's position table ends early) — verified against og's
+    // screen's position table ends early) — verified against less's
     // bytes, which repaint nothing here
     revealPipeEnd();
     ringBell('eof');
     return;
   }
 
-  // nothing to scroll (a -z window of zero or less): og's forw runs
+  // nothing to scroll (a -z window of zero or less): less's forw runs
   // zero iterations and rings the eof bell on nlines == 0
   if (offset <= 0) {
     ringBell('eof');
@@ -289,7 +289,7 @@ export function lineForward(
     config.blankTop -= consumed;
     offset -= consumed;
 
-    // revealing the whole tail latches (END) again, like og's forw
+    // revealing the whole tail latches (END) again, like less's forw
     // reaching end-of-input at the bottom line
     mode.EOF = fitsViewport(content);
 
@@ -300,12 +300,12 @@ export function lineForward(
   // before knowing whether EOF lands mid-screen ("not really
   // desirable ... but we don't yet know"), so the view runs over EOF
   // with null lines below, stopping once the last file line reaches
-  // the top, like og's forw top_scroll branch forcing
+  // the top, like less's forw top_scroll branch forcing
   if (optClearRepaint() && offset >= config.window - 1) {
     ignoreEOF = true;
   }
 
-  // og's forw checks each newly printed BOTTOM line (forwback.c:366):
+  // less's forw checks each newly printed BOTTOM line (forwback.c:366):
   // the scroll stops with the \f line as the LAST visible row; jumps
   // pass do_stop_on_form_feed=FALSE and never stop
   if (optStopOnFormFeed()) offset = ffCapForward(content, offset);
@@ -318,14 +318,14 @@ export function lineForward(
     config.row = Math.min(target, ignoreEOF ? content.length - 1 : lastRow);
 
     // a move asking for more rows than the input has reads past the
-    // end, like og's forw hitting EOI on a partial screenful — or
+    // end, like less's forw hitting EOI on a partial screenful — or
     // blocking for the missing lines when the pipe still delivers
     if (config.row < target &&
         !streamingWait(target - config.row, config.row > startRow)) {
       revealPipeEnd();
     }
 
-    // og's forw unsquishes as soon as it actually paints: a forced
+    // less's forw unsquishes as soon as it actually paints: a forced
     // (ESC-SPACE, --past-eof) advance on the squished short first
     // paint fills the screen with null-line tildes; only clamped
     // bells keep the squish (forwback.c first_time branch)
@@ -341,7 +341,7 @@ export function lineForward(
   // forw walks the entries a backward move prepended before the grid
   // below resumes: add_forw_pos drops table[0] each row (position.c)
   //
-  // add_forw_pos is dumb in og too — it records a row that forw()
+  // add_forw_pos is dumb in less too — it records a row that forw()
   // already DECIDED to draw, and forward() bells at EOF before forw()
   // ever runs (forwback.c:481). So the anchor is the caller's job:
   // screenForward walks until the CONTENT runs out, which slides the
@@ -361,7 +361,7 @@ export function lineForward(
   if (offset <= 0) {
     if (mode.INIT) mode.INIT = false;
 
-    // the table walk can land exactly ON the anchor, and og's
+    // the table walk can land exactly ON the anchor, and less's
     // eof_displayed answers from the position table the moment the
     // last line is on screen — without this the next press finds
     // mode.EOF still false and steps past it
@@ -410,7 +410,7 @@ export function lineForward(
     // a shifted row can step OVER the anchor, and then the last
     // screenful is still where it is - but only if this move actually
     // stepped. A top that was ALREADY past the anchor must stay put:
-    // og's forward() bells and returns (forwback.c:481) and never
+    // less's forward() bells and returns (forwback.c:481) and never
     // moves the top BACKWARD to meet the clamp.
     if (moved > 0 && at > capAt) at = capAt;
 
@@ -424,7 +424,7 @@ export function lineForward(
 
   setTopOffset(content[row] ?? '', row, at);
 
-  // og's forw unsquishes when it actually paints (a forced advance
+  // less's forw unsquishes when it actually paints (a forced advance
   // fills the screen with null-line tildes); clamped bells keep it
   if (mode.INIT && (row !== fromRow || at !== fromOffset)) {
     mode.INIT = false;
@@ -450,7 +450,7 @@ export function lineBackward(
   offset: number,
   attn: boolean = true
 ): number {
-  // og's back() calls add_back_pos per row: back_line re-wraps from
+  // less's back() calls add_back_pos per row: back_line re-wraps from
   // the LINE's start and stops the moment it reaches the row that was
   // on top ("if (new_pos >= curr_pos) break", input.c), so the row it
   // exposes is bounded by the old screen while the rows below keep the
@@ -485,7 +485,7 @@ function lineBackwardFrom(
   if (config.row === 0 && config.subRow === 0 && config.subShift === 0) {
     if (mode.INIT) mode.INIT = false;
 
-    // --past-eof forces backward scrolls over BOF too, like og's
+    // --past-eof forces backward scrolls over BOF too, like less's
     // back() setting force on past_eof
     if (optPastEof() && offset > 0) {
       padBlankTop(content, offset);
@@ -496,7 +496,7 @@ function lineBackwardFrom(
     return offset;
   }
 
-  // og's back with nothing to scroll bells the same way (nlines == 0)
+  // less's back with nothing to scroll bells the same way (nlines == 0)
   if (offset <= 0) {
     ringBell('eof');
     return 0;
@@ -506,7 +506,7 @@ function lineBackwardFrom(
   // (v693, command.c:1715)
   if (attn) setAttnBackward(optShowAttn() === 2 && offset > 1);
 
-  // og's back() clamps at the header start: each line is checked
+  // less's back() clamps at the header start: each line is checked
   // through after_header_pos (forwback.c:426), so rows above the
   // header are unreachable by backward scrolls
   const floor = optHeader().lines > 0 ? optHeader().start : 0;
@@ -544,7 +544,7 @@ function lineBackwardFrom(
     return leftover;
   }
 
-  // og's back() is one rule repeated: back_line lands on the greatest
+  // less's back() is one rule repeated: back_line lands on the greatest
   // row start BELOW where it is, stepping onto the previous line's
   // last row when it is already at a line's beginning (input.c:358).
   // Walking it a row at a time is what makes a top part-way into a
@@ -624,12 +624,12 @@ export function forceLineBackward(
 }
 
 /**
- * Accumulates og's over-BOF null rows for a forced back.
+ * Accumulates less's over-BOF null rows for a forced back.
  */
 function padBlankTop(content: string[], leftover: number): void {
   const cap = Math.max(config.window - 2, 0);
 
-  // og's back bells when it cannot add a single line (nlines == 0):
+  // less's back bells when it cannot add a single line (nlines == 0):
   // the first file line has reached the bottom of the screen
   if (config.blankTop >= cap) {
     ringBell('eof');
@@ -641,7 +641,7 @@ function padBlankTop(content: string[], leftover: number): void {
 
   // (END) stays displayed while the rows past the tail are still
   // on screen, and clears once the tail slides below the bottom
-  // line, like og's eof_displayed checking the bottom position
+  // line, like less's eof_displayed checking the bottom position
   mode.EOF = fitsViewport(content);
 }
 
@@ -667,7 +667,7 @@ function displayRows(content: string[], cap: number): number {
 }
 
 /**
- * Scrolls forward by whole file lines (ESC-j), like og's to_newline
+ * Scrolls forward by whole file lines (ESC-j), like less's to_newline
  * forw: wrapped sub-rows always land on a line boundary.
  *
  * @param content - Full content lines.
@@ -687,7 +687,7 @@ export function newlineForward(content: string[], offset: number): void {
   // ESC-j shares A_F_NEWLINE's -W-with-count condition
   setAttnForward(content, optShowAttn() === 2 && offset > 1);
 
-  // og's to_newline counts at the BOTTOM edge (forwback.c:302): rows
+  // less's to_newline counts at the BOTTOM edge (forwback.c:302): rows
   // reveal from BOTTOM_PLUS_ONE and only ones ending their file line
   // decrement the count — wrap continuations ride free — so convert
   // the file-line count into the screen rows forw() would scroll
@@ -710,7 +710,7 @@ export function newlineForward(content: string[], offset: number): void {
 }
 
 /**
- * Scrolls backward by whole file lines (ESC-k), like og's to_newline
+ * Scrolls backward by whole file lines (ESC-k), like less's to_newline
  * back.
  *
  * @param content - Full content lines.
@@ -749,7 +749,7 @@ export function newlineBackward(content: string[], offset: number): void {
   }
 }
 
-// the -e forward-at-EOF handler, like og's forward() top: returns
+// the -e forward-at-EOF handler, like less's forward() top: returns
 // true when it consumed the move (next file edited, or quitting)
 let eofForwardHook: (() => boolean) | null = null;
 
@@ -762,7 +762,7 @@ export function onEofForward(fn: (() => boolean) | null): void {
  * Scrolls the view forward by a window size.
  *
  * - If `buffer` is a valid number, it overrides the default window size.
- * - Falls back to the -z scroll window (og's get_swindow) if `buffer`
+ * - Falls back to the -z scroll window (less's get_swindow) if `buffer`
  *   is invalid.
  * - If `ignoreEOF` is `true`, allows scrolling beyond (END) without clamping.
  *
@@ -792,7 +792,7 @@ export function windowForward(
  * Moves the view backward by one window.
  *
  * - If `buffer` is a valid number, uses it as the offset.
- * - Otherwise, uses the -z scroll window (og's get_swindow).
+ * - Otherwise, uses the -z scroll window (less's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
@@ -813,7 +813,7 @@ export function windowBackward(content: string[], buffer: string[]): void {
  * Sets a custom window size using the given `buffer`, and scrolls forward.
  *
  * - If `buffer` is a valid number, updates `config.setWindow` with it.
- * - Then scrolls forward by the -z scroll window (og's get_swindow).
+ * - Then scrolls forward by the -z scroll window (less's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
@@ -830,7 +830,7 @@ export function setWindowForward(content: string[], buffer: string[]): void {
  * Sets a custom window size using the given `buffer`, and scrolls backward.
  *
  * - If `buffer` is a valid number, updates `config.setWindow` with it.
- * - Then scrolls backward by the -z scroll window (og's get_swindow).
+ * - Then scrolls backward by the -z scroll window (less's get_swindow).
  *
  * @param content - The full content as an array of lines.
  * @param buffer - A string array that represents the number of lines to scroll.
@@ -894,7 +894,7 @@ export function setHalfWindowBackward(
  * @param buffer - Buffer containing scroll offset.
  */
 /**
- * og's horizontal shifts all end in screen_trashed(), so the next
+ * less's horizontal shifts all end in screen_trashed(), so the next
  * make_display repaints and eof_displayed re-reads
  * position(BOTTOM_PLUS_ONE) from the rebuilt table. That matters
  * because a shift CHANGES how many rows a line occupies: forw_line is
@@ -904,7 +904,7 @@ export function setHalfWindowBackward(
  * A source engine derives mode.EOF in its own sync(), and posRehead()
  * returns early when the top is already at a line start - so without
  * this the flag kept the value it had while the line was still
- * folded, and a one-line file read ":" where og says "(END)".
+ * folded, and a one-line file read ":" where less says "(END)".
  */
 function shifted(): void {
   hook.rebuildContent();
@@ -913,7 +913,7 @@ function shifted(): void {
 export function setHalfScreenRight(buffer: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
-  // og shifts only whole lines: pos_rehead first (command.c)
+  // less shifts only whole lines: pos_rehead first (command.c)
   posRehead();
 
   const count = bufferToNum(buffer);
@@ -931,7 +931,7 @@ export function setHalfScreenRight(buffer: string[]): void {
 export function setHalfScreenLeft(buffer: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
-  // og shifts only whole lines: pos_rehead first (command.c)
+  // less shifts only whole lines: pos_rehead first (command.c)
   posRehead();
 
   const count = bufferToNum(buffer);
@@ -953,7 +953,7 @@ export function setHalfScreenLeft(buffer: string[]): void {
 export function lastCol(content: string[]): void {
   if (mode.INIT) mode.INIT = false;
 
-  // og's A_RRSHIFT calls pos_rehead too (command.c:2493)
+  // less's A_RRSHIFT calls pos_rehead too (command.c:2493)
   posRehead();
 
   let maxWidth = 0;

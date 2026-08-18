@@ -9,7 +9,7 @@ import { opt } from './state';
 /**
  * Searches with JavaScript's own RegExp instead of the POSIX engine.
  *
- * NOT an og option — og has no such switch, because og has no such
+ * NOT a less option — less has no such switch, because less has no such
  * choice: it links whatever regcomp its libc ships and that is the end
  * of it. This exists so the two engines can be compared from one
  * binary, and because a JS RegExp is the faster of the two on patterns

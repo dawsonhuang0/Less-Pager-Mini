@@ -19,7 +19,7 @@ import { LtScreen } from '../lesstest/ltScreen';
  * ("|X\bX_\bc_\bo..." for the pipe command) is bold X then an
  * underlined "command", and used to come out bold throughout.
  *
- * The attribute strings here were captured from og (less/less) at
+ * The attribute strings here were captured from less (less/less) at
  * 24x80 with the same input.
  */
 const WIDTH = 20;
@@ -54,17 +54,17 @@ beforeEach(() => {
 
 describe('nroff overstrike runs', () => {
   it('keeps bold and underline apart across a boundary', () => {
-    // og: "Xcom" with attributes b u u u
+    // less: "Xcom" with attributes b u u u
     expect(attrsOf('X\bX_\bc_\bo_\bm')).toBe('buuu');
   });
 
   it('switches back from underline to bold', () => {
-    // og: "cXY" with attributes u b b
+    // less: "cXY" with attributes u b b
     expect(attrsOf('_\bcX\bXY\bY')).toBe('ubb');
   });
 
   it('alternates as many times as the line does', () => {
-    // og: "XcYo" with attributes b u b u
+    // less: "XcYo" with attributes b u b u
     expect(attrsOf('X\bX_\bcY\bY_\bo')).toBe('bubu');
   });
 

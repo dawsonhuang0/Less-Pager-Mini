@@ -19,7 +19,7 @@ for keys in CASES:
     while i<min(len(a),len(b)) and a[i]==b[i]: i+=1
     ok = a==b
     if not ok: bad+=1
-    print(f'{keys!r:14} og={len(a):5} ours={len(b):5} {"SAME" if ok else "DIFF@"+str(i)}')
+    print(f'{keys!r:14} less={len(a):5} ours={len(b):5} {"SAME" if ok else "DIFF@"+str(i)}')
     if not ok:
-        print('  og  :',esc(a[i-14:i+55])); print('  ours:',esc(b[i-14:i+55]))
+        print('  less  :',esc(a[i-14:i+55])); print('  ours:',esc(b[i-14:i+55]))
 print(f'{len(CASES)-bad}/{len(CASES)} identical')

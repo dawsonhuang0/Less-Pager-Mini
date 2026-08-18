@@ -1,6 +1,6 @@
 import { strWidth } from 'char-width';
 
-// og's cmdbuf.c measures against sc_width, the whole terminal: the
+// less's cmdbuf.c measures against sc_width, the whole terminal: the
 // command line is the BOTTOM row, which never carries the -N/-J
 // gutter that config.screenWidth has had taken out of it
 import { fullScreenWidth } from "../options/state";
@@ -24,7 +24,7 @@ type EditAction =
   | 'complete' | 'reverseComplete' | 'expand' | 'noAction';
 
 // the edit-key table, like decode.c's edittable: hardwired ESC
-// combos plus the xterm sequences og reads from terminfo
+// combos plus the xterm sequences less reads from terminfo
 const EDIT_KEYS: Record<string, EditAction> = {
   '\t': 'complete',
   '\x0F': 'reverseComplete', // ^O BACKTAB
@@ -75,7 +75,7 @@ const EDIT_KEYS: Record<string, EditAction> = {
   '\x1B[2~': 'noAction',
 };
 
-// og's CMDBUF_SIZE guard
+// less's CMDBUF_SIZE guard
 const CMDBUF_LIMIT = 2000;
 
 const segmenter = new Intl.Segmenter();
@@ -137,7 +137,7 @@ const clusters = (text: string): string[] =>
 
 /**
  * A cluster's display form, like cmd_step_common: caret notation for
- * controls (ESC spelled out, like og's prchar), everything else as-is.
+ * controls (ESC spelled out, like less's prchar), everything else as-is.
  */
 export function stepText(step: string): string {
   const code = step.charCodeAt(0);
@@ -350,7 +350,7 @@ function cmdIchar(text: string): CmdResult {
   }
 
   // recluster the whole line so combining marks merge with the
-  // cluster before them, like og's zero-width composing chars
+  // cluster before them, like less's zero-width composing chars
   const before = cmd.steps.slice(0, cmd.cur).join('');
   const after = cmd.steps.slice(cmd.cur).join('');
 
@@ -419,7 +419,7 @@ function cmdUpdown(dir: -1 | 1): CmdResult {
 
   const prefix = cmd.steps.slice(0, cmd.updownMatch).join('');
 
-  // og's mlist is circular with a sentinel: walking off either end
+  // less's mlist is circular with a sentinel: walking off either end
   // stops there, but DOWN from a fresh prompt wraps to the oldest
   const sentinel = cmd.history.length;
   let pos = cmd.histPos;
@@ -474,17 +474,17 @@ function suffixMatch(str: string, goal: string): number {
   return 0;
 }
 
-// og collects at most this many chars for one command (MAX_CMDLEN)
+// less collects at most this many chars for one command (MAX_CMDLEN)
 const MAX_CMDLEN = 16;
 
 /**
  * Decodes an edit key, like editchar over cmd_decode: the erase and
- * kill characters first, then og's SUFFIX matching — the collected
+ * kill characters first, then less's SUFFIX matching — the collected
  * sequence resolves when its tail equals a whole table entry (any
  * garbage before it is discarded), stays pending while its tail is a
  * proper prefix of one, and otherwise inserts its first char and
  * replays the rest like CC_PASS + ungetcc. This is why an ESC flood
- * shows nothing until a following key settles it, like og.
+ * shows nothing until a following key settles it, like less.
  */
 function editKey(key: string): Decoded {
   if (!cmd.prefix) {
@@ -520,7 +520,7 @@ function editKey(key: string): Decoded {
       return { kind: 'pending' };
     }
 
-    // og's editchar stops collecting at MAX_CMDLEN and the tail is
+    // less's editchar stops collecting at MAX_CMDLEN and the tail is
     // simply lost: only the first char inserts
     cmd.prefix = '';
     return { kind: 'insert', text: candidate[0] };
@@ -547,7 +547,7 @@ export function cmdChar(key: string): CmdResult {
   if (decoded.kind === 'pending') return 'ok';
 
   if (decoded.kind === 'insert') {
-    // og's cmd_edit default runs not_in_completion before CC_PASS
+    // less's cmd_edit default runs not_in_completion before CC_PASS
     cmd.inCompletion = false;
     return cmdIchar(decoded.text);
   }
@@ -595,7 +595,7 @@ export function cmdChar(key: string): CmdResult {
     case 'up':
     case 'down':
       notInCompletion();
-      // og rejects history actions at history-less prompts
+      // less rejects history actions at history-less prompts
       if (!cmd.history) {
         ringBell();
         return 'ok';

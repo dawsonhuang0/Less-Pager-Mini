@@ -98,7 +98,7 @@ describe('-D option', () => {
       COLOR_RESET);
   });
 
-  it('reports og error messages for bad input', () => {
+  it('reports less error messages for bad input', () => {
     toggle('-DZx\x0D');
     expect(search.message).toBe("Invalid color specifier 'Z'");
 
@@ -184,7 +184,7 @@ describe('color application', () => {
   });
 });
 
-describe('lowercase -D types without --use-color, like og', () => {
+describe('lowercase -D types without --use-color, like less', () => {
   it('recolors standout-rendered text once -Ds is set', () => {
     expect(setColor('s9.7')).toBeNull();
     const out = colored('search', 'hit', INVERSE_ON, INVERSE_OFF);

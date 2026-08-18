@@ -11,7 +11,7 @@ import { markLesskeyViewSession, isLesskeyViewSession,
  * WITH a file it opens over it, the way the runtime form opens over a
  * live session: quitting the view leaves the session on the file that
  * was asked for. That is deliberately unlike -?, whose help IS the
- * input file and whose q quits (og's dohelp registering
+ * input file and whose q quits (less's dohelp registering
  * FAKE_HELPFILE).
  */
 const text = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
@@ -67,7 +67,7 @@ describe('--view-lesskey given with a file', () => {
 
   it('shows the name and the file count on the view\'s first prompt',
     async () => {
-      // og's whole "?n?f%f .?m(%T %i of %m) .." group hangs off ?n,
+      // less's whole "?n?f%f .?m(%T %i of %m) .." group hangs off ?n,
       // "first prompt in a new file", and pr_string clears new_file as
       // it builds a prompt (prompt.c:630). So a second render of the
       // same screen shows neither - which is what an extra render in

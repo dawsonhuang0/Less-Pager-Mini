@@ -70,13 +70,13 @@ export interface FileEntry {
   /** False while a pipe's length reads as unknown, like ch_length()
    *  returning NULL_POSITION before ch has read to EOF. */
   sizeKnown: boolean;
-  /** True once the entry opened successfully, like og's opened():
+  /** True once the entry opened successfully, like less's opened():
    *  a re-open skips the binary file confirmation. */
   everOpened?: boolean;
-  /** True while a pipe is still delivering data, like og's ch layer
+  /** True while a pipe is still delivering data, like less's ch layer
    *  before read() returns end-of-file. */
   streaming?: boolean;
-  /** Early pipe data recycled away under memory pressure, like og's
+  /** Early pipe data recycled away under memory pressure, like less's
    *  ch_addbuf failure reusing the oldest buffer: these lines and
    *  bytes are gone but still count in line numbers and offsets. */
   discardedLines?: number;
@@ -86,9 +86,9 @@ export interface FileEntry {
   /** The $LESSOPEN replacement name, like ifile.c's altfilename. */
   alt?: string;
   /** A failed pipe preprocessor's message, reported at close like
-   *  og's close_altfile (edit.c:288). */
+   *  less's close_altfile (edit.c:288). */
   preprocError?: string;
-  /** Where the "-" entry's spooled standard input lives. og keeps fd0
+  /** Where the "-" entry's spooled standard input lives. less keeps fd0
    *  open with CH_KEEPOPEN and buffers it in ch; the spool is our ch,
    *  and it makes the entry an ordinary growing file to everything
    *  downstream. */
@@ -199,11 +199,11 @@ export function trimExamineHistory(length: number): void {
  * @param lines - The content to page.
  */
 export function initContent(lines: string[]): void {
-  // new content, new screen: og's position table describes rows of the
+  // new content, new screen: less's position table describes rows of the
   // file it was filled from, so it cannot outlive it (pos_clear)
   config.screen = [];
 
-  // the SAME entry when there already is one: og's stdin ifile is
+  // the SAME entry when there already is one: less's stdin ifile is
   // opened once and outlives every read, and a mark holds the entry
   // itself - handing out a new object for the same pseudo-file would
   // quietly orphan every mark set before it
@@ -222,7 +222,7 @@ export function initContent(lines: string[]): void {
   entry.lines = lines;
   entry.size = byteOffset(lines, lines.length) - 1;
   // a pipe's length is unknown until a read returns EOI —
-  // --file-size runs that read up front (og's edit.c scan_eof),
+  // --file-size runs that read up front (less's edit.c scan_eof),
   // which reveals the size through the pipe machinery itself
   entry.sizeKnown = false;
 
@@ -250,7 +250,7 @@ export function makeFileList(paths: string[]): FileEntry[] {
     path,
     lines: null,
     size: 0,
-    // regular files are seekable: og knows their length at once
+    // regular files are seekable: less knows their length at once
     sizeKnown: true,
     saved: null,
   }));
@@ -268,7 +268,7 @@ export function initFiles(paths: string[]): void {
 
 /**
  * The `"X" may be a binary file.  See it anyway?` confirmation state,
- * like og's edit query: loadFile raises `request`, and the caller
+ * like less's edit query: loadFile raises `request`, and the caller
  * either answers synchronously (startup) or arms the `pending` prompt
  * answered with y/Y (runtime).
  */
@@ -280,7 +280,7 @@ export const binaryConfirm = {
 };
 
 /**
- * True when a file's first 256 bytes look binary, like og's bin_file:
+ * True when a file's first 256 bytes look binary, like less's bin_file:
  * malformed UTF-8 and IS_BINARY_CHAR chars count, ANSI sequences skip
  * under -R, and more than 5 binary characters qualify.
  */
@@ -306,7 +306,7 @@ export function binFile(bytes: Buffer): boolean {
 }
 
 /**
- * og's bad_file and isatty checks, ahead of the open itself.
+ * less's bad_file and isatty checks, ahead of the open itself.
  *
  * @returns True when the file may be opened, false with a message
  *   set; a stat failure throws for the caller's errno report.
@@ -315,7 +315,7 @@ function statGuard(path: string): boolean {
   const stat = fs.statSync(path);
 
   // -f skips the directory guard and lets the read report the OS
-  // error, like og's force_open bypassing bad_file's is_dir check
+  // error, like less's force_open bypassing bad_file's is_dir check
   if (stat.isDirectory() && !opt.forceOpen) {
     search.message = `${path} is a directory`;
     return false;
@@ -323,7 +323,7 @@ function statGuard(path: string): boolean {
 
   // bad_file's second guard is S_ISREG, not isatty: EVERY non-regular
   // file is refused with the same message - devices, fifos, sockets
-  // alike (filename.c:1119). og's "is a terminal" message belongs to a
+  // alike (filename.c:1119). less's "is a terminal" message belongs to a
   // later, different check (edit.c:582), which only ever sees a
   // descriptor bad_file did not screen: standard input
   if (!stat.isFile() && !opt.forceOpen) {
@@ -335,14 +335,14 @@ function statGuard(path: string): boolean {
 }
 
 /**
- * Opens an entry the way a NON-terminal session needs it, like og
+ * Opens an entry the way a NON-terminal session needs it, like less
  * reaching cat_file through the same edit_ifile every session uses.
  *
  * $LESSOPEN applies with output on a pipe exactly as it does on a
  * screen (main.c:376 runs edit_first before the cat loop), but the
  * copy that follows is byte for byte - ch_forw_get, no line
  * processing - so a pipe preprocessor writes straight to `out` and
- * anything else hands back a path to stream. og's binary-file
+ * anything else hands back a path to stream. less's binary-file
  * question is gated on is_tty and never asked here.
  *
  * @param index - Entry index in the file list.
@@ -369,7 +369,7 @@ export async function openForCat(
     return { path: alt.path };
   }
 
-  // og's edit_ifile takes the name "-" to mean standard input, on the
+  // less's edit_ifile takes the name "-" to mean standard input, on the
   // descriptor it already has and with CH_KEEPOPEN so it is never
   // closed and reopened (edit.c:516). bad_file never sees it
   if (entry.path === '-') {
@@ -412,7 +412,7 @@ export function loadFile(index: number): string[] | null {
 
   if (entry.lines) return entry.lines;
 
-  // a re-open replaces any previous $LESSOPEN product, like og's edit
+  // a re-open replaces any previous $LESSOPEN product, like less's edit
   // closing the old alt file first
   closeAlt(entry);
 
@@ -425,7 +425,7 @@ export function loadFile(index: number): string[] | null {
     entry.alt = alt.alt;
     entry.preprocError = alt.preprocError;
 
-    // a pipe-form $LESSOPEN ("|cmd") feeds a pipe whose length og
+    // a pipe-form $LESSOPEN ("|cmd") feeds a pipe whose length less
     // does not know; the file-replacement form is a seekable file
     entry.sizeKnown = alt.alt !== '-';
     entry.everOpened = true;
@@ -442,7 +442,7 @@ export function loadFile(index: number): string[] | null {
 
     const bytes = fs.readFileSync(entry.path);
 
-    // og asks before opening what looks like a binary file, unless
+    // less asks before opening what looks like a binary file, unless
     // -f, a previous open, or a non-tty session (edit.c's bin_file)
     if (!opt.forceOpen && !entry.everOpened && keyboard().isTTY &&
         binFile(bytes)) {
@@ -451,7 +451,7 @@ export function loadFile(index: number): string[] | null {
       return null;
     }
 
-    // bytes decode through the charset, like og's chardef classes:
+    // bytes decode through the charset, like less's chardef classes:
     // invalid UTF-8 bytes survive as markers for $LESSBINFMT
     const data = decodeContent(bytes);
     entry.size = fs.statSync(entry.path).size;
@@ -467,9 +467,9 @@ export function loadFile(index: number): string[] | null {
 
     return lines;
   } catch (error) {
-    // -f forced the open past bad_file: og's read then fails
+    // -f forced the open past bad_file: less's read then fails
     // (EISDIR) and the pager runs on the empty file, with
-    // prompt_message reporting og's "read error"
+    // prompt_message reporting less's "read error"
     if (opt.forceOpen && stated) {
       search.message = 'read error';
       entry.size = 0;
@@ -485,7 +485,7 @@ export function loadFile(index: number): string[] | null {
 
 /**
  * Runs $LESSCLOSE for an entry's $LESSOPEN product and forgets it,
- * like og's close_altfile when a file is left.
+ * like less's close_altfile when a file is left.
  */
 export function closeAlt(entry: FileEntry | undefined): void {
   if (!entry || !entry.alt) return;
@@ -547,7 +547,7 @@ export function indexFileTarget(n: number): number | null {
  * @param filePath - Path of the file just opened.
  */
 export function addExamineHistory(filePath: string): void {
-  // og shell_quotes the entry (edit.c:683), never the -" pair on a
+  // less shell_quotes the entry (edit.c:683), never the -" pair on a
   // shell with an escape char
   const name = shellQuote(filePath);
   if (!name) return;
@@ -640,7 +640,7 @@ export function examineKey(key: string): 'run' | 'pending' | 'cancel' {
 export function expandExamineList(text: string): string[] {
   const names: string[] = [];
 
-  // the word keeps its quotes here: og hands the quoted word to
+  // the word keeps its quotes here: less hands the quoted word to
   // lglob and shell_unquotes what comes back (edit.c:728), which is
   // the only reason a name with spaces survives the shell
   for (const word of splitWordsRaw(fexpand(text))) {
@@ -676,7 +676,7 @@ export function fexpand(text: string): string {
       : previousPath;
 
     // with no file to substitute, the character stays literal;
-    // og shell_quotes the substituted name (xcpy_filename)
+    // less shell_quotes the substituted name (xcpy_filename)
     expanded += name === null ? char : shellQuote(name);
   }
 
@@ -687,14 +687,14 @@ export function fexpand(text: string): string {
  * Splits a filename list on unquoted spaces, like init_textlist: the
  * -" quote pair groups words and the meta escape (LESSMETAESCAPE,
  * default backslash) protects the next character; both stay in the
- * word for unquoteWord, like og deferring to shell_unquote.
+ * word for unquoteWord, like less deferring to shell_unquote.
  */
 function splitWords(text: string): string[] {
   return splitWordsRaw(text).map(unquoteWord);
 }
 
 /**
- * og's init_textlist (edit.c:63): unquoted spaces become word
+ * less's init_textlist (edit.c:63): unquoted spaces become word
  * separators and NOTHING ELSE CHANGES - the quotes stay on the word.
  *
  * That is what carries a name with spaces safely through lglob: the
@@ -807,31 +807,31 @@ export function expandHomeEnv(word: string): string {
  * @param pattern - The pattern to expand.
  */
 export function glob(pattern: string): string[] {
-  // og's caller shell_unquotes whatever lglob hands back, expanded
+  // less's caller shell_unquotes whatever lglob hands back, expanded
   // or not, so every path out of here owes an unquoted name
   const plain = unquoteWord(pattern);
 
   // like lglob: expansion is disabled under LESSSECURE
   if (!secureAllow('glob')) return [plain];
 
-  // og's lglob on unix does NOT glob. It hands the pattern to $SHELL
+  // less's lglob on unix does NOT glob. It hands the pattern to $SHELL
   // and lets the shell expand it (filename.c:750, the HAVE_POPEN
   // branch); glob(3) appears exactly once in all of less, guarded by
   // `#if MSDOS_COMPILER==DJGPPC` (lglob.h:34).
   //
-  // That is why "[[:upper:]]*" and "{a,b}" expand in og, and why no
+  // That is why "[[:upper:]]*" and "{a,b}" expand in less, and why no
   // in-process implementation can match it: the answer depends on
   // WHICH shell the user runs, down to the setopts its startup file
   // applies to a non-interactive one.
   //
   // There is no fast path for a pattern without metacharacters
-  // either - og shells out for every name it is given.
+  // either - less shells out for every name it is given.
   if (!isWindows && !optNoShell()) {
     const expanded = shellExpand(pattern);
     return expanded !== null && expanded.length ? expanded : [plain];
   }
 
-  // Windows has no such delegation: og walks the directory itself
+  // Windows has no such delegation: less walks the directory itself
   // through _findfirst/_findnext (lglob.h:61), which is DOS wildcard
   // matching - "*" and "?" only, case-insensitive, no bracket
   // expressions. The walk below is neither that nor the shell; it is
@@ -875,13 +875,13 @@ export function glob(pattern: string): string[] {
 }
 
 /**
- * og's lglob shell pipeline (filename.c:750): build a command, run it
+ * less's lglob shell pipeline (filename.c:750): build a command, run it
  * through `$SHELL -c`, read back the names the shell expanded.
  *
- * og runs `lessecho`, whose entire job is to quote those names so
+ * less runs `lessecho`, whose entire job is to quote those names so
  * init_textlist can split them on spaces again. We prefer the real
  * binary where it exists, so a user's $LESSECHO is honoured and the
- * quoting round trip is og's own. Where it is missing - og simply
+ * quoting round trip is less's own. Where it is missing - less simply
  * fails to expand at all then - the same shell reports the same names
  * NUL-delimited instead, which needs no quoting to survive.
  *
@@ -889,7 +889,7 @@ export function glob(pattern: string): string[] {
  * @returns The expanded names, or null when the shell produced none.
  */
 function shellExpand(pattern: string): string[] | null {
-  // og: $LESSECHO, else LIBEXECDIR/lessecho, else "lessecho" on PATH
+  // less: $LESSECHO, else LIBEXECDIR/lessecho, else "lessecho" on PATH
   const lessecho = lgetenv('LESSECHO') || 'lessecho';
   const { open, close } = optQuotes();
   const escape = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
@@ -913,7 +913,7 @@ function shellExpand(pattern: string): string[] | null {
   return raw.split('\0').filter(name => name !== '');
 }
 
-/** One command through the shell, like og's shellcmd + readfd. */
+/** One command through the shell, like less's shellcmd + readfd. */
 function runShell(cmd: string): string | null {
   const [shell, args] = shellArgv(cmd);
 
@@ -921,11 +921,11 @@ function runShell(cmd: string): string | null {
     const result = spawnSync(shell, args, { encoding: 'utf8' });
     const text = typeof result.stdout === 'string' ? result.stdout : '';
 
-    // og: `if (*gfilename == '\0') { return (filename); }` - no
+    // less: `if (*gfilename == '\0') { return (filename); }` - no
     // output means the name comes back unexpanded
     return text.replace(/\n+$/, '') || null;
   } catch {
-    // og: `if (fd == NULL) return (filename)` - the pipe never opened
+    // less: `if (fd == NULL) return (filename)` - the pipe never opened
     return null;
   }
 }
@@ -1026,7 +1026,7 @@ function buildCompletions(): boolean {
 
   cmd.inCompletion = true;
   completion.wordStart = start;
-  // og shell_quotes each expanded name (lglob, filename.c:665)
+  // less shell_quotes each expanded name (lglob, filename.c:665)
   const separator = lgetenv('LESSSEPARATOR') ?? (isWindows ? '\\' : '/');
   completion.trials = [
     ...matches.map(name => shellQuote(name) +
@@ -1041,7 +1041,7 @@ function buildCompletions(): boolean {
 
 /**
  * Returns the start of the last space-delimited word, honoring the
- * -" quote pair and the meta escape like og's delimit_word.
+ * -" quote pair and the meta escape like less's delimit_word.
  */
 function wordStart(text: string): number {
   const { open, close } = optQuotes();
@@ -1148,7 +1148,7 @@ export function byteOffset(content: string[], row: number): number {
 }
 
 /**
- * True when the current file's length is known, like og's
+ * True when the current file's length is known, like less's
  * ch_length() != NULL_POSITION: displaying the last line of a pipe
  * is not enough — the length arrives only when a read past the end
  * returns EOI (revealPipeEnd, or revealSize for explicit scans).
@@ -1160,7 +1160,7 @@ export function sizeIsKnown(): boolean {
 
 /**
  * A forward read past the end of a completed pipe returns EOI and
- * teaches the length, like og's ch_forw_get at end-of-input; a pipe
+ * teaches the length, like less's ch_forw_get at end-of-input; a pipe
  * still delivering has no end to return yet.
  */
 export function revealPipeEnd(): void {
@@ -1169,7 +1169,7 @@ export function revealPipeEnd(): void {
 }
 
 /**
- * og reads a pipe-form $LESSOPEN alt to EOI when its content ends
+ * less reads a pipe-form $LESSOPEN alt to EOI when its content ends
  * within the first screen: the length is learned at the first paint
  * and the prompt shows (END), like eof_displayed.
  */
@@ -1188,7 +1188,7 @@ export function revealAltEnd(content: string[]): void {
 }
 
 /**
- * Learns the current file's size now, like og's scan_eof: --file-size
+ * Learns the current file's size now, like less's scan_eof: --file-size
  * turning on, or a forward search scanning to the end of a pipe.
  */
 export function revealSize(): void {
@@ -1197,7 +1197,7 @@ export function revealSize(): void {
 }
 
 /**
- * The bottom line state while a pipe drains for G/%: og's G reads
+ * The bottom line state while a pipe drains for G/%: less's G reads
  * with a blank command line, while % shows ierror's interruptible
  * "Determining length of file" note.
  */
@@ -1208,7 +1208,7 @@ export const pipeDraining = {
 };
 
 /**
- * A forward move blocked reading a live pipe, like og's forw loop
+ * A forward move blocked reading a live pipe, like less's forw loop
  * waiting in forw_line: the display rows still owed, and whether any
  * line has painted yet (forw's nlines, deciding the eof_bell).
  */

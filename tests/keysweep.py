@@ -28,5 +28,5 @@ for groups, label in CASES:
     b = run(['node', CLI, '-X', 'lines.txt'], groups)
     if a != b:
         bad += 1
-        print(f'DIFF {label}  og={len(a)} ours={len(b)}')
+        print(f'DIFF {label}  less={len(a)} ours={len(b)}')
 print(f'{len(CASES)-bad}/{len(CASES)} identical')

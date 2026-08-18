@@ -9,7 +9,7 @@ import pager, { pagerPipe, NamedArg, PagerArg, PagerEnv }
   from '../../src/index';
 
 // The long names are spelled into the union so an editor can list
-// them, in each form og accepts. Asserted against NamedArg, not
+// them, in each form less accepts. Asserted against NamedArg, not
 // PagerArg: PagerArg accepts any string, so it would accept these
 // even if the suggestion were gone.
 const bare: NamedArg = '--chop-long-lines';

@@ -4,7 +4,7 @@ import { LtFile } from '../lesstest/ltFile';
 import { runLt } from '../lesstest/runLt';
 
 /*
- * LESSUTFCHARDEF, against og's verified screens.
+ * LESSUTFCHARDEF, against less's verified screens.
  *
  * Every expectation here was captured from less/less (707x) on a real
  * pty at this exact size, not derived from our own output. Two of the
@@ -13,13 +13,13 @@ import { runLt } from '../lesstest/runLt';
  *
  * Why this file exists at all: the w and c classes are parsed into
  * tables that nothing reads, so it looks like a missing feature. It is
- * not that simple. og applies the width and then emits a full row with
+ * not that simple. less applies the width and then emits a full row with
  * the deferred-wrap ' \b' rather than a newline, so on a terminal that
  * draws one cell per character its rows RUN TOGETHER -- and ignoring
  * the width lands in the same place. Honouring the width without also
- * implementing og's rule that a row ending a LINE takes a newline
+ * implementing less's rule that a row ending a LINE takes a newline
  * (pdone, line.c:1523) breaks the cancellation and moves us AWAY from
- * og. Measured, both ways, on 2026-08-02.
+ * less. Measured, both ways, on 2026-08-02.
  */
 const WIDTH = 20;
 const HEIGHT = 8;
@@ -54,15 +54,15 @@ const screen = async (env: Record<string, string>): Promise<string[]> => {
 // captured from less/less: 30 bullets wrap once, then SECOND
 const OG_SCREEN = [BULLET.repeat(20), BULLET.repeat(10), 'SECOND'];
 
-describe('LESSUTFCHARDEF against og', () => {
-  it('matches og with no definitions', async () => {
+describe('LESSUTFCHARDEF against less', () => {
+  it('matches less with no definitions', async () => {
     const rows = await screen({});
 
     expect(rows.slice(0, 3)).toEqual(OG_SCREEN);
   }, 20000);
 
-  it('matches og when the bullet is declared wide', async () => {
-    // og believes each bullet is two columns and puts ten on a screen
+  it('matches less when the bullet is declared wide', async () => {
+    // less believes each bullet is two columns and puts ten on a screen
     // row -- and still produces the screen above, because it ends each
     // full row with ' \b' instead of a newline and the terminal packs
     // them back together
@@ -73,7 +73,7 @@ describe('LESSUTFCHARDEF against og', () => {
 
   it.skip('DIVERGENCE: a leading composing run is not displayed',
     async () => {
-      // og shows an EMPTY first row and SECOND on the next: a run of
+      // less shows an EMPTY first row and SECOND on the next: a run of
       // composing characters with no base character to attach to
       // renders as nothing at all. We display all thirty.
       //

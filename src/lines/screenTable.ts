@@ -8,10 +8,10 @@ import { withReset } from './helpers';
 import { gutterOverflow } from '../helpers';
 
 /**
- * og's position table (position.c): one entry per screen row, holding
+ * less's position table (position.c): one entry per screen row, holding
  * where that row STARTS.
  *
- * og's screen is not a top plus a wrapping rule - it is this array.
+ * less's screen is not a top plus a wrapping rule - it is this array.
  * `position(sindex)` reads it, `add_forw_pos` drops the front and
  * appends, `add_back_pos` prepends, `pos_clear` empties it. Because
  * every row carries its own start, rows above and below a scroll seam
@@ -30,7 +30,7 @@ export interface ScreenRow {
   /** Display-character offset into that line where this row begins. */
   offset: number;
   /**
-   * Where it ends. og reads this off the NEXT entry, but the bottom
+   * Where it ends. less reads this off the NEXT entry, but the bottom
    * row has no next one and a row the seam cut short must stay short
    * there too, so each entry carries its own.
    */
@@ -38,7 +38,7 @@ export interface ScreenRow {
 }
 
 /**
- * Fills the table forward from the current top, like og's forw()
+ * Fills the table forward from the current top, like less's forw()
  * appending an entry per row it draws.
  *
  * @param lineAt - The line as it will be DRAWN (highlights spliced in),
@@ -59,7 +59,7 @@ export function buildScreen(
   let offset = (getLayout(line).rowStart[config.subRow] ?? 0) +
     config.subShift;
 
-  // og's table survives a scroll: the entries a backward move
+  // less's table survives a scroll: the entries a backward move
   // prepended describe rows that cannot be re-derived, because
   // back_line bounded them at the row that used to be on top. It is
   // only ever valid while its first entry IS the top - anything that

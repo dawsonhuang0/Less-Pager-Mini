@@ -38,30 +38,30 @@ import {
  */
 /** Content-rebuild hook, set by the pager (onRebuild), the -b
  *  buffer trim hook (onTrimBufSpace), and whether the pager screen
- *  is initialized: og writes mouse/paste modes only from screen
+ *  is initialized: less writes mouse/paste modes only from screen
  *  init and TOGGLE handlers, never during the option scan. */
 export const hook = {
   rebuildContent: (() => {}) as () => void,
-  /** og's O_HL_REPAINT: re-highlight NOW, under the option's message. */
+  /** less's O_HL_REPAINT: re-highlight NOW, under the option's message. */
   hiliteRepaint: ((() => {}) as () => void),
   /** Rebuilds the compiled pattern, for when the ENGINE changed under
    *  it (--use-js-regexp) rather than the pattern or its case. */
   recompilePattern: (() => {}) as () => void,
   hiliteErase: ((() => {}) as () => void),
   /** Reads the top row's character offset, returning a function that
-   *  restores it once the width has changed (og's table[TOP]). */
+   *  restores it once the width has changed (less's table[TOP]). */
   topOffset: ((() => () => {}) as (content: string[]) => () => void),
   /** Moves a source engine's own top back to its line start, for
-   *  og's pos_rehead. */
+   *  less's pos_rehead. */
   reheadSource: null as null | (() => void),
-  /** og's opt_k: load a COMPILED lesskey file named by -k, returning
+  /** less's opt_k: load a COMPILED lesskey file named by -k, returning
    *  false when lesskey() would have returned nonzero (unreadable,
    *  shorter than 3 bytes, or blocked by SECURE/LESSNOCONFIG). Set by
    *  features/lesskey to keep the option table free of that import. */
   loadLesskeyFile: ((() => false) as (path: string) => boolean),
   trimBufSpace: (() => {}) as () => void,
   screenActive: false,
-  /** --file-size draining a still-unknown pipe (og's opt_filesize). */
+  /** --file-size draining a still-unknown pipe (less's opt_filesize). */
   scanFileSize: (() => {}) as () => void,
 
   /** Opens the lesskey syntax page, like the h command opens help. */
@@ -81,24 +81,24 @@ export const hook = {
   sourceHeaderRow: null as null | (() => number | undefined),
   /** Moves a seekable source when --header changes its absolute start. */
   sourceHeaderChanged: null as null | ((start: number) => void),
-  /** og's screen_trashed for an O_REPAINT option: the next
+  /** less's screen_trashed for an O_REPAINT option: the next
    *  make_display repaints through jump_loc, which rebuilds the screen
    *  from the position table rather than from whatever the last
    *  command left standing. */
   sourceRepaint: null as null | (() => void),
-  /** Raw bytes between two absolute file positions, like og's
+  /** Raw bytes between two absolute file positions, like less's
    *  pipe_data reading ch.c between spos and epos. The pipe needs the
    *  FILE, not the materialized window: session.content holds only the
    *  rows currently spooled. */
   sourceReadRange: null as null | ((from: number, to: number) => Buffer | null),
-  /** og's curr_byte(where): the byte at a SCREEN ROW, read off the
+  /** less's curr_byte(where): the byte at a SCREEN ROW, read off the
    *  position table. A wrapped line puts several rows in one line, so
    *  this is not the line's byte - which is what makes %bB and %pB
    *  land mid-line on a long line. */
   sourceRowByte: null as null | ((sindex: number) => number | null),
 };
 
-/** Registers the immediate -b pool trim, like og's ch_setbufspace. */
+/** Registers the immediate -b pool trim, like less's ch_setbufspace. */
 export function onTrimBufSpace(fn: () => void): void {
   hook.trimBufSpace = fn;
 }
@@ -106,7 +106,7 @@ export function onTrimBufSpace(fn: () => void): void {
 
 // option-backed state not living in config, defaults from opttbl.c
 
-// -j/-# fractions in parts per million, like og's NUM_FRAC_DENOM
+// -j/-# fractions in parts per million, like less's NUM_FRAC_DENOM
 
 // control chars pass through like `less -R`, this pager's native mode
 
@@ -157,7 +157,7 @@ export const optHowSearch = (): number => opt.howSearch;
 export const optHiliteSearch = (): number => opt.hiliteSearch;
 
 /** State 2 of -e/-E etc, read by the pager loop; $LESS_IS_MORE maps
- *  the flag onto more's -e semantics, like og's get_quit_at_eof. */
+ *  the flag onto more's -e semantics, like less's get_quit_at_eof. */
 export const optQuitAtEof = (): number => opt.lessIsMore
   ? (opt.quitAtEof ? 2 : 1)
   : opt.quitAtEof;
@@ -181,7 +181,7 @@ export const optQuitOnIntr = (): boolean => opt.quitOnIntr > 0;
 export const optQuitIfOneScreen = (): boolean => opt.quitIfOneScreen > 0;
 
 /** The prompt style used for display: more mode defaults to medium
- *  and -m selects short, like og's pr_string type mapping. */
+ *  and -m selects short, like less's pr_string type mapping. */
 export const displayPrType = (): number =>
   opt.lessIsMore ? (opt.prType ? 0 : 1) : opt.prType;
 
@@ -263,7 +263,7 @@ export const optDefSearchType = (): typeof defSearchType => defSearchType;
 /**
  * The --match-shift columns for the current screen width, like less's
  * calc_match_shift resolving a fraction (parts per million, rounded
- * like og's muldiv; the default fraction is half the width).
+ * like less's muldiv; the default fraction is half the width).
  */
 export function optMatchShift(): number {
   if (opt.matchShiftFraction < 0) return opt.matchShift;
@@ -319,7 +319,7 @@ export const optNoVbell = (): boolean => opt.noVbell > 0;
 export const optUseColor = (): boolean => opt.useColor > 0;
 
 /** True when --use-js-regexp searches with the host RegExp instead of
- *  the POSIX engine og's regcomp would give. */
+ *  the POSIX engine less's regcomp would give. */
 export const optUseJsRegexp = (): boolean => opt.useJsRegexp > 0;
 
 /** The -T tags file name (or a GTAGS-family name). */
@@ -346,7 +346,7 @@ export const optNoEditWarn = (): boolean => opt.noEditWarn > 0;
 /** True when interactive shell, pipe and editor commands are disabled. */
 export const optNoShell = (): boolean => opt.noShell > 0;
 
-/** OG's deliberately terse error for an unavailable process escape. */
+/** less's deliberately terse error for an unavailable process escape. */
 export const NO_SHELL_MESSAGE = 'Command not available';
 
 /** True when --follow-name makes F re-open the file by name. */
@@ -359,7 +359,7 @@ export const optExitFollowOnClose = (): boolean => opt.exitFollowOnClose > 0;
 export const optEndPrompt = (): string | null => endPrompts[displayPrType()];
 
 /** True when --old-bot clears the bottom line from lower-left, like
- *  og's clear_bot choosing lower_left over line_left. */
+ *  less's clear_bot choosing lower_left over line_left. */
 export const optOldBot = (): boolean => opt.oldBot > 0;
 
 /**
@@ -435,7 +435,7 @@ export function vlinenumAbsolute(absolute: number): number {
   return absolute;
 }
 
-/** Rounded n*frac/1,000,000, like og's muldiv on a fraction. */
+/** Rounded n*frac/1,000,000, like less's muldiv on a fraction. */
 const mulFrac = (n: number, frac: number): number =>
   Math.round(n * frac / 1000000);
 
@@ -458,7 +458,7 @@ export function jumpSindex(): number {
 }
 
 /** The -# shift columns, resolving a fraction of the screen width
- *  like og's calc_shift_count; 0 means the half-screen default. */
+ *  like less's calc_shift_count; 0 means the half-screen default. */
 export function optShiftCount(): number {
   if (opt.shiftFraction >= 0) {
     return mulFrac(fullScreenWidth(), opt.shiftFraction);
@@ -468,7 +468,7 @@ export function optShiftCount(): number {
 
 /**
  * Stores a numeric shift from an ESC-(/ESC-) count, clearing the -#
- * fraction like og's A_LSHIFT with a number.
+ * fraction like less's A_LSHIFT with a number.
  */
 export function setShiftCount(count: number): void {
   config.setCol = count;
@@ -479,7 +479,7 @@ export function setShiftCount(count: number): void {
  * Parses a number or a `.F` fraction, like optfunc.c's toggle_fraction
  * with getfraction: the fraction keeps six digits (parts per million).
  *
- * @returns The parsed value, or null after the og error message.
+ * @returns The parsed value, or null after the less error message.
  */
 export function parseFraction(
   text: string,
@@ -535,7 +535,7 @@ export const optWheelLines = (): number => opt.wheelLines;
 export const optRscroll = (): string => opt.rscrollChar;
 
 /** The --rscroll fallback attribute codes when -D R sets no color,
- *  like og's rscroll_attr from setfmt's `*x` prefix. */
+ *  like less's rscroll_attr from setfmt's `*x` prefix. */
 export function optRscrollAttr(): { on: string, off: string } {
   switch (opt.rscrollAttr) {
     case 'd': return { on: BOLD_ON, off: BOLD_OFF };
@@ -548,13 +548,13 @@ export function optRscrollAttr(): { on: string, off: string } {
 
 /**
  * True when displayed lines are truncated at the screen width: -S, or
- * any --header lines/columns, like og's chop_line().
+ * any --header lines/columns, like less's chop_line().
  */
 export const chopLine = (): boolean =>
   config.chopLongLines || opt.headerLines > 0 || opt.headerCols > 0;
 
 /**
- * The scroll window size, like og's get_swindow: a positive -z is the
+ * The scroll window size, like less's get_swindow: a positive -z is the
  * size itself; zero or negative is relative to the screen height less
  * the --header lines (the default -1 leaves one line of overlap).
  */
@@ -579,7 +579,7 @@ export function nextTabStop(col: number): number {
 
 /**
  * Columns reserved at the left edge for the -J status column and the
- * -N line number field: og's NOMINAL width (line_pfx_width returns
+ * -N line number field: less's NOMINAL width (line_pfx_width returns
  * linenum_width + 1, line.c:459) — a wider number overflows the
  * field and its LINE's text area shrinks instead (the line buffer
  * simply fills to sc_width past the actual prefix).
@@ -609,7 +609,7 @@ export function applyGutter(content: string[]): void {
   const gutter = gutterWidth();
   if (gutter === opt.appliedGutter) return;
 
-  // og's table[TOP] is a byte position, so a width change moves
+  // less's table[TOP] is a byte position, so a width change moves
   // nothing - it just re-wraps from the same byte. Ours is a boundary
   // index, so the OFFSET is what has to be carried across, and the
   // remainder past the new boundary becomes the shift. The layout
@@ -626,7 +626,7 @@ export function applyGutter(content: string[]): void {
 
   // every option that moves this gutter is O_REPAINT - -N and -J,
   // --line-num-width and --status-col-width (opttbl.c:325, :373,
-  // :605, :613) - so og trashes the screen and the next make_display
+  // :605, :613) - so less trashes the screen and the next make_display
   // repaints it, pos_clear and all
   markFullRepaint();
   hook.sourceRepaint?.();
@@ -644,9 +644,9 @@ export function onRebuild(fn: () => void): void {
  * state.
  */
 export function applyMouse(): void {
-  // og's mouse strings are hardcoded xterm sequences, not termcap,
+  // less's mouse strings are hardcoded xterm sequences, not termcap,
   // so even a dumb terminal receives them; before the screen
-  // initializes og's INIT handler writes nothing, and like
+  // initializes less's INIT handler writes nothing, and like
   // init_mouse nothing is written while the option stays off
   if (!process.stdout.isTTY || !hook.screenActive) return;
 
@@ -667,7 +667,7 @@ let pasteApplied = false;
  * input can be recognized and ignored.
  */
 export function applyBracketedPaste(): void {
-  // og's opt_no_paste writes only at TOGGLE (hardcoded sequences,
+  // less's opt_no_paste writes only at TOGGLE (hardcoded sequences,
   // dumb included); the screen init enables the markers itself, and
   // nothing is written while the option stays off
   if (!process.stdout.isTTY || !hook.screenActive) return;
@@ -687,7 +687,7 @@ export function prChar(char: string): string {
 
   if (code === 0x1B) return 'ESC';
 
-  // og XORs with 0100 rather than adding it (charset.c:548). For
+  // less XORs with 0100 rather than adding it (charset.c:548). For
   // 0x00-0x1F the two agree, but DEL only becomes "^?" under the XOR:
   // 0x7F ^ 0x40 is 0x3F. There were two copies of this function and
   // the other one, using <0x20, printed a raw DEL
@@ -813,7 +813,7 @@ export function searchTypeNames(): string {
 /**
  * Parses a --match-shift answer, like toggle_fraction with the `.d`
  * format: a leading `.` sets a fraction of the screen width, kept in
- * parts per million like og.
+ * parts per million like less.
  */
 export function setMatchShift(text: string): void {
   const parsed = parseFraction(text, '--match-shift', false);
@@ -838,7 +838,7 @@ export const CASELESS_MESSAGES = [
 /**
  * Sets the header search exclusions, like optfunc.c's
  * do_nosearch_headers: the three options assign both flags rather than
- * toggling. Silent, so $LESS INIT matches og; toggles report through
+ * toggling. Silent, so $LESS INIT matches less; toggles report through
  * noSearchHeadersMessage.
  */
 export function setNoSearchHeaders(lines: number, cols: number): void {
@@ -911,7 +911,7 @@ export function setTabs(text: string): void {
 }
 
 /**
- * Reports a startup scan problem at the first prompt, like og's
+ * Reports a startup scan problem at the first prompt, like less's
  * error() calls before the screen initializes: follow-ups queue behind
  * the first message.
  */
@@ -927,10 +927,10 @@ export function optScanError(message: string): void {
 /**
  * Applies a --header parameter (`L[,C[,N]]`), like less's parse_header:
  * empty fields keep their value, a leading `-` disables the header, and
- * without N the header anchors at the current top line (og's TOGGLE
+ * without N the header anchors at the current top line (less's TOGGLE
  * defaulting start_pos to position(TOP)).
  */
-// og can't parse --header at INIT: find_pos needs the open file, so
+// less can't parse --header at INIT: find_pos needs the open file, so
 // opt_header stores init_header and main applies it as a TOGGLE after
 // the first file opens (main.c:450)
 let pendingHeader: string | null = null;
@@ -955,7 +955,7 @@ export function applyPendingHeader(content: string[]): void {
 }
 
 export function setHeader(text: string, content: string[]): void {
-  // startup scan: the file is not open yet - defer like og's
+  // startup scan: the file is not open yet - defer like less's
   // init_header (main.c:450 applies it after the first open)
   if (!content.length) {
     pendingHeader = text;
@@ -990,17 +990,17 @@ export function setHeader(text: string, content: string[]): void {
       ? sourcedLine - 1
       : config.row;
 
-  // og's set_header: with no header LINES there is no start position
+  // less's set_header: with no header LINES there is no start position
   // at all (search.c:572 stores NULL_POSITION), so a columns-only
   // --header=0,C,N must not move the view to line N
   if (opt.headerLines === 0) opt.headerStart = 0;
 
-  // og's O_REPAINT repaints through jump_loc, whose after_header_pos
+  // less's O_REPAINT repaints through jump_loc, whose after_header_pos
   // clamps a top above the new header start up to it: the view lands
   // at the header, content continuing right below (jump.c:215)
   if (config.row < opt.headerStart) config.row = opt.headerStart;
 
-  // header lines/columns force chopping (og's chop_line), so the
+  // header lines/columns force chopping (less's chop_line), so the
   // sub-row layout changed shape
   config.subRow = 0;
   if (sourced) hook.sourceHeaderChanged?.(opt.headerStart);

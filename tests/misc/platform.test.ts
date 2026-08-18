@@ -31,7 +31,7 @@ afterEach(() => {
   }
 });
 
-describe('homeDir, like og lgetenv("HOME") + main.c WIN32', () => {
+describe('homeDir, like less lgetenv("HOME") + main.c WIN32', () => {
   it('prefers $HOME on any platform', () => {
     setEnv('HOME', '/somewhere');
     expect(homeDir()).toBe('/somewhere');
@@ -41,12 +41,12 @@ describe('homeDir, like og lgetenv("HOME") + main.c WIN32', () => {
     setPlatform('win32');
     setEnv('HOME', undefined);
     setEnv('HOMEDRIVE', 'C:');
-    setEnv('HOMEPATH', '\\Users\\og');
-    expect(homeDir()).toBe('C:\\Users\\og');
+    setEnv('HOMEPATH', '\\Users\\less');
+    expect(homeDir()).toBe('C:\\Users\\less');
   });
 });
 
-describe('shellArgv, like og lsystem/HAVE_SHELL', () => {
+describe('shellArgv, like less lsystem/HAVE_SHELL', () => {
   it('unix: $SHELL -c, with LESS_SHELL_COPTION overrides', () => {
     setPlatform('linux');
     setEnv('SHELL', '/bin/zsh');
@@ -59,12 +59,12 @@ describe('shellArgv, like og lsystem/HAVE_SHELL', () => {
     setEnv('LESS_SHELL_COPTION', '-fc');
     expect(shellArgv('ls')).toEqual(['/bin/zsh', ['-fc', 'ls']]);
 
-    // "-" drops the $SHELL wrapper, like og calling system()
+    // "-" drops the $SHELL wrapper, like less calling system()
     setEnv('LESS_SHELL_COPTION', '-');
     expect(shellArgv('ls')).toEqual(['/bin/sh', ['-c', 'ls']]);
   });
 
-  it('windows: %COMSPEC% /c, like og system() with HAVE_SHELL=0', () => {
+  it('windows: %COMSPEC% /c, like less system() with HAVE_SHELL=0', () => {
     setPlatform('win32');
     setEnv('COMSPEC', 'C:\\Windows\\system32\\cmd.exe');
     expect(shellArgv('dir')).toEqual(

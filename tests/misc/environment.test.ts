@@ -67,7 +67,7 @@ afterEach(() => {
   initTerminalCapabilities();
 });
 
-describe('OG lgetenv precedence and filtering', () => {
+describe('less lgetenv precedence and filtering', () => {
   it('uses user lesskey, nonempty real env, then system lesskey', () => {
     setLesskeyEnv('ORDER', 'system', true);
     expect(lgetenv('ORDER')).toBe('system');
@@ -110,8 +110,8 @@ describe('OG lgetenv precedence and filtering', () => {
     expect(actualEnv('ORDER')).toBe('real');
   });
 
-  it('provides OG defaults and positive-only timing overrides', () => {
-    // og's unix build bakes LIBEXECDIR into dflt_vartable; only the
+  it('provides less defaults and positive-only timing overrides', () => {
+    // less's unix build bakes LIBEXECDIR into dflt_vartable; only the
     // Windows build falls back to the bare PATH lookup
     expect(lgetenv('LESS_OSC8_OPEN_ANY')).toBe(
       process.platform === 'win32'

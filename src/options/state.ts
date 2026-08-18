@@ -1,8 +1,8 @@
 import { config } from "../state/config";
 
 /**
- * Mutable option state shared by the option files, like og
- * opttbl.c's globals. Defaults mirror og's option table.
+ * Mutable option state shared by the option files, like less
+ * opttbl.c's globals. Defaults mirror less's option table.
  */
 export const opt = {
   howSearch: 2,
@@ -24,8 +24,8 @@ export const opt = {
   prType: 0,
   linenums: 1,
   quiet: 0,
-  // og's default: caret ALL escape sequences (user revoked the old
-  // ctldisp=2 divergence 2026-07-24 — full og parity, -R for ANSI)
+  // less's default: caret ALL escape sequences (user revoked the old
+  // ctldisp=2 divergence 2026-07-24 — full less parity, -R for ANSI)
   ctldisp: 0,
   squeeze: 0,
   tagsFile: 'tags',
@@ -72,7 +72,7 @@ export const opt = {
   intrChar: '\x18',
   autosave: '-',
   matchShift: 0,
-  // og defaults --match-shift to half the screen width
+  // less defaults --match-shift to half the screen width
   // (match_shift_fraction = NUM_FRAC_DENOM/2)
   matchShiftFraction: 500000,
   emouse: 0,
@@ -85,11 +85,11 @@ export const opt = {
   procReturn: 0,
   wordwrap: 0,
   appliedGutter: 0,
-  // $LESS_IS_MORE: POSIX more compatibility, like og's less_is_more
+  // $LESS_IS_MORE: POSIX more compatibility, like less's less_is_more
   lessIsMore: 0,
 };
 
-// og gets a clean option table by being one process per session; a
+// less gets a clean option table by being one process per session; a
 // library call has to ask for it. Snapshotted at load, before any
 // scan touches the table.
 const DEFAULTS = JSON.parse(JSON.stringify(opt)) as typeof opt;
@@ -98,7 +98,7 @@ const DEFAULTS = JSON.parse(JSON.stringify(opt)) as typeof opt;
  * Restores every option to its table default, like a fresh less.
  *
  * Without this a second pager() call in the same process inherits the
- * first call's -x, -S and friends: og's opttbl.c globals are
+ * first call's -x, -S and friends: less's opttbl.c globals are
  * process-lifetime, and ours outlive a session the same way.
  */
 export function resetOptions(): void {
@@ -106,7 +106,7 @@ export function resetOptions(): void {
 }
 
 /**
- * OG keeps sc_width as the complete terminal width. Our renderer stores
+ * less keeps sc_width as the complete terminal width. Our renderer stores
  * the text width after reserving the line prefix, so anything defined in
  * terms of sc_width - every bottom-row measurement, since the command
  * line never carries the gutter - must add that reservation back.

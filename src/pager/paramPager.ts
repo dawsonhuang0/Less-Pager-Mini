@@ -21,7 +21,7 @@ export default async function paramPager(
   freshSession();
   initInvocationOptions();
 
-  // og never refuses to start over the keyboard: open_getchr takes
+  // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then
   // /dev/tty, then stderr itself (ttyin.c:67) - and pages either way.
   // If that turns out to have no input, getchr sees EOF and quits

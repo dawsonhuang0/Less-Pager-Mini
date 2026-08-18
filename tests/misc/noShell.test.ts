@@ -134,7 +134,7 @@ describe('the library shell lock', () => {
   });
 
   it('reads the lock from a lesskey #env too', () => {
-    // og scans $LESS after init_cmds, so a #env line is one of the
+    // less scans $LESS after init_cmds, so a #env line is one of the
     // tiers the option string can come from (decode.c lgetenv). The
     // file belongs to whoever RUNS the application, so it is ambient
     // policy, and the caller's overlay must not lift it

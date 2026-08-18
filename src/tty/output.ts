@@ -1,7 +1,7 @@
 /**
- * The one place bytes reach the terminal, like og's output.c.
+ * The one place bytes reach the terminal, like less's output.c.
  *
- * og never writes to the tty as it goes: every putchr appends to an
+ * less never writes to the tty as it goes: every putchr appends to an
  * 8K obuf (output.c:117) and only flush() hands it over, at the few
  * points where the user is about to be kept waiting — cmd_exec before
  * a command runs (command.c:128), the prompts that read a key, and
@@ -18,16 +18,16 @@
  * byte-level corpus passed; only the write BOUNDARIES were wrong.
  */
 
-/** og's OUTBUF_SIZE (output.c). */
+/** less's OUTBUF_SIZE (output.c). */
 const OUTBUF_SIZE = 8192;
 
 let obuf = '';
 let scheduled = false;
 
 /**
- * Appends to the output buffer, like og's putstr/putchr.
+ * Appends to the output buffer, like less's putstr/putchr.
  *
- * A full buffer flushes itself, as og's putchr does — that bounds the
+ * A full buffer flushes itself, as less's putchr does — that bounds the
  * memory and is the only flush the caller does not choose.
  */
 export function putstr(text: string): void {
@@ -51,7 +51,7 @@ export function putstr(text: string): void {
 
   // A paint is not always a keypress: a resize, a pipe delivering
   // more input, F following a growing file and the signal handlers
-  // all repaint on their own, and og's output reaches the terminal at
+  // all repaint on their own, and less's output reaches the terminal at
   // each of them. Flushing only from the command loop left those
   // sitting here until the user happened to type something - a resize
   // kept the screen at the old size until a key arrived.
@@ -71,7 +71,7 @@ export function putstr(text: string): void {
 }
 
 /**
- * Hands the buffer to the terminal, like og's flush().
+ * Hands the buffer to the terminal, like less's flush().
  *
  * Call before anything that makes the user wait — reading a key,
  * running a command, leaving the pager. Cheap when empty, so an

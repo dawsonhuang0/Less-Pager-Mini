@@ -18,7 +18,7 @@ const BLANK: Cell = { ch: '_', attr: 0, fg: NULL_COLOR, bg: NULL_COLOR };
 
 /**
  * A small terminal emulator for this pager's escape output, playing
- * the role of og's lt_screen: it tracks a width x height grid of
+ * the role of less's lt_screen: it tracks a width x height grid of
  * cells plus the cursor, so screens can be compared to the `=` dumps
  * recorded in .lt files.
  */
@@ -37,9 +37,9 @@ export class LtScreen {
   private bg = NULL_COLOR;
 
   /**
-   * The terminal's "xn" (og's defer_wrap, screen.c:1532).
+   * The terminal's "xn" (less's defer_wrap, screen.c:1532).
    *
-   * og's lt_screen has no magic margin - it wraps the moment the last
+   * less's lt_screen has no magic margin - it wraps the moment the last
    * column is written (screen_incr, lt_screen.c:133), which is right
    * for the terminal the recordings were made on: lesstest hands less
    * "am" and no "xn", and passes no $TERM (env.c is_less_env), so
@@ -238,7 +238,7 @@ export class LtScreen {
 
     // xterm's last-column flag survives a sequence that does not
     // touch the cursor: SGR sets attributes only, so a style change
-    // between the last column and the deferred-wrap nudge (og's
+    // between the last column and the deferred-wrap nudge (less's
     // " \b", line.c:1527) must leave the wrap pending. Clearing it
     // made the nudge overwrite the last column instead
     if (final !== 'm') this.pendingWrap = false;

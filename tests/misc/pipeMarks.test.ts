@@ -58,7 +58,7 @@ vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
  *
  * This is the shape that produced every bug below: session.content is
  * not the file, it is a bounded slice, so a mark's local row means one
- * thing before the window slides and something else after. og stores a
+ * thing before the window slides and something else after. less stores a
  * mark as a POSITION and never has the problem, which is why the pipe
  * has to compare positions too.
  */
@@ -93,7 +93,7 @@ const slideTo = (firstLine: number): void => {
 
 /** Registers the hooks a seekable input publishes. */
 const attachSource = (): void => {
-  // og's curr_byte: the position table only covers the SCREEN's rows,
+  // less's curr_byte: the position table only covers the SCREEN's rows,
   // and a row past it falls back to ch_length -- which is what makes
   // the '$' mark reach the end of the FILE rather than of the window
   const rowByte = (row: number): number =>
@@ -104,7 +104,7 @@ const attachSource = (): void => {
   hook.sourceBytePosition = row => rowByte(row);
   hook.sourceReadRange = (from, to) =>
     to > from ? FILE_BYTES.subarray(from, to) : null;
-  // og's position(sindex) indexes the SCREEN; with no wrapping screen
+  // less's position(sindex) indexes the SCREEN; with no wrapping screen
   // row k is content row config.row + k
   hook.sourceRowByte = sindex => rowByte(config.row + sindex);
 
@@ -176,7 +176,7 @@ describe('a letter mark in the pipe is a position, not a row', () => {
     // the reported bug: mark line 1, go to the end, pipe. The mark's
     // local row 0 survives the slide as a number and stops naming the
     // line it was set on, so the row comparison said "on screen" and
-    // og's before-the-screen branch never fired
+    // less's before-the-screen branch never fired
     setMark('a');
     slideTo(101);
 
@@ -203,7 +203,7 @@ describe('a letter mark in the pipe is a position, not a row', () => {
     setMark('b'); // file line 111
 
     // the second mark is given first, so only ordering by POSITION
-    // yields og's range
+    // yields less's range
     pipeKeys('|ba');
 
     expect(piped()).toBe(fileLines(1, 111));
@@ -252,7 +252,7 @@ describe('the predefined marks are file positions', () => {
     expect(piped()).toBe(fileLines(101, 200));
   });
 
-  it('pipes the current screen for . (og takes : and ; together)', () => {
+  it('pipes the current screen for . (less takes : and ; together)', () => {
     slideTo(101);
 
     pipeKeys('.');
@@ -296,7 +296,7 @@ describe('the last mark in the pipe', () => {
   });
 
   it('refuses when the last mark was never set', () => {
-    // og's markpos has no ch_zero() fallback -- that belongs to gomark
+    // less's markpos has no ch_zero() fallback -- that belongs to gomark
     // -- so an unset LASTMARK fails its "in current file" test
     pipeKeys("'");
 

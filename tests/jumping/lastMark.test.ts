@@ -39,7 +39,7 @@ const LAST_SCREEN_TOP = `line ${LINES - (HEIGHT - 2)}`;
 
 describe("G records the last mark, like jump_forw's own lastmark", () => {
   it("comes back to where G left when '' is pressed", async () => {
-    // og's jump_forw calls lastmark() itself, before pos_clear, since
+    // less's jump_forw calls lastmark() itself, before pos_clear, since
     // "lastmark will be called later by jump_loc, but it fails because
     // the position table has been cleared" (jump.c:51). Without it the
     // mark stayed unset and '' did not move at all
@@ -80,7 +80,7 @@ describe('an unset last mark is the beginning of the file', () => {
   }, 20000);
 
   it('stays at line 1 when asked again', async () => {
-    // og's gomark cmarks LASTMARK to position zero on the way past, so
+    // less's gomark cmarks LASTMARK to position zero on the way past, so
     // the second '' has a mark now -- and it is still zero. The jump
     // that got here was short enough to scroll, which does not record
     const seen = await tops(['j', 'j', "'", "'", "'", "'"]);

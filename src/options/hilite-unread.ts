@@ -12,7 +12,7 @@ export const hiliteUnread: OptionSpec = {
       'Highlight first unread line after any forward movement',
     ],
     defaultValue: 0,
-    // og keeps the current attn highlight when -w turns off; the
+    // less keeps the current attn highlight when -w turns off; the
     // next movement clears it (clear_attn), not the toggle
     get: () => opt.showAttn,
     set: value => { opt.showAttn = value as number; },

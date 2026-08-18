@@ -20,5 +20,5 @@ for c in cases:
     b = run(f'cat lines.txt | node {CLI} -X', kb)
     if a != b:
         bad += 1
-        print(f'DIFF pipe -X [{c}] og={len(a)} ours={len(b)}')
+        print(f'DIFF pipe -X [{c}] less={len(a)} ours={len(b)}')
 print(f'pipe -X: {len(cases)-bad}/{len(cases)} identical')

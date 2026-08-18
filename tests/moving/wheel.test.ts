@@ -45,7 +45,7 @@ const UP = '\x1b[<64;1;1M';
 
 describe('mouse wheel scrolling on a file', () => {
   it('keeps moving on every tick, not just the first', async () => {
-    // og's A_F_MOUSE is forward(wheel_lines) -- the same forward()
+    // less's A_F_MOUSE is forward(wheel_lines) -- the same forward()
     // every other command uses (command.c:1720), so the fourth tick
     // is as ordinary as the first
     const screens = await tops([DOWN, DOWN, DOWN, DOWN]);
@@ -69,12 +69,12 @@ describe('mouse wheel scrolling on a file', () => {
     expect(screens[2]).toBe('line 7');
   }, 20000);
 
-  it('is swallowed whole while a count is pending, like og', async () => {
-    // og decodes the report inside editchar, which hands it to
+  it('is swallowed whole while a count is pending, like less', async () => {
+    // less decodes the report inside editchar, which hands it to
     // x116mouse_action(skip=TRUE) and gets A_NOACTION back
     // (decode.c:818); the digit prompt reads that as "ignore this
     // char and get another one" (command.c:690). So the tick does
-    // nothing AND the count survives it - measured against og, which
+    // nothing AND the count survives it - measured against less, which
     // still shows ":5" when it exits
     const screens = await tops(
       [DOWN, '5', DOWN, 'j'],

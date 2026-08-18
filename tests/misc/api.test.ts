@@ -186,7 +186,7 @@ describe('pager(input, args, env) API', () => {
   });
 
   it('starts every call from a clean option table', async () => {
-    // og gets this by being one process per session; freshSession()
+    // less gets this by being one process per session; freshSession()
     // gives a library call the same slate, so a -S or -x from one
     // call cannot decide the next one's screen
     await drive(() => pager(content, ['--chop-long-lines', '--tabs=4']));
@@ -280,7 +280,7 @@ describe('pager(input, args, env) API', () => {
 
   it('pages input with no lines as an empty file', async () => {
     // a symbol is the one input inputToString has no line for: it
-    // opens an empty session like og, rather than refusing to run
+    // opens an empty session like less, rather than refusing to run
     const nothing = await drive(() => pager(Symbol('nothing')));
     const empty = await drive(() => pager(''));
 

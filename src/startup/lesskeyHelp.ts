@@ -4,7 +4,7 @@
 /**
  * The lesskey syntax page, shown by --lesskey-help.
  *
- * NOT an og screen: og documents lesskey in a man page that ships with
+ * NOT a less screen: less documents lesskey in a man page that ships with
  * the less distribution, which an npm install of this pager does not
  * bring with it. Same rendering as the command help - overstrike
  * sequences (X\bX bold, _\bX underline) through the normal content

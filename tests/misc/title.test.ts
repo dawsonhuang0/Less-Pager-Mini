@@ -5,8 +5,8 @@ import { files } from '../../src/features/files';
 import { windowTitle, refreshWindowTitle } from '../../src/tty/title';
 
 /**
- * The terminal's title, which og sets only on Windows and gets on unix
- * for free: the terminal reads the foreground process, and og's is
+ * The terminal's title, which less sets only on Windows and gets on unix
+ * for free: the terminal reads the foreground process, and less's is
  * `less foo`. Ours is `node .../cli.js foo`, so process.title is the
  * one thing that can put our name there.
  *
@@ -34,7 +34,7 @@ afterAll(() => {
 });
 
 describe('window title', () => {
-  it('names the file being paged, like og\'s ?f', () => {
+  it('names the file being paged, like less\'s ?f', () => {
     files.list = [entry('notes.txt')];
 
     expect(windowTitle()).toBe('less-pager-mini notes.txt');
@@ -48,7 +48,7 @@ describe('window title', () => {
   });
 
   it('says nothing about standard input', () => {
-    // og's ?f is false for "-", so a piped session has no name to
+    // less's ?f is false for "-", so a piped session has no name to
     // show and the prompt does not carry one either
     files.list = [entry('-')];
 

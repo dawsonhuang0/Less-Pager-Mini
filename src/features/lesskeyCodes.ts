@@ -1,11 +1,11 @@
 /**
- * og's lesskey action NAMES against the numeric codes a compiled file
+ * less's lesskey action NAMES against the numeric codes a compiled file
  * carries - `lesskey_parse.c`'s cmdnames/editnames tables resolved
  * through `cmd.h`.
  *
  * The pager itself never needs this: reading a binding only has to
  * reach an action, which `ACTION_CODES` already does. WRITING one
- * does, because the byte in the file is og's code and nothing else,
+ * does, because the byte in the file is less's code and nothing else,
  * and so does rendering a binary back as source. Both directions live
  * here so they cannot drift apart.
  *
@@ -19,7 +19,7 @@ export const A_EXTRA = 0x80;
 /** EV_OK: the #env section's action byte, always with A_EXTRA. */
 export const EV_OK = 0x01;
 
-/** #command action names, like og's cmdnames[]. */
+/** #command action names, like less's cmdnames[]. */
 export const COMMAND_CODES: Record<string, number> = {
   'back-bracket':        36,
   'back-line':           2,
@@ -99,7 +99,7 @@ export const COMMAND_CODES: Record<string, number> = {
   'visual':              32,
 };
 
-/** #line-edit action names, like og's editnames[]. */
+/** #line-edit action names, like less's editnames[]. */
 export const EDIT_ACTION_CODES: Record<string, number> = {
   'back-complete':   18,
   'backspace':       1,
@@ -129,8 +129,8 @@ export const EDIT_ACTION_CODES: Record<string, number> = {
 /**
  * A code back to ONE name, for rendering a binary as source.
  *
- * og lets several names share a code - "end" and "goto-end" are both
- * A_GOEND - so this keeps the first og lists, which is also the first
+ * less lets several names share a code - "end" and "goto-end" are both
+ * A_GOEND - so this keeps the first less lists, which is also the first
  * alphabetically. Any of them compiles back to the same byte.
  */
 export const COMMAND_NAMES: Record<number, string> = {
@@ -245,7 +245,7 @@ export const SK_SPECIAL_KEY = 0x0B;
 export const SK_CONTROL_K = 40;
 
 /**
- * Every \k form and the SK_* code it compiles to, out of og's tstr.
+ * Every \k form and the SK_* code it compiles to, out of less's tstr.
  *
  * A compiled file stores the blob `SK_SPECIAL_KEY <code> 6 1 1 1`, not
  * a terminal sequence - the reader expands it through terminfo when it
@@ -312,14 +312,14 @@ export const SPECIAL_KEY_CODES: Record<string, number> = {
 };
 
 /**
- * og's built-in bindings, written out as lesskey source.
+ * less's built-in bindings, written out as lesskey source.
  *
  * --edit-lesskey opens this when a session has no lesskey of any kind,
  * so the editor holds what the keys ALREADY do rather than an empty
  * file - every binding is there to be changed or deleted, and the
  * shape of the syntax comes with it.
  *
- * It is og's own cmdtable/edittable (decode.c), not a description of
+ * It is less's own cmdtable/edittable (decode.c), not a description of
  * them: compile it and you get the defaults back. The two paste
  * markers appear commented out, because A_START_PASTE and A_END_PASTE
  * have no lesskey name to write.

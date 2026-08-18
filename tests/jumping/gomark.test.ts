@@ -87,7 +87,7 @@ beforeEach(() => {
 
 describe('gomark on an unset last mark', () => {
   it("jumps to position zero, not to the window's row 0", () => {
-    // og's gomark sets an unset LASTMARK to ch_zero() -- the beginning
+    // less's gomark sets an unset LASTMARK to ch_zero() -- the beginning
     // of the FILE (mark.c:340). Building a synthetic row 0 instead and
     // letting its position be filled in from the window meant `''`
     // after any scrolling jumped to where it already was

@@ -22,7 +22,7 @@ describe('a caller may tighten LESSSECURE, never loosen it', () => {
   afterEach(() => setSessionEnv(null));
 
   it('refuses to re-allow what the environment took away', () => {
-    // og is a program its user ran, so whoever writes
+    // less is a program its user ran, so whoever writes
     // LESSSECURE_ALLOW also wrote LESSSECURE. A library call has two
     // parties, and a deployment's hardening outranks the application
     process.env.LESSSECURE = '1';
@@ -110,9 +110,9 @@ describe('LESSSECURE', () => {
       initEnvironment();
     });
 
-    it('hides LESSSECURE from the allowlist, like og', () => {
+    it('hides LESSSECURE from the allowlist, like less', () => {
       // main.c reads no_config BEFORE init_secure, and ignore_env then
-      // blanks every name the list omits - so in og this really does
+      // blanks every name the list omits - so in less this really does
       // turn the whole policy off
       process.env.LESSSECURE = '1';
       process.env.LESSNOCONFIG = 'LESSCHARSET';

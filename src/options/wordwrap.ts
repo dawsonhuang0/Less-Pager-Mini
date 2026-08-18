@@ -15,7 +15,7 @@ export const wordwrap: OptionSpec = {
     defaultValue: 0,
     get: () => opt.wordwrap,
     set: (value, content) => {
-      // og's --wordwrap is O_BOOL|O_REPAINT with no ofunc at all
+      // less's --wordwrap is O_BOOL|O_REPAINT with no ofunc at all
       // (opttbl.c:754), so it never moves table[TOP]: the screen keeps
       // its byte and forw_line re-wraps from there. Ours indexes wrap
       // BOUNDARIES, and this option reshapes them - breaking at spaces

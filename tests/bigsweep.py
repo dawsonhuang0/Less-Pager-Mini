@@ -30,6 +30,6 @@ for term, o, pre in suites:
         b = run(['node', CLI]+o+['lines.txt'], kb, term)
         if a != b:
             bad += 1
-            out.append(f'DIFF {term} {" ".join(o)} [{c}] og={len(a)} ours={len(b)}')
+            out.append(f'DIFF {term} {" ".join(o)} [{c}] less={len(a)} ours={len(b)}')
     out.append(f'{term} {" ".join(o)}: {len(cases)-bad}/{len(cases)} identical')
 print('\n'.join(out))

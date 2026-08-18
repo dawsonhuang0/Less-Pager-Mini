@@ -99,7 +99,7 @@ describe('editing at the search prompt', () => {
     expect(pattern()).toBe('a!');
   });
 
-  it('inserts a dead ESC combo as pattern text, like og', () => {
+  it('inserts a dead ESC combo as pattern text, like less', () => {
     searchInputKey('\x1B');
     searchInputKey('q');
 
@@ -120,7 +120,7 @@ describe('editing at the search prompt', () => {
 });
 
 describe('messages with control characters', () => {
-  it('shows the missed pattern with ESC in display form, like og', () => {
+  it('shows the missed pattern with ESC in display form, like less', () => {
     for (let i = 0; i < 3; i++) {
       searchInputKey('\x16'); // ^V literal
       searchInputKey('\x1B');

@@ -47,12 +47,12 @@ function runSearch(pattern: string): void {
 }
 
 describe('catastrophic pattern guard', () => {
-  // og runs this pattern against the same 300 a's and simply reports
+  // less runs this pattern against the same 300 a's and simply reports
   // "Pattern not found" — a C regcomp is an NFA and has nothing to
   // blow up. Our search is one too now, so the backtracking blowup
   // this used to guard against cannot happen through a search pattern
   // and the guard never fires for one.
-  it('answers a backtracking pattern the way og does', () => {
+  it('answers a backtracking pattern the way less does', () => {
     runSearch('(a+)+b');
 
     expect(search.message).toBe('Pattern not found: (a+)+b');

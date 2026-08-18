@@ -59,7 +59,7 @@ beforeEach(() => {
   writeSpy.mockClear();
 });
 
-describe('bells like og lbell/eof_bell/vbell', () => {
+describe('bells like less lbell/eof_bell/vbell', () => {
   let clock = 1_000_000_000_000;
 
   beforeEach(() => {
@@ -88,7 +88,7 @@ describe('bells like og lbell/eof_bell/vbell', () => {
     scan('-Q');
     writeSpy.mockClear();
 
-    // og runs the terminfo flash through tputs having called
+    // less runs the terminfo flash through tputs having called
     // setupterm(term, -1, NULL), so ospeed is 0 and the padding in
     // "\E[?5h$<100/>\E[?5l" emits nothing: both halves go out
     // together. Captured from less/less under -Q on a real pty.
@@ -105,7 +105,7 @@ describe('bells like og lbell/eof_bell/vbell', () => {
     expect(writeSpy).toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
 
     // the one-per-second gate silences the FLASH, not cmd_exec's
-    // clear_bot: og emits that for the command either way
+    // clear_bot: less emits that for the command either way
     writeSpy.mockClear();
     ringBell('eof');
     expect(writeSpy).not.toHaveBeenCalledWith('\x1B[?5h\x1B[?5l');
@@ -133,7 +133,7 @@ describe('bells like og lbell/eof_bell/vbell', () => {
 });
 
 describe('--rmouse', () => {
-  it('toggles with og messages', () => {
+  it('toggles with less messages', () => {
     toggle('--rmouse\x0D');
     expect(search.message).toBe('Reverse mouse scroll direction');
     expect(optMouseReverse()).toBe(true);
@@ -143,14 +143,14 @@ describe('--rmouse', () => {
     expect(optMouseReverse()).toBe(false);
   });
 
-  it('follows --mouse like og opt_mouse', () => {
+  it('follows --mouse like less opt_mouse', () => {
     scan('--MOUSE');
     expect(optMouseReverse()).toBe(true);
 
     scan('--mouse');
     expect(optMouseReverse()).toBe(false);
 
-    // turning the mouse off leaves the direction alone, like og
+    // turning the mouse off leaves the direction alone, like less
     scan('--MOUSE');
     scan('--+mouse');
     expect(optMouseReverse()).toBe(true);
@@ -158,7 +158,7 @@ describe('--rmouse', () => {
 });
 
 describe('--old-bot', () => {
-  it('toggles with og messages', () => {
+  it('toggles with less messages', () => {
     toggle('--old-bot\x0D');
     expect(search.message).toBe('Use old bottom of screen behavior');
 
@@ -174,13 +174,13 @@ describe('--cmd', () => {
     expect(takeCmdAtPrompt()).toBe('');
   });
 
-  it('cannot be toggled at runtime, like og', () => {
+  it('cannot be toggled at runtime, like less', () => {
     toggle('--cmd\x0D');
     expect(search.message).toBe('Cannot change the --cmd option');
   });
 });
 
-describe('-j and -# fractions, like og toggle_fraction', () => {
+describe('-j and -# fractions, like less toggle_fraction', () => {
   beforeEach(() => {
     scan('-j1 -#0');
     config.chopLongLines = false;
@@ -189,11 +189,11 @@ describe('-j and -# fractions, like og toggle_fraction', () => {
 
   it('resolves a -j fraction against the window height', () => {
     scan('-j.5');
-    // window 6: muldiv(6, .5) = 3, clamped and 0-based like og
+    // window 6: muldiv(6, .5) = 3, clamped and 0-based like less
     expect(jumpSindex()).toBe(2);
   });
 
-  it('reports fractions trimmed of trailing zeros, like og', () => {
+  it('reports fractions trimmed of trailing zeros, like less', () => {
     toggle('-j.500000\x0D');
     expect(search.message).toBe('Position target at screen position .5');
 
@@ -206,13 +206,13 @@ describe('-j and -# fractions, like og toggle_fraction', () => {
     expect(search.message).toBe('Horizontal shift .25 of screen width');
     expect(optShiftCount()).toBe(20);
 
-    // a numeric shift clears the fraction, like og's A_LSHIFT
+    // a numeric shift clears the fraction, like less's A_LSHIFT
     toggle('-#8\x0D');
     expect(search.message).toBe('Horizontal shift 8 columns');
     expect(optShiftCount()).toBe(8);
   });
 
-  it('rejects an invalid fraction with the og message', () => {
+  it('rejects an invalid fraction with the less message', () => {
     toggle('-j.\x0D');
     expect(search.message).toBe('Invalid fraction in -j');
 

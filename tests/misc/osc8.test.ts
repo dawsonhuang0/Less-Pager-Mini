@@ -81,7 +81,7 @@ describe('OSC 8 selection and handler variables', () => {
     expect(searchOsc8(lines, -1)).toBe(true);
     expect(selectedOsc8()?.uri).toBe('https://a');
 
-    // og never wraps: a miss errors and keeps the old selection
+    // less never wraps: a miss errors and keeps the old selection
     // (osc8_search returns after "OSC 8 link not found")
     expect(searchOsc8(lines, -1)).toBe(false);
     expect(selectedOsc8()?.uri).toBe('https://a');
@@ -110,7 +110,7 @@ describe('OSC 8 selection and handler variables', () => {
 
 describe('an empty link is not a link', () => {
   it('skips a sequence pair with no text between them', () => {
-    // og requires op2.osc8_start > op1.osc8_end (search.c:1417): the
+    // less requires op2.osc8_start > op1.osc8_end (search.c:1417): the
     // anchors a man-page converter emits - "ESC]8;:id=1;# ESC\" then
     // an immediate close - mark a position and display nothing, so
     // ^O^N walks past them to the next real link

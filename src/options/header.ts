@@ -12,7 +12,7 @@ export const header: OptionSpec = {
     prompt: 'Header lines: ',
     validchars: 'd,',
     defaultValue: '-',
-    // og's set_header keeps NO start position when there are no
+    // less's set_header keeps NO start position when there are no
     // header LINES (search.c:572), and find_linenum answers 0 for a
     // position the caller does not know (linenum.c) - so a
     // columns-only header reports line-number 0, not 1

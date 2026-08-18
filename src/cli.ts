@@ -46,7 +46,7 @@ import { startupInit } from './startup/startup';
 import { search } from './features/searching';
 
 /**
- * The `lmn` command, mirroring og main.c's startup: $LESS scans
+ * The `lmn` command, mirroring less main.c's startup: $LESS scans
  * first (inside the pager), then command line options override;
  * options and filenames may be mixed, `--` ends options, and
  * POSIXLY_CORRECT stops option scanning at the first filename.
@@ -59,7 +59,7 @@ function usageError(message: string): never {
 
 /**
  * Expands *?* filename patterns on Windows, where the console shells
- * pass them through literally, like og's main.c globbing each
+ * pass them through literally, like less's main.c globbing each
  * argument on the MSDOS builds; an unmatched pattern stays literal
  * so the open error can report it.
  */
@@ -87,11 +87,11 @@ function globArg(name: string): string[] {
 
 async function main(): Promise<void> {
   initEnvironment();
-  // init_cmds precedes argv classification in og, so lesskey #env may
+  // init_cmds precedes argv classification in less, so lesskey #env may
   // define $LESS/$MORE options whose pending argument consumes argv.
   initSecure();
   // QUIETLY: startupInit parses these again once the session state is
-  // up, and THAT pass is the one whose diagnostics are og's. This one
+  // up, and THAT pass is the one whose diagnostics are less's. This one
   // exists only so the #env lines are in place before argv is split
   if (secureAllow('lesskey')) loadLesskey(true);
   const argv = process.argv.slice(2);
@@ -101,7 +101,7 @@ async function main(): Promise<void> {
   let sawTag = false;
   const posixlyCorrect = actualEnv('POSIXLY_CORRECT') !== undefined;
 
-  // og scans $LESS (or $MORE) before argv, so an option left dangling
+  // less scans $LESS (or $MORE) before argv, so an option left dangling
   // at the end of the environment consumes the first argument
   const lim = lgetenv('LESS_IS_MORE');
   opt.lessIsMore = lim !== undefined && lim !== '' && lim !== '0' ? 1 : 0;
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
       endOpts = true;
     } else if (!endOpts && (isOptString(arg) || pending !== null)) {
       // a dangling string/number option takes the next argument as
-      // its value, like og's isoptpending in the argv loop
+      // its value, like less's isoptpending in the argv loop
       optArgs.push(arg);
       pending = optionArgPending(arg, pending, spec => {
         if (spec.letter === 't') sawTag = true;
@@ -128,34 +128,34 @@ async function main(): Promise<void> {
     }
   }
 
-  // og's main quits when the last option still wants a value
+  // less's main quits when the last option still wants a value
   if (pending !== null) {
     usageError(`Value is required after ${optionDesc(pending)}`);
   }
 
-  // og's main: -t selects the file, so filenames are not allowed
+  // less's main: -t selects the file, so filenames are not allowed
   if (sawTag && files.length) {
     usageError('No filenames allowed with -t option');
   }
 
-  // -V/--version prints and exits, like og's opt__V at startup
+  // -V/--version prints and exits, like less's opt__V at startup
   if (optArgs.some(a => a === '-V' || a === '--version')) {
     printVersion();
     return;
   }
 
-  // -?/--help makes the help file an input, like og's dohelp
+  // -?/--help makes the help file an input, like less's dohelp
   // registering FAKE_HELPFILE, so no filename is required
   const wantsHelp = optArgs.some(a => a === '-?' || a === '--help');
 
   // --lesskey-help pages the lesskey syntax the same way, as its
-  // own input file. Not an og switch: og has `man lesskey` and an
+  // own input file. Not a less switch: less has `man lesskey` and an
   // npm install has nothing.
   const wantsLesskeyHelp = optArgs.some(a => a === '--lesskey-help');
   const wantsViewLesskey = optArgs.some(a => a === '--view-lesskey');
 
   // command line options scan after $LESS, one scan_option call per
-  // argument like og's main (a "$" separator would break long names)
+  // argument like less's main (a "$" separator would break long names)
   // --view-lesskey with no file BECOMES the session, so the forms are
   // already the file list by the time the scan runs. Left in, the
   // scan would open the view a second time over itself, and it took
@@ -166,23 +166,23 @@ async function main(): Promise<void> {
 
   const stdoutTty = process.stdout.isTTY === true;
 
-  // og's whole mode turns on isatty(1) alone (main.c:259), and its
+  // less's whole mode turns on isatty(1) alone (main.c:259), and its
   // keyboard NEVER comes from fd 0: open_getchr goes through
   // open_tty's cascade whatever stdin is (ttyin.c:67, :138). Taking
   // stdin when it happened to be a terminal was our own shortcut, and
-  // it showed: with no controlling terminal and stderr redirected, og
+  // it showed: with no controlling terminal and stderr redirected, less
   // runs out of cascade and quits while we read the pty on stdin and
   // carried on.
   const stdinTty = process.stdin.isTTY === true;
 
   if (!stdoutTty) {
-    // not a terminal: copy input to output, like og's cat_file loop;
+    // not a terminal: copy input to output, like less's cat_file loop;
     // --help makes the help file the first input
     if (wantsHelp) putstr(help.join('\n') + '\n');
     if (wantsLesskeyHelp) putstr(lesskeyHelp.join('\n') + '\n');
 
     if (files.length) {
-      // og reaches the cat loop through its ordinary startup: the
+      // less reaches the cat loop through its ordinary startup: the
       // option scan, the lesskey files and $LESSOPEN all still apply
       // with output on a pipe, because main.c:376 runs edit_first()
       // before it starts copying (edit.c:936)
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
       initFiles(files);
       let opened = 0;
 
-      // og runs `set_output(1, TRUE)` only AFTER edit_first() finds a
+      // less runs `set_output(1, TRUE)` only AFTER edit_first() finds a
       // file it can open (main.c:413, moved there by e1fdd8c2). Until
       // then its output fd is still stderr, so the errors from every
       // name tried before the first success land on stderr - that is
@@ -209,7 +209,7 @@ async function main(): Promise<void> {
         const source = await openForCat(i, process.stdout);
 
         if (!source) {
-          // og's edit_ifile error()s and edit_istep moves on to the
+          // less's edit_ifile error()s and edit_istep moves on to the
           // next name; only a list where NOTHING opens is an error
           reportOpenError(search.message || files[i]);
           search.message = '';
@@ -229,7 +229,7 @@ async function main(): Promise<void> {
             });
           } catch (error) {
             // bad_file cannot see this one: stat SUCCEEDS on a file
-            // whose mode denies reading, so og finds out at the open
+            // whose mode denies reading, so less finds out at the open
             // and reports errno_message(filename) - "%s: %s" with
             // strerror (os.c:450, used at edit.c:558) - then edit_istep
             // moves to the next name. Letting the reject reach the
@@ -249,7 +249,7 @@ async function main(): Promise<void> {
         closeAlt(fileList.list[i]);
       }
 
-      // og's main quits QUIT_ERROR only when edit_first found no file
+      // less's main quits QUIT_ERROR only when edit_first found no file
       // it could open at all
       if (!opened) process.exitCode = 1;
     } else if (wantsHelp) {
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // og's edit_ifile reads the name "-" from standard input (edit.c:516)
+  // less's edit_ifile reads the name "-" from standard input (edit.c:516)
   // and, having skipped bad_file, is the one place that reaches the
   // isatty guard below it: a terminal on fd0 is refused, and with no
   // other file to fall back on edit_first quits QUIT_ERROR
@@ -336,7 +336,7 @@ async function main(): Promise<void> {
 
   if (wantsHelp) {
     // `lmn --help` with no files pages the help file alone, like
-    // og's dohelp making FAKE_HELPFILE the only input
+    // less's dohelp making FAKE_HELPFILE the only input
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
@@ -346,7 +346,7 @@ async function main(): Promise<void> {
 
   if (sawTag) {
     // -t supplies the file itself: the queued tag jump opens the
-    // file containing the tag, like og's main editing the tag file
+    // file containing the tag, like less's main editing the tag file
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();
@@ -356,7 +356,7 @@ async function main(): Promise<void> {
 
   if (!stdinTty) {
     // `cmd | lmn`: page the stream as it arrives, keyboard from
-    // /dev/tty like ttyin.c; og never waits for a pipe to end, so
+    // /dev/tty like ttyin.c; less never waits for a pipe to end, so
     // an endless writer pages immediately
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
@@ -369,7 +369,7 @@ async function main(): Promise<void> {
 }
 
 main().then(() => {
-  // og's quit() ends the process outright (exit()); node would
+  // less's quit() ends the process outright (exit()); node would
   // otherwise sit on the closed stdin pipe until the writer's next
   // write lets the loop drain — a visible pause before the shell
   // prompt. TTY writes are synchronous, so nothing is truncated;

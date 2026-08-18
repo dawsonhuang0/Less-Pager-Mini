@@ -171,7 +171,7 @@ describe('ESC sequence handling', () => {
   });
 
   it('holds an ESC flood pending until a key settles it', () => {
-    // og's suffix matching: the tail ESC-ESC always prefixes
+    // less's suffix matching: the tail ESC-ESC always prefixes
     // ESC-ESC-arrow, so nothing resolves or displays
     type('a', 'b');
     type('\x1B', '\x1B', '\x1B', '\x1B');
@@ -200,7 +200,7 @@ describe('history recall', () => {
     cmdOpen('/', { history });
   });
 
-  it('walks entries with UP/DOWN and og sentinel stops', () => {
+  it("walks entries with UP/DOWN and less's sentinel stops", () => {
     type('\x1B[A');
     expect(cmdText()).toBe('abd');
 

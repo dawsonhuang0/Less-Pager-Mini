@@ -26,11 +26,11 @@ import { saveHistory, touchMarks } from "../startup/histfile";
  * @param lineNum - 1-based target line number, or 0 when none was given.
  */
 export function firstLine(content: string[], lineNum: number): void {
-  // recycled pipe data cannot be sought again, like og's discarded
+  // recycled pipe data cannot be sought again, like less's discarded
   // buffers failing ch_seek
   const base = lineBase();
 
-  // og's jump_back for line 1 with the beginning recycled: land on
+  // less's jump_back for line 1 with the beginning recycled: land on
   // the earliest retained data (ch_beg_seek) and still report it
   if (base > 0 && lineNum <= 1) {
     jumpLoc(content, 0, 0, lineNum > 0 ? jumpSindex() : 0);
@@ -65,7 +65,7 @@ export function firstLine(content: string[], lineNum: number): void {
  * @param content - Full content lines.
  * @param lineNum - 1-based target line number, or 0 to jump to the end.
  * @returns True when jump_forw's end jump ran (past its eof_bell) —
- *   the caller decides whether it was og's pos_clearing G or the
+ *   the caller decides whether it was less's pos_clearing G or the
  *   buffered F entry.
  */
 export function lastLine(content: string[], lineNum: number): boolean {
@@ -137,7 +137,7 @@ export function percentLine(content: string[], percent: number): void {
  * @param offset - Byte offset, 0 for the beginning.
  */
 export function goPos(content: string[], offset: number): void {
-  // recycled pipe data cannot be sought again, like og's ch_seek
+  // recycled pipe data cannot be sought again, like less's ch_seek
   // failing on a discarded block
   offset -= byteBase();
 
@@ -325,14 +325,14 @@ export function matchBracket(
  * Advances the top over the rows a backward move uncovered, treating
  * the anchor as a row boundary.
  *
- * og's forw() generates each row from the current bottom and
+ * less's forw() generates each row from the current bottom and
  * add_forw_pos drops table[0] (position.c:63), so moving forward
  * walks the entries the backward moves prepended - the last of which
  * ends AT the anchor - before the grid below resumes. Returns the
  * rows it consumed.
  */
 /**
- * og's pos_rehead (position.c): every horizontal shift command moves
+ * less's pos_rehead (position.c): every horizontal shift command moves
  * table[TOP] back to the BEGINNING of its line first - LSHIFT,
  * RSHIFT, LLSHIFT, RRSHIFT and the horizontal wheel all call it
  * (command.c:1740, :1754, :2459, :2473, :2483, :2493) - and trashes
@@ -391,7 +391,7 @@ export interface Mark {
   /**
    * The file itself, not its place in the list.
    *
-   * og's mark holds an IFILE pointer, which stays valid however the
+   * less's mark holds an IFILE pointer, which stays valid however the
    * list is reordered, spliced or swapped out. A list index does not:
    * every change to the list silently re-points every mark, which is
    * why this used to need a renumbering pass on :d and a snapshot
@@ -401,7 +401,7 @@ export interface Mark {
   row: number;
   subRow: number;
   sline: number;
-  /** Seekable inputs retain og's byte POSITION across window changes. */
+  /** Seekable inputs retain less's byte POSITION across window changes. */
   pos?: number;
 }
 
@@ -409,7 +409,7 @@ const MARK_LETTER_REGEX = /^[a-zA-Z#]$/;
 
 /**
  * Shifts user marks after the front of a streaming pipe is recycled,
- * like og's positions inside discarded buffers becoming unreadable:
+ * like less's positions inside discarded buffers becoming unreadable:
  * marks above the cut are lost.
  *
  * @param drop - Display rows removed from the front.
@@ -461,7 +461,7 @@ function dropFileMark(char: string): void {
   fileMarks = fileMarks.filter(f => f.char !== char);
 }
 
-/** Canonical file name, like og's lrealpath (falls back unchanged). */
+/** Canonical file name, like less's lrealpath (falls back unchanged). */
 export function realPath(path: string): string {
   try {
     return fs.realpathSync(path);
@@ -503,7 +503,7 @@ export function onMarkSwitch(
 export function allMarks(): { char: string, mark: Mark }[] {
   const all = [...userMarks].map(([char, mark]) => ({ char, mark }));
 
-  // og's save_marks loop covers LASTMARK: the ' position persists
+  // less's save_marks loop covers LASTMARK: the ' position persists
   // and '' works across sessions
   if (quoteMark) all.push({ char: "'", mark: quoteMark });
 
@@ -521,14 +521,14 @@ export function adoptFileMarks(index: number, lines: string[]): void {
   const path = files.list[index]?.path;
   if (!path || path === '-') return;
 
-  // og's mark_check_ifile compares canonical names (lrealpath vs
+  // less's mark_check_ifile compares canonical names (lrealpath vs
   // get_real_filename): a mark saved absolute binds to a relative open
   const real = realPath(path);
 
   for (const restored of fileMarks) {
     if (realPath(restored.path) !== real) continue;
 
-    // restored marks never displace one set this session (og: an
+    // restored marks never displace one set this session (less: an
     // active cmark cleared m_filename, so mark_check_ifile skips it)
     if (restored.char === "'" ? quoteMark !== null
       : userMarks.has(restored.char)) {
@@ -630,7 +630,7 @@ export interface MarkSnapshot {
 /**
  * Copies the marks aside.
  *
- * A mark names its file by INDEX (og's ifile pointer, which we cannot
+ * A mark names its file by INDEX (less's ifile pointer, which we cannot
  * hold), so anything recorded while a different file list is in place
  * points somewhere else entirely once the old list returns - the
  * automatic ' mark included, since edit_ifile records one on every
@@ -672,10 +672,10 @@ export function marksKey(content: string[], key: string): void {
   const pending = marks.pending;
   marks.pending = '';
 
-  // og's getcc returns 0 when an interrupt cleared it, and A_SETMARK
-  // hands that to setmark, so og answers ^C here with "Invalid mark
+  // less's getcc returns 0 when an interrupt cleared it, and A_SETMARK
+  // hands that to setmark, so less answers ^C here with "Invalid mark
   // letter ^@" rather than cancelling. Reproducing it needs more than
-  // the letter: og's trashed-screen repaint runs BEFORE the message
+  // the letter: less's trashed-screen repaint runs BEFORE the message
   // and draws no rows at all, because the pending S_INTERRUPT aborts
   // forw()'s paint loop through ABORT_SIGS. Not modelled; we cancel.
   if (key === '\x03' || key.startsWith('\x1B')) return;
@@ -698,7 +698,7 @@ export function marksKey(content: string[], key: string): void {
     clearMark(char);
   }
 
-  // og's A_SETMARK and A_CLRMARK both end in repaint() (command.c:2374,
+  // less's A_SETMARK and A_CLRMARK both end in repaint() (command.c:2374,
   // :2386) - pos_clear plus jump_loc from the top, so the screen is
   // redrawn whole behind the skipping marker even though nothing moved.
   // Only the erase/newline keys break out before it, and A_GOMARK has
@@ -769,7 +769,7 @@ function setMark(
   }
   userMarks.set(char, mark);
 
-  // og's setmark raises marks_modified BEFORE its autosave check, so
+  // less's setmark raises marks_modified BEFORE its autosave check, so
   // the very first m of a session writes immediately (unlike search
   // history's cmd_accept ordering)
   touchMarks();
@@ -831,7 +831,7 @@ function goMark(content: string[], char: string, sline: number): void {
         return;
       }
 
-      // og's gomark sets an unset last mark to ch_zero() at jump_sline
+      // less's gomark sets an unset last mark to ch_zero() at jump_sline
       // (mark.c:340) -- POSITION zero, the beginning of the file. Ours
       // built a synthetic row 0 and let the code below fill its
       // position in from the window, where row 0 is the current top:
@@ -859,7 +859,7 @@ function goMark(content: string[], char: string, sline: number): void {
       mark = userMarks.get(char);
 
       if (!mark) {
-        // og's restored marks live by filename until requested:
+        // less's restored marks live by filename until requested:
         // gomark's mark_get_ifile + edit_ifile open the file
         const restored = fileMarks.find(f => f.char === char);
 
@@ -878,7 +878,7 @@ function goMark(content: string[], char: string, sline: number): void {
   }
 
   if (mark.file !== files.list[files.index]) {
-    // og's gomark edits the mark's file (edit_ifile) and jumps there;
+    // less's gomark edits the mark's file (edit_ifile) and jumps there;
     // "Mark not in current file" belongs to markpos (the | command)
     markSwitchHook(mark, sline);
     return;
@@ -947,7 +947,7 @@ function clearMark(char: string): void {
     return;
   }
 
-  // og's clrmark clears file_marks too - without this the restored
+  // less's clrmark clears file_marks too - without this the restored
   // copy resurrects the cleared mark at the next write
   const restored = fileMarks.length;
   dropFileMark(char);
@@ -957,7 +957,7 @@ function clearMark(char: string): void {
     return;
   }
 
-  // og's clrmark autosaves the history file too (--save-marks with
+  // less's clrmark autosaves the history file too (--save-marks with
   // an 'm' autosave action)
   touchMarks();
   if (optPermaMarks() && optAutosaveAction('m')) saveHistory();
@@ -993,7 +993,7 @@ export function jumpLoc(
     subRow = 0;
   }
 
-  // og's edit_ifile trashes the screen: a jump right after a file
+  // less's edit_ifile trashes the screen: a jump right after a file
   // switch never takes the already-there bell shortcut
   if (!fresh && targetScreenRow(content, row, subRow) === sindex) {
     ringBell('eof');
@@ -1072,7 +1072,7 @@ export function linePos(lineNum: number): number | null | undefined {
 /**
  * Resolves a mark character to its byte POSITION, like less's markpos.
  *
- * og's marks ARE positions: a mark holds an scrpos, and markpos hands
+ * less's marks ARE positions: a mark holds an scrpos, and markpos hands
  * pipe_pos the raw m_scrpos.pos. Ours hold a local row as well, and a
  * row is only meaningful while the window that produced it is still
  * mapped -- once it slides, the same row names different bytes. Every
@@ -1089,7 +1089,7 @@ export function markPos(
 ): number | undefined {
   if (!hook.sourceBytePosition) return undefined;
 
-  // og's position(sindex) indexes the SCREEN: TOP is row 0 and BOTTOM
+  // less's position(sindex) indexes the SCREEN: TOP is row 0 and BOTTOM
   // is sc_height-2, so on a wrapped line both are bytes INSIDE a line.
   // sourceRowByte is that table; the content row is the fallback.
   const screenByte = (sindex: number, row: number): number | undefined => {
@@ -1102,7 +1102,7 @@ export function markPos(
     // ch_zero()
     case '^': return 0;
 
-    // og seeks to the end and backs up a line. The byte before EOF is
+    // less seeks to the end and backs up a line. The byte before EOF is
     // the same pipe range: pipe_data copies through its argument and
     // then finishes the line, so both spellings reach EOF.
     case '$': {
@@ -1241,8 +1241,8 @@ function displayDistance(
 export function recordLastPosition(): void {
   if (mode.HELP) return;
 
-  // og's lastmark raises marks_modified: nearly any jump dirties
-  // the history file, so og rewrites it at quit
+  // less's lastmark raises marks_modified: nearly any jump dirties
+  // the history file, so less rewrites it at quit
   touchMarks();
 
   quoteMark = {
@@ -1305,7 +1305,7 @@ function bottomPosition(
  */
 /**
  * Sets the mouse mark `#` at a clicked screen line (0-based), like
- * og's mouse_button_left calling setmark('#', y, 0).
+ * less's mouse_button_left calling setmark('#', y, 0).
  */
 export function setMouseMark(content: string[], y: number): void {
   const steps = Math.max(y - config.blankTop, 0);
@@ -1410,7 +1410,7 @@ function placeAt(
 ): void {
   let steps = sindex;
 
-  // og's back() never scrolls above the current header start
+  // less's back() never scrolls above the current header start
   // (forwback.c: pos != after_header_pos breaks the paint loop -
   // even at BOF, since after_header_pos(NULL) is the header start),
   // so with a header active the -j back-walk clamps with NO blank
@@ -1475,7 +1475,7 @@ function setTop(row: number, subRow: number): void {
 
   config.row = row;
   config.subRow = subRow;
-  // a jump lands on a real row start and og's jump_loc regenerates
+  // a jump lands on a real row start and less's jump_loc regenerates
   // the whole position table from it (pos_clear), so neither the
   // shift nor the anchor survives
   config.subShift = 0;

@@ -1,8 +1,8 @@
 /*
- * Reads the compiled terminfo database, the way og's curses does.
+ * Reads the compiled terminfo database, the way less's curses does.
  *
- * Ported from the new-src og rewrite, which wrote it as an ADDITION
- * with no og counterpart: og links curses and calls tgetent/tgetstr,
+ * Ported from the new-src less rewrite, which wrote it as an ADDITION
+ * with no counterpart in less: less links curses and calls tgetent/tgetstr,
  * so we have to read term(5) ourselves. src had been answering every
  * capability from the LESS_TERMCAP variables and $TERMCAP alone, so a
  * terminal's real strings were never consulted and each caller fell
@@ -121,9 +121,9 @@ const parse = (buf: Buffer): Terminfo | null => {
     let end = o;
     while (end < table.length && table[end] !== 0) end++;
     /*
-     * {{ The $<...> padding stays in the string. og hands the database
+     * {{ The $<...> padding stays in the string. less hands the database
      *    string to tputs unchanged, and screen.c's ltputs performs the
-     *    delay itself; stripping it here silently removed every delay og
+     *    delay itself; stripping it here silently removed every delay less
      *    makes, and left cost() counting a string tputs never sees. }}
      */
     strs.push(table.subarray(o, end).toString('binary'));
@@ -218,7 +218,7 @@ const parse = (buf: Buffer): Terminfo | null => {
 };
 
 /*
- * og's tgetent. Returns 1 on success, 0 if the terminal is unknown, -1 if
+ * less's tgetent. Returns 1 on success, 0 if the terminal is unknown, -1 if
  * the database is unreadable -- the same three answers screen.c branches on.
  */
 export const tgetent = (term: string | null): number => {
@@ -247,7 +247,7 @@ const BOOLS: { [cap: string]: number } = {
   msgr: 14,  /* move_standout_mode */
   os: 15,    /* over_strike */
   /*
-   * {{ Not asked for by any og capability lookup: these two are what
+   * {{ Not asked for by any of less's capability lookups: these two are
    *    ncurses' own tputs consults to decide whether a $<...> delay
    *    becomes pad characters, a nap, or nothing. screen.ts reads them
    *    through the same ltgetflag path. }}
@@ -364,7 +364,7 @@ export const tgetstr = (cap: string): string | null => {
 };
 
 /*
- * og's tgoto: substitute a row and column into a cursor-addressing string.
+ * less's tgoto: substitute a row and column into a cursor-addressing string.
  *
  * Handles the terminfo parameter language to the extent cursor_address
  * uses it -- %i, %p1/%p2, %d, %2/%3, %c, %%, and the %p1%d style. That is

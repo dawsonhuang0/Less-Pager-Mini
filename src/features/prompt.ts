@@ -90,7 +90,7 @@ export function setProto(text: string): void {
 }
 
 /**
- * Restores the built-in prototypes for a fresh pager run, like og's
+ * Restores the built-in prototypes for a fresh pager run, like less's
  * init_prompt: more mode replaces the medium prompt with --More--.
  */
 export function resetProtos(): void {
@@ -205,7 +205,7 @@ function whereRow(content: string[], where: Where): number {
 }
 
 /**
- * og's prutfchar over a whole string: ESC spells "ESC", an ASCII
+ * less's prutfchar over a whole string: ESC spells "ESC", an ASCII
  * control character takes caret notation, and everything else stands
  * for itself (charset.c). This is what %f and %F are passed through.
  */
@@ -227,7 +227,7 @@ function printableName(name: string): string {
 }
 
 /**
- * True when the file has no lines at all, which is og's currline()
+ * True when the file has no lines at all, which is less's currline()
  * returning 0: the position table is empty, so there is no line number
  * to report. Our content array still carries one synthetic empty line
  * for such a file.
@@ -247,7 +247,7 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'a': return out.length > 0;
     case 'c': return config.col !== 0;
 
-    // og's eof_displayed: with a pipe's length unknown, the bottom
+    // less's eof_displayed: with a pipe's length unknown, the bottom
     // line at the end is not yet (END) — the help file always knows.
     // It asks where the bottom line ends in the FILE, so a tail
     // hidden by a & filter keeps it short of the end
@@ -262,12 +262,12 @@ function cond(content: string[], out: string, char: string): boolean {
       return ntags() ? ntags() > 1 : files.list.length > 1;
 
     case 'n':
-      // og: with an active tag list ?n is ALWAYS true (prompt.c:242)
+      // less: with an active tag list ?n is ALWAYS true (prompt.c:242)
       // - a -t session shows the file name on every prompt, since
       // tag jumps switch files
       return ntags() > 0 || files.newFile;
 
-    // og's ?O: "OSC 8 link selected?" - `osc8_linepos != NULL_POSITION`
+    // less's ?O: "OSC 8 link selected?" - `osc8_linepos != NULL_POSITION`
     // (prompt.c:246, documented at less.nro.VER:2868). Note the
     // neighbouring %O EXPANSION does not exist at HEAD: e0d51f0 added
     // it and 3e11cb4 removed it again when the handler stopped being
@@ -282,16 +282,16 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'x': return files.list[files.index + 1] !== undefined;
 
     // line numbers are only known while -n keeps them on
-    // og's cond is `linenums && currline(where) != 0` (prompt.c:229):
+    // less's cond is `linenums && currline(where) != 0` (prompt.c:229):
     // a line NUMBER of zero means it is not known - which is the state
     // an empty file is permanently in, since it has no lines at all.
-    // og then takes the ELSE branch of the -M prompt and reports the
+    // less then takes the ELSE branch of the -M prompt and reports the
     // byte instead
     case 'l': case 'd':
       return optLinenums() > 0 && !noLines(content);
 
     // the LAST line and page need the input's LENGTH, not merely a
-    // finished stream: og's cond is linenums && ch_length() !=
+    // finished stream: less's cond is linenums && ch_length() !=
     // NULL_POSITION (prompt.c:233), and a pipe's length stays
     // unknown until a read returns its EOI
     case 'L': case 'D':
@@ -320,7 +320,7 @@ function protochar(
 ): string {
   const entry = files.list[files.index];
   const next = files.list[files.index + 1];
-  // og keeps the real length and guards the DIVISION instead: `%p`
+  // less keeps the real length and guards the DIVISION instead: `%p`
   // asks `if (pos != NULL_POSITION && len > 0)` and prints "?"
   // otherwise (prompt.c:396). Clamping the length to 1 made an empty
   // file report a size of one byte
@@ -330,7 +330,7 @@ function protochar(
   const pageSize = Math.max(config.window - 1 - optHeader().lines, 1);
   const row = whereRow(content, where);
 
-  // og's position(where) indexes the SCREEN, not the content: TOP is
+  // less's position(where) indexes the SCREEN, not the content: TOP is
   // row 0, BOTTOM is sc_height-2, BOTTOM_PLUS_ONE sc_height-1, MIDDLE
   // the middle row (position.c). On a wrapped line those are rows
   // INSIDE a line, which is why %bB and %pB report a mid-line byte
@@ -360,9 +360,9 @@ function protochar(
 
   switch (char) {
     case 'b':
-      // recycled pipe data still counts in the offset (og positions);
+      // recycled pipe data still counts in the offset (less positions);
       // an unknown length never clamps — entry.size is stale while a
-      // pipe still streams (og's curr_byte reports the raw position)
+      // pipe still streams (less's curr_byte reports the raw position)
       return out + (sizeIsKnown()
         ? Math.min(absoluteByte(), size)
         : absoluteByte());
@@ -375,7 +375,7 @@ function protochar(
         ? String(Math.floor(Math.max(absoluteLine() - 1, 0) / pageSize) + 1)
         : '?');
 
-    // og's %D expands '?' while ch_length is unknown even without
+    // less's %D expands '?' while ch_length is unknown even without
     // the ?D guard (prompt.c:317), 0 for an empty file
     case 'D':
       if (!optLinenums() || !sizeIsKnown()) return out + '?';
@@ -400,7 +400,7 @@ function protochar(
       // EDIT_PGM is "vi" on unix and "edit" on Windows (defines.wn)
       return out + (lgetenv('VISUAL') || lgetenv('EDITOR') || EDIT_PGM);
 
-    // og converts ONLY the file name to printable form, and it does so
+    // less converts ONLY the file name to printable form, and it does so
     // while BUILDING the prompt - ap_estr(..., TRUE) for %f and %F,
     // ap_str for everything else (prompt.c:337, bf14bc4a). That is a
     // different conversion from the one the draw applies: prutfchar
@@ -424,7 +424,7 @@ function protochar(
       return out +
         (optLinenums() ? String(vlinenum(whereRow(content, where) + 1)) : '?');
 
-    // og's %L is '?' while ch_length is unknown, and also for an
+    // less's %L is '?' while ch_length is unknown, and also for an
     // EMPTY file (len == ch_zero, prompt.c:379) — unlike %D's 0
     case 'L':
       if (!optLinenums() || !sizeIsKnown()) return out + '?';
@@ -512,7 +512,7 @@ export function shellQuote(name: string): string {
   // the whole name gets the quote characters instead
   const meta = lgetenv('LESSMETACHARS') ?? METACHARS;
 
-  // the Windows shell has no backslash escaping, so og's
+  // the Windows shell has no backslash escaping, so less's
   // DEF_METAESCAPE is empty there and names quote-wrap instead
   const esc = lgetenv('LESSMETAESCAPE') ?? DEF_METAESCAPE;
 

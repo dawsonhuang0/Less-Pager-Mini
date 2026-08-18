@@ -3,10 +3,10 @@ import { files } from '../features/files';
 /**
  * What this session calls itself in the terminal's title bar.
  *
- * og sets a title only on Windows, through SetConsoleTitleW under
+ * less sets a title only on Windows, through SetConsoleTitleW under
  * MSDOS_COMPILER==WIN32C (command.c:966), and sends nothing at all on
  * unix. It does not have to: a unix terminal titles its window from
- * the foreground PROCESS, and og's process is `less foo`. Ours is
+ * the foreground PROCESS, and less's process is `less foo`. Ours is
  * `node /path/to/cli.js foo`, so the same mechanism reads "node".
  *
  * process.title is that mechanism, not an escape sequence. Writing an
@@ -18,14 +18,14 @@ import { files } from '../features/files';
  * the bar afterwards.
  *
  * So there is one writer, it needs no restoring, and it goes away
- * with the process - exactly like og's.
+ * with the process - exactly like less's.
  */
 const PRODUCT = 'less-pager-mini';
 
 /**
  * The title this session should be showing.
  *
- * A name appears whenever one is being PAGED, which is og's own `?f`
+ * A name appears whenever one is being PAGED, which is less's own `?f`
  * test and needs no idea of who called: `lmn foo` and a library call
  * under --examine-file both open foo and both say so, while standard
  * input (path "-") and a library call over its own data have no name
@@ -42,7 +42,7 @@ export function windowTitle(): string {
 /**
  * Renames the process, so the terminal retitles itself.
  *
- * og's Windows build re-sets its title at every prompt; its own source
+ * less's Windows build re-sets its title at every prompt; its own source
  * says the right place is the file switch ("{{ Seems like this should
  * be done in edit_ifile }}", command.c:969), which is where the name
  * can actually change.

@@ -102,7 +102,7 @@ describe('--header option', () => {
 
     // set_header keeps NO start position without header LINES
     // (search.c:572) and find_linenum answers 0 for one the caller
-    // does not know - confirmed by og's own hdr-unicode1 recording,
+    // does not know - confirmed by less's own hdr-unicode1 recording,
     // where --header=0,5 queries back as "0,5,0"
     toggle('__header\x0D');
     expect(search.message)
@@ -160,8 +160,8 @@ describe('header line overlay', () => {
     }
   });
 
-  it('shifts headers with hshift like og overlay_header', () => {
-    // og's overlay draws header lines through forw_line, which
+  it('shifts headers with hshift like less overlay_header', () => {
+    // less's overlay draws header lines through forw_line, which
     // honors the live hshift (pty-verified: L01 fghij... under
     // --header=2,4 with ESC-))
     const wide = ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ1234', 'x', 'y', 'z'];
@@ -180,7 +180,7 @@ describe('header line overlay', () => {
     initContent(helpContent);
     toggle('--header=2,3,1\x0D');
 
-    // Once help has moved below its beginning, og overlays lines 1-2,
+    // Once help has moved below its beginning, less overlays lines 1-2,
     // underlines the second one, and continues with help line 4.
     mode.HELP = true;
     config.row = 1;
@@ -230,7 +230,7 @@ describe('header jumps', () => {
     config.row = 10;
     toggle('--header=2,0,5\x0D');
 
-    // g 1 clamps to the header start (after_header_pos) and og's
+    // g 1 clamps to the header start (after_header_pos) and less's
     // back() guard stops the -j back-walk there with NO blank rows
     // (forwback.c: pos != after_header_pos breaks), so the screen
     // stays aligned under the overlay - no duplicated lines
@@ -293,26 +293,26 @@ describe('--no-search-headers family', () => {
     toggle('--header=2,0,3\x0D');
     setNoSearchHeaders(1, 0);
 
-    // og's only exclusion is the START adjust over ABSOLUTE line
+    // less's only exclusion is the START adjust over ABSOLUTE line
     // numbers (search.c:1541): the first two FILE lines (m1, m2)
     // fall out of range...
     doSearch('m2$');
     expect(search.message).toMatch(/^Pattern not found/);
 
-    // ...while the actual header rows (m3, m4) still match - og is
+    // ...while the actual header rows (m3, m4) still match - less is
     // blind to where the header really starts
     search.message = '';
     doSearch('m3$');
     expect(config.row).toBe(2);
   });
 
-  it('lets backward searches run into the header, like og', () => {
+  it('lets backward searches run into the header, like less', () => {
     toggle('--header=1,0,1\x0D');
     setNoSearchHeaders(1, 0);
     config.row = 5;
     search.message = '';
 
-    // og never skips header lines mid-scan: a backward search from
+    // less never skips header lines mid-scan: a backward search from
     // below matches the pinned line itself (probed: 6g ?TARGET with
     // --no-search-headers jumps to line 1)
     startSearch('?', 1);

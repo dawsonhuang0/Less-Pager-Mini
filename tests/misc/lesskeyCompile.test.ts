@@ -44,7 +44,7 @@ beforeEach(() => {
  * without needing that binary built.
  */
 describe('compiling lesskey source', () => {
-  it('lays the file out like og\'s lesskey.c', () => {
+  it('lays the file out like less\'s lesskey.c', () => {
     const bytes = compile('#command\nx quit\n');
 
     // "\0M+G", then c/e/v sections, then "x" "End"
@@ -62,7 +62,7 @@ describe('compiling lesskey source', () => {
     expect(section(bytes, 'v')).toEqual([]);
   });
 
-  it('stores a special key as og\'s BLOB, not a terminal sequence', () => {
+  it('stores a special key as less\'s BLOB, not a terminal sequence', () => {
     // the difference between compiling and reading: a compiled file
     // carries SK_SPECIAL_KEY <code> 6 1 1 1 and the reader expands it
     // through terminfo at load time, so what the terminal calls an up
@@ -76,7 +76,7 @@ describe('compiling lesskey source', () => {
       .toEqual([0x0B, 40, 6, 1, 1, 1, 0x00, 24]);
   });
 
-  it('leaves \\k alone inside an extra string, like og', () => {
+  it('leaves \\k alone inside an extra string, like less', () => {
     // tstr is called with xlate off there, so this is five characters
     const body = section(compile('#command\nx quit \\ku\n'), 'c');
 
@@ -86,7 +86,7 @@ describe('compiling lesskey source', () => {
     ]);
   });
 
-  it('writes #env with og\'s EV_OK, and appends with +=', () => {
+  it('writes #env with less\'s EV_OK, and appends with +=', () => {
     // NAME NUL (EV_OK|A_EXTRA) VALUE NUL; += erases the terminating
     // NUL and carries on, ignoring the name it was given
     expect(section(compile('#env\nA = 1\nA += 2\n'), 'v')).toEqual([
@@ -94,12 +94,12 @@ describe('compiling lesskey source', () => {
     ]);
   });
 
-  it('writes #stop as og\'s end-of-list marker', () => {
+  it('writes #stop as less\'s end-of-list marker', () => {
     expect(section(compile('#command\nx quit\n#stop\n'), 'c'))
       .toEqual([0x78, 0x00, 24, 0x00, 103]); // A_END_LIST
   });
 
-  it('reports what og reports, in og\'s words', () => {
+  it('reports what less reports, in less\'s words', () => {
     const bad = (source: string): string[] =>
       compileLesskey(source, 707).errors;
 
@@ -123,7 +123,7 @@ describe('compiling lesskey source', () => {
     const { data } = compileLesskey('#command\nx blah\ny quit\n', 707);
     const body = section([...data as Buffer], 'c');
 
-    // og's findaction returns A_INVALID and parsing carries on, so the
+    // less's findaction returns A_INVALID and parsing carries on, so the
     // key is dead rather than the rest of the file being lost
     expect(body).toEqual([0x78, 0x00, 100, 0x79, 0x00, 24]);
   });

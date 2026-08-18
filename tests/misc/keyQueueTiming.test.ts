@@ -12,7 +12,7 @@ import {
  *
  * Both take `now` instead of reading it, because both were wrong in a
  * way no screen test could catch: one hid the ":" on the first key of
- * every burst, the other never fired at all. Neither is og's - og
+ * every burst, the other never fired at all. Neither is less's - less
  * needs no clock here, its no-op costs microseconds - so there is no
  * upstream behaviour to compare against, only the rule we chose.
  */

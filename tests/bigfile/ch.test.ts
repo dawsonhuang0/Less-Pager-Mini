@@ -103,7 +103,7 @@ describe('line reading', () => {
     bf.close();
   });
 
-  it('treats a trailing newline like og: last line precedes it', () => {
+  it('treats a trailing newline like less: last line precedes it', () => {
     const bf = open('nltail.txt', 'one\ntwo\n');
     expect(lastLineStart(bf)).toBe(4);
     bf.close();
@@ -152,7 +152,7 @@ describe('terabyte-scale access', () => {
     const last = lastLineStart(bf);
     expect(forwLine(bf, last)?.text).toBe('the very end');
 
-    // byte-percent jump like og's jump_percent
+    // byte-percent jump like less's jump_percent
     const mid = Math.floor(bf.size / 2);
     expect(bf.readRange(mid, 8).length).toBe(8);
 

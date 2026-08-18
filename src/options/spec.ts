@@ -26,7 +26,7 @@ export interface OptionSpec {
   /** Custom `_` query, for handlers with combined-state messages. */
   query?: () => void;
   /** Runs after a number value applies at INIT or TOGGLE, like an
-   *  optfunc handler; og skips it for a two-argument pendopt value. */
+   *  optfunc handler; less skips it for a two-argument pendopt value. */
   handler?: () => void;
   /** Number options: largest accepted value and the reset fallback. */
   max?: number;

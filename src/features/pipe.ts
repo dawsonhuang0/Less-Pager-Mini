@@ -41,7 +41,7 @@ import { PipeDecoder } from './charset';
 import { envDelay } from '../startup/environment';
 
 /**
- * The still-delivering input, like og's non-seekable ch file: the
+ * The still-delivering input, like less's non-seekable ch file: the
  * entry paths set it before contentPager attaches it.
  */
 export const pipeInput = {
@@ -49,7 +49,7 @@ export const pipeInput = {
   decoder: null as PipeDecoder | null,
 };
 
-// og recycles pipe buffers when allocation fails; v8 aborts instead,
+// less recycles pipe buffers when allocation fails; v8 aborts instead,
 // so nearing the heap ceiling is our failed-allocation moment
 const HEAP_LIMIT = v8.getHeapStatistics().heap_size_limit;
 
@@ -57,11 +57,11 @@ const heapPressed = (): boolean =>
   process.memoryUsage().heapUsed > HEAP_LIMIT * 0.7;
 
 // how many lines past the view a pipe reads before pausing, like
-// og's ch reading on demand
+// less's ch reading on demand
 const PIPE_AHEAD = 1000;
 
-// a runtime -b or -B change re-bounds the pipe like og's opt_b
-// calling ch_setbufspace: existing data stays (og recycles only
+// a runtime -b or -B change re-bounds the pipe like less's opt_b
+// calling ch_setbufspace: existing data stays (less recycles only
 // at the next allocation), new arrivals shed against the bound
 onTrimBufSpace(() => {
   if (session.pipeStream) session.pipeBudget = pipeBudgetBytes();
@@ -74,9 +74,9 @@ export function pipeRetained(): number {
 }
 
 /**
- * True while og's initial forw() would still be blocked reading the
+ * True while less's initial forw() would still be blocked reading the
  * input: the first screenful is not painted and the length is not
- * learned. Keys arriving now queue like og's check_poll ungetting
+ * learned. Keys arriving now queue like less's check_poll ungetting
  * tty chars, and the prompt row stays unwritten.
  */
 export function pipeFilling(): boolean {
@@ -84,7 +84,7 @@ export function pipeFilling(): boolean {
     !session.pipeProbing && !sizeIsKnown();
 }
 
-// og's waiting_for_data_delay: a fill stalled this long (or poked by
+// less's waiting_for_data_delay: a fill stalled this long (or poked by
 // a typed key) shows wait_message() once, via ixerror (ch.c:331)
 let stallTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -115,7 +115,7 @@ function clearStallTimer(): void {
 
 /**
  * The fill is over (screenful, EOI, or an interrupt): replay the
- * keys og would now pull from its ungot queue.
+ * keys less would now pull from its ungot queue.
  */
 function finishFill(): void {
   clearStallTimer();
@@ -126,9 +126,9 @@ function finishFill(): void {
 }
 
 /**
- * The --intr char (or ^C) breaks out of the wait, like og's
+ * The --intr char (or ^C) breaks out of the wait, like less's
  * check_poll returning READ_INTR: the fill stops, the queued keys
- * are discarded (getcc_clear), and og lands at the bottom of the
+ * are discarded (getcc_clear), and less lands at the bottom of the
  * buffered data — clear + home, null-line tildes above BOF, the
  * partial content bottom-anchored (jump_loc's !full_screen lclear
  * + forw painting nblank lines first).
@@ -157,7 +157,7 @@ export function abortPipeFill(): void {
 
 /** Wires the still-delivering pipe into the session. */
 /**
- * The -b bound in bytes, like og's ch_setbufspace: the kilobytes
+ * The -b bound in bytes, like less's ch_setbufspace: the kilobytes
  * round up to 8K LBUFSIZE buffers, at least one; unlimited while
  * -B keeps autobuf on or the space is negative.
  */
@@ -171,12 +171,12 @@ export function attachPipe(): void {
   const decoder = pipeInput.decoder!;
   session.pipeStream = stream;
 
-  // the first chunk may already hold a screenful: og's initial
+  // the first chunk may already hold a screenful: less's initial
   // forw(sc_height-1) counts forw_line screen rows and returns once
   // they are available, so the fill is not pending
   session.pipeFirstFill = screenPastEnd();
 
-  // -B bounds a pipe to the -b buffer space, like og's maxbufs
+  // -B bounds a pipe to the -b buffer space, like less's maxbufs
   // applying to non-seekable input when autobuf is off
   session.pipeBudget = pipeBudgetBytes();
 
@@ -189,14 +189,14 @@ export function attachPipe(): void {
       shedPipe();
     } else if (session.pipeBudget === Infinity && (++chunks & 31) === 0 &&
                heapPressed()) {
-      // og's allocation failure moment: from here on the oldest
+      // less's allocation failure moment: from here on the oldest
       // data recycles away instead of the process dying (ch_addbuf
       // falling back to the tail buffer)
       session.pipeBudget = Math.max(pipeRetained() / 2, 64 * 1024 * 1024);
       shedPipe();
     }
 
-    // og reads a pipe only on demand: pause once far enough ahead
+    // less reads a pipe only on demand: pause once far enough ahead
     // of the view, which blocks the writer (`yes` stops producing)
     if (!session.pipeDrainTo &&
         session.content.length - config.row > config.window + PIPE_AHEAD) {
@@ -205,21 +205,21 @@ export function attachPipe(): void {
     }
 
     // a draining read's 4s stall window restarts with each chunk
-    // (og's poll timeout is per read); a message already shown
-    // stays, like og never repainting mid-drain
+    // (less's poll timeout is per read); a message already shown
+    // stays, like less never repainting mid-drain
     if (session.pipeDrainTo) armStallTimer();
   };
 
   const onEnd = (): void => {
     growPipe(decoder.flush());
 
-    // no more data will come, but og's ch_length stays unknown
+    // no more data will come, but less's ch_length stays unknown
     // until a read returns EOI: a drain or follow is such a read,
     // and so was the screen fill if the input ran out mid-screen —
     // except a follow that --exit-follow-on-close will end, whose
     // READ_INTR fires on the bare POLLHUP before any read could
     // return 0 (os.c check_poll, Linux only), leaving the length
-    // unknown; elsewhere og's F reads the 0 and learns it
+    // unknown; elsewhere less's F reads the 0 and learns it
     const entry = files.list[files.index];
     if (entry) entry.streaming = false;
 
@@ -230,7 +230,7 @@ export function attachPipe(): void {
       revealSize();
     }
 
-    // a blocked forward move ends at the EOI, like og's forw_line
+    // a blocked forward move ends at the EOI, like less's forw_line
     // returning NULL and breaking the loop: with no line painted
     // forw's nlines == 0 rings the eof bell
     if (pendingScroll.rows) {
@@ -253,7 +253,7 @@ export function attachPipe(): void {
       render(session.content, session.buffer);
     }
 
-    // end-of-input completes og's blocked read: queued keys process
+    // end-of-input completes less's blocked read: queued keys process
     finishFill();
   };
 
@@ -264,7 +264,7 @@ export function attachPipe(): void {
   // the input may have been consumed to its end before this attach
   // (a startup error gate held the session while the writer
   // finished): 'end' has already been emitted and will not repeat,
-  // so run its bookkeeping now — og's reads at EOF would learn this
+  // so run its bookkeeping now — less's reads at EOF would learn this
   // naturally on the first forward past the data
   if (stream.readableEnded) {
     onEnd();
@@ -277,7 +277,7 @@ export function attachPipe(): void {
     stream.off('data', onData);
     stream.off('end', onEnd);
 
-    // quitting closes the pipe so the writer sees EPIPE, like og
+    // quitting closes the pipe so the writer sees EPIPE, like less
     (stream as unknown as { destroy?: () => void }).destroy?.();
 
     session.pipeStream = null;
@@ -289,7 +289,7 @@ export function attachPipe(): void {
 
 /**
  * --file-size reads the whole pipe before the terminal initializes,
- * like edit() calling scan_eof under want_filesize: og blocks the
+ * like edit() calling scan_eof under want_filesize: less blocks the
  * first paint until the length is known, painting "Determining
  * length of file" on the main screen once the scan runs LONGTIME
  * (2s); ^X or ^C abandons the scan and pages with it unknown.
@@ -301,13 +301,13 @@ export function pipeFullProbe(): Promise<void> {
     let messaged = false;
     let ticks = 0;
 
-    // og's raw mode is on from startup, so ^C reaches the scan as
+    // less's raw mode is on from startup, so ^C reaches the scan as
     // an interrupt instead of killing the process; the keyboard
     // stays paused, leaving its bytes to the readSync poll
     keyboard().setRawMode(true);
 
     // huge pipes recycle their oldest data while scanning, like
-    // og's ch buffers under -B during scan_eof
+    // less's ch buffers under -B during scan_eof
     session.pipeBudget = pipeBudgetBytes();
 
     const timer = setTimeout(() => {
@@ -320,7 +320,7 @@ export function pipeFullProbe(): Promise<void> {
 
     const finish = (): void => {
       clearTimeout(timer);
-      // og clears its ierror line before the alt screen enters
+      // less clears its ierror line before the alt screen enters
       if (messaged) fs.writeSync(1, '\r' + CLEAR_LINE);
       stream.off('data', onData);
       stream.off('end', onEnd);
@@ -340,13 +340,13 @@ export function pipeFullProbe(): Promise<void> {
         shedPipe();
       }
 
-      // ABORT_SIGS in og's scan_eof loop: stop where we are; an
+      // ABORT_SIGS in less's scan_eof loop: stop where we are; an
       // interrupt after the message showed turns line numbers off
       // (abort_delayed_msg) — the pre-init error prints plainly and
-      // joins the startup RETURN gate, like og's errmsgs check
+      // joins the startup RETURN gate, like less's errmsgs check
       if ((ticks & 7) === 0 && searchInterrupted()) {
-        // the aborting ^C is og's consumed signal, never a key —
-        // except under -K, where og's psignals quits on it (the
+        // the aborting ^C is less's consumed signal, never a key —
+        // except under -K, where less's psignals quits on it (the
         // requeued byte reaches the key loop and quits there); the
         // pending S_INTERRUPT clears the startup gate's key too
         if (!optQuitOnIntr()) {
@@ -383,7 +383,7 @@ export function pipeFullProbe(): Promise<void> {
   });
 }
 
-// a runtime --file-size toggle, like og's opt_filesize: scan_eof
+// a runtime --file-size toggle, like less's opt_filesize: scan_eof
 // runs only while a file is open and its length is unknown
 // (`curr_ifile != NULL && ch_length() == NULL_POSITION`) — a
 // completed input reveals from its buffers at once, and a
@@ -400,7 +400,7 @@ hook.scanFileSize = () => {
   if (pipeDraining.active) return;
   if (!pipeDrain(() => {}, '', '')) return;
 
-  // the note appears once the drain runs og's LONGTIME
+  // the note appears once the drain runs less's LONGTIME
   const timer = setTimeout(() => {
     if (pipeDraining.active && session.pipeDrainTo) {
       pipeDraining.note = 'Determining length of file';
@@ -412,7 +412,7 @@ hook.scanFileSize = () => {
 
 /**
  * Reads the pipe until the content exceeds one screen or it ends,
- * growing the session silently, like og's get_one_screen blocking
+ * growing the session silently, like less's get_one_screen blocking
  * in forw_line before the terminal initializes.
  */
 export function pipeOneScreenProbe(): Promise<void> {
@@ -475,7 +475,7 @@ export function pipeOneScreenProbe(): Promise<void> {
 
 /**
  * True when the current screen extends past the end of the input:
- * og's fill requested window-1 rows, so the input ending before
+ * less's fill requested window-1 rows, so the input ending before
  * they arrived means a read already returned EOI.
  */
 function screenPastEnd(): boolean {
@@ -497,14 +497,14 @@ function growPipe(raw: string[]): void {
 
   session.fullContent.push(...raw);
 
-  // og's ch.c writes the log file as each pipe buffer is read: an
+  // less's ch.c writes the log file as each pipe buffer is read: an
   // active -o/s log receives streamed lines live, not just the
   // content buffered when it opened
   appendLogLines(raw);
 
   // a pipe's byte count grows with the data, for %b and = (one
   // newline per line, like byteOffset); a streamed file's size is
-  // already known from stat, like og's CH_CANSEEK ch_length
+  // already known from stat, like less's CH_CANSEEK ch_length
   if (entry && !entry.sizeKnown) {
     for (const line of raw) entry.size += Buffer.byteLength(line) + 1;
   }
@@ -539,9 +539,9 @@ function growPipe(raw: string[]): void {
     mode.EOF = false;
   }
 
-  // a forward move blocked in og's forw_line advances as its lines
+  // a forward move blocked in less's forw_line advances as its lines
   // arrive, painting each one; a shown wait message stays put until
-  // the move completes (og reprints it at every keypress, which on
+  // the move completes (less reprints it at every keypress, which on
   // a live keyboard reads as continuous)
   if (pendingScroll.rows && !session.pipeFirstFill &&
       !session.pipeDrainTo && !session.exited && !session.shellPause) {
@@ -562,22 +562,22 @@ function growPipe(raw: string[]): void {
     render(session.content, session.buffer);
 
     // the move completed: the prompt is back, and the queued keys
-    // run like og's command loop draining the ungot chars
+    // run like less's command loop draining the ungot chars
     if (done) {
       pendingScroll.moved = false;
       finishFill();
     }
   }
 
-  // og displays lines only while the first screenful is filling;
+  // less displays lines only while the first screenful is filling;
   // once it completes, new pipe data never repaints an idle screen.
   // A shown wait message stays through arriving lines until the
-  // fill completes (og reprints it at every keypress, which on a
+  // fill completes (less reprints it at every keypress, which on a
   // live keyboard reads as continuous)
   if (session.pipeFirstFill && !session.pipeProbing && !session.exited &&
       !session.shellPause &&
       !session.pipeDrainTo) {
-    // og's forw counts screen rows (forw_line per row, so wrapped
+    // less's forw counts screen rows (forw_line per row, so wrapped
     // lines fill faster), not input lines
     const done = !screenPastEnd();
 
@@ -595,9 +595,9 @@ function growPipe(raw: string[]): void {
 }
 
 /**
- * Recycles the oldest half of the buffered pipe data, like og's
+ * Recycles the oldest half of the buffered pipe data, like less's
  * ch_addbuf failure reusing the tail buffer: the early lines become
- * unreachable (marks there are lost, like og's unreadable blocks),
+ * unreachable (marks there are lost, like less's unreadable blocks),
  * while line numbers and byte offsets keep counting from the true
  * start via the entry's discarded bases.
  */
@@ -642,7 +642,7 @@ function shedPipe(): void {
 }
 
 /**
- * Wakes the pipe for a forward move that clamped short, like og's
+ * Wakes the pipe for a forward move that clamped short, like less's
  * forw_line starting its blocking read: the stream resumes (it may
  * have paused on back-pressure) and a 4s data stall shows the wait
  * message on the cleared command line.
@@ -660,7 +660,7 @@ export function startPendingScroll(): void {
 }
 
 /**
- * Abandons a blocked forward move, like og's READ_INTR breaking the
+ * Abandons a blocked forward move, like less's READ_INTR breaking the
  * forw loop: queued keys are discarded (getcc_clear), and with no
  * line painted forw's nlines == 0 rings the eof bell.
  *
@@ -690,12 +690,12 @@ export function pipeDemand(): void {
 }
 
 /**
- * G and % on a streaming pipe read to end-of-file first, like og's
- * ch_end_seek loop; the interrupt key cancels it. og's G runs with
+ * G and % on a streaming pipe read to end-of-file first, like less's
+ * ch_end_seek loop; the interrupt key cancels it. less's G runs with
  * a blank command line, % with ierror's "Determining length" note.
  *
  * @param jump - The jump to run once the pipe ends.
- * @param note - The ierror text shown while reading (og's %).
+ * @param note - The ierror text shown while reading (less's %).
  * @param cancelMessage - The message an interrupt reports.
  * @returns True when the jump waits for the pipe to drain.
  */
@@ -716,7 +716,7 @@ export function pipeDrain(
   session.pipePaused = false;
   session.pipeStream.resume();
 
-  // the drain blocks reading like og's ch_end_seek: a 4s data
+  // the drain blocks reading like less's ch_end_seek: a 4s data
   // stall shows wait_message on the blank command line
   armStallTimer();
   return true;

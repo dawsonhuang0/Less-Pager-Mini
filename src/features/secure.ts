@@ -37,7 +37,7 @@ function parseFeatures(
     const matches = FEATURES.filter(f => f.startsWith(token));
 
     if (matches.length !== 1) {
-      // the ambient pass is a policy probe, not a scan: og reports
+      // the ambient pass is a policy probe, not a scan: less reports
       // each bad name once, so only the real read speaks up
       if (report) {
         const kind = matches.length ? 'ambiguous' : 'invalid';
@@ -84,19 +84,19 @@ function allowedBy(
  * Reads the LESSSECURE environment, like init_secure — but a library
  * caller's overlay may only TIGHTEN what it finds.
  *
- * og is a program its user ran, so whoever sets LESSSECURE_ALLOW is
+ * less is a program its user ran, so whoever sets LESSSECURE_ALLOW is
  * the same person who set LESSSECURE. A library call has two parties:
  * the deployment that hardened the environment, and the application
  * embedding the pager. Taking what BOTH permit means the application
  * can still restrict itself, and cannot hand back a feature the
  * environment took away.
  *
- * The ambient view is og's ladder, so $LESSNOCONFIG blanks LESSSECURE
- * exactly as it does in og (main.c reads no_config before init_secure,
+ * The ambient view is less's ladder, so $LESSNOCONFIG blanks LESSSECURE
+ * exactly as it does in less (main.c reads no_config before init_secure,
  * and ignore_env then hides every name the list omits). Only the real
  * environment can set $LESSNOCONFIG, so a caller cannot reach for it
  * to wipe a policy it is not allowed to relax directly. Lesskey #env
- * lines cannot carry LESSSECURE in either program: og's init_secure
+ * lines cannot carry LESSSECURE in either program: less's init_secure
  * runs before init_cmds loads the tables, and so does ours.
  */
 export function initSecure(): void {

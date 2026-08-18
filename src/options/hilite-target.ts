@@ -11,7 +11,7 @@ export const hiliteTarget: OptionSpec = {
       'Highlight target line',
     ],
     defaultValue: 0,
-    // the target screen row redraws with the next repaint, like og's
+    // the target screen row redraws with the next repaint, like less's
     // opt_hilite_target calling draw_target_attn
     get: () => opt.hiliteTarget,
     set: value => { opt.hiliteTarget = value as number; },

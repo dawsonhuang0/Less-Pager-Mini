@@ -7,7 +7,7 @@ import { execFileSync } from 'child_process';
 import { terminalEnv } from '../startup/environment';
 
 /**
- * The keyboard stream, like og's ttyin.c: keys come from the
+ * The keyboard stream, like less's ttyin.c: keys come from the
  * controlling terminal, not stdin, so piped input (`cmd | lmn`)
  * still leaves an interactive keyboard.
  */
@@ -50,13 +50,13 @@ function attach(fd: number): boolean {
 }
 
 export function openTtyKeyboard(): boolean {
-  // og's ttyin.c opens "CON" on Windows
+  // less's ttyin.c opens "CON" on Windows
   if (process.platform === 'win32') {
     const con = openDevice('CONIN$');
     return con >= 0 && attach(con);
   }
 
-  // og's open_tty (ttyin.c:67) tries THREE things in order and cannot
+  // less's open_tty (ttyin.c:67) tries THREE things in order and cannot
   // come away empty:
   //
   //   1. ttyname(2) - the device STDERR is on - opened afresh
@@ -71,7 +71,7 @@ export function openTtyKeyboard(): boolean {
 
   if (fd < 0) fd = openDevice('/dev/tty');
 
-  // og takes fd 2 here unconditionally, terminal or not: raw_mode's
+  // less takes fd 2 here unconditionally, terminal or not: raw_mode's
   // tcsetattr simply fails on it and getchr finds out one read later,
   // at EOF. That is not a dead end - it is how less still PAINTS its
   // first screen before it gives up
@@ -83,11 +83,11 @@ export function openTtyKeyboard(): boolean {
 
 /**
  * Takes a descriptor that is NOT a terminal as the keyboard, which is
- * og's last resort (fd 2, ttyin.c:71).
+ * less's last resort (fd 2, ttyin.c:71).
  *
  * Node's tty.ReadStream refuses a non-tty fd, so the descriptor is
  * wrapped in the same shape with the terminal calls as the no-ops
- * they effectively are there - og's raw_mode on such an fd fails and
+ * they effectively are there - less's raw_mode on such an fd fails and
  * is ignored. Reading it yields EOF, which is the point.
  */
 function attachPlain(fd: number): boolean {
@@ -106,7 +106,7 @@ function attachPlain(fd: number): boolean {
   }
 }
 
-// og's check_poll (os.c) peeks the tty with a zero-timeout poll; a
+// less's check_poll (os.c) peeks the tty with a zero-timeout poll; a
 // readSync on the keyboard fd can BLOCK when that fd is in blocking
 // mode (fs.openSync default; fd 0's state is whatever the shell
 // left), freezing a scan at its first poll — so interrupt polls use
@@ -133,9 +133,9 @@ export function keyboardPollFd(): number | null {
 }
 
 /**
- * True when the terminal lacks cursor capabilities, like og's
+ * True when the terminal lacks cursor capabilities, like less's
  * missing_cap: on unix a missing $TERM loads the "unknown" termcap
- * entry (screen.c's DEFAULT_TERM), which turns up dumb. og's Windows
+ * entry (screen.c's DEFAULT_TERM), which turns up dumb. less's Windows
  * build never consults $TERM — it drives the console API directly —
  * so a Windows console only degrades when it predates the VT
  * processing that node enables on its tty streams (Windows 10 build
@@ -154,7 +154,7 @@ export function dumbTerminal(): boolean {
   return !term || term === 'dumb' || term === 'unknown';
 }
 
-// og's ungot queue (ungetcc_back): keys the interrupt poll consumed
+// less's ungot queue (ungetcc_back): keys the interrupt poll consumed
 // during a blocking scan, replayed by the command loop afterwards —
 // never fed back through the stream, whose flowing-mode unshift
 // would re-enter the key handler synchronously mid-scan
@@ -169,7 +169,7 @@ export function pushUngot(data: Buffer): void {
  * True when a queued key was typed while the screen it will act on
  * was already up.
  *
- * Queued keys wait behind a message, because og's get_return reads
+ * Queued keys wait behind a message, because less's get_return reads
  * the raw tty and a key typed BEFORE a message appeared must not
  * dismiss it. A key taken off the terminal mid-work is the opposite
  * case: the message was on screen for the whole wait, so the user was
@@ -198,7 +198,7 @@ export function takeUngot(): Buffer | null {
 }
 
 /**
- * og's `sigs` (signal.c:29) and ABORT_SIGS().
+ * less's `sigs` (signal.c:29) and ABORT_SIGS().
  *
  *     static void u_interrupt(int type) { ... sigs |= S_INTERRUPT; ... }
  *     #define ABORT_SIGS()  (sigs & (S_INTERRUPT|S_STOP))
@@ -206,53 +206,53 @@ export function takeUngot(): Buffer | null {
  * A volatile flag the SIGNAL handler sets, so every loop that draws
  * can check it for free: put_line_hilite returns without output
  * (output.c:64) and forw()/back() break where they stand
- * (forwback.c:312, :412). That is why og stops the instant you press
+ * (forwback.c:312, :412). That is why less stops the instant you press
  * ^C, wherever it happens to be.
  *
  * We cannot get a signal delivered mid-work - node runs its handlers
  * on the event loop - so this flag is raised by whoever first SEES
  * the ^C: the key scan, the interrupt poll, or the SIGINT handler.
- * The loops then behave like og's.
+ * The loops then behave like less's.
  */
 let sigs = false;
 
-/** og's ABORT_SIGS(). */
+/** less's ABORT_SIGS(). */
 export const abortSigs = (): boolean => sigs;
 
-/** og's `sigs |= S_INTERRUPT`, from wherever the ^C was noticed. */
+/** less's `sigs |= S_INTERRUPT`, from wherever the ^C was noticed. */
 export function raiseAbort(): void {
   sigs = true;
 }
 
-/** og's psignals clearing the flag once it has been handled. */
+/** less's psignals clearing the flag once it has been handled. */
 export function clearAbort(): void {
   sigs = false;
 }
 
 /**
- * Discards the queued keys, like og's iread on READ_INTR running
+ * Discards the queued keys, like less's iread on READ_INTR running
  * `getcc_clear()` (os.c): keys typed before the interrupt — the
  * aborting ^C included — never run as commands. Keys still unread
- * in the kernel's tty buffer survive, exactly like og's.
+ * in the kernel's tty buffer survive, exactly like less's.
  */
 export function consumeInterrupt(): void {
   ungot = [];
   ungotLive = false;
 }
 
-/** True while ungot input pends, og's prompt() early-return test. */
+/** True while ungot input pends, less's prompt() early-return test. */
 export function hasUngot(): boolean {
   return ungot.length > 0;
 }
 
 /**
- * og's error()/get_return inline gate: prints the message on the
+ * less's error()/get_return inline gate: prints the message on the
  * prompt line, BLOCKS for one raw key (output.c:696 - RETURN, space
  * or an interrupt dismiss; any other key ungets to run as the next
  * command), then clears the line so the interrupted action continues.
  */
 // how the last gateReturn ended: a dismissing key, an ungot command
-// key, or og's lwinch resize longjmp
+// key, or less's lwinch resize longjmp
 type GateRelease = 'dismiss' | 'unget' | 'winch';
 let gateKind: GateRelease = 'dismiss';
 
@@ -266,10 +266,10 @@ export function gateReleasedByWinch(): boolean {
   return gateKind === 'winch';
 }
 
-// where the last gate's message ended, og's error() col: the standout
+// where the last gate's message ended, less's error() col: the standout
 // widths (zero on any terminal whose sequences take no columns), the
 // message, and the whole "  (press RETURN)" array INCLUDING its
-// terminating NUL, which og counts with sizeof (output.c:730)
+// terminating NUL, which less counts with sizeof (output.c:730)
 let gateCol = 0;
 
 /** The column the last gate's message reached. */
@@ -282,7 +282,7 @@ export function gateReturn(message: string): void {
   gateCol = message.length + '  (press RETURN)'.length + 1;
 
   if (!process.stdout.isTTY || !keyboard().isTTY) {
-    // og's non-interactive error() prints plainly with no gate
+    // less's non-interactive error() prints plainly with no gate
     fs.writeSync(1, message + '\n');
     return;
   }
@@ -292,9 +292,9 @@ export function gateReturn(message: string): void {
 
   keyboard().pause();
 
-  // node's tty fd is non-blocking: og's getchr blocks, so spin on
+  // node's tty fd is non-blocking: less's getchr blocks, so spin on
   // EAGAIN with a short sleep until a key arrives. A resize during
-  // the wait dismisses like og's lwinch longjmp out of the blocked
+  // the wait dismisses like less's lwinch longjmp out of the blocked
   // read (READ_INTR at a tty read) - node can't deliver SIGWINCH
   // while we spin, so poll the real ioctl size instead
   const buf = Buffer.alloc(64);
@@ -338,7 +338,7 @@ export function gateReturn(message: string): void {
   fs.writeSync(1, '\r\x1b[K');
 }
 
-// og keeps ISIG on in raw mode, so a typed ^C is a kernel SIGINT to
+// less keeps ISIG on in raw mode, so a typed ^C is a kernel SIGINT to
 // the WHOLE foreground process group — a pipe's writer dies with it
 // (`cmd | less` + ^C kills cmd; the pipe closes and EOF is real).
 // node's setRawMode clears ISIG, so the ^C reaches us as a bare
@@ -370,9 +370,9 @@ export function wasSelfSigint(): boolean {
 }
 
 /**
- * The terminal size straight from the kernel, like og's scrsize
+ * The terminal size straight from the kernel, like less's scrsize
  * ioctl: node caches the winsize and refreshes it only in its own
- * SIGWINCH processing — a blocking scan delays that past og's
+ * SIGWINCH processing — a blocking scan delays that past less's
  * update_term moment, and a raw SIGWINCH handler can run before
  * the refresh. Returns [columns, rows], falling back to node's
  * cache when stty is unavailable (Windows).
@@ -403,11 +403,11 @@ export function freshWindowSize(): [number, number] | null {
 }
 
 /**
- * Watches window changes like og's lwinch: the handler fires on the
- * SIGNAL itself — og's psignals runs screen_trashed() even when the
+ * Watches window changes like less's lwinch: the handler fires on the
+ * SIGNAL itself — less's psignals runs screen_trashed() even when the
  * size did not change, and the longjmp dismisses get_return waits —
  * while node's 'resize' event only fires when the dimensions
- * differ. Windows has no SIGWINCH, so 'resize' covers it, like og
+ * differ. Windows has no SIGWINCH, so 'resize' covers it, like less
  * polling the console size.
  */
 export function watchWinch(fn: () => void): void {

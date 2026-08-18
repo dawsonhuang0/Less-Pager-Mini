@@ -16,7 +16,7 @@ export const rawControlChars: OptionSpec = {
     defaultValue: 0,
     get: () => opt.ctldisp,
     set: (value, content) => {
-      // og's -r is O_BOOL|O_REPAINT with no ofunc (opttbl.c): it
+      // less's -r is O_BOOL|O_REPAINT with no ofunc (opttbl.c): it
       // trashes the screen and the next make_display repaints from
       // table[TOP], a BYTE, so the top stays on the same SOURCE
       // character while what that character displays as changes

@@ -93,7 +93,7 @@ describe('wrapLongLines', () => {
 
     const line22 = text[21];
 
-    // og's rows are self-contained: a style spanning the wrap
+    // less's rows are self-contained: a style spanning the wrap
     // closes at the row end and reopens on the continuation
     const expectOutputs = [
       line22.slice(0, 103) + RESET,

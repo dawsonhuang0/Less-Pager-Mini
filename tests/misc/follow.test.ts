@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 describe('startFollow', () => {
-  it('waits on the pseudo-file like og at the end of a closed pipe',
+  it('waits on the pseudo-file like less at the end of a closed pipe',
     () => {
       initContent(['a', 'b']);
 
@@ -73,8 +73,8 @@ describe('startFollow', () => {
 
     startFollow('forever');
 
-    // og exits only where poll reports the bare POLLHUP (Linux);
-    // Darwin adds POLLIN, so og's F keeps waiting there — and so
+    // less exits only where poll reports the bare POLLHUP (Linux);
+    // Darwin adds POLLIN, so less's F keeps waiting there — and so
     // does ours
     expect(pollFollow()).toEqual(
       { kind: process.platform === 'linux' ? 'close' : 'idle' });
@@ -84,7 +84,7 @@ describe('startFollow', () => {
     initContent(['a', 'b']);
     scanOptions('--exit-follow-on-close', []);
 
-    // og's check_poll needs POLLHUP: an open but idle pipe waits
+    // less's check_poll needs POLLHUP: an open but idle pipe waits
     files.list[files.index].streaming = true;
 
     startFollow('forever');
@@ -219,7 +219,7 @@ describe('pollFollow', () => {
 
       expect(pollFollow()).toEqual({ kind: 'idle' });
 
-      // og's option only checks POLLHUP, which a regular file never
+      // less's option only checks POLLHUP, which a regular file never
       // raises: removal or truncation changes nothing (os.c:167)
       fs.unlinkSync(file);
       expect(pollFollow()).toEqual({ kind: 'idle' });

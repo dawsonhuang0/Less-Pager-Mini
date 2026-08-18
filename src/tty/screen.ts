@@ -31,7 +31,7 @@ import { terminalNumber } from './terminal';
 
 const atoi = (value: string): number => parseInt(value, 10) || 0;
 
-/** OG scrsize precedence, before gutters are reserved. */
+/** less scrsize precedence, before gutters are reserved. */
 export function detectedDimensions(): [number, number] {
   const size = freshWindowSize();
   const sysWidth = (size ? size[0] : process.stdout.columns) || 0;
@@ -49,7 +49,7 @@ export function detectedDimensions(): [number, number] {
       ? atoi(lgetenv('COLUMNS') ?? '')
       : terminalNumber('cols', 'co') ?? 0;
 
-  // og's full_screen goes FALSE here and never back (screen.c:966);
+  // less's full_screen goes FALSE here and never back (screen.c:966);
   // the variable cannot change inside one process, so recomputing it
   // on every scrsize - resize included - is the same thing
   const lessRows = lgetenv('LESS_LINES');
@@ -73,14 +73,14 @@ export function detectedDimensions(): [number, number] {
 }
 
 /**
- * The escape sequences that undo enterScreen, like og's term_deinit.
+ * The escape sequences that undo enterScreen, like less's term_deinit.
  *
  * Both ways out of the screen need these in this order, and they were
  * written twice: here and inline in the quit path. Two copies of an
- * exit path is how one of them silently stops matching og.
+ * exit path is how one of them silently stops matching less.
  */
 export function leaveScreenCodes(): void {
-  // og's mouse and paste strings are hardcoded, not termcap: even
+  // less's mouse and paste strings are hardcoded, not termcap: even
   // a dumb terminal receives them when the options are on
   if (optMouse() || opt.emouse) {
     putstr(MOUSE_OFF + MOUSE_SGR_OFF);
@@ -104,12 +104,12 @@ export function leaveScreenCodes(): void {
 export function suspendTerminal(): void {
   leaveScreenCodes();
 
-  // og's lsystem: `term_deinit(); flush(); /* Make sure the deinit
+  // less's lsystem: `term_deinit(); flush(); /* Make sure the deinit
   // chars get out */` (lsystem.c:97). The child writes to fd 1
   // directly, so anything of ours still in obuf arrives AFTER it -
   // including the alternate-screen exit. `!echo hi` then printed hi
   // inside the alt screen, and leaving it a moment later threw the
-  // line away: og showed "hi", we showed nothing.
+  // line away: less showed "hi", we showed nothing.
   flush();
 
   keyboard().setRawMode(false);
@@ -136,11 +136,11 @@ export function enterScreen(): void {
 
   hook.screenActive = true;
 
-  // og's first_time is a static set at STARTUP and never again
+  // less's first_time is a static set at STARTUP and never again
   // (forwback.c:22, cleared at :381) - term_init does not touch it,
   // and lsystem, pipe_data and psignals all come back through
   // term_init. So a screen RE-entered still counts as having painted,
-  // and its first repaint prints "...skipping..." like og's. Clearing
+  // and its first repaint prints "...skipping..." like less's. Clearing
   // the flag here is what swallowed the marker after every ! and ^Z.
   // A genuinely fresh session clears it in freshSession instead.
   resetRender(true);
@@ -148,18 +148,18 @@ export function enterScreen(): void {
 }
 
 /**
- * The last thing og's term_init does (screen.c:2071): park the cursor
+ * The last thing less's term_init does (screen.c:2071): park the cursor
  * at the start of the line.
  *
  * It belongs to the TERMINAL setup, not to the paint that happens to
  * come next, and the difference shows the moment something else comes
- * first: a `+cmd` is ungotten before the first prompt, so og echoes
+ * first: a `+cmd` is ungotten before the first prompt, so less echoes
  * the command behind this CR and paints afterwards. Folding the CR
  * into the first frame instead lost it whenever the first frame was
  * not the first output.
  */
 export function termInitTail(): void {
-  // with -c og instead scrolls a whole screen in, so the first paint
+  // with -c less instead scrolls a whole screen in, so the first paint
   // has the terminal to itself without losing any scrollback
   if (optClearRepaint()) {
     putstr('\n'.repeat(Math.max(config.window - 1, 0)));
@@ -170,9 +170,9 @@ export function termInitTail(): void {
 }
 
 export function calculateDimensions(): void {
-  // og's scrsize queries the terminal itself: node's cached
+  // less's scrsize queries the terminal itself: node's cached
   // winsize lags blocked loops and raw SIGWINCH handlers; a zero
-  // size (some pseudo-terminals) falls back like og
+  // size (some pseudo-terminals) falls back like less
   const [columns, rows] = detectedDimensions();
   config.window = rows;
   config.screenWidth = columns;
@@ -180,7 +180,7 @@ export function calculateDimensions(): void {
   // -N and -J reserve gutter columns inside the screen width
   reserveGutter();
 
-  // og rounds UP: wscroll = (sc_height + 1) / 2 in C integer division
+  // less rounds UP: wscroll = (sc_height + 1) / 2 in C integer division
   // (screen.c:998), so a 45-row screen scrolls 23 lines, not 22
   config.halfWindow = Math.floor((config.window + 1) / 2);
 }

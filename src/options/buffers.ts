@@ -16,7 +16,7 @@ export const buffers: OptionSpec = {
     set: value => {
       opt.bufSpace = value as number;
 
-      // og's opt_b calls ch_setbufspace right away
+      // less's opt_b calls ch_setbufspace right away
       hook.trimBufSpace();
     },
   };

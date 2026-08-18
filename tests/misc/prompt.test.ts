@@ -62,7 +62,7 @@ describe('prompt expansion', () => {
     // top, middle, bottom, bottom-plus-one of a 6-row window
     expect(prExpand(content, '%lt-%lm-%lb-%lB')).toBe('10-12-14-15');
 
-    // og's %L is '?' while ch_length is unknown (prompt.c:379);
+    // less's %L is '?' while ch_length is unknown (prompt.c:379);
     // the where char defaults to top
     expect(prExpand(content, '%l/%L')).toBe('10/?');
 
@@ -76,7 +76,7 @@ describe('prompt expansion', () => {
     // lines "p1\n".."p9\n" are 3 bytes each: 27 bytes before line 10
     expect(prExpand(content, '%b')).toBe('27');
 
-    // the pipe's total size is unknown (og's ch_length) even with
+    // the pipe's total size is unknown (less's ch_length) even with
     // the end displayed, until a read past it returns EOI
     expect(prExpand(content, '%s')).toBe('?');
     mode.EOF = true;
@@ -106,7 +106,7 @@ describe('prompt expansion', () => {
     // 6 screen rows show 5 content lines above the prompt line
     expect(prExpand(content, '?e(END):%lb.')).toBe('5');
 
-    // ?e is og's eof_displayed: the pipe must have returned EOI
+    // ?e is less's eof_displayed: the pipe must have returned EOI
     mode.EOF = true;
     expect(prExpand(content, '?e(END):%lb.')).toBe('5');
     revealPipeEnd();

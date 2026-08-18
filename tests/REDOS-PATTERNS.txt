@@ -51,10 +51,10 @@ ON THE MANY LINES — throughput, and whether you can get out:
 WHAT TO WATCH
 
   1. Does it come back at all, and how fast.
-  2. Does ^C abort a slow search. og checks ABORT_SIGS between LINES
+  2. Does ^C abort a slow search. less checks ABORT_SIGS between LINES
      (search.c), so it can stop between lines but never inside one
      regexec call - on redos-long.txt a single line may be
-     uninterruptible even in og.
+     uninterruptible even in less.
   3. Does the pager still work afterwards, or is the screen wedged.
-  4. If og hangs too, that is worth knowing: it means the limit is
+  4. If less hangs too, that is worth knowing: it means the limit is
      the C library's, not ours.

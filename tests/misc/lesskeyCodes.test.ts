@@ -19,11 +19,11 @@ import { compileLesskey } from '../../src/features/lesskeyCompile';
  * The generated name/code table (tools/gen-lesskey-codes.py).
  *
  * A generator can produce a table that is internally tidy and still
- * wrong, so these check it against og's own numbers rather than
+ * wrong, so these check it against less's own numbers rather than
  * against itself -- the values below are read off cmd.h.
  */
 describe('lesskey action codes', () => {
-  it('carries og\'s numbers for the actions a binary names', () => {
+  it('carries less\'s numbers for the actions a binary names', () => {
     expect({
       forwLine: COMMAND_CODES['forw-line'],       // A_F_LINE 12
       quit: COMMAND_CODES['quit'],                // A_QUIT 24
@@ -64,7 +64,7 @@ describe('lesskey action codes', () => {
     }
   });
 
-  it('keeps the synonyms og keeps, pointing at one code', () => {
+  it('keeps the synonyms less keeps, pointing at one code', () => {
     // several names share a code; the reverse table picks one, and
     // the others still have to compile to the same byte
     for (const [a, b] of [
@@ -81,7 +81,7 @@ describe('lesskey action codes', () => {
   it('carries every \\k form a compiled file can hold', () => {
     // the pager's own \\k handling resolves through terminfo and so
     // only knows the keys a terminal describes; this table is what
-    // COMPILES, and og's tstr accepts the keypad forms too
+    // COMPILES, and less's tstr accepts the keypad forms too
     expect(Object.keys(SPECIAL_KEY_CODES)).toHaveLength(55);
 
     expect({
@@ -97,7 +97,7 @@ describe('lesskey action codes', () => {
     expect([SK_SPECIAL_KEY, SK_CONTROL_K]).toEqual([0x0B, 40]);
   });
 
-  it('writes og\'s built-in bindings as source that compiles', () => {
+  it('writes less\'s built-in bindings as source that compiles', () => {
     // --edit-lesskey opens this when a session has no lesskey at all,
     // so it has to be a real file, not a description of one
     const { data, errors } = compileLesskey(
@@ -106,7 +106,7 @@ describe('lesskey action codes', () => {
     expect(errors).toEqual([]);
     expect(data).not.toBeNull();
 
-    // nothing in og's table went untranslated
+    // nothing in less's table went untranslated
     expect(DEFAULT_KEYMAP.filter(line => line.includes('<?'))).toEqual([]);
 
     // the only commented lines are the two paste markers, which have
@@ -122,7 +122,7 @@ describe('lesskey action codes', () => {
       .toEqual(['#command', '#line-edit']);
   });
 
-  it('leaves the mouse actions unnamed, like og', () => {
+  it('leaves the mouse actions unnamed, like less', () => {
     // A_F_MOUSE(66)/A_B_MOUSE(67)/A_L_MOUSE(78)/A_R_MOUSE(79) are what
     // the DECODER resolves a wheel report to, so lesskey_parse.c never
     // names them - only a hand-written binary can carry one, and a

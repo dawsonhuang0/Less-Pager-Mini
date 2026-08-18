@@ -7,7 +7,7 @@ import os from 'os';
 import path from 'path';
 
 /**
- * og reaches its cat loop through the ordinary startup: main.c:376
+ * less reaches its cat loop through the ordinary startup: main.c:376
  * runs edit_first() - the same edit_ifile every session uses, so
  * $LESSOPEN, the option scan and $LESSCLOSE all apply - and only then
  * copies bytes with cat_file (edit.c:936).
@@ -87,7 +87,7 @@ describe('a non-terminal session cats through the normal open path', () => {
 
     expect(out).toBe('real line\n');
     expect(err).toBe(`${missing}: No such file or directory\n`);
-    // og quits QUIT_ERROR only when edit_first opened nothing at all
+    // less quits QUIT_ERROR only when edit_first opened nothing at all
     expect(code).toBe(0);
   });
 
@@ -118,7 +118,7 @@ describe('a non-terminal session cats through the normal open path', () => {
   });
 
   it('interleaves the preprocessor\'s own stderr, like a live pipe', () => {
-    // og keeps the popen stream open and reads through it as it
+    // less keeps the popen stream open and reads through it as it
     // copies (open_altfile's returnfd branch), so the child is still
     // running while its output is written and its stderr lands
     // BETWEEN its stdout. Collecting the output first would put every

@@ -16,7 +16,7 @@ export const chopLongLines: OptionSpec = {
     defaultValue: 0,
     get: () => (config.chopLongLines ? 1 : 0),
     set: (value, content) => {
-      // og's opt__S calls pos_rehead(TRUE) on toggle (optfunc.c): the
+      // less's opt__S calls pos_rehead(TRUE) on toggle (optfunc.c): the
       // screen top moves back to the BEGINNING of its line, and the
       // horizontal shift becomes the column that top used to be at
       // (position.c:329, pos_shift counts characters). So a chopped
@@ -27,7 +27,7 @@ export const chopLongLines: OptionSpec = {
         const line = content[config.row];
 
         if (line !== undefined) {
-          // og's pos_rehead(TRUE) sets hshift = pos_shift(linepos,
+          // less's pos_rehead(TRUE) sets hshift = pos_shift(linepos,
           // tpos - linepos), and pos_shift counts the characters
           // between the line's start and the top AFTER cvt_text
           // (position.c:271) - which folds backspaces and CR but does
@@ -52,7 +52,7 @@ export const chopLongLines: OptionSpec = {
       config.chopLongLines = Boolean(value);
       recalculateEOF(content);
 
-      // chopline carries O_REPAINT (opttbl.c:423). og repaints from
+      // chopline carries O_REPAINT (opttbl.c:423). less repaints from
       // the file, so it simply reads what the new shape needs; our
       // stream engine materializes a slice sized for the OLD shape,
       // and a chopped screen wants one whole line per row where a

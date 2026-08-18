@@ -136,7 +136,7 @@ interface SearchState {
   history: string[];
   /** Transient status message shown at the prompt. */
   message: string;
-  /** execSearch already wrote og's cmd_exec clear_bot for this
+  /** execSearch already wrote less's cmd_exec clear_bot for this
    *  command, so the next frame opens with nothing. */
   cmdExecOpened: boolean;
   /** A mid-scan note was written straight to the bottom line, so the
@@ -166,7 +166,7 @@ export const search: SearchState = {
 /**
  * Drops the search a session leaves behind, like a fresh less: the
  * compiled pattern, the & filters, the sub-pattern set and the
- * caseless state. The HISTORY stays — og persists that across
+ * caseless state. The HISTORY stays — less persists that across
  * invocations through its history file.
  */
 export function resetSearch(): void {
@@ -383,7 +383,7 @@ export function searchInputKey(key: string): 'pending' | 'run' | 'cancel' {
   }
 
   // keys inside a pending ESC combo go to the editor first, like
-  // og's editchar collecting the sequence with getcc
+  // less's editchar collecting the sequence with getcc
   if (!cmd.prefix) {
     if (key === '\x0D' || key === '\x0A') return 'run';
 
@@ -415,7 +415,7 @@ export function searchInputKey(key: string): 'pending' | 'run' | 'cancel' {
 
 /**
  * Feeds a key through the command buffer, replaying any chars a dead
- * escape sequence ungets, like og's ungetcc loop.
+ * escape sequence ungets, like less's ungetcc loop.
  */
 function feedKey(
   input: SearchInput,
@@ -476,7 +476,7 @@ export function onAutosave(fn: () => void): void {
 }
 
 // histfile hooks, same cycle-avoiding registration: the entry
-// recorder is og's cmdbuf.c:798 entry-modified bit (raised BEFORE
+// recorder is less's cmdbuf.c:798 entry-modified bit (raised BEFORE
 // the autosave attempt), the touch hook is cmd_accept's list flag
 // (raised AFTER it - the attempt sees only earlier state)
 let recordHook: (entry: string) => void = () => {};
@@ -487,7 +487,7 @@ export function onHistRecord(fn: (entry: string) => void): void {
   recordHook = fn;
 }
 
-/** Registers the history modified-flag raiser (og's cmd_accept). */
+/** Registers the history modified-flag raiser (less's cmd_accept). */
 export function onHistTouch(fn: () => void): void {
   touchHook = fn;
 }
@@ -516,7 +516,7 @@ export function addHistory(pattern: string): void {
 
   if (optAutosaveAction('/')) autosaveHook();
 
-  // og's cmd_accept raises the list modified flag only AFTER
+  // less's cmd_accept raises the list modified flag only AFTER
   // cmd_addhist's autosave attempt: the first accept of a clean
   // session skips its own autosave unless the action already
   // dirtied the file (a far search jump's lastmark)
@@ -606,14 +606,14 @@ export function execSearch(
   content: string[],
   finder: SearchFinder | null = null
 ): void {
-  // og's exec_mca runs cmd_exec() before the search: the /pattern
+  // less's exec_mca runs cmd_exec() before the search: the /pattern
   // command line clears and flushes ahead of a possibly long walk
   // (command.c:267); sync, since the search blocks the loop
   fs.writeSync(1, (optNoInit() && !mode.DUMB
     ? '\r'
     : `\x1b[${config.window};1H`) + CLEAR_LINE);
 
-  // that WAS the frame's opening (og's cmd_exec clear_bot before a
+  // that WAS the frame's opening (less's cmd_exec clear_bot before a
   // possibly long walk, command.c:267), so the message frame that may
   // follow must not write another one
   search.cmdExecOpened = true;
@@ -626,7 +626,7 @@ export function execSearch(
   const pattern = input.chars.join('');
   const dir: 1 | -1 = input.type === '?' ? -1 : 1;
 
-  // og's cmd_accept runs at the TOP OF THE NEXT command iteration
+  // less's cmd_accept runs at the TOP OF THE NEXT command iteration
   // (command.c:1517), i.e. after the search executed: its autosave
   // attempt sees the jump's lastmark dirtying the file
   try {
@@ -635,7 +635,7 @@ export function execSearch(
       search.subs = new Set(input.subs);
       hiliteCache.clear();
 
-      // og erases the highlights on screen and then, under -G's
+      // less erases the highlights on screen and then, under -G's
       // default, highlights what already matches BEFORE it searches
       // (search.c:2137 and :2147). Both go through repaint_hilite,
       // whose first act is "if (squished) repaint()" - which is how a
@@ -643,7 +643,7 @@ export function execSearch(
       // runs, whether or not the match moves the view
       if (optHiliteSearch() || optStatusCol()) {
 
-        // and og does not just un-squish here, it PAINTS twice before
+        // and less does not just un-squish here, it PAINTS twice before
         // the search runs: repaint_hilite(FALSE) erases what is on
         // screen, then hilite_screen() paints the new pattern's
         // on-screen matches. Both redraw every row. Repainting the
@@ -780,7 +780,7 @@ export function repeatSearch(
  * - Reports an error when there is no pattern to highlight, like less.
  */
 /**
- * og's hide_hilite while an O_HL_REPAINT toggle redraws the screen.
+ * less's hide_hilite while an O_HL_REPAINT toggle redraws the screen.
  *
  * toggle_option erases the highlights BEFORE it changes anything -
  * repaint_hilite(FALSE) redraws every row with hide_hilite on
@@ -800,7 +800,7 @@ export function setHiliteHidden(hidden: boolean): void {
 }
 
 export function toggleHighlight(): void {
-  // og's undo_search: `osc8_active = undo_osc8()` runs FIRST and its
+  // less's undo_search: `osc8_active = undo_osc8()` runs FIRST and its
   // result gates the complaint - `else if (!osc8_active) error("No
   // previous regular expression")` (search.c:405). So ESC-u on a
   // selected OSC 8 link with no search pattern clears the link
@@ -849,7 +849,7 @@ const subColorKind = (n: number): ColorKind =>
 /**
  * Pushes a match's highlight ranges: the whole match takes the search
  * color, while capture groups 1-5 carve out their own subsearch
- * colors, like og assigning AT_COLOR_SUBSEARCH to group matches.
+ * colors, like less assigning AT_COLOR_SUBSEARCH to group matches.
  */
 function pushMatchRanges(
   ranges: [number, number, ColorKind][],
@@ -896,9 +896,9 @@ function pushMatchRanges(
 }
 
 /**
- * Highlighted lines, kept between paints like og's prep region.
+ * Highlighted lines, kept between paints like less's prep region.
  *
- * og does not re-hilite what it has already hilited: prep_hilite
+ * less does not re-hilite what it has already hilited: prep_hilite
  * (search.c:2236) records the byte range its hilite list covers, and
  * a paint inside that range reuses it - the list is only thrown away
  * by a new search or a jump outside it (clr_hilite). We rebuilt every
@@ -927,7 +927,7 @@ const hiliteCache = new Map<number, HilitedLine>();
 let hiliteCacheMode = '';
 const HILITE_CACHE_MAX = 256;
 
-/** og's clr_hilite: the list stops applying, so drop it. */
+/** less's clr_hilite: the list stops applying, so drop it. */
 export function clearHiliteCache(): void {
   hiliteCache.clear();
 }
@@ -970,7 +970,7 @@ export function highlightLine(line: string, row: number = -1): string {
 }
 
 function highlightLineFor(line: string, row: number): string {
-  // og hilites through prep_hilite, which searches with SRCH_FORW |
+  // less hilites through prep_hilite, which searches with SRCH_FORW |
   // SRCH_FIND_ALL and carries over only SRCH_NO_REGEX from the user's
   // search (search.c:2319). SRCH_NO_MATCH is NOT carried, so a
   // ^N/! search still marks the text that really matches - the
@@ -983,7 +983,7 @@ function highlightLineFor(line: string, row: number): string {
     return line;
   }
 
-  // og's hilite list holds only lines a search actually matched:
+  // less's hilite list holds only lines a search actually matched:
   // under --no-search-header-lines the start adjust keeps the first
   // header_lines FILE lines out of it (search.c:1541, absolute like
   // the adjust), so they never highlight - pinned overlay included
@@ -998,7 +998,7 @@ function highlightLineFor(line: string, row: number): string {
 
   if (!line) return line;
 
-  // og reuses the hilites it already has for this text (prep region);
+  // less reuses the hilites it already has for this text (prep region);
   // only a new search or a jump outside it clears them
   // tokenize into text runs and ANSI codes, tracking stripped offsets
   const tokens: { code: string; text: string; start: number }[] = [];
@@ -1012,7 +1012,7 @@ function highlightLineFor(line: string, row: number): string {
 
   // the split has to agree with cvt_text, or the offsets a match
   // reports would not be the offsets this line hilites: an ABORTED
-  // sequence is one og drops whole, so it cannot be left sitting
+  // sequence is one that less drops whole, so it cannot be left
   // inside a text run (github265's "y he" spans ESC[01;31m ESC[K)
   let i = 0;
   let run = 0;
@@ -1034,7 +1034,7 @@ function highlightLineFor(line: string, row: number): string {
 
   const stripped = tokens.map(token => token.text).join('');
 
-  // og matches the column-skipped text and hilites at linepos +
+  // less matches the column-skipped text and hilites at linepos +
   // skip_bytes (search_range's skip_columns): with
   // --no-search-header-columns active, only matches past the
   // header columns exist to highlight
@@ -1048,7 +1048,7 @@ function highlightLineFor(line: string, row: number): string {
 
   const ranges: [number, number, ColorKind][] = [];
 
-  // og searches the RAW line - forw_raw_line then cvt_text, which
+  // less searches the RAW line - forw_raw_line then cvt_text, which
   // only folds backspaces, CR and ANSI (search.c:1680) - and turns
   // the match's offsets into file positions through chpos. Every
   // display character carries the position of the character it came
@@ -1079,7 +1079,7 @@ function highlightLineFor(line: string, row: number): string {
 
     if (match.index === globalRegex.lastIndex) globalRegex.lastIndex++;
 
-    // og's hilite_line loops on match_pattern with the USER's search
+    // less's hilite_line loops on match_pattern with the USER's search
     // type (search.c), and SRCH_NO_MATCH inverts its verdict
     // (pattern.c:444): once a line's first match is hilited, the
     // continuation asks "is there NO match in the rest", which is
@@ -1103,18 +1103,18 @@ function highlightLineFor(line: string, row: number): string {
   const out: string[] = [];
   let r = 0;
 
-  // the sequences in force at this point in the line: og carries an
+  // the sequences in force at this point in the line: less carries an
   // attribute per CHARACTER, so a hilite that ends mid-colour leaves
   // the file's own bold or colour still running underneath. Splicing
   // standout into the byte stream loses that, because ending it
   // resets everything - so the state goes back in behind it.
-  // og carries ONE attribute per character (linebuf.attr[], line.c)
+  // less carries ONE attribute per character (linebuf.attr[], line.c)
   // and emits the transition the next character needs. Ours are codes
   // in the byte stream, so the state has to be kept: a code that ends
   // an attribute drops the one that opened it, and a reset drops them
   // all. Accumulating every code ever seen instead replayed a whole
   // line's history after each match - "ESC[1m ESC(B ESC[m ESC[4m
-  // ESC[24m" where og writes nothing at all, because by then bold and
+  // ESC[24m" where less writes nothing at all, because by then bold and
   // underline had both been closed again.
   const open: string[] = [];
   const styleState = (code: string): void => {
@@ -1132,7 +1132,7 @@ function highlightLineFor(line: string, row: number): string {
         continue;
       }
 
-      // og's at_exit undoes one attribute at a time (screen.c:3108);
+      // less's at_exit undoes one attribute at a time (screen.c:3108);
       // 21-29 turn off what 1-9 turned on, and 39/49 the colours
       const off = n >= 21 && n <= 29 ? n - 20 : 0;
 
@@ -1154,7 +1154,7 @@ function highlightLineFor(line: string, row: number): string {
     }
   };
 
-  // og's store_char computes link_attr = hl_attr | AT_UNDERLINE for a
+  // less's store_char computes link_attr = hl_attr | AT_UNDERLINE for a
   // hilited character inside an OSC 8 link, then takes the hl_attr
   // branch and never applies it (line.c:883 and :888) - so a search
   // match inside a link takes standout WITHOUT the link's underline.
@@ -1202,7 +1202,7 @@ function highlightLineFor(line: string, row: number): string {
 
       // only when styled text actually follows: a hilite that runs to
       // the end of its run is followed by the file's own next code
-      // anyway, and og emits no transition it does not need
+      // anyway, and less emits no transition it does not need
       if (open.length && end < text.length) out.push(open.join(''));
       pos = end;
     }
@@ -1210,7 +1210,7 @@ function highlightLineFor(line: string, row: number): string {
 
   const painted = out.join('');
 
-  // bounded: og's prep region covers the screen, not the file
+  // bounded: less's prep region covers the screen, not the file
   return painted;
 }
 
@@ -1226,23 +1226,23 @@ export const searchCaseFlags = (pattern: string): string =>
     : '';
 
 /**
- * Compiles a pattern the way og's compile_pattern2 does.
+ * Compiles a pattern the way less's compile_pattern2 does.
  *
- * og hands the pattern to regcomp with REG_EXTENDED (pattern.h's
+ * less hands the pattern to regcomp with REG_EXTENDED (pattern.h's
  * REGCOMP_FLAG) and REG_ICASE for -i. The dialect carries the extended
  * spelling itself — see REGEX_DIALECT, where leaving it to the "e"
  * flag would silently fall back to BASIC.
  *
- * Matching is by CHARACTER, as og's is — cvt_text hands regcomp a
+ * Matching is by CHARACTER, as less's is — cvt_text hands regcomp a
  * UTF-8 string where "." spans one character however many bytes it
  * takes. That used to need the "u" flag, applied only when the pattern
- * still compiled with it, because "u" also rejected patterns og
+ * still compiled with it, because "u" also rejected patterns less
  * accepts (a stray "\\d" in a class, an unescaped brace). POSIX reads
  * by code point always and has no such quarrel, so the guess is gone.
  */
 /**
  * The `Pattern too complex.  Try again with POSIX RegExp?` prompt, in
- * the shape og asks about a binary file: a question on the bottom row
+ * the shape less asks about a binary file: a question on the bottom row
  * that y answers and anything else declines.
  *
  * A --use-js-regexp search that had to be killed leaves the user with
@@ -1381,7 +1381,7 @@ function psx(source: string, flags: string): SearchRegex {
  * "u" goes on only when the pattern still compiles with it, which is
  * the guess the POSIX engine let us delete: without it "." counts
  * UTF-16 units and an emoji eats two dots, but with it JS rejects
- * patterns og accepts. Neither answer is og's, which is the point of
+ * patterns less accepts. Neither answer is less's, which is the point of
  * the option.
  */
 function jsRegex(source: string, flags: string): SearchRegex {
@@ -1400,7 +1400,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // them - and being able to interrupt matters more than the thread
   // hop it costs. This is the non-default engine; the POSIX one
   // underneath does not backtrack and has nothing to abort
-  // a search ends on an interrupt, like og's. A repaint ends on ANY
+  // a search ends on an interrupt, like less's. A repaint ends on ANY
   // key: it is running behind whatever the user does next, and a key
   // arriving means they have moved on - waiting for a ^C they have no
   // reason to press is how a RETURN went unread for seven seconds
@@ -1507,7 +1507,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       search.message !== '');
 
     // whatever the watcher took off the terminal belongs to the
-    // command loop - EXCEPT the interrupt that ended the wait. og's
+    // command loop - EXCEPT the interrupt that ended the wait. less's
     // check_poll ungets an ordinary key with ungetcc_back, and on the
     // intr char calls getcc_clear() instead: the queue is emptied and
     // the char itself is never handed on (os.c:161).
@@ -1571,7 +1571,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
 }
 
 function compile(pattern: string, literal: boolean, invert: boolean): boolean {
-  // a new pattern is og's clr_hilite: the old list cannot apply
+  // a new pattern is less's clr_hilite: the old list cannot apply
   hiliteCache.clear();
 
   try {
@@ -1592,7 +1592,7 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
 }
 
 /**
- * Removes escape sequences the way cvt_text's CVT_ANSI does: og walks
+ * Removes escape sequences the way cvt_text's CVT_ANSI does: less walks
  * ansi_step and drops everything the run consumed, so a sequence that
  * ABORTS (ESC[K, ESC(B) goes too, not just its valid prefix. Matching
  * a valid-sequence pattern instead would leave those bytes sitting
@@ -1624,7 +1624,7 @@ export function stripStyles(line: string): string {
 
 /**
  * Converts a candidate line like matchesLine and maps each converted
- * index back to its raw string index, like og's cvt chpos array.
+ * index back to its raw string index, like less's cvt chpos array.
  */
 function convertWithMap(raw: string): { text: string; map: number[] } {
   const ops = cvtOps();
@@ -1670,11 +1670,11 @@ function convertWithMap(raw: string): { text: string; map: number[] } {
 }
 
 /**
- * Locates the first match's end in a candidate line, like og's ep[0]
+ * Locates the first match's end in a candidate line, like less's ep[0]
  * after match_pattern.
  *
- * @returns The end as a converted-text offset (og's end_off) and the
- *          raw index it maps to (og's chpos[end_off]), or null when
+ * @returns The end as a converted-text offset (less's end_off) and the
+ *          raw index it maps to (less's chpos[end_off]), or null when
  *          there is no real match (inverted searches have no ep).
  */
 function matchEnd(
@@ -1694,7 +1694,7 @@ function matchEnd(
   const m = regex.exec(text);
   if (!m) return null;
 
-  // og 707 never fills chpos past the last char (cvt_text's trailing
+  // less 707 never fills chpos past the last char (cvt_text's trailing
   // assignment sits behind a FIXME comment) and the calloc'd array
   // reads 0 there: a match ending exactly at the line end computes
   // tpos = linepos and never bottom-jumps
@@ -1706,7 +1706,7 @@ function matchEnd(
  * The hilite ranges a transformed line gets, in DISPLAYED-character
  * coordinates, from a search run against its RAW text.
  *
- * convertWithMap is og's cvt_text plus chpos: it folds what cvt folds
+ * convertWithMap is less's cvt_text plus chpos: it folds what cvt folds
  * and remembers where each surviving character came from. The match's
  * ends become raw offsets through that map, and each one becomes a
  * displayed offset by transforming the prefix - the same relation
@@ -1755,12 +1755,12 @@ function sourceRanges(source: string): [number, number, ColorKind][] {
 function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean {
   if (!subs.size) return regex.test(text);
 
-  // og's subsearch_ok (pattern.c): a ^S group fails when `ep[i] ==
+  // less's subsearch_ok (pattern.c): a ^S group fails when `ep[i] ==
   // sp[i]`, i.e. it must be NON-EMPTY - merely participating is not
   // enough. And match_pattern does not judge only the first match: it
   // keeps searching AFTER each one that fails the condition, giving up
   // when `mlen == 0` because it cannot advance (e66db83 - that guard
-  // is what stopped og hanging on a pattern like `(x*)`).
+  // is what stopped less hanging on a pattern like `(x*)`).
   const scan = regex.global ? regex : psx(regex.source, regex.flags + 'g');
 
   let start = 0;
@@ -1787,9 +1787,9 @@ function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean
 }
 
 /**
- * og's get_cvt_ops (search.c:230): which conversions apply to search
+ * less's get_cvt_ops (search.c:230): which conversions apply to search
  * candidates under the current display modes. The CRLF condition
- * genuinely consults proc_BACKSPACE, quirky but og's own.
+ * genuinely consults proc_BACKSPACE, quirky but less's own.
  */
 function cvtOps(): { bs: boolean; crlf: boolean; ansi: boolean } {
   const pb = optProcBackspace();
@@ -1850,11 +1850,11 @@ const isAsciiText = (text: string): boolean =>
   /^[\x00-\x7F]*$/.test(text);
 
 /**
- * og's search_range start adjust (search.c:1541): with
+ * less's search_range start adjust (search.c:1541): with
  * --no-search-header-lines a start within the first header_lines
- * lines of the FILE (ABSOLUTE line numbers - og's own quirk, blind
+ * lines of the FILE (ABSOLUTE line numbers - less's own quirk, blind
  * to where the header actually starts) moves past them. That is the
- * ONLY exclusion: og never skips header lines mid-scan, so backward
+ * ONLY exclusion: less never skips header lines mid-scan, so backward
  * and wrapped searches still run INTO the header and can match it.
  */
 function noSearchStart(start: ScreenPos): ScreenPos {
@@ -1898,7 +1898,7 @@ function findMatch(
     let start = searchStartPos(content, dir, afterTarget);
 
     if (start === null) {
-      // og's search_pos found no place to start from
+      // less's search_pos found no place to start from
       search.message = 'Nothing to search';
       return;
     }
@@ -1942,7 +1942,7 @@ function findMatch(
   if (wrap) {
     const start = dir > 0 ? 0 : content.length - 1;
     // a partial first row leaves its other part to the wrapped scan,
-    // which reads the boundary line whole like og's endpos check
+    // which reads the boundary line whole like less's endpos check
     const until = firstOffset > 0 ? first + dir : first;
     const wrapped = scanRange(content, start, dir, until, state);
 
@@ -1950,7 +1950,7 @@ function findMatch(
 
     if (wrapped !== 'miss') {
       // a forward search that wrapped read through EOF first, so a
-      // pipe's length becomes known, like og's ch
+      // pipe's length becomes known, like less's ch
       if (dir > 0) revealSize();
 
       const wrapSub = lastLineSub(content, wrapped, dir, start, 0, 0);
@@ -1961,7 +1961,7 @@ function findMatch(
         jumpTo(content, wrapped);
       }
 
-      // ^W wrap reports where the search resumed, like og's
+      // ^W wrap reports where the search resumed, like less's
       // search_wrapped message
       search.message = dir > 0
         ? 'Search hit bottom; continuing at top'
@@ -1971,17 +1971,17 @@ function findMatch(
   }
 
   // a missed forward search scanned to the end of the input, which
-  // teaches og a pipe's length
+  // teaches less a pipe's length
   if (dir > 0) revealSize();
 
-  // og shows the pattern in the miss message (v693); control chars
-  // print in display form (ESC, ^X) like og's message line
+  // less shows the pattern in the miss message (v693); control chars
+  // print in display form (ESC, ^X) like less's message line
   search.message = compiledPattern
     ? `Pattern not found: ${displayText(compiledPattern)}`
     : 'Pattern not found';
 }
 
-/** Formats embedded control characters like og's prchar. */
+/** Formats embedded control characters like less's prchar. */
 const displayText = (text: string): string =>
   Array.from(text, stepText).join('');
 
@@ -1991,7 +1991,7 @@ let guardScript: vm.Script | null = null;
 
 /**
  * Drives a slice function inside vm timeouts: V8's backtracking
- * regexes can hang forever on a catastrophic pattern (og's POSIX
+ * regexes can hang forever on a catastrophic pattern (less's POSIX
  * engine does not blow up), and terminating a vm script is the only
  * way to stop a match mid-flight. Slices self-limit to ~100ms, so the
  * timeout only fires when one match call hangs.
@@ -2001,20 +2001,20 @@ let guardScript: vm.Script | null = null;
  *          user interrupted (`stop`).
  */
 /**
- * og's LONGTIME (linenum.c:58): how long a loop runs before it says
- * so. og applies it to line numbering and to determining a file's
+ * less's LONGTIME (linenum.c:58): how long a loop runs before it says
+ * so. less applies it to line numbering and to determining a file's
  * length, both through ierror, which appends "... (interrupt to
  * abort)" (output.c:767).
  */
 const LONGTIME_MS = 2000;
 
 /**
- * Says what we are doing when a search runs long, the way og's
+ * Says what we are doing when a search runs long, the way less's
  * delayed_msg does for its own long loops (linenum.c:229).
  *
- * NOT og: search.c has no delayed message, so a search over a very
+ * NOT less: search.c has no delayed message, so a search over a very
  * long line - a nested quantifier on 200k characters - sits there
- * saying nothing until it finishes or the user interrupts. og's own
+ * saying nothing until it finishes or the user interrupts. less's own
  * shape is what this borrows: nothing for the first two seconds, then
  * the note with ierror's suffix, written straight to the bottom line.
  */
@@ -2093,7 +2093,7 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
  * @param until - Exclusive stop row for a wrapped scan, or null.
  * @param fromOffset - Raw string index bounding the partial first
  *          row: forward scans read from it, backward scans up to it,
- *          like og reading a raw line at a mid-line start position.
+ *          like less reading a raw line at a mid-line start position.
  * @returns The matching row, `miss`, or `stop` after an interrupt or
  *          a dropped catastrophic pattern.
  */
@@ -2113,7 +2113,7 @@ function scanRange(
     let steps = 0;
 
     while (row >= 0 && row < content.length && row !== until) {
-      // og searches the RAW line, not the displayed one (search.c:1680
+      // less searches the RAW line, not the displayed one (search.c:1680
       // reads it with forw_raw_line and folds only what cvt_text
       // folds), so a pattern may span a tab or a control character
       const raw = sourceLine(content[row]) ?? content[row];
@@ -2174,7 +2174,7 @@ function dropPattern(): void {
 }
 
 /**
- * Walks every line under og's interruptible slice budget, calling
+ * Walks every line under less's interruptible slice budget, calling
  * `step` for each, and reports how the walk ended.
  *
  * filterLines and filterLineMask differ only in what they do per line
@@ -2259,7 +2259,7 @@ let lastInterruptPoll = 0;
 
 /**
  * Polls the terminal in the middle of a long synchronous search, like
- * og's read layer watching for the interrupt: while a search runs the
+ * less's read layer watching for the interrupt: while a search runs the
  * event loop cannot deliver keys, so the raw tty is read directly.
  * Ctrl-C goes back on the stream so -K can still quit at the prompt;
  * other typed keys queue as normal input.
@@ -2315,7 +2315,7 @@ export function searchInterrupted(force = false): boolean {
   }
 
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
-  // not fd 0 (og's check_poll watches the tty, whatever stdin is)
+  // not fd 0 (less's check_poll watches the tty, whatever stdin is)
   const kb = keyboard();
   if (!kb.isTTY) return false;
 
@@ -2324,7 +2324,7 @@ export function searchInterrupted(force = false): boolean {
   // where a ^C typed during a scroll actually sits. The readSync
   // below polls the TTY and finds it empty every time, which is why
   // no abort site in the tree ever fired. Reading the stream buffer
-  // is free (memory, no syscall), so it runs on every check - og
+  // is free (memory, no syscall), so it runs on every check - less
   // tests ABORT_SIGS() per LINE it draws (output.c:64), not ten times
   // a second, and "stop immediately" needs that granularity.
   const buffered = force
@@ -2337,7 +2337,7 @@ export function searchInterrupted(force = false): boolean {
       : buffered.toString('binary');
 
     if (text.includes('\x03')) {
-      // og's u_interrupt rings at every ^C (signal.c lbell) and sets
+      // less's u_interrupt rings at every ^C (signal.c lbell) and sets
       // sigs |= S_INTERRUPT, which every drawing loop then sees
       fs.writeSync(1, '\x07');
       raiseAbort();
@@ -2351,7 +2351,7 @@ export function searchInterrupted(force = false): boolean {
       return true;
     }
 
-    // og's check_poll ungets ordinary keys for the command loop
+    // less's check_poll ungets ordinary keys for the command loop
     pushUngot(Buffer.from(text, 'binary'));
 
     // ...and for a repaint, an ordinary key IS the abort. A search is
@@ -2374,7 +2374,7 @@ export function searchInterrupted(force = false): boolean {
   // loop is blocked pass force and pay the syscall, which is
   // microseconds against a scroll's paint.
   //
-  // og needs none of this: ABORT_SIGS() reads a volatile flag its
+  // less needs none of this: ABORT_SIGS() reads a volatile flag its
   // SIGINT handler set (signal.c:41), so checking per line is free.
   const now = Date.now();
   if (!force && now - lastInterruptPoll < 100) return false;
@@ -2402,7 +2402,7 @@ export function searchInterrupted(force = false): boolean {
   const text = data.subarray(0, n).toString();
 
   if (text.includes('\x03')) {
-    // og's u_interrupt rings at every ^C (signal.c lbell), even
+    // less's u_interrupt rings at every ^C (signal.c lbell), even
     // with the event loop blocked mid-scan
     fs.writeSync(1, '\x07');
     raiseAbort();
@@ -2413,7 +2413,7 @@ export function searchInterrupted(force = false): boolean {
 
   if (text.includes(optIntrChar())) return true;
 
-  // og's check_poll ungets ordinary keys for the command loop —
+  // less's check_poll ungets ordinary keys for the command loop —
   // never back through the stream, whose flowing-mode unshift would
   // re-enter the key handler in the middle of the scan
   pushUngot(Buffer.from(data.subarray(0, n)));
@@ -2425,7 +2425,7 @@ interface ScreenPos { row: number; sub: number }
 /**
  * The content position displayed at a screen row, like position():
  * row `k` counted from the top of the window, the end-of-file
- * position just past the last line (og's table entry pushed after
+ * position just past the last line (less's table entry pushed after
  * the paint loop), or null beyond that on a short screen.
  */
 function screenPos(content: string[], k: number): ScreenPos | null {
@@ -2484,11 +2484,11 @@ function searchStartPos(
   let p = screenPos(content, k);
 
   if (p && addOne) {
-    // og's add_one reads past the whole target line (forw_raw_line)
+    // less's add_one reads past the whole target line (forw_raw_line)
     p = p.row < content.length ? { row: p.row + 1, sub: 0 } : null;
   }
 
-  // "look around for a plausible starting place": og walks the
+  // "look around for a plausible starting place": less walks the
   // screen rows toward the search direction while the row is empty
   while (p === null) {
     k += dir;
@@ -2499,7 +2499,7 @@ function searchStartPos(
   return p;
 }
 
-/** og's repaint_hilite: a squished short first screen repaints in
+/** less's repaint_hilite: a squished short first screen repaints in
  *  full - tildes past EOF included - before anything is highlighted
  *  (search.c:281). */
 function unsquish(): void {
@@ -2507,7 +2507,7 @@ function unsquish(): void {
 }
 
 /**
- * og's two pre-search paints (search.c:2137 and :2147), which happen
+ * less's two pre-search paints (search.c:2137 and :2147), which happen
  * whether the search then succeeds or fails.
  *
  * `if (hilite_search || status_col) repaint_hilite(FALSE)` - and
@@ -2524,7 +2524,7 @@ function hilitePasses(content: string[]): void {
 // the renderer lives on the other side of an import cycle
 let hilitePaint: ((content: string[]) => void) | null = null;
 
-/** Registers og's pre-search repaint pair. */
+/** Registers less's pre-search repaint pair. */
 export function onHilitePaint(
   fn: ((content: string[]) => void) | null
 ): void {
@@ -2536,7 +2536,7 @@ function jumpTo(content: string[], row: number, sub: number = 0): void {
 
   lastMatchRow = row;
 
-  // og skips the jump when the match already sits at the -j target
+  // less skips the jump when the match already sits at the -j target
   // screen row (search.c: pos != opos), with no bell
   const opos = screenPos(content, jumpSindex());
 
@@ -2550,7 +2550,7 @@ function jumpTo(content: string[], row: number, sub: number = 0): void {
 }
 
 /**
- * og's long-line rule (search_range's plastlinepos): when a match in
+ * less's long-line rule (search_range's plastlinepos): when a match in
  * a wrapped line ends at least a quarter screenful into the candidate
  * (`end_off >= swidth*sheight/4`) and its sub-row falls a screenful
  * or more below the candidate's start (get_lastlinepos), the jump
@@ -2566,7 +2566,7 @@ function lastLineSub(
   fromOffset: number,
   fromSub: number
 ): number | null {
-  // og computes lastlinepos only when not chopping (the chop branch
+  // less computes lastlinepos only when not chopping (the chop branch
   // shifts horizontally instead)
   if (chopLine() || config.col) return null;
 
@@ -2620,10 +2620,10 @@ function shiftVisible(content: string[], row: number): void {
  *
  * Both engines run this, and differ only in where the text comes from:
  * a row of session.content, or a line read from the seekable source.
- * Everything after that -- og's four-way choice of new hshift -- was
+ * Everything after that -- less's four-way choice of new hshift -- was
  * written out twice, identically.
  *
- * og reaches here only with a real match in hand (sp[0] and ep[0] are
+ * less reaches here only with a real match in hand (sp[0] and ep[0] are
  * non-NULL, search.c:1745), which under an inverted search they never
  * are: the line "matches" precisely because the pattern did not. The
  * invert test below says that up front; falling through to a null exec
@@ -2673,10 +2673,10 @@ export function lineMatches(line: string): boolean {
 }
 
 /**
- * The -J status column search char, like og's init_status_col: `*`
+ * The -J status column search char, like less's init_status_col: `*`
  * for a match in the displayed part of the line, `<`/`>` for matches
  * chopped off before/after the visible columns, `=` for both sides.
- * Hidden highlights (ESC-u) and -G0 still mark the column, like og's
+ * Hidden highlights (ESC-u) and -G0 still mark the column, like less's
  * is_hilited_attr status-column path ignoring hide_hilite; -g marks
  * only the last search's match line.
  *
@@ -2712,7 +2712,7 @@ export function statusColChar(
 
   if (!ranges.length) return '';
 
-  // og decides this per SCREEN ROW, from the range of characters that
+  // less decides this per SCREEN ROW, from the range of characters that
   // row actually shows: is_hilited_attr(disp_pos, edisp_pos)
   // (input.c:64). A wrapped line's continuation row whose range holds
   // no match gets no marker -- we marked every row of the line.
@@ -2728,11 +2728,11 @@ export function statusColChar(
     return ranges.some(r => r.start < stop && r.end > start) ? '*' : '';
   }
 
-  // og compares hilite positions against the displayed range; char
+  // less compares hilite positions against the displayed range; char
   // indexes stand in for columns here
   const left = config.col;
 
-  // og's disp_pos is NULL_POSITION when the shift has carried the
+  // less's disp_pos is NULL_POSITION when the shift has carried the
   // whole line off the screen, and init_status_col then sets no
   // attribute at all (input.c:45): with nothing visible there is no
   // marker, not a "match lies to the left" arrow

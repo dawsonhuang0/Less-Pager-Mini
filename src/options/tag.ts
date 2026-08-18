@@ -22,7 +22,7 @@ export const tag: OptionSpec = {
       }
 
       // like opt_t: load the tag list, then the pager jumps to it;
-      // og's skipspc strips leading blanks only
+      // less's skipspc strips leading blanks only
       const error = findTag(String(value).replace(/^[ \t]+/, ''));
 
       if (error) {

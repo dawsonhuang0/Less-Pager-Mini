@@ -13,14 +13,14 @@ import { render, resetRender, calculateEOF } from '../../src/helpers';
 import { LtScreen } from '../lesstest/ltScreen';
 
 /**
- * og's put_line writes the line buffer up to its first NUL
+ * less's put_line writes the line buffer up to its first NUL
  * (output.c:72). Under -r a raw NUL reaches that buffer, so the rest
  * of the line AND the newline ending it never reach the terminal: the
  * row collapses into the next one, the rows below drift up, and the
  * prompt — printed at the drifted cursor — ends up one row short of
  * the bottom.
  *
- * The expected screens here were captured from og itself
+ * The expected screens here were captured from less itself
  * (less/less -r, 10x20 pty) rather than reasoned about.
  */
 const WIDTH = 20;
@@ -44,7 +44,7 @@ function screenRows(): string[] {
 
 const content = ['ab\0cd', 'xy', 'zz'];
 
-// ESC [ K — the bottom-line clear og omits before its marker
+// ESC [ K — the bottom-line clear less omits before its marker
 const CLEAR_LINE_SEQ = '\x1B[K';
 
 beforeEach(() => {
@@ -83,8 +83,8 @@ describe('a raw NUL cutting a line short', () => {
   it('merges the row below it and drifts the prompt up', () => {
     render(content, []);
 
-    // og: abxy / zz / ~ x6 / the prompt on row 9 / row 10 left blank
-    // (og shows "(END)" there; the prompt TEXT is a session-state
+    // less: abxy / zz / ~ x6 / the prompt on row 9 / row 10 left blank
+    // (less shows "(END)" there; the prompt TEXT is a session-state
     // matter this unit harness does not set up, so only its ROW is
     // asserted)
     const rows = screenRows();
@@ -100,7 +100,7 @@ describe('a raw NUL cutting a line short', () => {
   it('parks the cursor on the drifted prompt row', () => {
     render(content, []);
 
-    // row 9, just past the prompt — og leaves its cursor there
+    // row 9, just past the prompt — less leaves its cursor there
     // because it never emitted the collapsed row's newline
     expect(written.join('')).toMatch(/\x1B\[9;\d+H/);
     expect(written.join('')).not.toMatch(/\x1B\[10;\d+H/);
@@ -131,7 +131,7 @@ describe('a raw NUL cutting a line short', () => {
     });
 
   it('drops the drift when a forced back scrolls the screen', () => {
-    // og's K pads a null line above BOF and repaints by scrolling
+    // less's K pads a null line above BOF and repaints by scrolling
     // (ESC M) with the prompt addressed absolutely, so the collapse's
     // drift disappears: the prompt returns to the bottom row. Ours
     // must take the scroll path too, which needs every tilde row to
@@ -150,10 +150,10 @@ describe('a raw NUL cutting a line short', () => {
 
   it('appends the repaint marker to an open option prompt\'s echo',
     () => {
-      // og's marker is a bare putstr at the cursor (forwback.c:274):
+      // less's marker is a bare putstr at the cursor (forwback.c:274):
       // typing -r over a squished screen repaints, and since the mca
       // line still shows "-" the row reads "-...skipping...".
-      // Captured from og at 12x80.
+      // Captured from less at 12x80.
       mode.INIT = true;
       option.pending = '-';
       render(content, []);

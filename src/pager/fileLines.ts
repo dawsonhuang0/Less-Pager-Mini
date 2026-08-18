@@ -6,16 +6,16 @@ import { optSqueeze, chopLine } from '../options';
 
 import { config } from '../state/config';
 
-/** True when the byte is a newline char, like og's '\n' || '\r'. */
+/** True when the byte is a newline char, like less's '\n' || '\r'. */
 const isNl = (b: number | undefined): boolean => b === 0x0A || b === 0x0D;
 
 /**
- * On-demand line reading over a BlockFile, ported from og input.c's
+ * On-demand line reading over a BlockFile, ported from less input.c's
  * forw_line/back_line: lines materialize from byte positions, so no
  * line index or full scan is ever required.
  */
 
-/** Pathological lines split at this many bytes (og grows linebuf;
+/** Pathological lines split at this many bytes (less grows linebuf;
  *  we bound memory instead — the renderer wraps/chops anyway, and
  *  every split segment costs a transform+layout per visible row). */
 export const MAX_LINE = 1 << 16;
@@ -34,7 +34,7 @@ interface BackLine {
   start: number;
 }
 
-// og builds a line's linebuf ONCE, reading its bytes through
+// less builds a line's linebuf ONCE, reading its bytes through
 // ch_forw_get's buffered blocks, and every row of that line is then
 // drawn out of the buffer it already holds. Ours rebuilds the decoded
 // string from scratch on each call, and a screen walk asks for the
@@ -46,7 +46,7 @@ interface BackLine {
 const lineMemo = new WeakMap<BlockFile, {
   size: number,
   squeeze: boolean,
-  /** og's skipeol: `chop_line() || hshift > 0` (input.c:348). */
+  /** less's skipeol: `chop_line() || hshift > 0` (input.c:348). */
   skipeol: boolean,
   /** How much of the line skipeol kept, so a wider shift re-reads. */
   extent: number,
@@ -69,7 +69,7 @@ export function forwLine(
   if (pos >= bf.size) return null;
 
   const squeeze = optSqueeze();
-  // og's skipeol, and how much of the line it keeps
+  // less's skipeol, and how much of the line it keeps
   const skipeol = chopLine() || config.col > 0;
   const extent = config.col + config.screenWidth;
   let memo = lineMemo.get(bf);
@@ -105,7 +105,7 @@ export function forwLine(
 }
 
 /**
- * og's skip to the end of the line: `while (c != '\n') c =
+ * less's skip to the end of the line: `while (c != '\n') c =
  * ch_forw_get()`. Unbounded, because the LINE's end is where the next
  * one starts - the 64 KiB bound applies to what we build, not to how
  * far the line runs.
@@ -140,7 +140,7 @@ function readForwLine(
   const nl = bf.findNewline(pos, MAX_LINE);
 
   if (nl < 0) {
-    // og's forw_line passes skipeol = `chop_line() || hshift > 0`
+    // less's forw_line passes skipeol = `chop_line() || hshift > 0`
     // (input.c:348): it builds the ONE visible row and then breaks
     // with `endline = TRUE; chopped = TRUE` (input.c:502), skipping
     // the rest of the line to its newline. One file line is one screen
@@ -181,7 +181,7 @@ function readForwLine(
 
   let next = nl + 1;
 
-  // og's forw_line under -s: a blank line skips down to the last
+  // less's forw_line under -s: a blank line skips down to the last
   // contiguous blank and pretends to be it (input.c:325), so the
   // run displays as this one line
   if (squeeze && nl === pos) {
@@ -204,7 +204,7 @@ function readForwLine(
 export function backLine(bf: BlockFile, pos: number): BackLine | null {
   if (pos <= 0) return null;
 
-  // og's back_line under -s: when the current line is blank, the
+  // less's back_line under -s: when the current line is blank, the
   // whole preceding blank run skips away — the run's first newline
   // folds into the non-blank line above (input.c:387)
   if (optSqueeze() && pos < bf.size &&
@@ -231,7 +231,7 @@ export function backLine(bf: BlockFile, pos: number): BackLine | null {
 }
 
 /**
- * The start of the last line of the file, like og's end-of-file seek
+ * The start of the last line of the file, like less's end-of-file seek
  * for G: a trailing newline belongs to the line before it.
  */
 export function lastLineStart(bf: BlockFile): number {

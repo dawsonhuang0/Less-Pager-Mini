@@ -10,7 +10,7 @@ const KEY_SEQUENCE_REGEX =
   // an X10/X11 mouse report is THREE raw bytes after a complete CSI
   // ("ESC [ M" ends at its final byte), so it has to be claimed
   // before the general CSI rule or the coordinates arrive as three
-  // separate keys - og reads them with getcc, one at a time, from
+  // separate keys - less reads them with getcc, one at a time, from
   // inside the action itself (decode.c x11mouse_action)
   new RegExp(
     '\\x1B\\[M[\\s\\S]{3}' +
@@ -33,7 +33,7 @@ export function splitKeys(data: string): string[] {
 }
 
 /**
- * og's kent translation (getcc_repl, command.c:1172): the terminal's
+ * less's kent translation (getcc_repl, command.c:1172): the terminal's
  * keypad-Enter sequence (terminfo kent, \eOM on xterm) reads as a
  * newline at getcc - commands and prompts alike - unless a lesskey
  * file mapped it. error()'s get_return reads RAW getchr instead, so
@@ -55,11 +55,11 @@ export const kentSequence = (): string =>
  * @returns The corresponding `Actions` type if defined, otherwise `undefined`.
  */
 /**
- * og's A_PREFIX test (cmd_decode, decode.c): the bytes in hand are a
+ * less's A_PREFIX test (cmd_decode, decode.c): the bytes in hand are a
  * proper prefix of some entry in the command table, so the command is
  * incomplete and the loop reads another character.
  *
- * og derives it from the TABLE. Ours hardcoded three characters
+ * less derives it from the TABLE. Ours hardcoded three characters
  * (`^X`, `:`, `^O`), so every other multi-key binding was
  * unreachable - `ZZ` is `'Z','Z',0, A_QUIT` (decode.c:236), and with
  * `Z` absent from that list its second key never had a chance.
@@ -82,19 +82,19 @@ export function getAction(key: string): Actions | undefined {
 }
 
 /**
- * The special keys, each named by the capability og reads for it
+ * The special keys, each named by the capability less reads for it
  * (special_key_str, screen.c:1218).
  *
  * A special key is EXACTLY what this terminal says it is and nothing
- * else. og reserves a slot per key in its command table and fills it
+ * else. less reserves a slot per key in its command table and fills it
  * from terminfo; when the capability is missing it writes "\377"
  * instead (decode.c:390) — a byte no key produces, so the key is
- * simply unbound. There is no hardcoded arrow anywhere in og, and a
+ * simply unbound. There is no hardcoded arrow anywhere in less, and a
  * second spelling of one is an ordinary unknown sequence: echoed to
  * the prompt and belled.
  *
  * So DON'T add "\x1b[B" as a fallback. Every common TERM (xterm,
- * screen, tmux, vt100) reports kcud1=\EOB, because og sends smkx/ESC=
+ * screen, tmux, vt100) reports kcud1=\EOB, because less sends smkx/ESC=
  * and the keypad answers in application mode; a terminal with no
  * kcud1 at all — TERM=dumb — is meant to have no arrow keys.
  */
@@ -115,7 +115,7 @@ let bound: Record<string, Actions> | null = null;
 /**
  * The one command table, terminfo strings included.
  *
- * og has a single cmdtable that already HOLDS each special key's real
+ * less has a single cmdtable that already HOLDS each special key's real
  * bytes, so the same table answers both a direct lookup and
  * cmd_match's tail scan. Keeping the terminfo keys in a list beside
  * the table would hide them from [[tailDecode]], and an arrow would
@@ -140,7 +140,7 @@ export function resetBoundKeys(): void {
 }
 
 /**
- * og's cmd_match (decode.c:845): the largest N where the first N
+ * less's cmd_match (decode.c:845): the largest N where the first N
  * chars of a binding equal the LAST N chars of the buffer.
  */
 function tailMatch(buf: string, entry: string): number {
@@ -152,7 +152,7 @@ function tailMatch(buf: string, entry: string): number {
 }
 
 /**
- * Decodes an accumulated buffer like og's cmd_decode (decode.c:943):
+ * Decodes an accumulated buffer like less's cmd_decode (decode.c:943):
  * bindings match against the buffer's TAIL, so stray prefix bytes
  * age out silently.
  *
@@ -167,7 +167,7 @@ function tailDecode(buf: string): string | 'prefix' | 'invalid' {
     const t = tailMatch(buf, entry);
     if (t === 0 || t < matchLen) continue;
 
-    // og's sequential scan: later entries take ties, an equal-length
+    // less's sequential scan: later entries take ties, an equal-length
     // partial outranking an earlier completion
     result = t === entry.length ? entry : 'prefix';
     matchLen = t;
@@ -177,11 +177,11 @@ function tailDecode(buf: string): string | 'prefix' | 'invalid' {
 }
 
 /**
- * Resolves the bytes of an unbound sequence like og reprocessing
+ * Resolves the bytes of an unbound sequence like less reprocessing
  * them through cmd_decode: a completed tail binding comes out as a
  * replayable key (ESC j still scrolls, a digit still counts), an
  * unmatched buffer as null - ONE invalid command, bell and count
- * dropped. og keeps waiting on a trailing partial match; sequences
+ * dropped. less keeps waiting on a trailing partial match; sequences
  * arrive whole here, so a dangling prefix simply drops.
  */
 export function tailCascade(stream: string): Array<string | null> {
@@ -233,7 +233,7 @@ const keys: Record<string, Actions> = {
   '\x7F': 'DEL_BUFFER', // delete
 
   // examine a new file
-  // og binds all three of E, :e and ^X^V to A_EXAMINE
+  // less binds all three of E, :e and ^X^V to A_EXAMINE
   // (decode.c:168). Without the bare E the key fell through to the
   // unbound-key path and every character of the filename after it
   // ran as a COMMAND - "Eb2.txt" executed b, 2, ., t, x, t.
@@ -252,7 +252,7 @@ const keys: Record<string, Actions> = {
   // delete the current file from the command line list
   ':d': 'REMOVE_FILE', // :d
 
-  // go to a tag: toggle-option t, like og's :t binding
+  // go to a tag: toggle-option t, like less's :t binding
   ':t': 'OPTION_TAG', // :t
 
   // print current file name
@@ -262,7 +262,7 @@ const keys: Record<string, Actions> = {
   ':q': 'EXIT', // :q
   ':Q': 'EXIT', // :Q
 
-  // og's table is `'Z','Z',0, A_QUIT` (decode.c:236): ZZ is a TWO-key
+  // less's table is `'Z','Z',0, A_QUIT` (decode.c:236): ZZ is a TWO-key
   // command and a lone Z is an incomplete one. Binding Z by itself
   // meant the second Z never arrived, and the action it named had no
   // handler at all - so ZZ rang the bell instead of quitting.

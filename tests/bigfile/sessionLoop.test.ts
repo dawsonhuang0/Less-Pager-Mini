@@ -44,7 +44,7 @@ fs.writeFileSync(oscFile, Array.from({ length: 12000 }, (_, i) =>
 
 fs.writeFileSync(followFile, 'follow start\n');
 
-// shorter than the window: its first paint is og's squished screen
+// shorter than the window: its first paint is less's squished screen
 const shortFile = path.join(dir, 'short-fixture.txt');
 fs.writeFileSync(shortFile, 'one\ntwo\nthree\n');
 
@@ -62,11 +62,11 @@ fs.writeFileSync(tagsFile, `deep\t${streamedFile}\t11000\n`);
 // at 2^40. That passed instantly only because forwLine cut a
 // newline-less run at the 64 KiB grid and never went looking for the
 // real end - which is the bug that drew a 360 KB line as six rows
-// (546290e). og reads to the newline however far it is (input.c:241,
+// (546290e). less reads to the newline however far it is (input.c:241,
 // `do { c = ch_forw_get(); } while (c != '\n' && c != EOI)`), and so
 // do we, so that shape now costs a terabyte of scanning in either
-// pager. og is in fact SLOWER at it than we are: on a 4 GB version,
-// og 10.1s to our 5.2s.
+// pager. less is in fact SLOWER at it than we are: on a 4 GB version,
+// less 10.1s to our 5.2s.
 //
 // The point of the fixture is byte-position G/g on a huge sparse
 // file, not a pathological single line, so the lines live in clusters
@@ -104,7 +104,7 @@ const originalEnv = Object.fromEntries(
   ENV_NAMES.map(name => [name, process.env[name]])
 );
 
-// The fused key loop replays og's ISIG semantics for a typed ^C by
+// The fused key loop replays less's ISIG semantics for a typed ^C by
 // signalling its own process group (raiseSigint). stdin is faked to
 // a TTY here, so an injected \x03 would SIGINT vitest and the shell
 // that launched it — swallow group signals for this suite's lifetime.
@@ -277,10 +277,10 @@ function screenOf(output: string): string[] {
 describe('unified file command loop', () => {
   it('repaints the squished first screen on a backward command',
     async () => {
-      // og's back() runs squish_check before it can know whether the
+      // less's back() runs squish_check before it can know whether the
       // scroll is possible (forwback.c:394), so k at BOF fills the
       // blank rows above the text with tildes and only then bells.
-      // Captured from og: one/two/three at the top, ~ below.
+      // Captured from less: one/two/three at the top, ~ below.
       const out = await drive(['k'], '', shortFile);
       const rows = screenOf(out);
 
@@ -293,7 +293,7 @@ describe('unified file command loop', () => {
 
   it('leaves the squished first screen alone on a forward command',
     async () => {
-      // og's forward() bells and returns BEFORE reaching forw(), so
+      // less's forward() bells and returns BEFORE reaching forw(), so
       // no squish_check runs and the short screen stays bottom-anchored
       const out = await drive(['j'], '', shortFile);
       const rows = screenOf(out);
@@ -305,15 +305,15 @@ describe('unified file command loop', () => {
     });
 
   it('uses byte-position G/g on a sparse 1TB file', async () => {
-    // -n: og's only line-number-scan suppressor — without it, G's
-    // og-faithful currline(BOTTOM) walks the whole sparse terabyte
+    // -n: less's only line-number-scan suppressor — without it, G's
+    // less-faithful currline(BOTTOM) walks the whole sparse terabyte
     const output = await drive(['G', 'g'], '-f -S -n', sparseFile);
 
     expect(output).toContain('FINAL SPARSE LINE');
     expect(output).toContain('FIRST SPARSE LINE');
 
     // the long line is ONE row under -S, so the line after it is on
-    // screen too: og's skipeol ends a chopped line at its first
+    // screen too: less's skipeol ends a chopped line at its first
     // screenful and skips to the newline (input.c:239), however many
     // megabytes away that is. Cutting it into 64 KiB pieces instead
     // put 64 rows of the same line on screen and pushed this off
@@ -359,9 +359,9 @@ describe('unified file command loop', () => {
       expect(headAgain).toBeGreaterThan(tail);
     }, 20000);
 
-  it('completes the wrapped bottom line on ESC-j, like og forw()',
+  it('completes the wrapped bottom line on ESC-j, like less forw()',
     async () => {
-      // top at line 111 leaves the 130-char line 121 half shown: og's
+      // top at line 111 leaves the 130-char line 121 half shown: less's
       // to_newline reveals its remaining rows, so ' wide tail' (its
       // last wrap row) must reach the screen; a file-line top jump
       // would stop one row short of it
@@ -571,7 +571,7 @@ describe('unified file command loop', () => {
 
   it('ages a ^O prefix out over an unbound sequence, like cmd_decode',
     async () => {
-      // ^O + up-arrow has no binding: og's tail cascade drops the
+      // ^O + up-arrow has no binding: less's tail cascade drops the
       // prefix silently and runs the arrow — a stale prefix once
       // re-entered the cascade forever (stack overflow)
       const output = await drive([
@@ -598,12 +598,12 @@ describe('unified file command loop', () => {
     }, 20000);
 
   // A key string reaching `drive` is fed as ONE chunk, so a
-  // multi-character one leaves keys queued behind the first - og's
+  // multi-character one leaves keys queued behind the first - less's
   // tty still holding the rest of the burst.
 
   it('keeps -N numbers correct after the anchor pool evicts',
     async () => {
-      // og's table holds LINENUM_POOL entries and drops the smallest
+      // less's table holds LINENUM_POOL entries and drops the smallest
       // gap when full (linenum.c:185). Resolving one per rendered row,
       // this scroll pushes well past 1024, so the numbers on screen
       // come from a table that has evicted.

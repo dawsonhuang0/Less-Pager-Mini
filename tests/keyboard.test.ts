@@ -93,7 +93,7 @@ describe('ungot keyboard queue', () => {
     expect(takeUngot()).toBe(null);
   });
 
-  // og's check_poll ungets an ordinary key and, on the intr char,
+  // less's check_poll ungets an ordinary key and, on the intr char,
   // calls getcc_clear() instead (os.c:161) - so the ^C itself is
   // never handed on. Handing it back put an interrupt in front of the
   // question that same interrupt had raised, and answered it unseen
@@ -169,7 +169,7 @@ describe('self SIGINT bookkeeping', () => {
 
 describe('tty opening and dimensions', () => {
   it('falls back to fd 2 when no terminal can be opened', () => {
-    // og's open_tty tries ttyname(2), then "/dev/tty", then fd 2
+    // less's open_tty tries ttyname(2), then "/dev/tty", then fd 2
     // itself, terminal or not (ttyin.c:67) - it cannot come away
     // empty, which is what lets less paint its first screen before
     // getchr finds the EOF and quits

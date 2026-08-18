@@ -10,7 +10,7 @@ import { runLt } from '../lesstest/runLt';
 /*
  * A key sequence that starts a binding and then does not finish it.
  *
- * og's cmd_decode matches against the TAIL of what has accumulated
+ * less's cmd_decode matches against the TAIL of what has accumulated
  * (decode.c:943, cmd_match:845), so bytes that lead nowhere age out
  * and the last one runs as its own command. The digit that opened
  * the sequence was never a count - binding "5e" makes 5 a prefix.

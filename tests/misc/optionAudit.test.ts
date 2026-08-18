@@ -127,7 +127,7 @@ function toggle(keys: string): void {
   for (const key of keys.slice(1)) optionKey(content, key);
 }
 
-describe('og option defaults', () => {
+describe('less option defaults', () => {
   it('defaults --match-shift to half the screen width', () => {
     expect(optMatchShift()).toBe(40);
   });
@@ -162,7 +162,7 @@ describe('get_swindow (-z)', () => {
     expect(getSwindow()).toBe(19);
   });
 
-  it('subtracts the --header lines like og', () => {
+  it('subtracts the --header lines like less', () => {
     opt.headerLines = 3;
     expect(getSwindow()).toBe(20);
   });
@@ -377,7 +377,7 @@ describe('option command cancellation boundaries', () => {
   });
 });
 
-describe('option prompt line editing, like og cmd_char', () => {
+describe('option prompt line editing, like less cmd_char', () => {
   it('edits a number parameter with the cursor keys', () => {
     toggle('-h12');
     optionKey(content, '\x1b[D');
@@ -517,7 +517,7 @@ describe('$LESS_UNSUPPORT and $LESS_IS_MORE', () => {
   });
 });
 
-describe('command line argument scans (og scan_option per arg)', () => {
+describe('command line argument scans (less scan_option per arg)', () => {
   it('accepts a bare long option argument', () => {
     const startup = scanOptions('--help', [], false);
     expect(startup.dohelp).toBe(true);
@@ -543,7 +543,7 @@ describe('command line argument scans (og scan_option per arg)', () => {
     expect(search.message).toBe('');
 
     // "X" is no style selector, so the short prompt takes it whole;
-    // og hands the raw argument over, without $ processing
+    // less hands the raw argument over, without $ processing
     scanOptions('X prompt$', [], false);
     flushPendopt();
     expect(search.message).toBe('');
@@ -567,12 +567,12 @@ describe('command line argument scans (og scan_option per arg)', () => {
     expect(search.message).toBe('Value is required after -P (--prompt)');
   });
 
-  it('skips the option handler for a pendopt number, like og', () => {
+  it('skips the option handler for a pendopt number, like less', () => {
     // an attached value runs opt_wheel_lines and clamps to 1
     scanOptions('--wheel-lines=0', [], false);
     expect(opt.wheelLines).toBe(1);
 
-    // a two-argument value writes the variable raw (og calls getnumc
+    // a two-argument value writes the variable raw (less calls getnumc
     // into the ovar without the handler)
     scanOptions('--wheel-lines', [], false);
     scanOptions('0', [], false);
@@ -647,11 +647,11 @@ describe('command line argument scans (og scan_option per arg)', () => {
       .toBe('Cannot use lesskey source file "/definitely/not/there"');
   });
 
-  it('accepts the source files og accepts, and only complains like it', () => {
-    // measured against og over four inputs. Only a MISSING file is an
+  it('accepts what less accepts, and only complains the way it does', () => {
+    // measured against less over four inputs. Only a MISSING file is an
     // error there; the other three load silently, and the compiled
-    // binary is the one this used to refuse - og's line stops at its
-    // first NUL (lesskey_parse.c:722), so og reads an empty first line
+    // binary is the one this used to refuse - less's line stops at its
+    // first NUL (lesskey_parse.c:722), so less reads an empty first line
     // where this read the whole blob and called it a missing action
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-ks-'));
     const write = (name: string, data: string | Buffer): string => {
@@ -813,7 +813,7 @@ describe('shared parser boundaries copied from less helpers', () => {
   });
 });
 
-describe('-J status column search chars (og init_status_col)', () => {
+describe('-J status column search chars (less init_status_col)', () => {
   it('shows * for visible and </>/= for chopped-away matches', () => {
     startSearch('/', 1);
     for (const char of 'm3') searchInputKey(char);
@@ -843,7 +843,7 @@ describe('-J status column search chars (og init_status_col)', () => {
   });
 });
 
-describe('-f force_open guards (og bad_file/edit)', () => {
+describe('-f force_open guards (less bad_file/edit)', () => {
   it('refuses a directory without -f and tries with it', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-f-'));
     initFiles([dir]);
@@ -851,7 +851,7 @@ describe('-f force_open guards (og bad_file/edit)', () => {
     expect(loadFile(0)).toBe(null);
     expect(search.message).toBe(`${dir} is a directory`);
 
-    // -f forces past bad_file: the failing read leaves og's empty
+    // -f forces past bad_file: the failing read leaves less's empty
     // file with prompt_message's "read error"
     search.message = '';
     opt.forceOpen = 1;
@@ -869,7 +869,7 @@ describe('pipe size, like ch_length() and --file-size', () => {
     expect(prExpand(content, '%B')).toBe('?');
     expect(prExpand(content, '?s%s:no size.')).toBe('no size');
 
-    // displaying the end alone is not enough, like og's ch_length
+    // displaying the end alone is not enough, like less's ch_length
     // staying NULL_POSITION until a read returns EOI
     mode.EOF = true;
     expect(prExpand(content, '%s')).toBe('?');

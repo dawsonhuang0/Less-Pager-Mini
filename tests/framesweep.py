@@ -2,23 +2,23 @@
 """What the SCREEN shows, and how many writes it took to get there.
 
 The byte sweeps compare the whole output stream and are blind to WHEN
-it arrives -- which is the wrong blind spot. A pager emitting og's
-exact bytes in five writes where og used one flickers; a pager whose
+it arrives -- which is the wrong blind spot. A pager emitting less's
+exact bytes in five writes where less used one flickers; a pager whose
 first screen never leaves the buffer looks dead. Both are byte-
 identical, and both were green under every other sweep here while the
 screen was visibly wrong.
 
 Two measurements, chosen because they hold still. Frame COUNTS do not:
 the pty coalesces reads however it likes, so the same session gives 65
-chunks one run and 70 the next, for og as much as for us.
+chunks one run and 70 the next, for less as much as for us.
 
   SCREEN   the emulated screen and cursor once everything settles,
-           against og. Catches a wrong cursor column, a blank paint,
+           against less. Catches a wrong cursor column, a blank paint,
            a stale prompt -- anything the eye would catch.
 
   WRITES   keys sent far enough apart that each command's output
            arrives on its own, so the chunk count IS the write count.
-           og emits one write per command (cmd_exec flushes before
+           less emits one write per command (cmd_exec flushes before
            each, command.c:128). Several per command is fragmentation,
            and fragmentation on a fast burst is what flicker IS.
 
@@ -123,10 +123,10 @@ for label, fixture, opts, burst, singly in CASES:
         print(f'  DIFF {label:22} the settled screen differs')
         for n, (x, y) in enumerate(zip(a[0], b[0])):
             if x != y:
-                print(f'         row {n:2} og  |{x[:66]}')
-                print(f'         row {n:2} our |{y[:66]}')
+                print(f'         row {n:2} less |{x[:66]}')
+                print(f'         row {n:2} our  |{y[:66]}')
         if a[1] != b[1]:
-            print(f'         cursor og={a[1]} ours={b[1]}')
+            print(f'         cursor less={a[1]} ours={b[1]}')
         if os.environ.get('FRAMESWEEP_SHOW'):
             for n, row in enumerate(b[0]):
                 print(f'         our {n:2} |{row[:66]}')
@@ -140,11 +140,11 @@ for label, fixture, opts, burst, singly in CASES:
 
         if wb > wa + 1:
             bad += 1
-            print(f'  DIFF {label:22} writes og={wa} ours={wb}'
-                  f'  -- {wb - wa} more than og, per {len(one)} keys')
+            print(f'  DIFF {label:22} writes less={wa} ours={wb}'
+                  f'  -- {wb - wa} more than less, per {len(one)} keys')
             continue
 
-        note = f'  writes og={wa} ours={wb}'
+        note = f'  writes less={wa} ours={wb}'
 
     print(f'  ok   {label:22} screen matches{note}')
 

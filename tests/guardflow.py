@@ -13,7 +13,7 @@ the bottom row exactly as a user would.
     python3 tests/guardflow.py
 
 Wants tests/redos-long.txt, which tests/REDOS-PATTERNS.txt says how to
-generate. Nothing here touches og: og has no such option, and og's own
+generate. Nothing here touches less: less has no such option, and less's own
 answer to a catastrophic pattern is to hang until it finishes.
 """
 

@@ -77,7 +77,7 @@ describe('-X main-screen rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og's clear_bot erases the prompt row, forw prints the new line
+    // less's clear_bot erases the prompt row, forw prints the new line
     expect(frame.startsWith('\r\x1B[Kx6\n')).toBe(true);
     expect(frame).not.toContain('x2\n');
   });
@@ -91,7 +91,7 @@ describe('-X main-screen rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og's back(): each line inserts at the top, nearest first
+    // less's back(): each line inserts at the top, nearest first
     expect(frame).toContain('\x1B[H\x1BMx2\n\x1B[H\x1BMx1\n');
     expect(frame).toContain(`\x1B[${config.window};1H`);
   });
@@ -104,7 +104,7 @@ describe('-X main-screen rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og's repaint()/forw without top_scroll
+    // less's repaint()/forw without top_scroll
     expect(frame.startsWith('\r\x1B[K...skipping...\n')).toBe(true);
     expect(frame).toContain('x21');
   });
@@ -112,11 +112,11 @@ describe('-X main-screen rendering', () => {
   it('prints it again when the screen is re-entered', () => {
     render(content, []);
 
-    // og's lsystem, pipe_data and psignals all come back through
+    // less's lsystem, pipe_data and psignals all come back through
     // term_init, which does not touch first_time - a static set at
     // startup and cleared at the end of the first forw (forwback.c:22,
     // :381). So the screen that comes back is not a FIRST screen and
-    // repaints behind the marker. Measured after "!echo h": og 1,
+    // repaints behind the marker. Measured after "!echo h": less 1,
     // ours 0 until enterScreen stopped clearing the painted flag
     enterScreen();
     written.length = 0;
@@ -149,7 +149,7 @@ describe('-X main-screen rendering', () => {
     render(content, []);
     const frame = written.join('');
 
-    // og's clear_bot then the message; the content rows stay put
+    // less's clear_bot then the message; the content rows stay put
     expect(frame.startsWith('\r\x1B[K')).toBe(true);
     expect(frame).toContain('hello there');
     expect(frame).not.toContain('\n');
@@ -165,7 +165,7 @@ describe('-X main-screen rendering', () => {
     opt.oldBot = 0;
     const frame = written.join('');
 
-    // og's lower_left instead of line_left (screen.c:2703)
+    // less's lower_left instead of line_left (screen.c:2703)
     expect(frame.startsWith(`\x1B[${config.window};1H\x1B[K`)).toBe(true);
     expect(frame).toContain('way down');
   });
@@ -179,7 +179,7 @@ describe('-X main-screen rendering', () => {
 });
 
 describe('a terminal that cannot switch screens', () => {
-  // og's term_init homes to the lower left only when BOTH "ti" and
+  // less's term_init homes to the lower left only when BOTH "ti" and
   // "te" exist and "NR" does not deny the switch (screen.c:2061),
   // because a terminal that stays on one screen would be scrolling
   // the user's own scrollback away. A short first screen therefore
@@ -192,7 +192,7 @@ describe('a terminal that cannot switch screens', () => {
     calculateEOF(short);
     mode.INIT = true;
     resetRender();
-    // each case is a fresh SESSION: og's first_time is what decides
+    // each case is a fresh SESSION: less's first_time is what decides
     // that the paint follows term_init's lower_left
     resetFirstPaint();
     written.length = 0;
@@ -221,12 +221,12 @@ describe('a terminal that cannot switch screens', () => {
   it('still sinks it to the bottom on a switchable terminal', () => {
     const frame = paint(undefined);
 
-    // og does not PAINT the rows above: term_init has already left
+    // less does not PAINT the rows above: term_init has already left
     // the cursor on the bottom line, and each drawn line's newline
     // scrolls the short file up into place (forwback.c's squished
     // first screen). So the frame homes nowhere and writes the
     // content straight out - which is what carries a cursor-moving
-    // escape through the way og carries it
+    // escape through the way less carries it
     expect(frame).not.toContain('\x1b[H');
     expect(frame.slice(0, frame.indexOf('a'))).toBe('\x1b[?2026h');
     expect(blanksAbove(frame)).toBe(0);

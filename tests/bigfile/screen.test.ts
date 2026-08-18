@@ -111,7 +111,7 @@ describe('BigView movement', () => {
   });
 
   it('re-wraps a shifted top rather than translating it (wordwrap)', () => {
-    // og's table[TOP] is a byte and forw_line wraps from THERE. Under a
+    // less's table[TOP] is a byte and forw_line wraps from THERE. Under a
     // fixed width that equals adding the shift to the next boundary -
     // offset + width == (boundary + width) + shift - but --wordwrap
     // breaks at spaces, so rows are unequal and the two answers part
@@ -142,7 +142,7 @@ describe('BigView movement', () => {
   });
 
   it('a jump lands on a row start, a scroll keeps an off-grid top', () => {
-    // og's jumps walk the file for a fresh position, and back_line /
+    // less's jumps walk the file for a fresh position, and back_line /
     // find_pos only ever land on a row start of the ABSOLUTE grid -
     // jump_forw says so outright (jump.c:62). Scrolling instead moves
     // the top within its line, so a top part-way into a row stays

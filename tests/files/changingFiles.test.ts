@@ -245,7 +245,7 @@ describe('examine prompt', () => {
   });
 
   it('escapes recalled names containing spaces', () => {
-    // og shell_quotes the history entry (edit.c:683): the meta
+    // less shell_quotes the history entry (edit.c:683): the meta
     // escape, never the -" pair, on a shell that has one
     addExamineHistory('with space.txt');
 
@@ -394,7 +394,7 @@ describe('prompts and info', () => {
     fileInfo(['a', 'b', 'c']);
 
     // e_proto's ?e branch ends with a space and ?c starts with one, so
-    // og prints two spaces between (END) and (column ...)
+    // less prints two spaces between (END) and (column ...)
     expect(search.message).toBe('lines 1-3/3 byte 5/5 (END)  (column 5)');
   });
 });

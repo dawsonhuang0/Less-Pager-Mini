@@ -41,8 +41,8 @@ it('maps SGR mouse scroll sequences to line movement', () => {
   expect(getAction('\x1b[<65;10;20M')).toBe('LINE_FORWARD');
 });
 
-it('binds arrow keys to what terminfo says, like og', () => {
-  // og fills each special key's slot from terminfo (special_key_str,
+it('binds arrow keys to what terminfo says, like less', () => {
+  // less fills each special key's slot from terminfo (special_key_str,
   // screen.c:1218) and writes "\377" when the capability is missing
   // (decode.c:390), so a SECOND spelling of an arrow is an ordinary
   // unknown key: echoed to the prompt and belled. Measured against
@@ -116,7 +116,7 @@ it('maps window movement keys', () => {
 });
 
 it('resolves unbound sequences by their tail, like cmd_decode', () => {
-  // og's cmd_match anchors bindings to the buffer's LAST chars
+  // less's cmd_match anchors bindings to the buffer's LAST chars
   // (decode.c:845): a stray ESC ages out and the tail runs
   expect(tailCascade('\x1Bq')).toEqual(['q']);
   expect(tailCascade('\x1B\x1BOA')).toEqual(['\x1BOA']);
@@ -129,9 +129,9 @@ it('resolves unbound sequences by their tail, like cmd_decode', () => {
 
   // digits complete mid-stream, the trailing junk is one invalid;
   // the '1' rides the \x1B[1;… modifier-arrow prefixes and ages out
-  // (og, binding none, would yield ['1', '5', null] - same bell)
+  // (less, binding none, would yield ['1', '5', null] - same bell)
   expect(tailCascade('\x1B[15~')).toEqual(['5', null]);
 
-  // a dangling partial match drops (og would wait for more input)
+  // a dangling partial match drops (less would wait for more input)
   expect(tailCascade('\x1B\x1B')).toEqual([]);
 });

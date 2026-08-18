@@ -48,9 +48,9 @@ function decodeTermcap(text: string): string {
 
 /** Resolves a literal TERMCAP entry or the TERM entry in a named file. */
 function termcapEntry(): string | undefined {
-  // $TERMCAP is the DATABASE, and og reads it through tgetent inside
+  // $TERMCAP is the DATABASE, and less reads it through tgetent inside
   // the termcap library - never through lgetenv, which is why
-  // $LESSNOCONFIG hides every LESS_TERMCAP_* override from og while
+  // $LESSNOCONFIG hides every LESS_TERMCAP_* override from less while
   // leaving the database itself in place. A library caller's own
   // overlay still counts: that is the application's configuration,
   // not the environment it was launched in.
@@ -114,7 +114,7 @@ function inlineTermcap(name: string): string | undefined {
     if (item === name) return '1';
     // A canceled capability is distinct from a missing one: the empty
     // string suppresses the built-in fallback just as tgetstr returning
-    // an explicitly disabled capability does in og.
+    // an explicitly disabled capability does in less.
     if (item.startsWith(name + '@')) return '';
     if (item.startsWith(name + '=')) return decodeTermcap(item.slice(3));
     if (item.startsWith(name + '#')) return item.slice(3);
@@ -124,7 +124,7 @@ function inlineTermcap(name: string): string | undefined {
 }
 
 /**
- * OG's ltget_env: debug marker, terminfo-name override, then the
+ * less's ltget_env: debug marker, terminfo-name override, then the
  * two-character termcap override. TERMCAP supplies our database fallback.
  */
 export function terminalCapability(
@@ -149,7 +149,7 @@ export function terminalCapability(
     if (inline !== undefined) return inline;
   }
 
-  // and then the terminal's own strings. og links curses and calls
+  // and then the terminal's own strings. less links curses and calls
   // tgetstr, so this is the tier that normally answers; without it
   // every caller fell through to its own hardcoded default
   if (terminfo !== null) {
@@ -162,10 +162,10 @@ export function terminalCapability(
 }
 
 /**
- * Drops a terminfo padding spec, the way og's tputs does at speed 0.
+ * Drops a terminfo padding spec, the way less's tputs does at speed 0.
  *
  * A database string may carry "$<100/>" -- xterm's flash does -- which
- * is an instruction to tputs, not output. og calls
+ * is an instruction to tputs, not output. less calls
  * setupterm(term, -1, NULL), leaving ospeed 0, so tputs emits no
  * padding at all and the capability goes out bare. Passing the spec
  * through would print "$<100/>" on the screen.
@@ -174,18 +174,18 @@ function stripPadding(value: string): string {
   return value.replace(/\$<[0-9.]*[*/]*>/g, '');
 }
 
-// og's DEFAULT_TERM (screen.c:133): an unset $TERM still names an
+// less's DEFAULT_TERM (screen.c:133): an unset $TERM still names an
 // entry, and "unknown" is a real one - it is how a terminal with no
 // capabilities at all gets described rather than left undescribed.
-// (og's other spelling, "ansi", is the OS2 build's; node has none.)
+// (less's other spelling, "ansi", is the OS2 build's; node has none.)
 const DEFAULT_TERM = 'unknown';
 
-// tgetent is og's one-time load at init; doing it on first use keeps
+// tgetent is less's one-time load at init; doing it on first use keeps
 // the $TERM lookup after the environment tiers have been set up
 let terminfoLoaded = false;
 let terminfoEntry = false;
 
-/** Loads the compiled entry for $TERM, once, like og's tgetent. */
+/** Loads the compiled entry for $TERM, once, like less's tgetent. */
 function loadTerminfo(): void {
   if (terminfoLoaded) return;
   terminfoLoaded = true;
@@ -195,8 +195,8 @@ function loadTerminfo(): void {
 /**
  * Whether the terminal database described this terminal.
  *
- * og always has an answer here: it links curses, so a capability the
- * entry omits is genuinely ABSENT and og uses the empty string. We
+ * less always has an answer here: it links curses, so a capability the
+ * entry omits is genuinely ABSENT and less uses the empty string. We
  * read the compiled entries ourselves, so a miss can also mean we
  * found no database to read - and there the hardcoded ANSI guesses
  * are the better answer. This tells the two apart.

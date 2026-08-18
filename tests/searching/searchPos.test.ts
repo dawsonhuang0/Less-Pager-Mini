@@ -52,7 +52,7 @@ describe('search_pos over wrapped lines', () => {
     doSearch('/', 'HIT');
     execSearch(content);
 
-    // the match end (sub 6) lands on the bottom line, like og's
+    // the match end (sub 6) lands on the bottom line, like less's
     // get_lastlinepos + jump_loc(lastlinepos, BOTTOM)
     expect(config.row).toBe(0);
     expect(config.subRow).toBe(2);
@@ -62,7 +62,7 @@ describe('search_pos over wrapped lines', () => {
     calculateEOF(content);
     search.message = '';
 
-    // og search_pos OPT_ON: position(sc_height-1) falls mid-line;
+    // less search_pos OPT_ON: position(sc_height-1) falls mid-line;
     // the remainder is the first candidate and the jump lands on it
     // (the match end is under the quarter-screen heuristic here)
     withHowSearch(1, () => {
@@ -105,7 +105,7 @@ describe('search_pos over wrapped lines', () => {
   });
 
   it('a match ending exactly at the line end never bottom-jumps', () => {
-    // og 707's zeroed chpos sentinel (cvt_text's FIXME): tpos reads
+    // less 707's zeroed chpos sentinel (cvt_text's FIXME): tpos reads
     // as linepos, and pos == opos skips the jump entirely
     const tail = 'a'.repeat(77) + 'HIT';
     const quirky = [tail, 'zzz'];
@@ -150,7 +150,7 @@ describe('get_cvt_ops search conversions', () => {
     }
   });
 
-  it("consults proc-BACKSPACE for the CRLF strip, og's own quirk", () => {
+  it("consults proc-BACKSPACE for the CRLF strip, less's own quirk", () => {
     const crlf = ['abc\r', 'zzz'];
     calculateEOF(crlf);
 

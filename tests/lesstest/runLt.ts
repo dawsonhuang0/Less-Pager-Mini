@@ -80,10 +80,10 @@ function compare(
 /**
  * Replays a parsed .lt session against this pager in-process: output
  * feeds the LtScreen emulator and every recorded step's screen is
- * compared, like lesstest's runtest against og.
+ * compared, like lesstest's runtest against less.
  */
 export async function runLt(lt: LtFile): Promise<LtResult> {
-  // og had no "xn" unless the recording names it, so its screen wraps
+  // less had no "xn" unless the recording names it, so its screen wraps
   // as soon as the last column is written - see LtScreen.deferWrap
   const screen = new LtScreen(lt.width, lt.height,
     'LESS_TERMCAP_xn' in lt.env);
@@ -101,7 +101,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
     } else if (lt.files[arg] !== undefined) {
       fs.writeFileSync(path.join(dir, arg), lt.files[arg], 'latin1');
 
-      // relative names keep the %f prompt identical to og's recording
+      // relative names keep the %f prompt identical to less's recording
       fileArgs.push(arg);
     }
   }
@@ -120,7 +120,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   setEnv('TERM', 'xterm');
 
   // anything a developer's own environment might contribute goes
-  // first; the recording then puts back exactly what og had
+  // first; the recording then puts back exactly what less had
   for (const name of ['LESS', 'LESSOPEN', 'LESSCLOSE', 'LESSKEYIN',
     'LESSKEY', 'LESSKEY_CONTENT', 'LESSCHARSET', 'LESSBINFMT',
     'LESSUTFBINFMT', 'LESSUTFCHARDEF', 'LESSANSIENDCHARS',
@@ -128,27 +128,27 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
     setEnv(name, undefined);
   }
 
-  // og's lesstest hands less exactly LESS*, COLUMNS, LINES, LANG,
+  // less's lesstest hands less exactly LESS*, COLUMNS, LINES, LANG,
   // LC_CTYPE and MORE (env.c is_less_env) and logs that set as the E
   // lines, so the recording IS the environment less saw. Replay it,
   // minus the synthetic LESS_TERMCAP_* VALUES: those only decide
-  // which escape bytes og wrote, and .lt compares screens, not bytes.
+  // which escape bytes less wrote, and .lt compares screens, not bytes.
   const recorded = Object.entries(lt.env)
     .filter(([name]) => !name.startsWith('LESS_TERMCAP_'));
 
   for (const [name, value] of recorded) setEnv(name, value || undefined);
 
-  // Which capabilities the recording NAMES is a different matter: og
+  // Which capabilities the recording NAMES is a different matter: less
   // ran with no $TERM at all (env.c never passes it), so every
   // capability it had came from that list and everything else was
-  // absent. "ti"/"te" are not on it, and og's term_init homes to the
+  // absent. "ti"/"te" are not on it, and less's term_init homes to the
   // lower left only when both exist (screen.c:2061) - which is why a
   // short first screen sits at the TOP of a recorded screen and at
   // the bottom of a real terminal's. Cancel them the way a termcap
-  // entry does, so the replay starts where og started.
-  // @8 is kent: without it og's getcc_repl returns a bare ESC to
+  // entry does, so the replay starts where less started.
+  // @8 is kent: without it less's getcc_repl returns a bare ESC to
   // the command loop instead of swallowing it as a partial match
-  // "xn" is the same story: og's defer_wrap comes from it
+  // "xn" is the same story: less's defer_wrap comes from it
   // (screen.c:1532), the recordings never name it, and a full-width
   // row must then be followed by nothing at all
   const canceled = ['ti', 'te', '@8', 'xn']
@@ -166,7 +166,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   // The developer's own lesskey files must stay out of the replay,
   // but LESSNOCONFIG is the wrong tool: it skips lesskey ENTIRELY
   // (decode.c:1357), including the $LESSKEY_CONTENT a recording may
-  // carry - og had that content, so the replay must too. Point every
+  // carry - less had that content, so the replay must too. Point every
   // lesskey lookup at a path that cannot exist instead, and leave the
   // recorded content alone.
   const nowhere = path.join(dir, 'no-such-lesskey');
@@ -231,7 +231,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   stdin.off = () => process.stdin;
 
   const checkStep = (step: number, key: string): void => {
-    // the pager buffers its output like og's obuf and hands it over
+    // the pager buffers its output like less's obuf and hands it over
     // when it is about to wait for a key; this harness drives it
     // without that wait, so the screen is only current once the
     // buffer has been emptied into the emulator
@@ -260,7 +260,7 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   };
 
   try {
-    // og ran with ordinary shell access; a library call defaults to
+    // less ran with ordinary shell access; a library call defaults to
     // --no-shell, and the caller's own config map is exactly how that
     // default is meant to be lifted (see the invocation lock)
     const session = pager(fileArgs, ['--examine-file'], {

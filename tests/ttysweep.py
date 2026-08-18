@@ -1,9 +1,9 @@
 """Which descriptors are terminals, compared against less/less.
 
-og keys its whole mode on isatty(1) (main.c:259) and takes its
+less keys its whole mode on isatty(1) (main.c:259) and takes its
 keyboard from open_tty's cascade - ttyname(2), then /dev/tty, then fd
 2 whatever it is (ttyin.c:67). Every combination below is a different
-step of that cascade; the last one reaches the end of it, where og
+step of that cascade; the last one reaches the end of it, where less
 paints the screen and then quits on EOF (ttyin.c:220).
 
 Needs the vendored less/less and a lines.txt of 100 numbered lines.
@@ -42,16 +42,16 @@ for harness, redir, keys, label in CASES:
     b = pty(f'node {CLI} -X lines.txt {redir}; echo "[rc $?]"', keys, harness)
     if a != b:
         bad += 1
-        print(f'DIFF {label}  og={len(a)} ours={len(b)}')
+        print(f'DIFF {label}  less={len(a)} ours={len(b)}')
 
-# stdout not a terminal: og copies the files out and never pages
+# stdout not a terminal: less copies the files out and never pages
 for sh, label in [('%s -X lines.txt', 'stdout not a terminal'),
                   ('echo hi | %s -X', 'stdout+stdin not terminals')]:
     a = plain(sh % f'{P}/less/less')
     b = plain(sh % f'node {CLI}')
     if a != b:
         bad += 1
-        print(f'DIFF {label}  og={len(a)} ours={len(b)}')
+        print(f'DIFF {label}  less={len(a)} ours={len(b)}')
 
 total = len(CASES) + 2
 print(f'{total-bad}/{total} identical')

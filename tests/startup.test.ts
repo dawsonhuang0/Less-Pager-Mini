@@ -18,7 +18,7 @@ import {
 const stdoutWrite = vi.spyOn(process.stdout, 'write')
   .mockImplementation(() => true);
 
-// og's error() prints through the CURRENT output fd, and main switches
+// less's error() prints through the CURRENT output fd, and main switches
 // that to stdout only once edit_first() has opened a file (main.c:413).
 // Under vitest stdout is not a tty, so a scan error goes to stderr -
 // which is exactly what keeps a diagnostic out of redirected data.
@@ -162,7 +162,7 @@ describe('startup option orchestration', () => {
       startupInit([]);
       expect(stdoutWrite).not.toHaveBeenCalled();
 
-      // og's warning sits after the !is_tty branch that cats and
+      // less's warning sits after the !is_tty branch that cats and
       // quits (main.c:395), so a piped session never reaches it
       stdoutWrite.mockClear();
       opt.knowDumb = 0;
@@ -189,11 +189,11 @@ describe('startup option orchestration', () => {
 });
 
 describe('pre-screen error gate helpers', () => {
-  it('prints one startup error per call, on og\'s output fd', () => {
+  it('prints one startup error per call, on less\'s output fd', () => {
     printStartupError('first');
     printStartupError('second');
 
-    // stdout is not a tty here, so these are the catting case: og has
+    // stdout is not a tty here, so these are the catting case: less has
     // not called set_output(1) yet and the messages land on stderr
     expect(stderrWrite.mock.calls.map(call => call[0]))
       .toEqual(['first\n', 'second\n']);

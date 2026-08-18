@@ -52,25 +52,25 @@ function styleRegex(
 }
 
 // the live sets behind the regexes, for the character-at-a-time walk
-// og's ansi_step does when a sequence turns out to be invalid
+// less's ansi_step does when a sequence turns out to be invalid
 let midChars = DEFAULT_MID_CHARS;
 let endChars = DEFAULT_END_CHARS;
 let oscIntroChars = '';
 
-/** og's is_ansi_middle set ($LESSANSIMIDCHARS). */
+/** less's is_ansi_middle set ($LESSANSIMIDCHARS). */
 export const ansiMidChars = (): string => midChars;
 
-/** og's is_ansi_end set ($LESSANSIENDCHARS). */
+/** less's is_ansi_end set ($LESSANSIENDCHARS). */
 export const ansiEndChars = (): string => endChars;
 
-/** og's osc_ansi_chars ($LESSANSIOSCCHARS): extra OSC intro chars. */
+/** less's osc_ansi_chars ($LESSANSIOSCCHARS): extra OSC intro chars. */
 export const ansiOscChars = (): string => oscIntroChars;
 
 /**
  * A "designate a character set" escape: ESC, one of ( ) * +, then the
- * set's name. Not SGR, and og's ANSI rule cannot close it - its end
+ * set's name. Not SGR, and less's ANSI rule cannot close it - its end
  * chars default to just "m" (line.c:164) - so it is not a sequence to
- * either engine. og never meets one in text because it keeps its
+ * either engine. less never meets one in text because it keeps its
  * attributes beside the characters rather than in them; we inline
  * ours, and terminfo's sgr0 leads with "\E(B" on xterm, so anything
  * MEASURING our display text has to skip it or count three columns
@@ -85,8 +85,8 @@ export let STYLE_REGEX_G =
 /**
  * A style sequence OR a charset designation, for the callers that lay
  * text out in COLUMNS. Both are zero-width, but only the first is a
- * sequence by og's rule - see CHARSET_DESIGNATION_G. Parsing of FILE
- * content keeps to STYLE_REGEX, which is og's rule exactly.
+ * sequence by less's rule - see CHARSET_DESIGNATION_G. Parsing of FILE
+ * content keeps to STYLE_REGEX, which is less's rule exactly.
  */
 export let STYLE_OR_CHARSET_G = new RegExp(
   `(?:${STYLE_REGEX_G.source}|${CHARSET_DESIGNATION_G.source})`, 'g');
@@ -124,7 +124,7 @@ export let CLEAR_LINE = '\x1b[K';
 export let CLEAR_BELOW = '\x1b[J';
 
 /**
- * og's auto_wrap and defer_wrap (screen.c:1531): termcap "am" and "xn".
+ * less's auto_wrap and defer_wrap (screen.c:1531): termcap "am" and "xn".
  *
  * auto_wrap - the terminal moves to the next line by itself once a
  * character lands past the right margin. defer_wrap - it holds that
@@ -141,7 +141,7 @@ export let CLEAR_BELOW = '\x1b[J';
 export let AUTO_WRAP = true;
 export let DEFER_WRAP = true;
 
-// og's terminfo clear (home + erase) and scroll-reverse strings,
+// less's terminfo clear (home + erase) and scroll-reverse strings,
 // used by the -X main-screen paint model
 export let CLEAR_SCREEN = '\x1b[H\x1b[2J';
 export let REVERSE_INDEX = '\x1bM';
@@ -161,7 +161,7 @@ export const CURSOR_TO = (row: number, col: number): string =>
 const SYNC_ON = '\x1b[?2026h';
 const SYNC_OFF = '\x1b[?2026l';
 
-/** True while the pager owns a switchable alternate screen, like og
+/** True while the pager owns a switchable alternate screen, like less
  *  testing sc_init and sc_deinit before it homes to the lower left. */
 export let ON_ALTERNATE_SCREEN = true;
 
@@ -173,7 +173,7 @@ export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 export let KEYPAD_ON = '\x1b[?1h\x1b=';
 export let KEYPAD_OFF = '\x1b[?1l\x1b>';
 
-// og's mousecap enables button events, button-motion (drags) and
+// less's mousecap enables button events, button-motion (drags) and
 // SGR encoding: "\e[?1000h\e[?1002h\e[?1006h" (screen.c)
 export let MOUSE_ON = '\x1b[?1000h\x1b[?1002h';
 export let MOUSE_OFF = '\x1b[?1002l\x1b[?1000l';
@@ -192,14 +192,14 @@ export let VISUAL_BELL: string | null = null;
 export let STYLE_RESET = '\x1b[0m';
 
 /**
- * og's color reset, which is NOT the attribute one.
+ * less's color reset, which is NOT the attribute one.
  *
- * A colored run ends with a literal "\033[m" (line.c:1445) — og writes
+ * A colored run ends with a literal "\033[m" (line.c:1445) — less writes
  * the bytes itself rather than asking terminfo. Attribute runs end
  * with sgr0 instead, which on xterm carries a "\E(B" charset
  * designation in front. Using sgr0 for a color left that designation
  * in the message text, where nothing can recognise it as a sequence
- * (og's ANSI rule wants an END char, by default only "m") — so its
+ * (less's ANSI rule wants an END char, by default only "m") — so its
  * three bytes counted as printing columns and the cursor parked three
  * columns right of every message under --use-color.
  */
@@ -210,7 +210,7 @@ export let INVERSE_OFF = '\x1b[27m';
 
 export let BOLD_ON = '\x1b[1m';
 
-// og exits bold through terminfo's sgr0 (no individual bold-off
+// less exits bold through terminfo's sgr0 (no individual bold-off
 // exists), a FULL attribute reset: a leaked SGR — say an
 // --end-prompt color marker — dies at the first bold text (the
 // tilde rows, help's SUMMARY), while standout/underline end with
@@ -227,9 +227,9 @@ export function initTerminalCapabilities(): void {
   ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ?? '\x1b[?1049h';
   ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ?? '\x1b[?1049l';
 
-  // og's term_init only treats the screen as an ALTERNATE one when
+  // less's term_init only treats the screen as an ALTERNATE one when
   // both strings exist and "NR" does not deny it (screen.c:2061); a
-  // terminal that cannot switch keeps its scrollback, so og neither
+  // terminal that cannot switch keeps its scrollback, so less neither
   // homes to the lower left nor expects the switch to undo itself
   ON_ALTERNATE_SCREEN = ALTERNATE_CONSOLE_ON !== '' &&
     ALTERNATE_CONSOLE_OFF !== '' &&
@@ -255,40 +255,40 @@ export function initTerminalCapabilities(): void {
 
   TERMINAL_SUSPEND = terminalCapability('SUSPEND', 'SUSPEND') ?? SYNC_ON;
   TERMINAL_RESUME = terminalCapability('RESUME', 'RESUME') ?? SYNC_OFF;
-  // og's fallbacks are text, not ANSI guesses: sc_home is
+  // less's fallbacks are text, not ANSI guesses: sc_home is
   // cheaper(home, cup(0,0), "|\b^") and sc_clear is "\n\n" with
   // missing_cap (screen.c:1626, :1680). A terminal that has neither
   // gets those, which is exactly what its dumb painter draws
   CURSOR_HOME = terminalCapability('home', 'ho') ?? '|\b^';
   cursorToCapability = terminalCapability('cup', 'cm') ??
     '\x1b[%i%p1%d;%p2%dH';
-  // og does NOT guess at "el"/"ed": a terminal without them gets the
+  // less does NOT guess at "el"/"ed": a terminal without them gets the
   // empty string and missing_cap (screen.c:1613, :1618), so nothing at
   // all is written where the clear would go. Guessing ESC[K put the
   // one escape sequence a dumb terminal ever saw into its output.
   CLEAR_LINE = terminalCapability('el', 'ce') ?? '';
   CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '';
   CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\n\n';
-  // og's sc_addline is "al" or "ri", whichever is cheaper, and EMPTY
+  // less's sc_addline is "al" or "ri", whichever is cheaper, and EMPTY
   // when the terminal has neither - which sets no_back_scroll and
   // forces a repaint on every backward movement (screen.c:1707)
   REVERSE_INDEX = terminalCapability('ill', 'al') ??
     terminalCapability('ri', 'sr') ?? '';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
-  // og's attribute exits go through tmodes(..., "sgr0", ..., "me")
+  // less's attribute exits go through tmodes(..., "sgr0", ..., "me")
   // (screen.c:1788), so a bold or standout run ends with the FULL
   // capability -- on xterm "\E(B\E[m", the SGR reset preceded by
   // designating ASCII as G0. -N's line numbers end exactly that way in
-  // og's bytes, so this keeps the capability whole.
+  // less's bytes, so this keeps the capability whole.
   //
-  // A terminal whose entry has no sgr0 leaves og with "", but this
+  // A terminal whose entry has no sgr0 leaves less with "", but this
   // file also uses STYLE_RESET as its own "the styles end here"
   // sentinel -- split on, compared against -- so it keeps a value.
   // Only what tmodes hands to the TERMINAL goes empty.
   STYLE_RESET = terminalCapability('sgr0', 'me') ?? '\x1b(B\x1b[m';
 
-  // og's order, and its defaults: standout falls back to nothing at
+  // less's order, and its defaults: standout falls back to nothing at
   // all, and the other three fall back to STANDOUT (screen.c:1645).
   [INVERSE_ON, INVERSE_OFF] =
     tmodes('smso', 'so', 'rmso', 'se', '', '', '\x1b[7m', '\x1b[27m');
@@ -301,17 +301,17 @@ export function initTerminalCapabilities(): void {
 }
 
 /**
- * og's tmodes (screen.c:1774): one attribute's enter/exit pair.
+ * less's tmodes (screen.c:1774): one attribute's enter/exit pair.
  *
  * The ENTER capability decides. Missing, the pair falls back whole -
- * both strings - to the defaults it is handed; og gives standout the
+ * both strings - to the defaults it is handed; less gives standout the
  * empty pair, so a terminal without "smso" simply never stands out,
  * and hands the others standout's pair, so bold and underline come
  * out as standout on a terminal that has only that. Present, the exit
  * is looked up on its own, then sgr0, then the empty string.
  *
- * `guess` is ours, not og's: it applies only where no terminal entry
- * was found at all, which for og cannot happen (see terminfoAnswered).
+ * `guess` is ours, not less's: it applies only where no terminal entry
+ * was found at all, which for less cannot happen (see terminfoAnswered).
  */
 function tmodes(
   enterInfo: string,

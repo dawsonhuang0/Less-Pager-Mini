@@ -72,7 +72,7 @@ import {
  * position, and restores the target's saved position.
  */
 export function switchToFile(target: number): boolean {
-  // og's edit_ifile returns at once for the file it already has open
+  // less's edit_ifile returns at once for the file it already has open
   // (edit.c:465), so re-selecting the current file - `:x` with one
   // file, `:e` on the same name - re-reads nothing and repaints
   // nothing. We re-edited it, which showed the fresh-file prompt again
@@ -82,7 +82,7 @@ export function switchToFile(target: number): boolean {
 
   if (!lines) {
     // a binary-looking file arms the y/Y confirmation prompt and
-    // retries the switch on approval, like og's edit query
+    // retries the switch on approval, like less's edit query
     if (binaryConfirm.request) {
       binaryConfirm.request = false;
       binaryConfirm.pending = true;
@@ -124,7 +124,7 @@ export function switchToFile(target: number): boolean {
   session.content = deriveContent();
 
   // a pipe-form $LESSOPEN alt whose content ends within the screen
-  // learns its length at the paint, like og reading to EOI
+  // learns its length at the paint, like less reading to EOI
   revealAltEnd(session.content);
 
   const saved = files.list[target].saved;
@@ -132,9 +132,9 @@ export function switchToFile(target: number): boolean {
   config.subRow = saved ? saved.subRow : 0;
   config.blankTop = 0;
 
-  // og's edit_ifile sets `hshift = 0` (edit.c:680) on EVERY switch,
+  // less's edit_ifile sets `hshift = 0` (edit.c:680) on EVERY switch,
   // in the same block as pos_clear/clr_hilite: a new file starts at
-  // column 0 however far the last one was shifted. og saves a scrpos
+  // column 0 however far the last one was shifted. less saves a scrpos
   // per ifile (ifile.c:35) and the shift is not in it.
   //
   // Ours carried the shift across, so :n from a right-shifted file
@@ -156,7 +156,7 @@ export function switchToFile(target: number): boolean {
   const firstCmd = getFirstCmd();
   session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
 
-  // og renames the window on every prompt and its own source says the
+  // less renames the window on every prompt and its own source says the
   // right place is here ("{{ Seems like this should be done in
   // edit_ifile }}", command.c:969) - so here, where the name changes,
   // rather than costing every frame a sequence it does not need
@@ -181,7 +181,7 @@ export function openByName(name: string): boolean {
 
     if (!loadFile(at)) {
       // a binary-looking file keeps its entry and asks first,
-      // like og's edit query before registering failure
+      // like less's edit query before registering failure
       if (binaryConfirm.request) {
         binaryConfirm.request = false;
         binaryConfirm.pending = true;
@@ -237,7 +237,7 @@ export function tagStep(delta: 1 | -1): void {
 }
 
 /**
- * Repeats the search across the file list (ESC-n / ESC-N), like og's
+ * Repeats the search across the file list (ESC-n / ESC-N), like less's
  * A_T_AGAIN_SEARCH continuing into the next (or previous) files.
  */
 export function spanningSearch(
@@ -277,7 +277,7 @@ export function stepFile(delta: 1 | -1): void {
 
   if (target === null) {
     // :n past the last file quits with -e at end-of-file, like
-    // og's A_NEXT_FILE checking get_quit_at_eof after edit_next
+    // less's A_NEXT_FILE checking get_quit_at_eof after edit_next
     if (delta > 0 && optQuitAtEof() && mode.EOF && !mode.HELP) session.exit();
     return;
   }
@@ -296,7 +296,7 @@ export function removeFile(): void {
 
   if (!switchToFile(target)) return;
 
-  // og's del_ifile runs unmark(ifile): the removed file's marks die
+  // less's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
   if (files.index > removed) files.index--;
 }
@@ -316,7 +316,7 @@ export function runExamine(): void {
     return;
   }
 
-  // og's edit_list EDITS each name in turn (edit.c:728), and edit()
+  // less's edit_list EDITS each name in turn (edit.c:728), and edit()
   // is `edit_ifile(get_ifile(filename, curr_ifile))`: the new ifile
   // is inserted after the CURRENT one, and then becomes current. So
   // the insertion point follows along, and a name already in the
@@ -328,7 +328,7 @@ export function runExamine(): void {
   // index 0 - and every later name lands after a1, ahead of UP.
   let current = files.index;
 
-  // og keeps good_filename as a NAME, not a position, and resolves
+  // less keeps good_filename as a NAME, not a position, and resolves
   // it again at the end (edit.c) - which it has to, because a later
   // name that fails to open del_ifile()s an entry and shifts every
   // index after it
@@ -351,7 +351,7 @@ export function runExamine(): void {
 
     if (!loadFile(at)) {
       // a binary-looking file keeps its entry and asks first,
-      // like og's edit query
+      // like less's edit query
       if (binaryConfirm.request) {
         binaryConfirm.request = false;
         binaryConfirm.pending = true;
@@ -368,14 +368,14 @@ export function runExamine(): void {
         continue;
       }
 
-      // og's edit_list error()s per failing name IN ORDER; each
+      // less's edit_list error()s per failing name IN ORDER; each
       // message blocks in turn, not last-one-wins
       if (search.message) {
         errors.push(search.message);
         search.message = '';
       }
 
-      // og's edit_error del_ifile()s the entry unconditionally
+      // less's edit_error del_ifile()s the entry unconditionally
       // (edit.c) - a name that was already in the list and now
       // cannot be opened is dropped from it too
       files.list.splice(at, 1);
@@ -390,7 +390,7 @@ export function runExamine(): void {
   }
 
   if (errors.length && goodName !== null) {
-    // og's error() runs squish_check (output.c:720): a squished
+    // less's error() runs squish_check (output.c:720): a squished
     // short first paint repaints the OLD file top-anchored, tildes
     // and all, before the message shows
     if (mode.INIT && !optOldBot()) {
@@ -398,7 +398,7 @@ export function runExamine(): void {
       render(session.content, session.buffer);
     }
 
-    // og's make_display then defers while the messages block: the
+    // less's make_display then defers while the messages block: the
     // old screen survives the switch until RETURN dismisses them
     freezeFrame();
   }
@@ -406,21 +406,21 @@ export function runExamine(): void {
   if (goodName !== null) {
     search.message = '';
 
-    // og closes with `if (get_ifile(good_filename, curr_ifile) ==
+    // less closes with `if (get_ifile(good_filename, curr_ifile) ==
     // curr_ifile) return 0; reedit_ifile(save); return
     // edit(good_filename);` - it can skip the re-edit because its
     // own loop already EDITED each name and left curr_ifile on the
     // last one. Ours only validates with loadFile, so the switch it
     // skips is the one we still owe; switchToFile's own
-    // already-current guard covers og's early return.
+    // already-current guard covers less's early return.
     const target = files.list.findIndex(entry => entry.path === goodName);
 
-    // og's loop left curr_ifile on the LAST name it edited, so when
+    // less's loop left curr_ifile on the LAST name it edited, so when
     // that is not good_filename the closing edit() is a real switch:
     // new_file goes TRUE and the file it leaves becomes '#'. Ours
     // only validated, so a "switch" back to the file we never left
     // has to record both for itself - which is why ":e {a1,b2}.txt"
-    // over a1 shows og's new-file prompt while ":e a1.txt" does not.
+    // over a1 shows less's new-file prompt while ":e a1.txt" does not.
     if (target >= 0 && target === files.index && current !== target &&
         files.list[current]) {
       setPreviousPath(files.list[current].path);
@@ -429,7 +429,7 @@ export function runExamine(): void {
 
     if (target >= 0) switchToFile(target);
   } else if (errors.length && files.index >= 0) {
-    // og's failed edit_ifile re-edits the current file
+    // less's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with
     // the filename
     switchToFile(files.index);
@@ -458,14 +458,14 @@ export function runShell(
     return;
   }
 
-  // og's putchr fires --end-prompt before the clear_bot that erases
+  // less's putchr fires --end-prompt before the clear_bot that erases
   // the prompt for the command's output (output.c:496)
   const endPrompt = eprPrefix();
 
   // only lsystem hides a "-" command; pipe_data always echoes
   if (input === undefined && cmd.startsWith('-')) {
     cmd = cmd.slice(1);
-    // The clear is NOT conditional on --end-prompt. og clears this
+    // The clear is NOT conditional on --end-prompt. less clears this
     // line in cmd_exec(), before the command runs at all, so the
     // typed "!-cmd" is gone whatever lsystem then decides to print;
     // lsystem's "-" rule only suppresses the echoed copy. Skipping
@@ -482,14 +482,14 @@ export function runShell(
   suspendTerminal();
 
   // $SHELL -c on unix (LESS_SHELL_COPTION replaces -c, "-" drops
-  // the wrapper); %COMSPEC% /c on Windows, like og's lsystem
+  // the wrapper); %COMSPEC% /c on Windows, like less's lsystem
   const argv = shellArgv(cmd);
 
   spawnSync(argv[0], argv[1], input === undefined
     ? { stdio: 'inherit' }
     : { stdio: ['pipe', 'inherit', 'inherit'], input });
 
-  // og's lsystem re-edits the current file on return (reedit_ifile):
+  // less's lsystem re-edits the current file on return (reedit_ifile):
   // the filename prompt shows again (new_file), the trashed screen's
   // repaint abandons a squished short first paint, and edit_ifile
   // records the last position (lastmark, edit.c:385) - raising
@@ -563,7 +563,7 @@ function sourceRangeText(
 }
 
 /**
- * og's pipe_data: the file bytes from spos through epos INCLUSIVE, then
+ * less's pipe_data: the file bytes from spos through epos INCLUSIVE, then
  * whatever is left of that last line.
  *
  * The inclusive bound is why "|^" at the very top of a file pipes one
@@ -573,7 +573,7 @@ function sourceRangeText(
 function pipeData(spos: number, epos: number): string | null {
   if (!hook.sourceReadRange) return null;
 
-  // og's loop is `while (spos++ <= epos)`, which never runs when the
+  // less's loop is `while (spos++ <= epos)`, which never runs when the
   // range is inverted, leaving c == EOI -- so the finish-line loop
   // does not run either and nothing is piped
   if (epos < spos) return '';
@@ -581,7 +581,7 @@ function pipeData(spos: number, epos: number): string | null {
   const buf = hook.sourceReadRange(spos, epos + 1);
   let text = buf === null ? '' : buf.toString('latin1');
 
-  // "Finish up the last line." og stops when the last byte it read was
+  // "Finish up the last line." less stops when the last byte it read was
   // a newline, so a range ending mid-line is extended, not truncated
   if (!text.endsWith('\n')) {
     const CHUNK = 64 * 1024;
@@ -616,7 +616,7 @@ export function runPipe(cmd: string): void {
 
   if (!pipeMark.rows.length) return;
 
-  // og's pipe_pos, on POSITIONS. A mark in og IS a position, so the
+  // less's pipe_pos, on POSITIONS. A mark in less IS a position, so the
   // "is this mark above the screen?" test is a byte comparison against
   // position(TOP). Ours also carry a local row, and a row stops meaning
   // anything once the window slides -- which is why a mark set at the
@@ -628,7 +628,7 @@ export function runPipe(cmd: string): void {
       positions.length === pipeMark.rows.length &&
       positions.every(p => p !== undefined)) {
     const [mpos1, mpos2] = positions as number[];
-    // position(TOP), falling back to ch_zero() as og does
+    // position(TOP), falling back to ch_zero() as less does
     const tpos = markPos(session.content, ':') ?? 0;
     const bpos = markPos(session.content, ';');
 
@@ -677,7 +677,7 @@ export function runPipe(cmd: string): void {
   // Below is the row path, for a mark that resolved to no position at
   // all -- a non-seekable stdin, where session.content is the whole of
   // what was read and a row is the only address there is.
-  // og's pipe_data reads the FILE between two positions (lsystem.c),
+  // less's pipe_data reads the FILE between two positions (lsystem.c),
   // which is why it can pipe 200 lines while showing 23. session.content
   // is only the spooled window -- piping from it sent whatever happened
   // to be materialized, so "|$" delivered 72 lines of a 200 line file.
@@ -692,7 +692,7 @@ export function runPipe(cmd: string): void {
   runShell(cmd, doneMsg, text);
 }
 
-// ---- the streaming pipe, like og's lazy non-seekable reads ----
+// ---- the streaming pipe, like less's lazy non-seekable reads ----
 
 /** Bytes of pipe data currently held, past recycles excluded. */
 /**
@@ -714,7 +714,7 @@ export function runEditor(): void {
     return;
   }
 
-  // og warns before editing a $LESSOPEN replacement; RETURN then
+  // less warns before editing a $LESSOPEN replacement; RETURN then
   // continues into the editor (--no-edit-warn skips this)
   if (!optNoEditWarn() && entry.alt && !session.pendingEditWarn) {
     session.pendingEditWarn = true;
@@ -731,7 +731,7 @@ export function runEditor(): void {
     if (!inLesskeyView()) return false;
 
     // switchToFile returns at once for the file it already holds,
-    // exactly like og's edit_ifile - and og really does leave the old
+    // exactly like less's edit_ifile - and less really does leave the old
     // text up after v, until R flushes the buffers (clear_buffers,
     // command.c:1846). The lesskey view is not a file being read
     // though: an editor was opened to change what the keys DO, so the
@@ -756,7 +756,7 @@ export function runEditor(): void {
     // clearing it first")
     enterScreen();
 
-    // og's main errmsgs gate: every message on a line of its own,
+    // less's main errmsgs gate: every message on a line of its own,
     // then one prompt, and nothing drawn until the key. Placed so the
     // prompt lands on the BOTTOM row, where every other thing this
     // pager asks of the user lands - and 1049h restores a saved
@@ -787,7 +787,7 @@ export function runMiscInput(
     return;
   }
 
-  // ^P prefixed commands still join the history bare, like og
+  // ^P prefixed commands still join the history bare, like less
   const bare = text.replace(/^\x10/, '');
 
   if (kind === '!') {
@@ -814,7 +814,7 @@ export function runMiscInput(
       writeLogFile(session.content, false);
     }
   }
-  // og's cmd_accept runs at the top of the NEXT command iteration:
+  // less's cmd_accept runs at the top of the NEXT command iteration:
   // the shell mlist accepts after the command ran, so its autosave
   // attempt sees lsystem's reedit lastmark having dirtied the file
   if (kind === '!' || kind === '#' || kind === '|') {
@@ -829,10 +829,10 @@ export function applyFilter(): void {
 
   session.lastFilter = filter;
 
-  // og clears soft_eof when the filter changes (command.c:282)
+  // less clears soft_eof when the filter changes (command.c:282)
   session.softEofSeen = false;
 
-  // og's is_filtering() is FALSE on the helpfile (search.c:2409):
+  // less's is_filtering() is FALSE on the helpfile (search.c:2409):
   // the & pattern stores, the help view stays unfiltered, and the
   // filtered file waits behind the help exit
   if (mode.HELP) {
@@ -848,7 +848,7 @@ export function applyFilter(): void {
   config.blankTop = 0;
   calculateEOF(session.content);
 
-  // og's set_filter_pattern ends with screen_trashed() (search.c), and
+  // less's set_filter_pattern ends with screen_trashed() (search.c), and
   // a trashed screen is answered by repaint(): the screen comes back
   // top-anchored with tilde fill. A short filtered result was instead
   // left in the SQUISHED layout of a first paint -- blank rows above,
