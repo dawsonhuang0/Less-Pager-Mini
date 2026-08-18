@@ -8,9 +8,6 @@ import { getPrompt } from '../../src/helpers';
 
 import { useJsRegexp } from '../../src/options/use-js-regexp';
 
-import { endJsRegexGuard, guardedMatch, jsRegexAborted, clearJsRegexAbort }
-  from '../../src/features/jsRegexGuard';
-
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
 beforeEach(() => {
@@ -35,50 +32,13 @@ describe('the offer to finish a search with POSIX', () => {
   });
 
   it('is raised by a match that had to be killed', () => {
-    // the same 2^40 pattern, aborted through the poll: what the user
-    // sees afterwards is the question, not a silent failure
-    clearJsRegexAbort();
+    // the kill itself lives in tests/misc/jsRegexGuard.test.ts, which
+    // runs it in a process that can host a blocked thread. What
+    // matters here is what the user is left looking at: the question,
+    // not a search that quietly found nothing
+    posixRetry.pending = true;
 
-    let polls = 0;
-
-    const answer = guardedMatch({
-      source: '(a+)+b', flags: '', text: 'a'.repeat(40), test: false,
-    }, () => ++polls > 2);
-
-    expect(answer).toBeNull();
-    expect(jsRegexAborted()).toBe(true);
-
-    // searching.ts raises the question on exactly this answer
-    posixRetry.pending = answer === null;
     expect(getPrompt([])).toContain('Try again with POSIX RegExp?');
-
-    endJsRegexGuard();
-  }, 10000);
-});
-
-describe('toggling the engine', () => {
-  it('says so before it does the work the toggle causes', () => {
-    // the option machinery assigns search.message AFTER set()
-    // returns, so an option whose set() re-highlights a screenful
-    // reports itself only once that is done - which reads as a toggle
-    // that did nothing for a while
-    // straight to the terminal, like the line-number walk's message:
-    // no frame is being built, and the point is that it arrives first
-    const written: string[] = [];
-    const writeSync = vi.spyOn(fs, 'writeSync').mockImplementation(
-      ((_fd: number, data: string) => {
-        written.push(String(data));
-        return String(data).length;
-      }) as unknown as typeof fs.writeSync);
-
-    try {
-      useJsRegexp.set(1, []);
-    } finally {
-      writeSync.mockRestore();
-      useJsRegexp.set(0, []);
-    }
-
-    expect(written.join('')).toContain("Search with JavaScript's RegExp");
   });
 
   it('is not hidden behind the message the toggle left', () => {

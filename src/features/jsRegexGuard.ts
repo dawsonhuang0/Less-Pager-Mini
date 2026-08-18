@@ -1,223 +1,374 @@
 import { Worker } from 'worker_threads';
 
 /**
- * Runs a host RegExp somewhere it can be killed.
+ * Runs a host RegExp somewhere it can be killed, and watches the
+ * keyboard from somewhere that is not blocked.
  *
  * A JavaScript regex is one synchronous call into the engine: nothing
- * on this thread runs again until it returns, so the interrupt poll
+ * on that thread runs again until it returns, so the interrupt poll
  * that stops every other long search never gets a turn. og has the
  * same limit with regexec, which is why it checks for the interrupt
- * BETWEEN lines (search.c) and can never break into one - and on a
- * line long enough, or a pattern shaped like (a+)+b, "between lines"
- * is a promise it cannot keep either.
+ * BETWEEN lines (search.c) and can never break into one.
  *
- * The only thing that stops a running regex is killing the thread it
- * runs on. So a catastrophic pattern runs in a worker, and the main
- * thread waits in slices it can be interrupted between.
+ * Killing the thread is the only thing that stops a running regex, so
+ * the match runs in a worker. But the thread that WAITS for it is
+ * just as stuck: a setTimeout cannot fire on it, a keypress is never
+ * delivered to it, and the only way it could notice anything was to
+ * wake on a timer and poll - which is a busy loop wearing a hat.
+ *
+ * So there are two workers. One matches; one reads the terminal. Both
+ * signal the same word in shared memory, and the waiting thread sleeps
+ * with no timeout at all until one of them does. An interrupt arrives
+ * as fast as the kernel hands over the byte, and nothing polls.
  *
  * This is for --use-js-regexp alone. The POSIX engine underneath the
  * default does not backtrack: (a+)+b against a million characters
  * returns in under a millisecond, and there is nothing to abort.
  */
 
-/** How long to wait per slice before looking for an interrupt. */
-const SLICE_MS = 20;
-
-/** When to admit that this is taking a while. */
-const NOTICE_MS = 2000;
-
-/** Header: [state, byte length]; the payload follows it. */
-const HEADER = 2;
+/** Header words: what is happening, and the sizes that go with it. */
+const HEADER = 5;
 const STATE = 0;
 const LENGTH = 1;
+/** 1 while ANY key should end the wait, 0 for an interrupt only. */
+const MODE = 2;
+/** Bytes the watcher has taken from the terminal and not used. */
+const KEYLEN = 3;
+/** 1 once the watcher has said this is taking a while. */
+const NOTICED = 4;
 
-/** Idle, a request is waiting, a reply is waiting. */
 const IDLE = 0;
 const REQUEST = 1;
 const REPLY = 2;
+const ABORT = 3;
 
-/** Where the payload starts, and grows from. */
+/** Payload for the request and the reply that replaces it. */
 const PAYLOAD = 1 << 20;
 
-/**
- * The worker's whole program.
- *
- * It cannot answer with postMessage: the thread that asked is blocked
- * in Atomics.wait and will not run a callback until it is let go. So
- * both directions go through the shared buffer.
- */
-const PROGRAM = `
+/** Room for keys the watcher read and the command loop still wants. */
+const KEYROOM = 256;
+
+/** How long before the watcher says something. */
+const NOTICE_MS = 2000;
+
+/** The matcher: takes a request, answers with a result. */
+const MATCHER = `
 const { workerData } = require('worker_threads');
-const header = new Int32Array(workerData, 0, ${HEADER});
-const payload = new Uint8Array(workerData, ${HEADER} * 4);
-const room = payload.length;
+const header = new Int32Array(workerData.memory, 0, ${HEADER});
+// the WHOLE payload, not a fixed size: the buffer grows for a subject
+// that does not fit, and a view left at the old size would hand this
+// a length it cannot reach - truncated JSON, and a throw where a
+// reply was owed
+const room = workerData.memory.byteLength - ${HEADER} * 4 - ${KEYROOM};
+const payload = new Uint8Array(workerData.memory, ${HEADER} * 4, room);
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
-
-const reply = value => {
-  const bytes = encoder.encode(JSON.stringify(value));
-  payload.set(bytes.subarray(0, room));
-  Atomics.store(header, ${LENGTH}, Math.min(bytes.length, room));
-  Atomics.store(header, ${STATE}, ${REPLY});
-  Atomics.notify(header, ${STATE});
-};
 
 for (;;) {
   Atomics.wait(header, ${STATE}, ${IDLE});
 
   if (Atomics.load(header, ${STATE}) !== ${REQUEST}) continue;
 
-  const length = Atomics.load(header, ${LENGTH});
-  const { source, flags, text, test } = JSON.parse(
-    decoder.decode(payload.subarray(0, length)));
+  let answer;
 
+  // everything inside, the parse included. A throw out here would end
+  // the thread with an 'error' event, and that event is a callback on
+  // the loop of a thread that is blocked waiting for this reply - so
+  // nobody would ever run it, and the wait would never end
   try {
+    const length = Atomics.load(header, ${LENGTH});
+    const { source, flags, text, test } = JSON.parse(
+      decoder.decode(payload.subarray(0, length)));
     const re = new RegExp(source, flags);
 
     if (test) {
-      reply({ test: re.test(text) });
+      answer = { test: re.test(text) };
     } else {
       const m = re.exec(text);
-      reply(m === null ? { match: null }
-        : { match: { index: m.index, groups: Array.from(m) } });
+      answer = m === null ? { match: null }
+        : { match: { index: m.index, groups: Array.from(m) } };
     }
   } catch (error) {
-    reply({ failed: String(error) });
+    answer = { failed: String(error) };
+  }
+
+  // the watcher may have got there first; whoever is second leaves
+  // the answer alone
+  const bytes = encoder.encode(JSON.stringify(answer));
+  payload.set(bytes.subarray(0, room));
+  Atomics.store(header, ${LENGTH}, Math.min(bytes.length, room));
+
+  if (Atomics.compareExchange(header, ${STATE}, ${REQUEST}, ${REPLY}) ===
+      ${REQUEST}) {
+    Atomics.notify(header, ${STATE});
+  }
+}
+`;
+
+/**
+ * The watcher: reads the terminal while a match is out, and says so
+ * when one has been out too long.
+ *
+ * It writes with fs.writeSync rather than console: a worker's stdout
+ * is forwarded through the PARENT's event loop, which is the very
+ * thing that is not running.
+ */
+const WATCHER = `
+const fs = require('fs');
+const { workerData } = require('worker_threads');
+const header = new Int32Array(workerData.memory, 0, ${HEADER});
+const keys = new Uint8Array(workerData.memory,
+  ${HEADER} * 4 + ${PAYLOAD}, ${KEYROOM});
+const buf = Buffer.alloc(64);
+const notice = Buffer.from(workerData.notice, 'binary');
+const intr = workerData.intr;
+
+const keep = bytes => {
+  const at = Atomics.load(header, ${KEYLEN});
+  const room = Math.min(bytes.length, ${KEYROOM} - at);
+
+  if (room > 0) {
+    keys.set(bytes.subarray(0, room), at);
+    Atomics.store(header, ${KEYLEN}, at + room);
+  }
+};
+
+for (;;) {
+  // nothing is out: sleep until something is
+  Atomics.wait(header, ${STATE}, ${IDLE});
+
+  const started = Date.now();
+  let said = false;
+
+  while (Atomics.load(header, ${STATE}) === ${REQUEST}) {
+    let n = 0;
+
+    try {
+      n = fs.readSync(workerData.fd, buf, 0, 64, null);
+    } catch (error) {
+      if (error.code !== 'EAGAIN') n = 0;
+    }
+
+    if (n > 0) {
+      const text = buf.toString('binary', 0, n);
+      const stop = text.includes('\\x03') || (intr && text.includes(intr)) ||
+        Atomics.load(header, ${MODE}) === 1;
+
+      keep(buf.subarray(0, n));
+
+      if (stop && Atomics.compareExchange(
+        header, ${STATE}, ${REQUEST}, ${ABORT}) === ${REQUEST}) {
+        Atomics.notify(header, ${STATE});
+        break;
+      }
+    }
+
+    if (!said && Date.now() - started >= ${NOTICE_MS}) {
+      said = true;
+      Atomics.store(header, ${NOTICED}, 1);
+      fs.writeSync(1, notice);
+    }
+
+    // this wait IS the sleep and the wake-up: it returns early the
+    // moment the state stops being REQUEST, so nothing is polled for
+    // its own sake
+    Atomics.wait(header, ${STATE}, ${REQUEST}, 1);
   }
 }
 `;
 
 interface Shared {
-  worker: Worker;
+  matcher: Worker;
+  watcher: Worker | null;
   header: Int32Array;
   payload: Uint8Array;
-  memory: SharedArrayBuffer;
+  keys: Uint8Array;
 }
 
 let shared: Shared | null = null;
 
+/** What the watcher writes after NOTICE_MS, styled by the caller. */
+let noticeBytes = '';
+
+/** The fd the watcher reads, and the --intr char to look for. */
+let watchFd: number | null = null;
+let intrChar = '';
+
 /**
- * Starts the worker, or hands back the one already running - unless
- * the one running has too small a buffer for what is being asked, in
- * which case it is replaced by one that fits.
+ * Tells the guard how to watch the terminal, and what to say when a
+ * match has been out too long.
  *
- * A SharedArrayBuffer cannot grow, and a subject that does not fit
- * cannot be handed over at all. Running it here instead would be the
- * one case that most needs killing, run somewhere unkillable, so the
- * buffer moves rather than the work.
- *
- * @param need - Bytes the next request occupies.
+ * The styling belongs to the caller - this is the same message the
+ * line-number walk writes, and it should not be spelled twice - but
+ * the writing has to happen on a thread that is awake, so the bytes
+ * are handed over rather than a callback.
  */
-function ensureWorker(need: number): Shared {
-  if (shared && shared.payload.length >= need) return shared;
+export function watchWith(fd: number | null, intr: string, notice: string):
+void {
+  if (fd === watchFd && intr === intrChar && notice === noticeBytes) return;
 
-  if (shared) killWorker();
+  watchFd = fd;
+  intrChar = intr;
+  noticeBytes = notice;
 
-  let room = PAYLOAD;
-  while (room < need) room *= 2;
+  // the watcher carries these; a new set means a new watcher
+  if (shared?.watcher) {
+    void shared.watcher.terminate();
+    shared.watcher = null;
+  }
+}
 
-  const memory = new SharedArrayBuffer(HEADER * 4 + room);
-  const header = new Int32Array(memory, 0, HEADER);
-  const payload = new Uint8Array(memory, HEADER * 4);
+/** Builds whichever workers are missing, with room for this request. */
+function ensureWorkers(need: number): Shared {
+  if (shared && shared.payload.length < need) killWorkers();
 
-  const worker = new Worker(PROGRAM, { eval: true, workerData: memory });
+  if (!shared) {
+    let room = PAYLOAD;
+    while (room < need) room *= 2;
 
-  // it outlives every search; nothing should wait on it at exit
-  worker.unref();
+    const memory = new SharedArrayBuffer(HEADER * 4 + room + KEYROOM);
+    const header = new Int32Array(memory, 0, HEADER);
+    const payload = new Uint8Array(memory, HEADER * 4, room);
+    const keys = new Uint8Array(memory, HEADER * 4 + room, KEYROOM);
 
-  shared = { worker, header, payload, memory };
+    const matcher = new Worker(MATCHER, { eval: true,
+      workerData: { memory } });
+
+    // a last resort only. This runs on the event loop, and the thread
+    // that waits for a reply is not running one - so it fires for a
+    // worker that dies BETWEEN requests, and never for one that dies
+    // during the wait it would rescue. The matcher not throwing is
+    // what actually keeps that wait finite
+    matcher.on('error', error => {
+      lastFailure = String(error);
+
+      if (Atomics.compareExchange(header, STATE, REQUEST, ABORT) === REQUEST) {
+        Atomics.notify(header, STATE);
+      }
+    });
+
+    matcher.unref();
+    shared = { matcher, watcher: null, header, payload, keys };
+  }
+
+  if (!shared.watcher && watchFd !== null) {
+    shared.watcher = new Worker(WATCHER, {
+      eval: true,
+      workerData: {
+        memory: shared.header.buffer,
+        fd: watchFd,
+        intr: intrChar,
+        notice: noticeBytes,
+      },
+    });
+
+    shared.watcher.on('error', error => { lastFailure = String(error); });
+    shared.watcher.unref();
+  }
+
   return shared;
 }
 
-/** Kills the worker mid-regex, which is the only thing that stops one. */
-function killWorker(): void {
+/** Kills both, for a match that must stop or a buffer that must grow. */
+function killWorkers(): void {
   if (!shared) return;
 
-  void shared.worker.terminate();
+  void shared.matcher.terminate();
+  if (shared.watcher) void shared.watcher.terminate();
   shared = null;
 }
 
-/** Drops the worker, for a session that is closing down. */
+/** Drops the workers, for a session that is closing down. */
 export function endJsRegexGuard(): void {
-  killWorker();
+  killWorkers();
 }
 
-/** True while a guarded run was cut short, so callers can tell. */
 let aborted = false;
+let noticed = false;
+
+/** Whatever a worker said on its way down, for a caller that asks. */
+let lastFailure = '';
+
+/** The last worker error, empty when there has not been one. */
+export const jsRegexFailure = (): string => lastFailure;
 
 /** Whether the last guarded call was interrupted rather than answered. */
 export const jsRegexAborted = (): boolean => aborted;
 
-/** Clears the flag, at the start of a new search. */
+/** Whether the last guarded call announced itself before finishing. */
+export const jsRegexNoticed = (): boolean => noticed;
+
+/** Clears both, at the start of a new search. */
 export function clearJsRegexAbort(): void {
   aborted = false;
+  noticed = false;
 }
 
 /**
- * Waits for the worker, letting the interrupt poll run between slices.
- *
- * @param interrupted - The poll; true means the user wants out.
- * @param notice - Run once, when the wait has gone on long enough.
- * @returns The reply, or null when it was killed.
- */
-function waitForReply(
-  state: Shared,
-  interrupted: () => boolean,
-  notice: () => void
-): unknown | null {
-  const started = Date.now();
-  let noticed = false;
-
-  for (;;) {
-    Atomics.wait(state.header, STATE, REQUEST, SLICE_MS);
-
-    if (Atomics.load(state.header, STATE) === REPLY) {
-      const length = Atomics.load(state.header, LENGTH);
-      const text = Buffer.from(state.payload.subarray(0, length)).toString();
-
-      Atomics.store(state.header, STATE, IDLE);
-
-      return JSON.parse(text);
-    }
-
-    if (interrupted()) {
-      killWorker();
-      aborted = true;
-      return null;
-    }
-
-    // og says nothing while a search runs, because og's searches
-    // return. This one may not, and a pager that looks hung without
-    // saying why is the thing to avoid
-    if (!noticed && Date.now() - started >= NOTICE_MS) {
-      noticed = true;
-      notice();
-    }
-  }
-}
-
-/**
- * Runs one match in the worker.
+ * Runs one match in the matcher, waiting until it or the watcher says
+ * otherwise.
  *
  * @param request - Pattern, flags, subject, and which call to make.
- * @param interrupted - Polled between slices; true aborts.
- * @param notice - Called once when this has run long enough to say so.
- * @returns The worker's answer, or null when aborted or unusable.
+ * @param anyKey - True when any keypress should end the wait, not
+ *   only an interrupt: a repaint runs behind whatever the user does
+ *   next, a search is what they are waiting for.
+ * @param fallbackPoll - Used only when there is no terminal to watch,
+ *   in slices, because a wait with nothing to wake it never returns.
+ * @returns The worker's answer, and any keys the watcher took.
  */
 export function guardedMatch(
   request: { source: string, flags: string, text: string, test: boolean },
-  interrupted: () => boolean,
-  notice: () => void = () => {}
-): { test?: boolean, match?: { index: number, groups: string[] } | null,
-  failed?: string } | null {
+  anyKey: boolean,
+  fallbackPoll?: () => boolean
+): { answer: { test?: boolean,
+  match?: { index: number, groups: string[] } | null } | null,
+  keys: string } {
   const bytes = Buffer.from(JSON.stringify(request));
-  const state = ensureWorker(bytes.length);
+  const state = ensureWorkers(bytes.length);
 
   state.payload.set(bytes);
   Atomics.store(state.header, LENGTH, bytes.length);
+  Atomics.store(state.header, KEYLEN, 0);
+  Atomics.store(state.header, NOTICED, 0);
+  Atomics.store(state.header, MODE, anyKey ? 1 : 0);
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
 
-  return waitForReply(state, interrupted, notice) as
-    ReturnType<typeof guardedMatch>;
+  // with a watcher there is nothing to wake up FOR: it sleeps until
+  // the answer or the interrupt arrives. Without one - no terminal,
+  // so no interrupt to arrive - it falls back to slices, since a wait
+  // nothing can end is a hang
+  if (state.watcher) {
+    Atomics.wait(state.header, STATE, REQUEST);
+  } else {
+    while (Atomics.load(state.header, STATE) === REQUEST) {
+      Atomics.wait(state.header, STATE, REQUEST, 20);
+
+      if (fallbackPoll?.()) {
+        Atomics.store(state.header, STATE, ABORT);
+        break;
+      }
+    }
+  }
+
+  const taken = Atomics.load(state.header, KEYLEN);
+  const keys = taken > 0
+    ? Buffer.from(state.keys.subarray(0, taken)).toString('binary')
+    : '';
+
+  noticed = Atomics.load(state.header, NOTICED) === 1;
+
+  if (Atomics.load(state.header, STATE) === ABORT) {
+    aborted = true;
+    killWorkers();
+    return { answer: null, keys };
+  }
+
+  const length = Atomics.load(state.header, LENGTH);
+  const text = Buffer.from(state.payload.subarray(0, length)).toString();
+
+  Atomics.store(state.header, STATE, IDLE);
+  Atomics.notify(state.header, STATE);
+
+  return { answer: JSON.parse(text), keys };
 }

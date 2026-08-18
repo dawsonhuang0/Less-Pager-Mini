@@ -7,7 +7,8 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
-import { guardedMatch } from './jsRegexGuard';
+import { guardedMatch, watchWith, jsRegexNoticed }
+  from './jsRegexGuard';
 
 import { keyboard, keyboardPollFd, pushUngot, raiseAbort } from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
@@ -1320,7 +1321,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // key: it is running behind whatever the user does next, and a key
   // arriving means they have moved on - waiting for a ^C they have no
   // reason to press is how a RETURN went unread for seven seconds
-  const abortPoll = (): boolean => userSearch
+  const fallbackPoll = (): boolean => userSearch
     ? searchInterrupted(true)
     : duringRepaintMatch(() => searchInterrupted(true));
 
@@ -1361,18 +1362,35 @@ function jsRegex(source: string, flags: string): SearchRegex {
     if (!userSearch) search.highlight = false;
   };
 
-  const notice = (): void => {
-    fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
-      'Searching... (interrupt to abort)' + INVERSE_OFF);
-
-    search.cmdExecOpened = false;
-    search.bottomClobbered = true;
-  };
-
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
-  | null => guardedMatch(
-    { source: re.source, flags: re.flags, text, test }, abortPoll, notice);
+  | null => {
+    // the watcher needs a terminal to watch and the exact bytes to
+    // write; both are this side's business, and neither changes
+    watchWith(keyboardPollFd(), optIntrChar(),
+      '\r' + CLEAR_LINE + INVERSE_ON +
+        'Searching... (interrupt to abort)' + INVERSE_OFF);
+
+    const { answer, keys } = guardedMatch(
+      { source: re.source, flags: re.flags, text, test },
+      !userSearch,
+      fallbackPoll);
+
+    // whatever the watcher took off the terminal belongs to the
+    // command loop, interrupt or not: og's check_poll ungets the keys
+    // it looked at (os.c)
+    if (keys) pushUngot(Buffer.from(keys, 'binary'));
+
+    // the message it may have written lands after the clear the
+    // command already emitted, so the next frame must repaint the row
+    // rather than print its prompt onto the end of it
+    if (jsRegexNoticed()) {
+      search.cmdExecOpened = false;
+      search.bottomClobbered = true;
+    }
+
+    return answer;
+  };
 
   return {
     source: re.source,

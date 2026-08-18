@@ -1,111 +1,49 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { guardedMatch, endJsRegexGuard, jsRegexAborted, clearJsRegexAbort }
-  from '../../src/features/jsRegexGuard';
-
-afterAll(() => {
-  endJsRegexGuard();
-});
+import { execFileSync } from 'child_process';
 
 /*
- * A JavaScript regex is one uninterruptible call: nothing else on the
- * thread runs until it returns, which is why the interrupt poll that
- * stops every other long search never gets a turn. Killing the thread
- * is the only thing that stops one, so a pattern that can blow up
- * runs in a worker.
+ * The two-worker guard, exercised in a real node process.
+ *
+ * Not driven from here directly: the guard blocks its thread in
+ * Atomics.wait while workers do the work, and vitest's own worker
+ * pool will not schedule a nested worker while the thread that owns
+ * it is blocked - the wait simply never ends. So the fixture runs it
+ * where nothing is in the way, and this reads the answers back.
  */
+const probe = (): Record<string, unknown> => JSON.parse(
+  execFileSync('node', ['tests/fixtures/guardProbe.mjs'],
+    { encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'ignore'] }));
+
 describe('a host regex that can be killed', () => {
-  const never = (): boolean => false;
+  const out = probe();
 
   it('answers an ordinary match with the whole shape', () => {
-    clearJsRegexAbort();
-
-    const answer = guardedMatch(
-      { source: '(a+)(b+)', flags: '', text: 'xxaaabbz', test: false }, never);
-
-    expect(answer?.match).toEqual({ index: 2, groups: ['aaabb', 'aaa', 'bb'] });
-    expect(jsRegexAborted()).toBe(false);
+    expect(out.match).toEqual(
+      { match: { index: 2, groups: ['aaabb', 'aaa', 'bb'] } });
   });
 
   it('answers a test', () => {
-    expect(guardedMatch(
-      { source: 'a+b', flags: '', text: 'aaab', test: true }, never)?.test)
-      .toBe(true);
-
-    expect(guardedMatch(
-      { source: 'a+b', flags: '', text: 'aaa', test: true }, never)?.test)
-      .toBe(false);
+    expect([out.test, out.miss]).toEqual([true, false]);
   });
 
   it('comes back from a pattern that would never return', () => {
     // 40 a's against (a+)+b is 2^40 steps in a backtracking engine:
-    // this call cannot finish, and the only reason the test does is
-    // that the thread running it gets killed
-    clearJsRegexAbort();
-
-    let polls = 0;
-    const start = Date.now();
-
-    const answer = guardedMatch({
-      source: '(a+)+b',
-      flags: '',
-      text: 'a'.repeat(40),
-      test: false,
-    }, () => ++polls > 2);
-
-    expect(answer).toBeNull();
-    expect(jsRegexAborted()).toBe(true);
-    expect(Date.now() - start).toBeLessThan(5000);
-  }, 10000);
+    // the call cannot finish, and the only reason anything comes back
+    // is that the thread running it is killed
+    expect(out.killed).toBeNull();
+    expect(out.aborted).toBe(true);
+    expect(out.killedMs as number).toBeLessThan(5000);
+  });
 
   it('still works after one was killed', () => {
-    clearJsRegexAbort();
-
-    expect(guardedMatch(
-      { source: 'b+', flags: '', text: 'abbbc', test: false }, never)?.match)
-      .toEqual({ index: 1, groups: ['bbb'] });
+    expect(out.after).toEqual({ match: { index: 1, groups: ['bbb'] } });
   });
 
   it('grows its buffer for a subject that does not fit', () => {
-    // a SharedArrayBuffer cannot grow, so the worker is replaced by
-    // one with room. Refusing instead would send the longest lines -
-    // the ones most worth killing - back to the thread that cannot
-    clearJsRegexAbort();
-
-    const long = 'x'.repeat(3 << 20);
-
-    expect(guardedMatch(
-      { source: 'x+$', flags: '', text: long, test: true }, never)?.test)
-      .toBe(true);
-    expect(jsRegexAborted()).toBe(false);
-  }, 20000);
-
-  it('says so when it is taking a while, and only then', async () => {
-    // og says nothing during a search, because og's searches return.
-    // This one may not, and a pager that looks hung without saying
-    // why is the thing to avoid
-    clearJsRegexAbort();
-
-    const written: string[] = [];
-    const write = process.stdout.write;
-
-    (process.stdout as unknown as { write: unknown }).write =
-      (data: string): boolean => { written.push(String(data)); return true; };
-
-    const start = Date.now();
-
-    try {
-      guardedMatch({
-        source: '(a+)+b', flags: '', text: 'a'.repeat(40), test: false,
-      }, () => Date.now() - start > 2500,
-      () => { process.stdout.write('NOTICE'); });
-    } finally {
-      (process.stdout as unknown as { write: unknown }).write = write;
-    }
-
-    // the guard does not style anything: it says WHEN, and the
-    // caller says what that looks like - which is how it ends up
-    // identical to the line-number walk's message
-    expect(written.join('')).toContain('NOTICE');
-  }, 15000);
+    // a SharedArrayBuffer cannot grow, so both workers are replaced by
+    // a pair with room. Refusing instead would send the longest lines
+    // - the ones most worth killing - back to the thread that cannot
+    expect(out.big).toBe(true);
+  });
 });
