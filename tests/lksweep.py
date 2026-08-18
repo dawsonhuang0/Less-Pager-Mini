@@ -21,11 +21,24 @@ import tempfile
 LESSKEY = 'less/lesskey'
 DRIVER = '''
 import fs from 'fs';
-import { compileLesskey } from '%s/src/features/lesskeyCompile';
-const { data, errors } = compileLesskey(
-  fs.readFileSync(process.argv[2], 'utf8'), 707);
-if (data && !errors.length) fs.writeFileSync(process.argv[3], data);
-for (const e of errors) process.stderr.write(e + '\\n');
+import { compileLesskey } from '%(root)s/src/features/lesskeyCompile';
+import { renderLesskeyBinary } from '%(root)s/src/features/lesskeyRender';
+
+const [, , mode, input, output] = process.argv;
+
+if (mode === 'compile') {
+  const { data, errors } = compileLesskey(fs.readFileSync(input, 'utf8'), 707);
+  if (data && !errors.length) fs.writeFileSync(output, data);
+  for (const e of errors) process.stderr.write(e + '\\n');
+} else {
+  // render the binary back to source, then compile that: the bytes
+  // have to survive the trip
+  const source = renderLesskeyBinary(fs.readFileSync(input));
+  if (source === null) process.exit(2);
+  const { data, errors } = compileLesskey(source, 707);
+  if (data && !errors.length) fs.writeFileSync(output, data);
+  for (const e of errors) process.stderr.write('recompile: ' + e + '\\n');
+}
 '''
 
 CASES = [
@@ -92,9 +105,11 @@ def main():
     root = os.getcwd()
     tmp = tempfile.mkdtemp(prefix='lksweep-')
     driver = os.path.join(tmp, 'compile.ts')
-    open(driver, 'w').write(DRIVER % root)
+    open(driver, 'w').write(DRIVER % {'root': root})
 
     same = 0
+    trips = 0
+    rounds = 0
 
     for name, source in CASES:
         if source is None:
@@ -111,7 +126,7 @@ def main():
 
         og = subprocess.run([LESSKEY, '-o', og_out, src],
                             capture_output=True, text=True)
-        us = subprocess.run(['npx', 'tsx', driver, src, us_out],
+        us = subprocess.run(['npx', 'tsx', driver, 'compile', src, us_out],
                             capture_output=True, text=True)
 
         og_wrote = os.path.exists(og_out)
@@ -136,8 +151,28 @@ def main():
         same += ok
         print('%-22s %s %s' % (name, 'same' if ok else 'DIFFER', detail))
 
-    print('%d/%d identical' % (same, len(CASES)))
-    return 0 if same == len(CASES) else 1
+        # phase two: a binary og accepted has to survive being rendered
+        # back to source and compiled again. Nothing in og does this -
+        # its lesskey only goes one way - so the check is against the
+        # bytes themselves
+        if og_wrote:
+            trip = os.path.join(tmp, 'trip.bin')
+            if os.path.exists(trip):
+                os.remove(trip)
+
+            back = subprocess.run(['npx', 'tsx', driver, 'render',
+                                   og_out, trip], capture_output=True,
+                                  text=True)
+            round_ok = (os.path.exists(trip) and
+                        open(trip, 'rb').read() == open(og_out, 'rb').read())
+            trips += round_ok
+            rounds += 1
+
+            if not round_ok:
+                print('%-22s ROUND-TRIP DIFFERS %s' % (name, back.stderr.strip()))
+
+    print('%d/%d identical, %d/%d round-trip' % (same, len(CASES), trips, rounds))
+    return 0 if same == len(CASES) and trips == rounds else 1
 
 
 if __name__ == '__main__':
