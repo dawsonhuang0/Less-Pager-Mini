@@ -2370,15 +2370,17 @@ function dispatchKey(sequence: string): void {
     if (session.key === 'y' || session.key === 'Y') {
       retryWithPosix();
 
-      // a search repeats; a frame's highlighting only needs the
-      // pattern rebuilt under the other engine, and turning back on
+      // rebuilt FIRST, whichever raised it: repeating a search does
+      // not recompile, so without this the repeat ran on the same
+      // host-engine object that had just been given up on - and said
+      // nothing, because it never finished to say anything
+      hook.recompilePattern();
+      search.highlight = true;
+
       if (posixRetry.fromSearch) {
         act('REPEAT_SEARCH');
         return;
       }
-
-      hook.recompilePattern();
-      search.highlight = true;
     }
 
     render(session.content, session.buffer);

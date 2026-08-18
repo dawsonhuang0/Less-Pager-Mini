@@ -260,6 +260,12 @@ hook.recompilePattern = (): void => {
  * @param count - N-th occurrence to find.
  */
 export function startSearch(type: '/' | '?' | '&', count: number): void {
+  // a pattern about to be typed is not the one POSIX was answered
+  // for. Clearing this when a search RUNS instead was wrong: the
+  // retry repeats a search, so it cleared its own answer on the way
+  // through and went back to the engine that could not finish
+  forcePosix = false;
+
   // --search-options presets the modifiers for every search
   const defaults = optDefSearchType();
 
@@ -1314,10 +1320,6 @@ export function duringRepaint<T>(run: () => T): T {
 export function duringUserSearch<T>(run: () => T): T {
   beginGuardedRun();
   hiliteAbandoned = false;
-
-  // a new pattern is not the one POSIX was asked for
-  forcePosix = false;
-
   return run();
 }
 
