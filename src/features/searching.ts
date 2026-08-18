@@ -1373,9 +1373,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // key: it is running behind whatever the user does next, and a key
   // arriving means they have moved on - waiting for a ^C they have no
   // reason to press is how a RETURN went unread for seven seconds
-  const fallbackPoll = (): boolean => inRepaint
-    ? duringRepaintMatch(() => searchInterrupted(true))
-    : searchInterrupted(true);
+  const fallbackPoll = (): boolean => searchInterrupted(true);
 
   // the same shape as the line-number walk's message, because it is
   // the same kind of thing: work the pager is doing on your behalf,
@@ -1423,9 +1421,15 @@ function jsRegex(source: string, flags: string): SearchRegex {
       '\r' + CLEAR_LINE + INVERSE_ON +
         'Searching... (interrupt to abort)' + INVERSE_OFF);
 
+    // interrupt only, for a frame as much as for a search. Any key
+    // ending a frame's matching was a workaround for keys that were
+    // being swallowed - they are handed back and dispatched now, and
+    // what the workaround does instead is kill the re-highlight
+    // milliseconds after it starts, with the RETURN that dismisses
+    // the message. Nothing gets a chance to happen, or to be seen
     const { answer, keys } = guardedMatch(
       { source: re.source, flags: re.flags, text, test },
-      inRepaint,
+      false,
       fallbackPoll);
 
     // whatever the watcher took off the terminal belongs to the
