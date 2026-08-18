@@ -7,6 +7,8 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
+import { guardedMatch } from './jsRegexGuard';
+
 import { keyboard, keyboardPollFd, pushUngot, raiseAbort } from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
 
@@ -1229,19 +1231,45 @@ function jsRegex(source: string, flags: string): SearchRegex {
 
   const re = new RegExp(source, host + unicode);
 
+  // EVERY match runs in the worker, not just the ones a detector
+  // thinks are dangerous. No detector can promise how long a regex
+  // takes - the shapes that blow up are the famous ones, not all of
+  // them - and being able to interrupt matters more than the thread
+  // hop it costs. This is the non-default engine; the POSIX one
+  // underneath does not backtrack and has nothing to abort
+  const abortPoll = (): boolean => searchInterrupted(true);
+
+  const runGuarded = (text: string, test: boolean):
+  { test?: boolean, match?: { index: number, groups: string[] } | null }
+  | null => guardedMatch(
+    { source: re.source, flags: re.flags, text, test }, abortPoll);
+
   return {
     source: re.source,
     flags: re.flags,
     global: re.global,
     get lastIndex() { return re.lastIndex; },
     set lastIndex(at: number) { re.lastIndex = at; },
-    test: (text: string) => re.test(text),
+    test: (text: string) => {
+      // aborted: the caller sees no match, and searchInterrupted has
+      // already set the abort in motion
+      const answer = runGuarded(text, true);
+
+      return answer?.test ?? false;
+    },
     exec: (text: string) => {
-      const m = re.exec(text);
-      if (!m) return null;
+      const found = runGuarded(text, false)?.match;
+
+      if (!found) return null;
+
+      const m = found.groups as unknown as RegExpExecArray;
+
+      m.index = found.index;
+      m.input = text;
+
       return Object.assign(m, {
-        value: m[0],
-        end: m.index + m[0].length,
+        value: found.groups[0],
+        end: found.index + found.groups[0].length,
       }) as unknown as Found;
     },
   };
