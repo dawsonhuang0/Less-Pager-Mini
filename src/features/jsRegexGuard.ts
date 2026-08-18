@@ -27,7 +27,7 @@ import { Worker } from 'worker_threads';
  */
 
 /** Header words: what is happening, and the sizes that go with it. */
-const HEADER = 7;
+const HEADER = 8;
 const STATE = 0;
 const LENGTH = 1;
 /** 1 while ANY key should end the wait, 0 for an interrupt only. */
@@ -40,6 +40,8 @@ const NOTICED = 4;
 const NOTICE_IN = 5;
 /** 1 while a message is on the bottom row, waiting to be dismissed. */
 const MSG_UP = 6;
+/** 1 when what stopped the match was an interrupt, not another key. */
+const BY_INTR = 7;
 
 const IDLE = 0;
 const REQUEST = 1;
@@ -196,8 +198,8 @@ for (;;) {
 
     if (n > 0) {
       const text = buf.toString('binary', 0, n);
-      const stop = text.includes('\\x03') || (intr && text.includes(intr)) ||
-        Atomics.load(header, ${MODE}) === 1;
+      const byIntr = text.includes('\\x03') || (intr && text.includes(intr));
+      const stop = byIntr || Atomics.load(header, ${MODE}) === 1;
 
       keep(buf.subarray(0, n));
 
@@ -209,6 +211,8 @@ for (;;) {
       if (!stop && Atomics.compareExchange(header, ${MSG_UP}, 1, 0) === 1) {
         fs.writeSync(1, clearRow);
       }
+
+      if (stop) Atomics.store(header, ${BY_INTR}, byIntr ? 1 : 0);
 
       if (stop && Atomics.compareExchange(
         header, ${STATE}, ${REQUEST}, ${ABORT}) === ${REQUEST}) {
@@ -352,6 +356,7 @@ export function endJsRegexGuard(): void {
 
 let aborted = false;
 let noticed = false;
+let byInterrupt = false;
 
 /** Whatever a worker said on its way down, for a caller that asks. */
 let lastFailure = '';
@@ -365,10 +370,21 @@ export const jsRegexAborted = (): boolean => aborted;
 /** Whether the last guarded call announced itself before finishing. */
 export const jsRegexNoticed = (): boolean => noticed;
 
+/**
+ * Whether an interrupt stopped it, rather than some other key.
+ *
+ * The watcher makes that call, and it is the only one who can: the
+ * poll on this side never runs while a watcher is attached, so the
+ * flag it would have set stays as it was. An abort that read as "some
+ * other key" is why ^C stopped raising the offer to try POSIX.
+ */
+export const jsRegexAbortedByInterrupt = (): boolean => byInterrupt;
+
 /** Clears both, at the start of a new search. */
 export function clearJsRegexAbort(): void {
   aborted = false;
   noticed = false;
+  byInterrupt = false;
 }
 
 /**
@@ -418,6 +434,7 @@ export function guardedMatch(
     Math.max(0, NOTICE_MS - (now - runStarted)));
   Atomics.store(state.header, MODE, anyKey ? 1 : 0);
   Atomics.store(state.header, MSG_UP, messageUp ? 1 : 0);
+  Atomics.store(state.header, BY_INTR, 0);
   Atomics.store(state.header, STATE, REQUEST);
   Atomics.notify(state.header, STATE);
 
@@ -444,6 +461,7 @@ export function guardedMatch(
     : '';
 
   noticed = Atomics.load(state.header, NOTICED) === 1;
+  byInterrupt = Atomics.load(state.header, BY_INTR) === 1;
 
   trace('  end state=' + Atomics.load(state.header, STATE) +
     ' keys=' + JSON.stringify(keys) + ' noticed=' + noticed +

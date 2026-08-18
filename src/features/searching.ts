@@ -7,8 +7,8 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
-import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun }
-  from './jsRegexGuard';
+import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
+  jsRegexAbortedByInterrupt } from './jsRegexGuard';
 
 import { keyboard, keyboardPollFd, pushUngot, pushUngotLive, raiseAbort }
   from '../tty/keyboard';
@@ -1396,7 +1396,9 @@ function jsRegex(source: string, flags: string): SearchRegex {
   const giveUp = (): void => {
     // a key that was not an interrupt is not a request for advice:
     // the user moved on, so highlighting stops and nothing is asked
-    if (inRepaint && !abortedByInterrupt()) {
+    // the watcher's verdict when there was one: with a watcher
+    // attached the poll on this side never runs, so its flag is stale
+    if (inRepaint && !abortedByInterrupt() && !jsRegexAbortedByInterrupt()) {
       hiliteAbandoned = true;
       return;
     }
