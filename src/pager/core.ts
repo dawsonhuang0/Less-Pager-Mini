@@ -3113,9 +3113,17 @@ hook.viewLesskey = (): void => {
 };
 
 function openHelp(text: string[] = help): void {
-  if (mode.HELP) return;
+  // already on a help page: switch to the other one rather than
+  // refusing. Still ONE level deep - `q` goes back to the FILE, like
+  // less's h does, not to the page this replaced. less has only the
+  // one help file and so no idea of a stack, and the lesskey view
+  // taught us what a second level costs: a `q` that has to be pressed
+  // twice, for a depth the user never asked to be in
+  if (mode.HELP) {
+    if (session.helpSource !== text) paintHelpPage(text);
 
-  session.helpSource = text;
+    return;
+  }
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file
@@ -3170,6 +3178,25 @@ function openHelp(text: string[] = help): void {
   opt.procBackspace = 0;
 
   session.prevConfig = config;
+  session.prevMode = mode;
+  session.prevContent = session.content;
+
+  paintHelpPage(text);
+}
+
+/**
+ * Puts one help page on the screen, with the file underneath already
+ * parked in session.prev*.
+ *
+ * Shared by entering help and by switching pages inside it: the two
+ * differ only in whether the file has just been parked and its
+ * altpipe closed, and everything from here down is the same either
+ * way. Reading the parked state rather than the live one is what lets
+ * it run a second time - a switch must not re-park the page it is
+ * replacing.
+ */
+function paintHelpPage(text: string[]): void {
+  session.helpSource = text;
   resetConfig();
 
   // the less globals follow into the help screen too
@@ -3184,10 +3211,8 @@ function openHelp(text: string[] = help): void {
   // helpfile like any other)
   calculateDimensions();
 
-  session.prevMode = mode;
   resetMode();
 
-  session.prevContent = session.content;
   // the help file renders through the normal content pipeline, so
   // its nroff overstrikes become bold/underline like less
   session.content = transformContent(text);
