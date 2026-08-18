@@ -15,7 +15,7 @@ import { wrapLongLines } from './lines/wrapLongLines';
 import { maxSubRow, visualWidth, isStyled, transformPrompt, promptHasAnsi }
   from './lines/helpers';
 
-import { search, searchPrompt, statusColChar, setHiliteHidden }
+import { search, searchPrompt, statusColChar, setHiliteHidden, posixRetry}
   from './features/searching';
 
 import {
@@ -2992,7 +2992,7 @@ export function calculateEOF(content: string[]): void {
  * @param content - Display lines, for prompt expansion.
  * @returns The prompt string.
  */
-function getPrompt(content: string[]): string {
+export function getPrompt(content: string[]): string {
   // only the branches below that paint og's display_prompt re-arm
   // the --end-prompt marker
   promptPainted = false;
@@ -3026,6 +3026,13 @@ function getPrompt(content: string[]): string {
   if (binaryConfirm.pending) {
     return `"${binaryConfirm.path}" may be a binary file.  ` +
       'See it anyway? ';
+  }
+
+  // and the same shape for a search the host engine could not finish:
+  // the pattern is not wrong, the engine asked for cannot get through
+  // it, and the one that can is right here
+  if (posixRetry.pending) {
+    return 'Pattern too complex. Try again with POSIX RegExp? ';
   }
 
   if (option.pending) {

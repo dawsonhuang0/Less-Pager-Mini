@@ -138,8 +138,8 @@ import {
   restoreSearchOrigin,
   onAutosave,
   onHistTouch,
-  onHistRecord
-} from "../features/searching";
+  onHistRecord, posixRetry,
+  retryWithPosix} from "../features/searching";
 
 import {
   firstLine,
@@ -1820,7 +1820,8 @@ function oneScreenQuit(): void {
   const atPrompt = !search.message && !option.pending &&
     !search.input && !examine.pending && !miscInput.pending &&
     !brackets.pending && !marks.pending && !mode.BUFFERING &&
-    !config.keyPrefix && !binaryConfirm.pending && !follow.active &&
+    !config.keyPrefix && !binaryConfirm.pending && !posixRetry.pending &&
+    !follow.active &&
     !pipeDraining.active && !session.shellPause;
 
   if (!atPrompt) return;
@@ -2344,6 +2345,22 @@ function dispatchKey(sequence: string): void {
   }
 
   // the binary file confirmation proceeds on y/Y, like og's query
+  // the same question shape as og's binary file query: y retries the
+  // search with the engine that can finish it, anything else lets the
+  // failure stand
+  if (posixRetry.pending) {
+    posixRetry.pending = false;
+
+    if (session.key === 'y' || session.key === 'Y') {
+      retryWithPosix();
+      act('REPEAT_SEARCH');
+      return;
+    }
+
+    render(session.content, session.buffer);
+    return;
+  }
+
   if (binaryConfirm.pending) {
     const proceed = binaryConfirm.proceed;
     binaryConfirm.pending = false;

@@ -1201,8 +1201,35 @@ export const searchCaseFlags = (pattern: string): string =>
  * accepts (a stray "\\d" in a class, an unescaped brace). POSIX reads
  * by code point always and has no such quarrel, so the guess is gone.
  */
+/**
+ * The `Pattern too complex. Try again with POSIX RegExp?` prompt, in
+ * the shape og asks about a binary file: a question on the bottom row
+ * that y answers and anything else declines.
+ *
+ * A --use-js-regexp search that had to be killed leaves the user with
+ * nothing - not because the pattern is wrong, but because the engine
+ * they asked for cannot finish it. The engine that can is already
+ * here, so offer it rather than reporting a failure.
+ */
+export const posixRetry = { pending: false };
+
+/** Set while a retry runs, so this one search skips the host engine. */
+let forcePosix = false;
+
+/** Takes the next search away from --use-js-regexp, for the retry. */
+export function retryWithPosix(): void {
+  forcePosix = true;
+}
+
+/** Puts the option back, once the retry has compiled. */
+function clearForcePosix(): void {
+  forcePosix = false;
+}
+
 function psx(source: string, flags: string): SearchRegex {
-  if (optUseJsRegexp()) return jsRegex(source, flags);
+  if (optUseJsRegexp() && !forcePosix) return jsRegex(source, flags);
+
+  clearForcePosix();
   return new PsxRegExp(source, { flags, flavor: REGEX_DIALECT });
 }
 
@@ -1269,10 +1296,15 @@ function jsRegex(source: string, flags: string): SearchRegex {
       // already set the abort in motion
       const answer = runGuarded(text, true);
 
+      if (answer === null) posixRetry.pending = true;
+
       return answer?.test ?? false;
     },
     exec: (text: string) => {
-      const found = runGuarded(text, false)?.match;
+      const answer = runGuarded(text, false);
+      const found = answer?.match;
+
+      if (answer === null) posixRetry.pending = true;
 
       if (!found) return null;
 
