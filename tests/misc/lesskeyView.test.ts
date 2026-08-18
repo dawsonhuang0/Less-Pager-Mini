@@ -13,8 +13,10 @@ import { markSnapshot, restoreMarkSnapshot, resetMarks, marks }
 import { resetLesskey, loadLesskey } from '../../src/features/lesskey';
 
 import { openLesskeyView, exitLesskeyView, inLesskeyView,
-  refreshLesskeyView, lesskeyViewFiles, applyLesskeyEdits }
-  from '../../src/features/lesskeyView';
+  refreshLesskeyView, lesskeyViewFiles, applyLesskeyEdits,
+  cleanLesskeyView } from '../../src/features/lesskeyView';
+
+import { search } from '../../src/features/searching';
 
 import { userBinding } from '../../src/features/lesskey';
 
@@ -149,9 +151,11 @@ describe('viewing lesskey files over a live session', () => {
     expect(userBinding('j')?.action).toBe('EXIT');
   });
 
-  it('compiles an edited binary back over the file it came from', () => {
-    // the rendered source is a temp file; the thing that has to
-    // change is the binary the session actually loads
+  it('keeps what parsed and reports what did not, like the reader', () => {
+    // og's lesskey PROGRAM writes nothing when a source has errors;
+    // og's pager READING one reports each bad line and keeps every
+    // binding that parsed. This is the reader's job, so one mistyped
+    // action must not cost the rest of the file
     const binary = path.join(dir, 'keys.bin');
 
     fs.writeFileSync(binary, Buffer.from([
@@ -161,29 +165,40 @@ describe('viewing lesskey files over a live session', () => {
       0x78, 0x45, 0x6E, 0x64,
     ]));
 
-    const before = fs.readFileSync(binary);
-    const view = lesskeyViewFiles.call(null);
-    const rendered = view.files.find(file => file.form?.kind === 'binary');
+    process.env.LESSKEYIN = path.join(dir, 'no-source-here');
+    process.env.LESSKEY = binary;
+    resetLesskey();
+    loadLesskey(true);
+    search.message = '';
 
-    // only reachable when a binary actually loaded; skip when the
-    // source file won this session's ladder
-    if (!rendered) return;
+    try {
+      const view = lesskeyViewFiles();
+      const rendered = view.files.find(file => file.form?.kind === 'binary');
 
-    fs.writeFileSync(rendered.path, '#command\nz help\n');
-    expect(applyLesskeyEdits(view.files, 707)).toEqual([]);
-    expect(fs.readFileSync(binary).equals(before)).toBe(false);
-  });
+      expect(rendered).toBeDefined();
 
-  it('reports a bad edit and leaves the binary alone', () => {
-    const view = lesskeyViewFiles();
-    const rendered = view.files.find(file => file.form?.kind === 'binary');
+      fs.writeFileSync(rendered!.path, '#command\nz help\nq blah\nw quit\n');
 
-    if (!rendered) return;
+      expect(applyLesskeyEdits(view.files, 707))
+        .toEqual([`${binary}: line 3: unknown action: "blah"`]);
 
-    fs.writeFileSync(rendered.path, '#command\nz blah\n');
+      // the good lines took, on both sides of the bad one
+      expect(userBinding('z')?.action).toBe('HELP');
+      expect(userBinding('w')?.action).toBe('EXIT');
 
-    expect(applyLesskeyEdits(view.files, 707)[0])
-      .toMatch(/unknown action: "blah"/);
+      // and the bad one was reported, in og's wording
+      expect(search.message).toMatch(/line 3: unknown action: "blah"/);
+
+      // the binary itself was written, not left at its old contents
+      expect(userBinding('x')).toBeUndefined();
+
+      cleanLesskeyView(view.dir);
+    } finally {
+      process.env.LESSKEYIN = source;
+      delete process.env.LESSKEY;
+      resetLesskey();
+      loadLesskey(true);
+    }
   });
 
   it('names a materialized form after where it came from', () => {

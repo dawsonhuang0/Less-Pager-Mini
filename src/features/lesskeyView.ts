@@ -150,6 +150,14 @@ export function applyLesskeyEdits(
 ): string[] {
   const messages: string[] = [];
 
+  /** Like parseError: the first shows, the rest wait behind it. */
+  const report = (text: string): void => {
+    messages.push(text);
+
+    if (search.message) search.messageQueue.push(text);
+    else search.message = text;
+  };
+
   for (const file of view) {
     if (file.form === null || !file.temporary) continue;
 
@@ -173,26 +181,37 @@ export function applyLesskeyEdits(
       continue;
     }
 
+    // errors and all: og's lesskey PROGRAM refuses to write output
+    // when a source has any ("N errors; no output produced",
+    // lesskey.c:316), but og's pager READING a lesskey does the
+    // opposite - parse_lesskey reports each bad line and keeps every
+    // binding that parsed (lesskey_parse.c). This is the reader's
+    // job, so it takes the reader's rule: one mistyped action does
+    // not cost the user the rest of what they wrote. Only a table too
+    // large to encode leaves nothing to write
     const { data, errors } = compileLesskey(text, version);
 
-    if (errors.length || data === null) {
-      // og's own compiler writes nothing when a source has errors
-      // ("N errors; no output produced", lesskey.c:316), and neither
-      // does this - the file it would overwrite still works
-      messages.push(`${path.basename(file.form.origin)}: ${errors[0]}` +
-        (errors.length > 1 ? ` (+${errors.length - 1} more)` : ''));
+    // reported HERE, not by the reload: compiling is where this text
+    // gets parsed, and by the time the reader sees the result a bad
+    // action is already A_INVALID with its name gone
+    for (const error of errors) report(`${file.form.origin}: ${error}`);
+
+    if (data === null) {
+      report(`${file.form.origin}: too large to write`);
       continue;
     }
 
     try {
       fs.writeFileSync(file.form.origin, data);
     } catch {
-      messages.push(`Cannot write ${file.form.origin}`);
+      report(`Cannot write ${file.form.origin}`);
     }
   }
 
-  // an edited file only takes effect once it is read again
-  loadLesskey(true);
+  // NOT quiet: the reload is where a bad line gets reported, in og's
+  // own wording and through og's own gate - "file: line 3: unknown
+  // action: \"blah\"", then the RETURN it waits on
+  loadLesskey(false);
 
   return messages;
 }
