@@ -52,8 +52,8 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
-import { openLesskeyView, exitLesskeyView, isLesskeyViewSession }
-  from "../features/lesskeyView";
+import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
+  nameLesskeyViewSession } from "../features/lesskeyView";
 
 import { LESS_VERSION } from "../features/lesskey";
 
@@ -636,7 +636,11 @@ export async function contentPager(
   } else if (startup.lesskeyHelp) {
     openHelp(lesskeyHelp);
     session.startupHelp = true;
-  } else if (startup.viewLesskey && !isLesskeyViewSession()) {
+  } else if (isLesskeyViewSession()) {
+    // this session IS the view: nothing to open over, only the temp
+    // files to name after what they came from
+    nameLesskeyViewSession();
+  } else if (startup.viewLesskey) {
     // over the file, not instead of it: q ends the view and the
     // session carries on with what was named, unlike -? whose help
     // IS the input file and whose q quits

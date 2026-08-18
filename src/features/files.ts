@@ -51,6 +51,18 @@ import { lgetenv } from '../startup/environment';
  */
 export interface FileEntry {
   path: string;
+  /**
+   * What to CALL this file, when its path is not the answer.
+   *
+   * A lesskey form that is not a file - a compiled one, or a content
+   * variable - is materialized as a temp file so it can be paged and
+   * edited, and the path that produces says nothing:
+   * /var/folders/3z/b8wpqjgn.../T/lesskey-Ab12Cd/LESSKEY_CONTENT.
+   * The prompt shows this instead, so the screen names the thing the
+   * text came FROM. Everything that opens, reads or shells out still
+   * uses path.
+   */
+  display?: string;
   /** Preloaded lines for non-file content, like stdin's "-". */
   lines: string[] | null;
   /** Byte size, from stat for real files. */

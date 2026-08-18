@@ -42,7 +42,7 @@ describe('--view-lesskey given with a file', () => {
     // list itself and says so; the scan still sees the flag - from
     // argv, or from $LESS where no filter reaches it - and opening
     // again would cost a second q to leave one screen
-    markLesskeyViewSession();
+    markLesskeyViewSession([]);
 
     try {
       expect(isLesskeyViewSession()).toBe(true);

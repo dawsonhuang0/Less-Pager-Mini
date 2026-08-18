@@ -44,6 +44,8 @@ interface ViewFile {
   form: LesskeyForm | null;
   /** What the pager opens. */
   path: string;
+  /** What the prompt calls it, when the path is a temp file. */
+  display?: string;
   /** Written here, so it can be cleaned up and compiled back. */
   temporary: boolean;
 }
@@ -107,7 +109,12 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
 
     const file = path.join(scratch(), scratchName(form));
     fs.writeFileSync(file, text);
-    files.push({ form, path: file, temporary: true });
+
+    // named for where it came from - the variable, or the compiled
+    // file - because the temp path it lives at is noise: sixty
+    // characters of /var/folders before the name even starts, on a
+    // prompt that also carries the NEXT file's path
+    files.push({ form, path: file, display: form.origin, temporary: true });
   }
 
   // nothing loaded at all: open the defaults, at the path the loader
@@ -236,6 +243,9 @@ let stash: Stash | null = null;
 /** True when the session's file list IS the lesskey forms already. */
 let isViewSession = false;
 
+/** The forms that session was built from, for their display names. */
+let viewSessionFiles: ViewFile[] = [];
+
 /**
  * Marks this session as being the view itself.
  *
@@ -245,8 +255,26 @@ let isViewSession = false;
  * would open the view a SECOND time over itself, which took two q's
  * to leave one screen.
  */
-export function markLesskeyViewSession(): void {
+export function markLesskeyViewSession(view: ViewFile[]): void {
   isViewSession = true;
+  viewSessionFiles = view;
+}
+
+/**
+ * Names the files of a session that IS the view.
+ *
+ * openLesskeyView does this as it builds the list; a session built by
+ * the ordinary startup path has no such moment, so it happens once
+ * the list exists.
+ */
+export function nameLesskeyViewSession(): void {
+  for (const file of viewSessionFiles) {
+    if (file.display === undefined) continue;
+
+    const entry = files.list.find(listed => listed.path === file.path);
+
+    if (entry) entry.display = file.display;
+  }
 }
 
 /** True when opening a view again would only stack one on itself. */
@@ -255,6 +283,7 @@ export const isLesskeyViewSession = (): boolean => isViewSession;
 /** Clears the mark, for a test or a second session in one process. */
 export function resetLesskeyViewSession(): void {
   isViewSession = false;
+  viewSessionFiles = [];
 }
 
 /** True while the lesskey files are the session's file list. */
@@ -327,6 +356,10 @@ export function openLesskeyView(): boolean {
   };
 
   files.list = makeFileList(view.files.map(file => file.path));
+
+  for (const [at, file] of view.files.entries()) {
+    if (file.display !== undefined) files.list[at].display = file.display;
+  }
   files.index = -1;
 
   if (!switchToFile(0)) {

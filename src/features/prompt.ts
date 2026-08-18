@@ -406,9 +406,12 @@ function protochar(
     // different conversion from the one the draw applies: prutfchar
     // renders a tab as ^I, where the line machinery would expand it to
     // the next tab stop
-    case 'f': return out + (entry ? printableName(entry.path) : '?');
+    case 'f':
+      return out + (entry ? printableName(entry.display ?? entry.path) : '?');
     case 'F':
-      return out + (entry ? printableName(path.basename(entry.path)) : '?');
+      return out + (entry
+        ? printableName(entry.display ?? path.basename(entry.path))
+        : '?');
     case 'g': return out + (entry ? shellQuote(entry.path) : '?');
 
     case 'G':
@@ -473,7 +476,7 @@ function protochar(
     case 't': return out.replace(/ +$/, '');
     case 'T': return out + (ntags() ? 'tag' : 'file');
     case 'W': return out + longestLine(content);
-    case 'x': return out + (next ? next.path : '?');
+    case 'x': return out + (next ? next.display ?? next.path : '?');
     case 'y': return out + (next ? shellQuote(next.path) : '?');
     case '%': return out + '%';
   }

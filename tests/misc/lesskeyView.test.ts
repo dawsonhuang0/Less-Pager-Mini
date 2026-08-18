@@ -186,6 +186,29 @@ describe('viewing lesskey files over a live session', () => {
       .toMatch(/unknown action: "blah"/);
   });
 
+  it('names a materialized form after where it came from', () => {
+    // the temp path a rendered form lives at is noise - sixty
+    // characters of /var/folders before the name starts - on a prompt
+    // that also carries the NEXT file's name
+    process.env.LESSKEY_CONTENT = 'x quit;y help';
+    resetLesskey();
+    loadLesskey(true);
+
+    try {
+      openLesskeyView();
+
+      const named = files.list.find(entry => entry.display !== undefined);
+
+      expect(named?.display).toBe('LESSKEY_CONTENT');
+      expect(named?.path).toMatch(/lesskey-/);   // still a real file
+      exitLesskeyView(707);
+    } finally {
+      delete process.env.LESSKEY_CONTENT;
+      resetLesskey();
+      loadLesskey(true);
+    }
+  });
+
   it('refuses to open twice over itself', () => {
     expect(openLesskeyView()).toBe(true);
     expect(openLesskeyView()).toBe(false);

@@ -295,9 +295,9 @@ async function main(): Promise<void> {
 
     // no session to stash out here, so the forms simply ARE the file
     // list; the runtime form swaps them over a live one instead
-    markLesskeyViewSession();
-
     const view = lesskeyViewFiles();
+
+    markLesskeyViewSession(view.files);
 
     if (view.files.length === 1 && view.files[0].form === null) {
       seedDefaultKeymap(view.files[0].path);
