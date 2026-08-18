@@ -26,7 +26,7 @@ import { help } from './startup/lessHelp';
 
 import { lesskeyHelp } from './startup/lesskeyHelp';
 
-import { lesskeyViewFiles, writeBackLesskey, cleanLesskeyView,
+import { lesskeyViewFiles, applyLesskeyEdits, cleanLesskeyView,
   seedDefaultKeymap } from './features/lesskeyView';
 
 import { LESS_VERSION } from './features/lesskey';
@@ -295,7 +295,7 @@ async function main(): Promise<void> {
     try {
       await pager(view.files.map(file => file.path), ['--examine-file']);
     } finally {
-      const messages = writeBackLesskey(view.files, LESS_VERSION);
+      const messages = applyLesskeyEdits(view.files, LESS_VERSION);
 
       cleanLesskeyView(view.dir);
 

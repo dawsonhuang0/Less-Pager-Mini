@@ -51,6 +51,11 @@ import { editCommand, prExpand } from './features/prompt';
 
 import { secureAllow } from './features/secure';
 
+import { inLesskeyView, refreshLesskeyView }
+  from './features/lesskeyView';
+
+import { LESS_VERSION } from './features/lesskey';
+
 import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
   jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';
 
@@ -716,6 +721,25 @@ export function runEditor(): void {
 
   // the file may have changed: re-examine it, like less's reedit
   switchToFile(files.index);
+
+  // ...except switchToFile returns at once for the file it already
+  // holds, exactly like og's edit_ifile - and og really does leave
+  // the old text up after v, until R flushes the buffers
+  // (clear_buffers, command.c:1846). The lesskey view is not a file
+  // being read though: an editor was opened to change what the keys
+  // DO, so the screen has to show what was written and the bindings
+  // have to be live before the user quits to find out
+  if (inLesskeyView()) {
+    const index = files.index;
+
+    saveFilePosition();
+    files.index = -1;
+    switchToFile(index);
+
+    const failed = refreshLesskeyView(LESS_VERSION);
+
+    if (failed) search.message = failed;
+  }
 }
 
 export function runMiscInput(

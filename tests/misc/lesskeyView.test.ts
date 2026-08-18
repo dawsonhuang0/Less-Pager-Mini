@@ -12,8 +12,11 @@ import { markSnapshot, restoreMarkSnapshot, resetMarks, marks }
 
 import { resetLesskey, loadLesskey } from '../../src/features/lesskey';
 
-import { openLesskeyView, exitLesskeyView, inLesskeyView }
+import { openLesskeyView, exitLesskeyView, inLesskeyView,
+  refreshLesskeyView, lesskeyViewFiles, applyLesskeyEdits }
   from '../../src/features/lesskeyView';
+
+import { userBinding } from '../../src/features/lesskey';
 
 import { switchToFile } from '../../src/commands';
 
@@ -125,6 +128,62 @@ describe('viewing lesskey files over a live session', () => {
     } finally {
       onSourceFiles(null);
     }
+  });
+
+  it('makes an edit live without waiting for the quit', () => {
+    // og leaves the old text up after v until R flushes its buffers,
+    // which is right for a file being READ and wrong here: the editor
+    // was opened to change what the keys do
+    openLesskeyView();
+
+    expect(userBinding('j')?.action).toBe('LINE_FORWARD');
+
+    // what `v` would have left behind
+    fs.writeFileSync(source, 'j quit\nQQ help\n');
+
+    expect(refreshLesskeyView(707)).toBeNull();
+    expect(userBinding('j')?.action).toBe('EXIT');
+    expect(userBinding('QQ')?.action).toBe('HELP');
+
+    exitLesskeyView(707);
+    expect(userBinding('j')?.action).toBe('EXIT');
+  });
+
+  it('compiles an edited binary back over the file it came from', () => {
+    // the rendered source is a temp file; the thing that has to
+    // change is the binary the session actually loads
+    const binary = path.join(dir, 'keys.bin');
+
+    fs.writeFileSync(binary, Buffer.from([
+      0x00, 0x4D, 0x2B, 0x47,
+      0x63, 3, 0, 0x78, 0x00, 24,      // x -> A_QUIT
+      0x65, 0, 0, 0x76, 0, 0,
+      0x78, 0x45, 0x6E, 0x64,
+    ]));
+
+    const before = fs.readFileSync(binary);
+    const view = lesskeyViewFiles.call(null);
+    const rendered = view.files.find(file => file.form?.kind === 'binary');
+
+    // only reachable when a binary actually loaded; skip when the
+    // source file won this session's ladder
+    if (!rendered) return;
+
+    fs.writeFileSync(rendered.path, '#command\nz help\n');
+    expect(applyLesskeyEdits(view.files, 707)).toEqual([]);
+    expect(fs.readFileSync(binary).equals(before)).toBe(false);
+  });
+
+  it('reports a bad edit and leaves the binary alone', () => {
+    const view = lesskeyViewFiles();
+    const rendered = view.files.find(file => file.form?.kind === 'binary');
+
+    if (!rendered) return;
+
+    fs.writeFileSync(rendered.path, '#command\nz blah\n');
+
+    expect(applyLesskeyEdits(view.files, 707)[0])
+      .toMatch(/unknown action: "blah"/);
   });
 
   it('refuses to open twice over itself', () => {

@@ -124,26 +124,45 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
 }
 
 /**
- * Writes back whatever the session may have edited through `v`.
+ * Writes back whatever the session may have edited through `v`, and
+ * reloads, so the new bindings are live.
  *
- * A source file was edited in place and needs nothing. A rendered
- * binary is compiled back over the file it came from - the one job
- * the compiler exists for. A content variable cannot be written
- * anywhere that outlives the process, so it is left alone.
+ * A source file was edited in place and needs nothing but the reload.
+ * A rendered binary is compiled back over the file it came from - the
+ * one job the compiler exists for. A content variable goes back into
+ * the variable, its lines rejoined with the ";" separators og's own
+ * parser splits on; that cannot outlive the process, which is all an
+ * environment variable ever could.
  *
+ * @param version - The running less version, for #version lines.
  * @returns Messages for anything that could not be written back.
  */
-export function writeBackLesskey(files: ViewFile[], version: number): string[] {
+export function applyLesskeyEdits(
+  view: ViewFile[],
+  version: number
+): string[] {
   const messages: string[] = [];
 
-  for (const file of files) {
-    if (file.form?.kind !== 'binary' || !file.temporary) continue;
+  for (const file of view) {
+    if (file.form === null || !file.temporary) continue;
 
     let text: string;
 
     try {
       text = fs.readFileSync(file.path, 'utf8');
     } catch {
+      continue;
+    }
+
+    if (file.form.kind === 'content') {
+      // straight into the process environment, not the lesskey #env
+      // table: the reload below clears that table, and this has to
+      // survive it to be worth anything
+      process.env[file.form.origin] = text
+        .split('\n')
+        .filter(line => line !== '')
+        .join(';');
+
       continue;
     }
 
@@ -164,6 +183,9 @@ export function writeBackLesskey(files: ViewFile[], version: number): string[] {
       messages.push(`Cannot write ${file.form.origin}`);
     }
   }
+
+  // an edited file only takes effect once it is read again
+  loadLesskey(true);
 
   return messages;
 }
@@ -213,6 +235,27 @@ let stash: Stash | null = null;
 
 /** True while the lesskey files are the session's file list. */
 export const inLesskeyView = (): boolean => stash !== null;
+
+/**
+ * Re-reads what `v` just edited, and makes it live.
+ *
+ * og does neither: its A_VISUAL is `lsystem(editproto)` and nothing
+ * else (command.c:2137), so the screen keeps the text it had until R
+ * flushes the buffers (clear_buffers, command.c:1846). That is right
+ * for a file you are reading and wrong for this screen, where the
+ * whole reason to open an editor is to change what the pager does -
+ * and the edit taking effect only on the way out would mean quitting
+ * to find out whether it worked.
+ *
+ * @returns A message when a write-back failed, else null.
+ */
+export function refreshLesskeyView(version: number): string | null {
+  if (stash === null) return null;
+
+  const messages = applyLesskeyEdits(stash.files, version);
+
+  return messages.length ? messages[0] : null;
+}
 
 /**
  * Swaps the lesskey files in as the session's file list.
@@ -317,10 +360,9 @@ export function exitLesskeyView(version: number): boolean {
   const held = stash;
   stash = null;
 
-  const messages = writeBackLesskey(held.files, version);
+  const messages = applyLesskeyEdits(held.files, version);
 
   cleanLesskeyView(held.dir);
-  loadLesskey(true);
 
   files.list = held.list;
   files.index = -1;
