@@ -1414,6 +1414,12 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * cannot see.
    */
   const giveUp = (): void => {
+    // an interrupt ends the SEARCH, not just the match it landed in.
+    // raiseAbort is what the walk already watches, so raising it here
+    // stops the loop at its next check instead of waiting for the
+    // scan to come and ask whether anything happened
+    if (jsRegexAbortedByInterrupt()) raiseAbort();
+
     // a key that was not an interrupt is not a request for advice:
     // the user moved on, so highlighting stops and nothing is asked
     // the watcher's verdict when there was one: with a watcher

@@ -100,6 +100,8 @@ export function beginGuardedRun(): void {
 
 /** Closes a run, so the watcher stops taking keys nobody asked it to. */
 export function endGuardedRun(): void {
+  runStarted = 0;
+
   const state = shared;
 
   if (!state?.watcher) return;
@@ -483,6 +485,13 @@ export function guardedMatch(
   match?: { index: number, groups: string[] } | null } | null,
   keys: string } {
   const now = Date.now();
+
+  // the two seconds are counted from the first match of this burst,
+  // not from whenever a run was last declared. A search does not
+  // always open one, so the clock could be left over from a render
+  // minutes ago - already past two seconds, and the notice arrived
+  // with no grace at all
+  if (runStarted === 0) runStarted = now;
 
   // already given up on: the rest of the frame is not worth another
   // wait, and certainly not another keypress each
