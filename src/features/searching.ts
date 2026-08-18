@@ -1316,7 +1316,13 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // them - and being able to interrupt matters more than the thread
   // hop it costs. This is the non-default engine; the POSIX one
   // underneath does not backtrack and has nothing to abort
-  const abortPoll = (): boolean => searchInterrupted(true);
+  // a search ends on an interrupt, like og's. A repaint ends on ANY
+  // key: it is running behind whatever the user does next, and a key
+  // arriving means they have moved on - waiting for a ^C they have no
+  // reason to press is how a RETURN went unread for seven seconds
+  const abortPoll = (): boolean => userSearch
+    ? searchInterrupted(true)
+    : duringRepaintMatch(() => searchInterrupted(true));
 
   // the same shape as the line-number walk's message, because it is
   // the same kind of thing: work the pager is doing on your behalf,
@@ -1337,6 +1343,13 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * cannot see.
    */
   const giveUp = (): void => {
+    // a key that was not an interrupt is not a request for advice:
+    // the user moved on, so highlighting stops and nothing is asked
+    if (!userSearch && !abortedByInterrupt()) {
+      search.highlight = false;
+      return;
+    }
+
     posixRetry.pending = true;
     posixRetry.fromSearch = userSearch;
 
@@ -2073,6 +2086,29 @@ let lastInterruptPoll = 0;
  *
  * @returns True when the search should abort.
  */
+/** True while the caller wants any keypress to count as an abort. */
+let anyKeyAborts = false;
+
+/** Whether the last abort was an INTERRUPT or just some other key. */
+let abortWasInterrupt = false;
+
+/** True when what ended the last match was ^C or the --intr char. */
+export const abortedByInterrupt = (): boolean => abortWasInterrupt;
+
+/**
+ * Runs matching that nobody asked for - a frame's highlighting - so
+ * that any key ends it, not only an interrupt.
+ */
+export function duringRepaintMatch<T>(run: () => T): T {
+  anyKeyAborts = true;
+
+  try {
+    return run();
+  } finally {
+    anyKeyAborts = false;
+  }
+}
+
 export function searchInterrupted(force = false): boolean {
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
   // not fd 0 (og's check_poll watches the tty, whatever stdin is)
@@ -2102,13 +2138,28 @@ export function searchInterrupted(force = false): boolean {
       fs.writeSync(1, '\x07');
       raiseAbort();
       pushUngot(Buffer.from('\x03', 'binary'));
+      abortWasInterrupt = true;
       return true;
     }
 
-    if (text.includes(optIntrChar())) return true;
+    if (text.includes(optIntrChar())) {
+      abortWasInterrupt = true;
+      return true;
+    }
 
     // og's check_poll ungets ordinary keys for the command loop
     pushUngot(Buffer.from(text, 'binary'));
+
+    // ...and for a repaint, an ordinary key IS the abort. A search is
+    // a command the user is waiting on, so only an interrupt ends it.
+    // Highlighting is not: it runs behind whatever they do next, and
+    // a key arriving means they have moved on. Without this the key
+    // sits unread until the matching finishes - which is how pressing
+    // RETURN to dismiss a message did nothing for seven seconds
+    if (anyKeyAborts) {
+      abortWasInterrupt = false;
+      return true;
+    }
   }
 
   // The tty poll is a syscall, so it is rate limited by default - but
