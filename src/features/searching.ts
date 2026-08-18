@@ -9,7 +9,7 @@ import { PsxRegExp, quote, type Found } from 'posix-regex';
 
 import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
   endGuardedRun, jsRegexAbortedByInterrupt, watcherActive,
-  watcherSawInterrupt, takeGuardedKeys } from './jsRegexGuard';
+  watcherSawInterrupt, takeGuardedKeys, trace } from './jsRegexGuard';
 
 import { consumeInterrupt, keyboard, keyboardPollFd, pushUngot,
   pushUngotLive, raiseAbort } from '../tty/keyboard';
@@ -245,6 +245,7 @@ hook.flashMessage = (text: string): void => {
 hook.recompilePattern = (): void => {
   // the point of recompiling is to see the other engine's answer, so
   // a pattern given up on under the last one gets another go
+  trace('recompile');
   hiliteAbandoned = false;
 
   if (!search.regex) return;
@@ -1315,8 +1316,18 @@ export function duringRepaint<T>(run: () => T): T {
 
 /** Kept for the search entry points: they still mark the run. */
 export function duringUserSearch<T>(run: () => T): T {
+  trace('userSearch');
   beginGuardedRun();
-  hiliteAbandoned = false;
+
+  // NOT while the question is up. A search command has more than one
+  // leg - the screen, then the file behind it - and an interrupt in
+  // the first one falls straight into the second. That is not a new
+  // search asking for another go at the pattern; it is the same one
+  // finishing, and clearing the flag here handed the doomed pattern
+  // back to the engine that had just been given up on. It then ran
+  // for another four seconds with the watcher holding the terminal,
+  // which is where the "y" answering the question went
+  if (!posixRetry.pending) hiliteAbandoned = false;
 
   try {
     return run();
@@ -1414,6 +1425,8 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * cannot see.
    */
   const giveUp = (): void => {
+    trace('  giveUp intr=' + jsRegexAbortedByInterrupt() +
+      ' inRepaint=' + inRepaint);
     // an interrupt ends the SEARCH, not just the match it landed in.
     // raiseAbort is what the walk already watches, so raising it here
     // stops the loop at its next check instead of waiting for the
@@ -1442,16 +1455,37 @@ function jsRegex(source: string, flags: string): SearchRegex {
     hiliteAbandoned = true;
   };
 
+  /**
+   * Runs one match under the guard.
+   *
+   * Three answers, not two: the worker's result, `null` for a match
+   * that was killed, and `undefined` for one that was never started.
+   * Only a kill is news - a skip is the consequence of a kill already
+   * reported, and treating the two alike had every remaining call in
+   * the frame raise the question over again.
+   */
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
-  | null => {
+  | null | undefined => {
     // given up on already: not this frame, this PATTERN. The frame
     // matches through more than the highlighter - the -S shift, the
     // status column, the filters - and each render opens a new run,
     // so gating one of them let the rest start the whole thing over.
     // That is what put "Searching..." on top of the question two
     // seconds after the match it belonged to had been killed
-    if (hiliteAbandoned) return null;
+    if (hiliteAbandoned) {
+      trace('  skip (pattern abandoned)');
+      return undefined;
+    }
+
+    // nor while the question about this pattern is on screen. The
+    // watcher owns the terminal for as long as a match is out, so a
+    // match started under the question eats the key that answers it -
+    // and the engine being asked about is the one that would run it
+    if (posixRetry.pending) {
+      trace('  skip (question up)');
+      return undefined;
+    }
 
     // the watcher needs a terminal to watch and the exact bytes to
     // write; both are this side's business, and neither changes

@@ -1253,7 +1253,19 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // queue keeps running dry, and every one of those keys then looked
   // like the end of the scroll and blinked the ":" back in. The settle
   // timer ends the hold instead, on the clock rather than on the queue.
-  const promptHeld = !filling && pollWouldFire();
+  // ...but never over the question. The hold keeps the ":" from
+  // blinking through a burst, and it ends when the key loop next
+  // turns - which, after a search the watcher interrupted, it does
+  // not: the interrupt is taken off the terminal and dropped where og
+  // drops it (getcc_clear), so no key arrives to settle anything. The
+  // question then sat behind a blank row until the user pressed
+  // something, and what they pressed was aimed at a question they
+  // could not see.
+  //
+  // Nothing of og's is at stake: og has no hold, and this question is
+  // not og's prompt but a query, which og writes and flushes on the
+  // spot (query/error, output.c)
+  const promptHeld = !filling && pollWouldFire() && !posixRetry.pending;
 
   // a command that already wrote og's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
