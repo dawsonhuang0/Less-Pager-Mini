@@ -1428,6 +1428,14 @@ function jsRegex(source: string, flags: string): SearchRegex {
   const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
   | null => {
+    // given up on already: not this frame, this PATTERN. The frame
+    // matches through more than the highlighter - the -S shift, the
+    // status column, the filters - and each render opens a new run,
+    // so gating one of them let the rest start the whole thing over.
+    // That is what put "Searching..." on top of the question two
+    // seconds after the match it belonged to had been killed
+    if (hiliteAbandoned) return null;
+
     // the watcher needs a terminal to watch and the exact bytes to
     // write; both are this side's business, and neither changes
     watchWith(keyboardPollFd(), optIntrChar(),
