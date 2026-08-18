@@ -2,6 +2,8 @@ import { OptionSpec } from './spec';
 
 import { hook } from './shared';
 
+import { clearForcePosix } from '../features/searching';
+
 import { opt } from './state';
 
 /**
@@ -29,6 +31,9 @@ export const useJsRegexp: OptionSpec = {
     defaultValue: 0,
     set: value => {
       opt.useJsRegexp = value as number;
+
+      // an explicit toggle overrides a "yes, use POSIX for this one"
+      clearForcePosix();
 
       // said BEFORE the work below, not after it. The option
       // machinery sets the message once set() returns, so a toggle

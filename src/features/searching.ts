@@ -1314,6 +1314,10 @@ export function duringRepaint<T>(run: () => T): T {
 export function duringUserSearch<T>(run: () => T): T {
   beginGuardedRun();
   hiliteAbandoned = false;
+
+  // a new pattern is not the one POSIX was asked for
+  forcePosix = false;
+
   return run();
 }
 
@@ -1326,15 +1330,25 @@ export function retryWithPosix(): void {
   forcePosix = true;
 }
 
-/** Puts the option back, once the retry has compiled. */
-function clearForcePosix(): void {
+/**
+ * Puts the option back, for the next pattern.
+ *
+ * NOT after one compile: compiling builds two regexes - the one a
+ * search walks with, and the one highlighting paints with - and
+ * clearing between them sent the search to POSIX and left the
+ * highlighting on the engine that could not finish, which is what "y"
+ * looked like it was ignoring.
+ *
+ * It lasts as long as the pattern it was answered for. A new search
+ * goes back to whatever the option says, and so does a toggle.
+ */
+export function clearForcePosix(): void {
   forcePosix = false;
 }
 
 function psx(source: string, flags: string): SearchRegex {
   if (optUseJsRegexp() && !forcePosix) return jsRegex(source, flags);
 
-  clearForcePosix();
   return new PsxRegExp(source, { flags, flavor: REGEX_DIALECT });
 }
 
