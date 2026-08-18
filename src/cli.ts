@@ -277,9 +277,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  // --view-lesskey pages the lesskey files THEMSELVES, whatever else
-  // was named: like -? it replaces the session rather than joining it
-  if (wantsViewLesskey) {
+  // --view-lesskey WITH files opens over them, so quitting the view
+  // leaves the session on the file that was asked for - the same
+  // stash the runtime form makes. Only on its own does it become the
+  // session, and then there is nothing underneath to go back to
+  if (wantsViewLesskey && !files.length) {
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
     markTerminalInvocation();

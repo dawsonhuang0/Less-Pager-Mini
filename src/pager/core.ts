@@ -636,6 +636,11 @@ export async function contentPager(
   } else if (startup.lesskeyHelp) {
     openHelp(lesskeyHelp);
     session.startupHelp = true;
+  } else if (startup.viewLesskey) {
+    // over the file, not instead of it: q ends the view and the
+    // session carries on with what was named, unlike -? whose help
+    // IS the input file and whose q quits
+    openLesskeyView();
   }
 
 
