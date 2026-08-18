@@ -1361,6 +1361,52 @@ function psx(source: string, flags: string): SearchRegex {
  * patterns og accepts. Neither answer is og's, which is the point of
  * the option.
  */
+/**
+ * Runs one host-engine call under a time limit it cannot outlive.
+ *
+ * The same mechanism the search scan has always used - a vm script
+ * with a timeout, which V8 terminates mid-regex (measured: (a+)+b
+ * against forty characters ends at 1001ms) - applied where it was
+ * missing. guardedSlices covers the search and the filter walk;
+ * HIGHLIGHTING was never inside it, and highlighting is what runs
+ * after --use-js-regexp is toggled on with a pattern already
+ * compiled. That is the hang with nothing to stop it.
+ *
+ * One mechanism for every host call, rather than a second one beside
+ * it: two guards over one search meant two clocks, two notices and
+ * two ideas of what an interrupt does.
+ *
+ * @returns False when the call was terminated, and nothing ran.
+ */
+function withinBudget(call: () => void): boolean {
+  // not when something above already bounds this. The search scan
+  // runs its slices inside a vm timeout of its own, and a slice is
+  // thousands of lines: paying 31us a call inside it would cost a
+  // minute over a two-million-line file to re-guarantee what the
+  // slice guarantees already
+  if (insideSliceGuard) {
+    call();
+    return true;
+  }
+
+  hostContext ??= vm.createContext({ run: () => {} }) as { run: () => void };
+  hostScript ??= new vm.Script('run()');
+  hostContext.run = call;
+
+  try {
+    hostScript.runInContext(hostContext as vm.Context, { timeout: 1000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True while guardedSlices has a slice in flight. */
+let insideSliceGuard = false;
+
+let hostContext: { run: () => void } | null = null;
+let hostScript: vm.Script | null = null;
+
 function jsRegex(source: string, flags: string): SearchRegex {
   const host = flags.replace('e', '');
   let unicode = '';
@@ -1383,15 +1429,29 @@ function jsRegex(source: string, flags: string): SearchRegex {
     global: re.global,
     get lastIndex() { return re.lastIndex; },
     set lastIndex(at: number) { re.lastIndex = at; },
-    test: (text: string) => re.test(text),
+    test: (text: string) => {
+      let hit = false;
+
+      if (withinBudget(() => { hit = re.test(text); })) return hit;
+
+      dropPattern();
+      return false;
+    },
     exec: (text: string) => {
-      const m = re.exec(text);
+      let m: RegExpExecArray | null = null;
+
+      if (!withinBudget(() => { m = re.exec(text); })) {
+        dropPattern();
+        return null;
+      }
 
       if (!m) return null;
 
-      return Object.assign(m, {
-        value: m[0],
-        end: m.index + m[0].length,
+      const found = m as RegExpExecArray;
+
+      return Object.assign(found, {
+        value: found[0],
+        end: found.index + found[0].length,
       }) as unknown as Found;
     },
   };
@@ -1863,7 +1923,15 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
   }
 
   let finished = false;
-  guardContext.step = () => { finished = slice(); };
+  guardContext.step = () => {
+    insideSliceGuard = true;
+
+    try {
+      finished = slice();
+    } finally {
+      insideSliceGuard = false;
+    }
+  };
 
   const started = Date.now();
   let noted = false;
