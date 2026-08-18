@@ -304,6 +304,7 @@ export class FileInput implements PagerInput {
     onSourceFiles({
       load: index => this.loadSourceFile(index),
       activate: index => this.activateSourceFile(index),
+      forget: filePath => { this.saved.delete(filePath); },
     });
     onSourceFollow({
       pinEnd: entering => this.pinFollowEnd(entering),

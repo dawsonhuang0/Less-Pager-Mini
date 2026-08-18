@@ -101,6 +101,8 @@ interface SourceFileHooks {
   load(index: number): string[] | null | undefined;
   /** Completes a successful shared switch after files.index changes. */
   activate(index: number): void;
+  /** Drops a remembered position, for a file that will not be back. */
+  forget(filePath: string): void;
 }
 
 let sourceFileHooks: SourceFileHooks | null = null;
@@ -113,6 +115,18 @@ export function onSourceFiles(hooks: SourceFileHooks | null): void {
 /** Finishes a source-backed switch after the common edit bookkeeping. */
 export function activateSourceFile(index: number): void {
   sourceFileHooks?.activate(index);
+}
+
+/**
+ * Forgets where a file was left.
+ *
+ * The engine remembers a position per PATH so :n and :p come back to
+ * it, which is right for a file list the user assembled and wrong for
+ * one the pager put up on its own: a screen you quit out of should
+ * open at the top next time, the way quitting help does.
+ */
+export function forgetSourceFile(filePath: string): void {
+  sourceFileHooks?.forget(filePath);
 }
 
 /**

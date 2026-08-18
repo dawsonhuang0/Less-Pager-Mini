@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { files, initFiles, getPreviousPath, setPreviousPath }
+import { files, initFiles, getPreviousPath, setPreviousPath, onSourceFiles }
   from '../../src/features/files';
 
 import { markSnapshot, restoreMarkSnapshot, resetMarks, marks }
@@ -102,6 +102,29 @@ describe('viewing lesskey files over a live session', () => {
     exitLesskeyView(707);
 
     expect(getPreviousPath()).toBe('/somewhere/else');
+  });
+
+  it('forgets where the view was left, like re-entering help', () => {
+    // the position that persists is the ENGINE's, kept per path so :n
+    // and :p come back to it - so this asserts the engine is told to
+    // drop it rather than asserting config, which a file list rebuilt
+    // from scratch resets on its own
+    const forgotten: string[] = [];
+
+    onSourceFiles({
+      load: () => undefined,
+      activate: () => {},
+      forget: filePath => { forgotten.push(filePath); },
+    });
+
+    try {
+      openLesskeyView();
+      exitLesskeyView(707);
+
+      expect(forgotten).toEqual([source]);
+    } finally {
+      onSourceFiles(null);
+    }
   });
 
   it('refuses to open twice over itself', () => {

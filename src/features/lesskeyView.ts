@@ -7,7 +7,7 @@ import { lesskeyForms, lesskeyFile, LesskeyForm, loadLesskey }
 
 import { files, makeFileList, FileEntry, saveFilePosition,
   getPreviousPath, setPreviousPath, examineHistoryLength,
-  trimExamineHistory } from './files';
+  trimExamineHistory, forgetSourceFile } from './files';
 
 import { markSnapshot, restoreMarkSnapshot, MarkSnapshot } from './jumping';
 
@@ -288,6 +288,13 @@ export function openLesskeyView(): boolean {
  * the same reason.
  */
 function restoreLesskeyViewState(held: Stash): void {
+  for (const file of held.files) forgetSourceFile(file.path);
+
+  // the view is a screen, not a file the user opened: quitting it
+  // ends it, so opening it again starts at the top like re-entering
+  // help does. Without this the engine's per-path position brought
+  // the last visit's scroll back
+
   restoreMarkSnapshot(held.marks);
   setPreviousPath(held.previous);
   trimExamineHistory(held.history);
