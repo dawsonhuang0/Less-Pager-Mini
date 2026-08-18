@@ -7,7 +7,11 @@ import vm from 'vm';
 import { strWidth } from 'char-width';
 import { PsxRegExp, quote, type Found } from 'posix-regex';
 
-import { keyboard, keyboardPollFd, pushUngot, raiseAbort }
+import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
+  endGuardedRun, jsRegexAbortedByInterrupt, watcherActive,
+  watcherSawInterrupt, takeGuardedKeys } from './jsRegexGuard';
+
+import { keyboard, keyboardPollFd, pushUngot, pushUngotLive, raiseAbort }
   from '../tty/keyboard';
 import { REGEX_DIALECT } from '../tty/platform';
 
@@ -1311,8 +1315,16 @@ export function duringRepaint<T>(run: () => T): T {
 
 /** Kept for the search entry points: they still mark the run. */
 export function duringUserSearch<T>(run: () => T): T {
+  beginGuardedRun();
   hiliteAbandoned = false;
-  return run();
+
+  try {
+    return run();
+  } finally {
+    // the run is over: the watcher stops reading, so the next key
+    // belongs to the command loop and not to a search that ended
+    endGuardedRun();
+  }
 }
 
 /** Set while a retry runs, so this one search skips the host engine. */
@@ -1361,52 +1373,6 @@ function psx(source: string, flags: string): SearchRegex {
  * patterns og accepts. Neither answer is og's, which is the point of
  * the option.
  */
-/**
- * Runs one host-engine call under a time limit it cannot outlive.
- *
- * The same mechanism the search scan has always used - a vm script
- * with a timeout, which V8 terminates mid-regex (measured: (a+)+b
- * against forty characters ends at 1001ms) - applied where it was
- * missing. guardedSlices covers the search and the filter walk;
- * HIGHLIGHTING was never inside it, and highlighting is what runs
- * after --use-js-regexp is toggled on with a pattern already
- * compiled. That is the hang with nothing to stop it.
- *
- * One mechanism for every host call, rather than a second one beside
- * it: two guards over one search meant two clocks, two notices and
- * two ideas of what an interrupt does.
- *
- * @returns False when the call was terminated, and nothing ran.
- */
-function withinBudget(call: () => void): boolean {
-  // not when something above already bounds this. The search scan
-  // runs its slices inside a vm timeout of its own, and a slice is
-  // thousands of lines: paying 31us a call inside it would cost a
-  // minute over a two-million-line file to re-guarantee what the
-  // slice guarantees already
-  if (insideSliceGuard) {
-    call();
-    return true;
-  }
-
-  hostContext ??= vm.createContext({ run: () => {} }) as { run: () => void };
-  hostScript ??= new vm.Script('run()');
-  hostContext.run = call;
-
-  try {
-    hostScript.runInContext(hostContext as vm.Context, { timeout: 1000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** True while guardedSlices has a slice in flight. */
-let insideSliceGuard = false;
-
-let hostContext: { run: () => void } | null = null;
-let hostScript: vm.Script | null = null;
-
 function jsRegex(source: string, flags: string): SearchRegex {
   const host = flags.replace('e', '');
   let unicode = '';
@@ -1423,6 +1389,105 @@ function jsRegex(source: string, flags: string): SearchRegex {
   // them - and being able to interrupt matters more than the thread
   // hop it costs. This is the non-default engine; the POSIX one
   // underneath does not backtrack and has nothing to abort
+  // a search ends on an interrupt, like og's. A repaint ends on ANY
+  // key: it is running behind whatever the user does next, and a key
+  // arriving means they have moved on - waiting for a ^C they have no
+  // reason to press is how a RETURN went unread for seven seconds
+  const fallbackPoll = (): boolean => searchInterrupted(true);
+
+  // the same shape as the line-number walk's message, because it is
+  // the same kind of thing: work the pager is doing on your behalf,
+  // long enough that silence would read as a hang, with a key that
+  // ends it. Straight to the terminal, since no frame is being built;
+  // and bottomClobbered so the NEXT frame repaints the row instead of
+  // printing its prompt onto the end of this
+  /**
+   * A killed match offers the engine that can finish it, whether it
+   * was a search or the highlighting of a frame. Both are the same
+   * question - this engine cannot get through your pattern, shall we
+   * use the other one - and the answer differs only in what gets
+   * redone afterwards.
+   *
+   * The message the bottom row is holding goes with it. A toggle sets
+   * one ("Search with JavaScript's RegExp") and a message outranks the
+   * prompt, so leaving it there would answer a question the user
+   * cannot see.
+   */
+  const giveUp = (): void => {
+    // an interrupt ends the SEARCH, not just the match it landed in.
+    // raiseAbort is what the walk already watches, so raising it here
+    // stops the loop at its next check instead of waiting for the
+    // scan to come and ask whether anything happened
+    if (jsRegexAbortedByInterrupt()) raiseAbort();
+
+    // a key that was not an interrupt is not a request for advice:
+    // the user moved on, so highlighting stops and nothing is asked
+    // the watcher's verdict when there was one: with a watcher
+    // attached the poll on this side never runs, so its flag is stale
+    if (inRepaint && !abortedByInterrupt() && !jsRegexAbortedByInterrupt()) {
+      hiliteAbandoned = true;
+      return;
+    }
+
+    posixRetry.pending = true;
+
+    search.message = '';
+    search.messageQueue.length = 0;
+
+    // and no more matching until it is answered - whether a search
+    // raised this or a repaint did. The frame that DRAWS the question
+    // would otherwise paint with the pattern the question is about,
+    // attach a watcher to it, and two seconds later announce itself
+    // over the question
+    hiliteAbandoned = true;
+  };
+
+  const runGuarded = (text: string, test: boolean):
+  { test?: boolean, match?: { index: number, groups: string[] } | null }
+  | null => {
+    // given up on already: not this frame, this PATTERN. The frame
+    // matches through more than the highlighter - the -S shift, the
+    // status column, the filters - and each render opens a new run,
+    // so gating one of them let the rest start the whole thing over.
+    // That is what put "Searching..." on top of the question two
+    // seconds after the match it belonged to had been killed
+    if (hiliteAbandoned) return null;
+
+    // the watcher needs a terminal to watch and the exact bytes to
+    // write; both are this side's business, and neither changes
+    watchWith(keyboardPollFd(), optIntrChar(),
+      '\r' + CLEAR_LINE + INVERSE_ON +
+        'Searching... (interrupt to abort)' + INVERSE_OFF,
+      '\r' + CLEAR_LINE);
+
+    // interrupt only, for a frame as much as for a search. Any key
+    // ending a frame's matching was a workaround for keys that were
+    // being swallowed - they are handed back and dispatched now, and
+    // what the workaround does instead is kill the re-highlight
+    // milliseconds after it starts, with the RETURN that dismisses
+    // the message. Nothing gets a chance to happen, or to be seen
+    const { answer, keys } = guardedMatch(
+      { source: re.source, flags: re.flags, text, test },
+      false,
+      fallbackPoll,
+      search.message !== '');
+
+    // whatever the watcher took off the terminal belongs to the
+    // command loop, interrupt or not: og's check_poll ungets the keys
+    // it looked at (os.c)
+    if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
+
+    // the message it may have written lands after the clear the
+    // command already emitted, so the next frame must repaint the row
+    // rather than print its prompt onto the end of it
+    if (jsRegexNoticed()) {
+      search.cmdExecOpened = false;
+      search.bottomClobbered = true;
+    }
+
+    return answer;
+  };
+
   return {
     source: re.source,
     flags: re.flags,
@@ -1430,28 +1495,30 @@ function jsRegex(source: string, flags: string): SearchRegex {
     get lastIndex() { return re.lastIndex; },
     set lastIndex(at: number) { re.lastIndex = at; },
     test: (text: string) => {
-      let hit = false;
+      // aborted: the caller sees no match, and searchInterrupted has
+      // already set the abort in motion
+      const answer = runGuarded(text, true);
 
-      if (withinBudget(() => { hit = re.test(text); })) return hit;
+      if (answer === null) giveUp();
 
-      dropPattern();
-      return false;
+      return answer?.test ?? false;
     },
     exec: (text: string) => {
-      let m: RegExpExecArray | null = null;
+      const answer = runGuarded(text, false);
+      const found = answer?.match;
 
-      if (!withinBudget(() => { m = re.exec(text); })) {
-        dropPattern();
-        return null;
-      }
+      if (answer === null) giveUp();
 
-      if (!m) return null;
+      if (!found) return null;
 
-      const found = m as RegExpExecArray;
+      const m = found.groups as unknown as RegExpExecArray;
 
-      return Object.assign(found, {
-        value: found[0],
-        end: found.index + found[0].length,
+      m.index = found.index;
+      m.input = text;
+
+      return Object.assign(m, {
+        value: found.groups[0],
+        end: found.index + found.groups[0].length,
       }) as unknown as Found;
     },
   };
@@ -1916,6 +1983,22 @@ function searchNote(): void {
 }
 
 function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
+  // the host engine guards itself now, in a worker: the match runs on
+  // a thread that can be killed, a second thread reads the terminal
+  // for the whole run, and the notice comes from there. Wrapping that
+  // in a vm timeout as well meant two guards racing over one search -
+  // the timeout dropped the pattern at one second with "Pattern too
+  // complex", and the watcher painted its notice over that at two.
+  //
+  // The vm path stays for the POSIX engine, which has no worker and
+  // no way of its own to stop
+  if (optUseJsRegexp()) {
+    for (;;) {
+      if (slice()) return 'done';
+      if (searchInterrupted(true)) return 'stop';
+    }
+  }
+
   if (!guardContext || !guardScript) {
     guardContext = vm.createContext({ step: () => {} }) as
       { step: () => void };
@@ -1923,15 +2006,7 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
   }
 
   let finished = false;
-  guardContext.step = () => {
-    insideSliceGuard = true;
-
-    try {
-      finished = slice();
-    } finally {
-      insideSliceGuard = false;
-    }
-  };
+  guardContext.step = () => { finished = slice(); };
 
   const started = Date.now();
   let noted = false;
@@ -2049,13 +2124,7 @@ export function recordSearchMatch(row: number): void {
 function dropPattern(): void {
   search.regex = null;
   search.highlight = false;
-
-  // the offer rather than the bare report: this only ever trips on
-  // the host engine, and the engine that can finish the pattern is
-  // right here. "y" rebuilds under POSIX and runs the search again
-  posixRetry.pending = true;
-  search.message = '';
-  search.messageQueue.length = 0;
+  search.message = 'Pattern too complex';
 }
 
 /**
@@ -2175,6 +2244,30 @@ export function duringRepaintMatch<T>(run: () => T): T {
 }
 
 export function searchInterrupted(force = false): boolean {
+  // an interrupt the watcher already took, owed to whoever asks next.
+  // FIRST, before any question about whether a watcher is still
+  // running: answering an interrupt kills the workers, so by the time
+  // the search around the match asks, there is no watcher to be
+  // active - and the verdict was going unread behind that test
+  if (watcherSawInterrupt()) {
+    fs.writeSync(1, '\x07');
+    raiseAbort();
+    abortWasInterrupt = true;
+    return true;
+  }
+
+  // one reader per run: while the watcher has the terminal, asking it
+  // is a shared word instead of a read(2), and it has been reading
+  // BETWEEN matches as well as during them - which is the gap the
+  // scan's own poll used to cover, a tenth of a second late
+  if (watcherActive()) {
+    const keys = takeGuardedKeys();
+
+    if (keys) pushUngotLive(Buffer.from(keys, 'binary'));
+
+    return false;
+  }
+
   // piped input reads keys from /dev/tty: poll the keyboard's fd,
   // not fd 0 (og's check_poll watches the tty, whatever stdin is)
   const kb = keyboard();
