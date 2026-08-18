@@ -4,7 +4,8 @@ import { putstr, flush } from '../tty/output';
 
 import { config } from '../state/config';
 
-import { CURSOR_TO, CLEAR_LINE } from '../state/constants';
+import { CURSOR_TO, CLEAR_LINE, INVERSE_ON, INVERSE_OFF }
+  from '../state/constants';
 
 /**
  * Runs a host RegExp somewhere it can be killed.
@@ -200,8 +201,11 @@ function waitForReply(
     // saying why is the thing to avoid
     if (!noticed && Date.now() - started >= NOTICE_MS) {
       noticed = true;
+      // standout, like every other message the pager holds you at -
+      // og's wait_message and ours for a stalled pipe both stand out
+      // from the text they sit under
       putstr(CURSOR_TO(config.window, 1) + CLEAR_LINE +
-        'Searching... (interrupt to abort)');
+        INVERSE_ON + 'Searching... (interrupt to abort)' + INVERSE_OFF);
       flush();
     }
   }

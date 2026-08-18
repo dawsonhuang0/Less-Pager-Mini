@@ -102,6 +102,11 @@ describe('a host regex that can be killed', () => {
       (process.stdout as unknown as { write: unknown }).write = write;
     }
 
-    expect(written.join('')).toContain('Searching... (interrupt to abort)');
+    const shown = written.join('');
+
+    expect(shown).toContain('Searching... (interrupt to abort)');
+
+    // and in standout, like every other message that holds you
+    expect(shown).toMatch(/\x1b\[7m.*Searching\.\.\./);
   }, 15000);
 });
