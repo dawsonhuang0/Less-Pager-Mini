@@ -64,4 +64,31 @@ describe('--view-lesskey given with a file', () => {
       resetLesskeyViewSession();
     }
   }, 20000);
+
+  it('shows the name and the file count on the view\'s first prompt',
+    async () => {
+      // og's whole "?n?f%f .?m(%T %i of %m) .." group hangs off ?n,
+      // "first prompt in a new file", and pr_string clears new_file as
+      // it builds a prompt (prompt.c:630). So a second render of the
+      // same screen shows neither - which is what an extra render in
+      // the open path was doing
+      const result = await runLt({
+        env: {
+          LESSKEYIN: '/tmp/lmn-view-fixture.lesskey',
+          LESSKEY_CONTENT: 'x quit;y help',
+        },
+        args: ['input.txt'],
+        files: { 'input.txt': text },
+        width: 80,
+        height: 8,
+        firstScreen: null,
+        firstCursor: null,
+        steps: [...'--view-lesskey'].concat('\r')
+          .map(key => ({ key, screen: null, cursor: null })),
+      });
+
+      const last = result.screens[result.screens.length - 1];
+
+      expect(last[last.length - 1]).toContain('(file 1 of 2)');
+    }, 20000);
 });

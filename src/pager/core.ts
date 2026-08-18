@@ -3042,8 +3042,15 @@ hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
 // unwinds the lesskey pager and leaves this one exactly as it was
 hook.viewLesskey = (): void => {
   // like the h command's overlay rather than a session of its own:
-  // one painter, and `q` unwinds one level
-  if (openLesskeyView()) render(session.content, session.buffer);
+  // one painter, and `q` unwinds one level.
+  //
+  // NO render here: the command that ran this renders when it
+  // returns, and a frame drawn now would be the one that spends
+  // og's new_file - pr_string clears it as it builds the prompt
+  // (prompt.c:630), and the whole "?n?f%f .?m(%T %i of %m) .." group
+  // hangs off it. Rendering twice meant the screen the user actually
+  // saw had neither the name nor the file count
+  openLesskeyView();
 };
 
 function openHelp(text: string[] = help): void {
