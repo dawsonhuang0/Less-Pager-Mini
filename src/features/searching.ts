@@ -1977,6 +1977,22 @@ function searchNote(): void {
 }
 
 function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
+  // the host engine guards itself now, in a worker: the match runs on
+  // a thread that can be killed, a second thread reads the terminal
+  // for the whole run, and the notice comes from there. Wrapping that
+  // in a vm timeout as well meant two guards racing over one search -
+  // the timeout dropped the pattern at one second with "Pattern too
+  // complex", and the watcher painted its notice over that at two.
+  //
+  // The vm path stays for the POSIX engine, which has no worker and
+  // no way of its own to stop
+  if (optUseJsRegexp()) {
+    for (;;) {
+      if (slice()) return 'done';
+      if (searchInterrupted(true)) return 'stop';
+    }
+  }
+
   if (!guardContext || !guardScript) {
     guardContext = vm.createContext({ step: () => {} }) as
       { step: () => void };
