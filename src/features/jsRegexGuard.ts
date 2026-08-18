@@ -217,7 +217,12 @@ for (;;) {
       }
     }
 
-    if (!said && Date.now() - started >= sayAt) {
+    // not while a message is holding the row: that message is waiting
+    // for an answer, and talking over it loses the question. It goes
+    // out the moment the row is free, however long ago the two
+    // seconds passed
+    if (!said && Date.now() - started >= sayAt &&
+        Atomics.load(header, ${MSG_UP}) === 0) {
       said = true;
       Atomics.store(header, ${NOTICED}, 1);
       fs.writeSync(1, notice);
