@@ -7,7 +7,7 @@ import path from 'path';
 import { runLt } from '../lesstest/runLt';
 
 import { markLesskeyViewSession, isLesskeyViewSession,
-  resetLesskeyViewSession } from '../../src/features/lesskeyView';
+  resetLesskeyViewSession } from '../../src/lesskey/view';
 
 /*
  * --view-lesskey on the command line.

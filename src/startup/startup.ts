@@ -13,7 +13,7 @@ import { resetBellTimer, resetPrompting, endPromptHold, armStall }
 
 import { initSecure, secureAllow } from '../features/secure';
 
-import { loadLesskey } from '../features/lesskey';
+import { loadLesskey } from '../lesskey';
 
 import { initCharset } from '../features/charset';
 

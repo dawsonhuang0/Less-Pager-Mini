@@ -7,7 +7,7 @@ import { homeDir, LESSKEYIN_NAME, LESSKEYIN_SYS, LESSKEYFILE_NAME,
 
 import { Actions } from "../state/interfaces";
 
-import { search } from "./searching";
+import { search } from "../features/searching";
 
 import { actualEnv, deleteLesskeyEnv, lgetenv, resetLesskeyEnvironment,
   setLesskeyEnv } from '../startup/environment';
@@ -16,9 +16,9 @@ import { terminalCapability } from '../tty/terminal';
 
 import { hook } from '../options/shared';
 
-import { SPECIAL_KEY_CODES } from './lesskeyCodes';
+import { SPECIAL_KEY_CODES } from './codes';
 
-import { secureAllow } from './secure';
+import { secureAllow } from '../features/secure';
 
 /**
  * A #command binding: the pager action, an optional canonical key for

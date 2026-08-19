@@ -28,9 +28,9 @@ import { lesskeyHelp } from './startup/lesskeyHelp';
 
 import { lesskeyViewFiles, applyLesskeyEdits, cleanLesskeyView,
   seedDefaultKeymap, markLesskeyViewSession }
-  from './features/lesskeyView';
+  from './lesskey/view';
 
-import { LESS_VERSION } from './features/lesskey';
+import { LESS_VERSION } from './lesskey';
 
 import { initInvocationOptions, markTerminalInvocation }
   from './startup/invocation';
@@ -39,7 +39,7 @@ import { actualEnv, initEnvironment, lgetenv } from './startup/environment';
 
 import { initSecure, secureAllow } from './features/secure';
 
-import { loadLesskey } from './features/lesskey';
+import { loadLesskey } from './lesskey';
 
 import { startupInit } from './startup/startup';
 

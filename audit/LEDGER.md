@@ -54,7 +54,7 @@ walk supersedes v241 behaviour commit by commit.
 
 ### 0002 `f5abfd9` Add changes for v242. — **MATCH**
 NEWS text only, but it states three behaviours; all three verified in ours:
-lesskey may redefine line-editing keys (`features/lesskey.ts` edit table);
+lesskey may redefine line-editing keys (`lesskey/index.ts` edit table);
 the literal key is `^V` or `^A`, not backslash (`features/cmdbuf.ts:31-32`
 map `\x16` and `\x01` to `literal`); filename completion is disabled in search
 commands (`cmdbuf` takes `complete` per prompt, defaults `null`, and only
@@ -64,7 +64,7 @@ commands (`cmdbuf` takes `complete` per prompt, defaults `null`, and only
 
 ### 0004 `d87add9` Initial revision (lesskey.h) — **MATCH**
 Defines the BINARY lesskey file format we must still read: magic `\0 M + G`,
-sections `c`/`e`/`x`, trailer `End`, KRADIX 64. `features/lesskey.ts:465`
+sections `c`/`e`/`x`, trailer `End`, KRADIX 64. `lesskey/index.ts:465`
 checks `buf[0]===0x00 && buf[1]===0x4D`; the compiled `#stop` sentinel
 (A_END_LIST) is handled at :545.
 
@@ -87,7 +87,7 @@ divergence there is not automatically our bug.
 
 ### 0010 `7190485` Doc -f flag and #stop. — **MATCH** (doc, but checked)
 lesskey man page. `#stop` is a real directive; ours implements it
-(`features/lesskey.ts:369` `userStop()`, plus the compiled form at :545).
+(`lesskey/index.ts:369` `userStop()`, plus the compiled form at :545).
 
 ### 0011 `88cf6bf` Don't hilite_search line number displayed with -N. — **MATCH**
 less adds `lno_indent` and hilites from `linebuf + lno_indent`, so the -N gutter

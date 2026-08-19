@@ -10,16 +10,16 @@ import { files, initFiles, getPreviousPath, setPreviousPath, onSourceFiles }
 import { markSnapshot, restoreMarkSnapshot, resetMarks, marks }
   from '../../src/features/jumping';
 
-import { resetLesskey, loadLesskey } from '../../src/features/lesskey';
+import { resetLesskey, loadLesskey } from '../../src/lesskey';
 
 import { openLesskeyView, exitLesskeyView, inLesskeyView,
   refreshLesskeyView, lesskeyViewFiles, applyLesskeyEdits,
   checkLesskeyEdits, cleanLesskeyView }
-  from '../../src/features/lesskeyView';
+  from '../../src/lesskey/view';
 
 import { search } from '../../src/features/searching';
 
-import { userBinding } from '../../src/features/lesskey';
+import { userBinding } from '../../src/lesskey';
 
 import { switchToFile } from '../../src/commands';
 

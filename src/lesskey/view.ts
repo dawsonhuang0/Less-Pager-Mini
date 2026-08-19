@@ -3,23 +3,23 @@ import os from 'os';
 import path from 'path';
 
 import { lesskeyForms, lesskeyFile, LesskeyForm, loadLesskey }
-  from './lesskey';
+  from '.';
 
 import { files, makeFileList, FileEntry, saveFilePosition,
   getPreviousPath, setPreviousPath, examineHistoryLength,
-  trimExamineHistory, forgetSourceFile } from './files';
+  trimExamineHistory, forgetSourceFile } from '../features/files';
 
-import { markSnapshot, restoreMarkSnapshot, MarkSnapshot } from './jumping';
+import { markSnapshot, restoreMarkSnapshot, MarkSnapshot } from '../features/jumping';
 
 import { switchToFile } from '../commands';
 
-import { renderLesskeyBinary } from './lesskeyRender';
-import { compileLesskey } from './lesskeyCompile';
-import { DEFAULT_KEYMAP } from './lesskeyCodes';
+import { renderLesskeyBinary } from './render';
+import { compileLesskey } from './compile';
+import { DEFAULT_KEYMAP } from './codes';
 
 import { lgetenv } from '../startup/environment';
-import { search } from './searching';
-import { secureAllow } from './secure';
+import { search } from '../features/searching';
+import { secureAllow } from '../features/secure';
 import { homeDir } from '../tty/platform';
 
 /**

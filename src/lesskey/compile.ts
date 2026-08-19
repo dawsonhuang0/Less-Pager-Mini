@@ -6,7 +6,7 @@ import {
   SK_SPECIAL_KEY,
   SK_CONTROL_K,
   SPECIAL_KEY_CODES,
-} from './lesskeyCodes';
+} from './codes';
 
 /**
  * Compiles lesskey source into the binary a `-k` file carries, like

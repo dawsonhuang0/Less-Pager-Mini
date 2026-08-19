@@ -43,7 +43,7 @@ import {
 
 import { prProto, setProto } from '../../src/features/prompt';
 
-import { resetLesskey, userBinding } from '../../src/features/lesskey';
+import { resetLesskey, userBinding } from '../../src/lesskey';
 
 // registers the session hooks (--file-size's scan) like the runtime
 import '../../src/features/pipe';

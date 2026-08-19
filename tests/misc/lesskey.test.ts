@@ -19,7 +19,7 @@ import {
   parseLesskeyContent,
   parseLesskeyBinary,
   loadLesskey
-} from '../../src/features/lesskey';
+} from '../../src/lesskey';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

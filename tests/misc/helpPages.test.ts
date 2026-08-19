@@ -10,8 +10,8 @@ import { session } from '../../src/state/session';
 import { hook } from '../../src/options/shared';
 
 import { files, initFiles } from '../../src/features/files';
-import { exitLesskeyView } from '../../src/features/lesskeyView';
-import { loadLesskey, resetLesskey } from '../../src/features/lesskey';
+import { exitLesskeyView } from '../../src/lesskey/view';
+import { loadLesskey, resetLesskey } from '../../src/lesskey';
 import { switchToFile } from '../../src/commands';
 
 import { help } from '../../src/startup/lessHelp';

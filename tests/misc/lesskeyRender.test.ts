@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderLesskeyBinary } from '../../src/features/lesskeyRender';
-import { compileLesskey } from '../../src/features/lesskeyCompile';
+import { renderLesskeyBinary } from '../../src/lesskey/render';
+import { compileLesskey } from '../../src/lesskey/compile';
 
 /** Compiles source, then renders the result back to source. */
 const trip = (source: string): string => {

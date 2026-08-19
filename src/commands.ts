@@ -52,9 +52,9 @@ import { editCommand, prExpand } from './features/prompt';
 import { secureAllow } from './features/secure';
 
 import { inLesskeyView, refreshLesskeyView }
-  from './features/lesskeyView';
+  from './lesskey/view';
 
-import { LESS_VERSION } from './features/lesskey';
+import { LESS_VERSION } from './lesskey';
 
 import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
   jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';

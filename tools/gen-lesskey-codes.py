@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate src/features/lesskeyCodes.ts from the vendored less/ source.
+"""Regenerate src/lesskey/codes.ts from the vendored less/ source.
 
 The lesskey action names and the numeric codes a compiled file carries
 live in two less files: the name tables in lesskey_parse.c, and the
@@ -13,7 +13,7 @@ import sys
 
 CMD_H = 'less/cmd.h'
 PARSE_C = 'less/lesskey_parse.c'
-OUT = 'src/features/lesskeyCodes.ts'
+OUT = 'src/lesskey/codes.ts'
 
 
 def cnum(text):

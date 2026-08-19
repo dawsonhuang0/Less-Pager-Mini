@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { compileLesskey } from '../../src/features/lesskeyCompile';
+import { compileLesskey } from '../../src/lesskey/compile';
 
 import { resetLesskey, parseLesskeyBinary, userBinding }
-  from '../../src/features/lesskey';
+  from '../../src/lesskey';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 /*
- * The lesskey compiler (src/features/lesskeyCompile.ts).
+ * The lesskey compiler (src/lesskey/compile.ts).
  *
  * tests/lksweep.py is the real check -- it compiles a corpus with GNU
  * lesskey out of the vendored tree and compares byte for byte. These

@@ -11,7 +11,7 @@ import { cmd as cmdBuf, cmdOpen, cmdClose, cmdChar, cmdText,
   cmdSetText, cmdUngot } from "../features/cmdbuf";
 
 import { parseLesskey, parseLesskeyBinary, parseLesskeyContent,
-  recordLesskeyForm } from "../features/lesskey";
+  recordLesskeyForm } from "../lesskey";
 
 import { secureAllow } from "../features/secure";
 

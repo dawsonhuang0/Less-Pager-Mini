@@ -56,9 +56,9 @@ import { trace as guardTrace } from "../features/jsRegexGuard";
 
 import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
   lesskeyViewOpen,
-  nameLesskeyViewSession } from "../features/lesskeyView";
+  nameLesskeyViewSession } from "../lesskey/view";
 
-import { LESS_VERSION } from "../features/lesskey";
+import { LESS_VERSION } from "../lesskey";
 
 import { raiseAbort, clearAbort, ungotIsLive} from "../tty/keyboard";
 
@@ -280,7 +280,7 @@ import {
   userIsPrefix,
   userStop,
   translateEditKey
-} from "../features/lesskey";
+} from "../lesskey";
 
 
 import { loadHistory, saveHistory, touchSearchList, touchShellList,

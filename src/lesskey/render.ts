@@ -5,7 +5,7 @@ import {
   SK_SPECIAL_KEY,
   SK_CONTROL_K,
   SPECIAL_KEY_CODES,
-} from './lesskeyCodes';
+} from './codes';
 
 /**
  * Renders a compiled lesskey back as the source it was built from.

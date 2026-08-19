@@ -57,7 +57,7 @@ export const hook = {
   /** less's opt_k: load a COMPILED lesskey file named by -k, returning
    *  false when lesskey() would have returned nonzero (unreadable,
    *  shorter than 3 bytes, or blocked by SECURE/LESSNOCONFIG). Set by
-   *  features/lesskey to keep the option table free of that import. */
+   *  the lesskey module to keep the option table free of that import. */
   loadLesskeyFile: ((() => false) as (path: string) => boolean),
   trimBufSpace: (() => {}) as () => void,
   screenActive: false,

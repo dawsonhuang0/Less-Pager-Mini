@@ -21,8 +21,8 @@ import tempfile
 LESSKEY = 'less/lesskey'
 DRIVER = '''
 import fs from 'fs';
-import { compileLesskey } from '%(root)s/src/features/lesskeyCompile';
-import { renderLesskeyBinary } from '%(root)s/src/features/lesskeyRender';
+import { compileLesskey } from '%(root)s/src/lesskey/compile';
+import { renderLesskeyBinary } from '%(root)s/src/lesskey/render';
 
 const [, , mode, input, output] = process.argv;
 

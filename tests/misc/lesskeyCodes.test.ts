@@ -11,9 +11,9 @@ import {
   SK_CONTROL_K,
   SPECIAL_KEY_CODES,
   DEFAULT_KEYMAP,
-} from '../../src/features/lesskeyCodes';
+} from '../../src/lesskey/codes';
 
-import { compileLesskey } from '../../src/features/lesskeyCompile';
+import { compileLesskey } from '../../src/lesskey/compile';
 
 /*
  * The generated name/code table (tools/gen-lesskey-codes.py).

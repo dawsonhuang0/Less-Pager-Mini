@@ -4,9 +4,9 @@ import os from 'os';
 import path from 'path';
 
 import { initFiles, files } from '../../src/features/files';
-import { resetLesskey, loadLesskey, userBinding } from '../../src/features/lesskey';
+import { resetLesskey, loadLesskey, userBinding } from '../../src/lesskey';
 import { openLesskeyView, refreshLesskeyView, exitLesskeyView }
-  from '../../src/features/lesskeyView';
+  from '../../src/lesskey/view';
 import { switchToFile, runEditor } from '../../src/commands';
 
 import { initEnvironment } from '../../src/startup/environment';
