@@ -632,12 +632,14 @@ export async function contentPager(
   // file's text under a "HELP --" prompt whenever -?/--help was given
   // a filename. This is also the order the h command already works
   // in, since by then the engine has long been ready.
-  if (startup.dohelp) {
-    openHelp();
+  if (startup.dohelp || startup.lesskeyHelp) {
+    openHelp(startup.lesskeyHelp ? lesskeyHelp : help);
     session.startupHelp = true;
-  } else if (startup.lesskeyHelp) {
-    openHelp(lesskeyHelp);
-    session.startupHelp = true;
+
+    // THIS page is not over anything - it is the session's input, and
+    // its q quits rather than going back. An h opened later, over the
+    // lesskey view say, is a real overlay and does stack
+    overlays.length = 0;
   } else if (isLesskeyViewSession()) {
     // this session IS the view: nothing to open over, only the temp
     // files to name after what they came from
@@ -646,7 +648,7 @@ export async function contentPager(
     // over the file, not instead of it: q ends the view and the
     // session carries on with what was named, unlike -? whose help
     // IS the input file and whose q quits
-    openLesskeyView();
+    if (openLesskeyView()) overlays.push('view');
   }
 
 
@@ -828,10 +830,31 @@ const acts: Record<Actions, () => void> = {
   EXIT: () => {
     // the lesskey view unwinds before help does, and before quitting:
     // both are stashes over the same session
-    if (exitLesskeyView(LESS_VERSION)) {
+    // popped only once the close has actually happened: exitHelp reads
+    // the stack to tell an h overlay from the session's own -? input,
+    // so taking it off first told it the wrong one and quit the pager
+    // out from under a help that had somewhere to go back to
+    const top = overlays[overlays.length - 1];
+
+    if (top === 'help') {
+      if (exitHelp()) {
+        overlays.pop();
+
+        return;
+      }
+
+      session.exit();
+
+      return;
+    }
+
+    if (top === 'view' && exitLesskeyView(LESS_VERSION)) {
+      overlays.pop();
+
       // straight back to the page it was opened from, if it was
-      // opened from one: each q undoes one thing the user opened
-      restoreHelpUnderView();
+      // opened from one: each q undoes one thing the user opened.
+      // Nothing to go back to means the session is over
+      if (!restoreHelpUnderView()) session.exit();
 
       return;
     }
@@ -2992,8 +3015,13 @@ function exitHelp(): boolean {
   if (!mode.HELP) return false;
 
   // a --help/-? screen is less's FAKE_HELPFILE input, not the h
-  // command's overlay: quitting it quits the pager
-  if (session.startupHelp) return false;
+  // command's overlay: quitting it quits the pager.
+  //
+  // ...but only while it is the page on screen. h opens a real
+  // overlay even in a --help session - over the lesskey view, say -
+  // and that one has somewhere to go back to, so the flag alone
+  // would quit the pager out from under it
+  if (session.startupHelp && !overlays.includes('help')) return false;
 
   const helpConfig = config;
 
@@ -3120,15 +3148,27 @@ hook.viewLesskey = (): void => {
   // knows how to give them back
   const page = mode.HELP && !session.startupHelp ? session.helpSource : null;
 
-  if (page) exitHelp();
+  if (page) {
+    exitHelp();
 
-  // -? is the session's own input, not an overlay: exitHelp refuses
-  // it (quitting THAT help quits the pager), so the flag is all
-  // there is to take off, and the view's own stash puts the screen
-  // back
-  const startupHelp = mode.HELP;
+    if (overlays[overlays.length - 1] === 'help') overlays.pop();
+  }
 
-  if (startupHelp) mode.HELP = false;
+  // -? is the session's own input rather than an overlay, and asking
+  // for the view CLOSES it. Keeping it underneath made a level out of
+  // a screen the user had already moved on from: q left the view, put
+  // --help back, and wanted another q to get out of a session that no
+  // longer had anywhere else to go
+  const closedStartupHelp = mode.HELP;
+
+  if (closedStartupHelp) {
+    mode.HELP = false;
+
+    // no longer a --help session: the help it names is gone, and what
+    // is on screen from here is the view and whatever is opened over
+    // it, each of which exits normally
+    session.startupHelp = false;
+  }
 
   // NO render here: the command that ran this renders when it
   // returns, and a frame drawn now would be the one that spends
@@ -3137,37 +3177,66 @@ hook.viewLesskey = (): void => {
   // hangs off it. Rendering twice meant the screen the user actually
   // saw had neither the name nor the file count
   if (openLesskeyView()) {
+    overlays.push('view');
     helpUnderView = page;
-    startupHelpUnderView = startupHelp;
+    viewClosedStartupHelp = closedStartupHelp;
 
     return;
   }
 
   // refused - put back exactly what was on screen before
-  if (startupHelp) mode.HELP = true;
+  if (closedStartupHelp) {
+    mode.HELP = true;
+    session.startupHelp = true;
+  }
+
   if (page) openHelp(page);
 };
+
+/**
+ * What is stacked over the file, innermost last.
+ *
+ * q closes whatever was opened LAST, which is the only order that
+ * holds when they can be opened in either: the view over a help page
+ * (--view-lesskey from h) and a help page over the view (h from
+ * inside it) are both reachable, and a fixed order gets one of them
+ * backwards. It used to unwind the view first always, so h inside the
+ * view then q took the view out from under the help that was on top -
+ * leaving the file's own text under a "HELP --" prompt, and the help
+ * it was opened from never closed at all.
+ *
+ * The startup help (-?/--help) is not in here: it is not over
+ * anything, it IS the session's input, and its q quits.
+ */
+const overlays: ('help' | 'view')[] = [];
 
 /** The help page `q` owes the user once the lesskey view unwinds. */
 let helpUnderView: string[] | null = null;
 
-/** Whether that page was -?'s, which is a flag rather than a stash. */
-let startupHelpUnderView = false;
+/** Whether opening the view is what closed a --help session's screen. */
+let viewClosedStartupHelp = false;
 
-/** Puts the help screen back after the view over it has unwound. */
-function restoreHelpUnderView(): void {
+/**
+ * Puts back whatever the view was opened over, once it has unwound.
+ *
+ * @returns False when there was nothing to go back to, so `q` means
+ *          quit: the view was asked for from a --help session, which
+ *          closed that screen for good.
+ */
+function restoreHelpUnderView(): boolean {
   const page = helpUnderView;
 
   helpUnderView = null;
 
-  if (startupHelpUnderView) {
-    startupHelpUnderView = false;
-    mode.HELP = true;
+  if (viewClosedStartupHelp) {
+    viewClosedStartupHelp = false;
 
-    return;
+    return false;
   }
 
   if (page) openHelp(page);
+
+  return true;
 }
 
 function openHelp(text: string[] = help): void {
@@ -3238,6 +3307,8 @@ function openHelp(text: string[] = help): void {
   session.prevConfig = config;
   session.prevMode = mode;
   session.prevContent = session.content;
+
+  overlays.push('help');
 
   paintHelpPage(text);
 }

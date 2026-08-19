@@ -31,6 +31,10 @@ ROWS, COLS = 24, 80
 KEYS = '/tmp/lpm-helpflow.lesskey'
 FILE = 'tests/lines.txt'
 
+# an expected screen of QUIT means the pager should be gone: there was
+# nothing left under the last thing q closed
+QUIT = 'the pager exits'
+
 # what is on screen, by something only that screen says
 MARKS = [
     ('command help', 'Commands marked with'),
@@ -52,15 +56,35 @@ FLOWS = [
         ('q', 'q', 'lesskey help'),
         ('q', 'q', 'the file'),
     ]),
-    # -? is the session's own input rather than an overlay, so there is
-    # no file underneath for q to fall back to
+    # -? is the session's own input rather than an overlay, and asking
+    # for the view CLOSES it: there is nothing left for q to go back to
     ('the view, opened from -?', ['-?'], [
         ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
-        ('q', 'q', 'command help'),
+        ('q', 'q', QUIT),
     ]),
     ('the view, opened from the file', [FILE], [
         ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
         ('q', 'q', 'the file'),
+    ]),
+    # h opens a real overlay from INSIDE the view, so the two can be
+    # stacked in either order - and q has to undo the LAST one either
+    # way. A fixed unwind order took the view out from under the help
+    # on top of it, leaving the file's text under a "HELP --" prompt
+    ('help opened from inside the view', [FILE], [
+        ('h', 'h', 'command help'),
+        ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
+        ('h', 'h', 'command help'),
+        ('q', 'q', 'lesskey view'),
+        ('q', 'q', 'command help'),
+        ('q', 'q', 'the file'),
+    ]),
+    # the same ladder from a --help session: h over the view still has
+    # somewhere to go back to, and only the last q finds nothing
+    ('help opened from the view, from -?', ['-?'], [
+        ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
+        ('h', 'h', 'command help'),
+        ('q', 'q', 'lesskey view'),
+        ('q', 'q', QUIT),
     ]),
     ('switching pages inside help', [FILE], [
         ('h', 'h', 'command help'),
@@ -96,6 +120,7 @@ def flow(title, args, steps):
         os.execvp('node', ['node', 'dist/cli.js', *args])
 
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', ROWS, COLS, 0, 0))
+    gone = []
 
     def drain(seconds):
         end, out = time.time() + seconds, b''
@@ -109,9 +134,11 @@ def flow(title, args, steps):
             try:
                 chunk = os.read(fd, 65536)
             except OSError:
+                gone.append(True)
                 break
 
             if not chunk:
+                gone.append(True)
                 break
 
             out += chunk
@@ -124,9 +151,18 @@ def flow(title, args, steps):
     bad = 0
 
     for label, keys, want in steps:
-        os.write(fd, keys.encode('latin-1'))
+        if gone:
+            print(f'  FAIL {label:<16} -> the pager had already exited')
+            bad += 1
+            continue
+
+        try:
+            os.write(fd, keys.encode('latin-1'))
+        except OSError:
+            gone.append(True)
+
         text = drain(1.6)
-        got = where(text)
+        got = QUIT if gone else where(text)
         ok = got == want
 
         if not ok:
