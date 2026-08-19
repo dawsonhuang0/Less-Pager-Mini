@@ -24,6 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # tests/fixtures/guardProbe.mjs imports the BUILT guard: it has to
+      # run in a process of its own, because vitest's worker pool will
+      # not schedule the guard's nested worker while the thread that
+      # owns it is blocked in Atomics.wait
+      - name: Build
+        run: npm run build
+
       - name: Run tests
         run: npm test
 

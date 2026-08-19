@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { runLt } from '../lesstest/runLt';
 
@@ -15,6 +19,18 @@ import { markLesskeyViewSession, isLesskeyViewSession,
  * FAKE_HELPFILE).
  */
 const text = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+
+// the SECOND lesskey the file count is about - the first is
+// $LESSKEY_CONTENT. It used to be a path in /tmp written by hand,
+// so the count was 2 on the machine that happened to have that file
+// and 1 everywhere else, which is how it passed here and failed in CI
+const lesskeyIn = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'lmn-viewstartup-')),
+  'fixture.lesskey');
+
+beforeAll(() => {
+  fs.writeFileSync(lesskeyIn, 'j forw-line\nZZ quit\n');
+});
 
 describe('--view-lesskey given with a file', () => {
   it('opens over it, and q leaves the session on the file', async () => {
@@ -74,7 +90,7 @@ describe('--view-lesskey given with a file', () => {
       // the open path was doing
       const result = await runLt({
         env: {
-          LESSKEYIN: '/tmp/lmn-view-fixture.lesskey',
+          LESSKEYIN: lesskeyIn,
           LESSKEY_CONTENT: 'x quit;y help',
         },
         args: ['input.txt'],
