@@ -55,6 +55,7 @@ import { lesskeyHelp } from "../startup/lesskeyHelp";
 import { trace as guardTrace } from "../features/jsRegexGuard";
 
 import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
+  lesskeyViewOpen,
   nameLesskeyViewSession } from "../features/lesskeyView";
 
 import { LESS_VERSION } from "../features/lesskey";
@@ -3159,6 +3160,13 @@ hook.viewLesskey = (): void => {
 
     if (overlays[overlays.length - 1] === 'help') overlays.pop();
   }
+
+  // already in the view, with a help page opened over it: closing that
+  // page IS the whole request. Asking for the view while looking at
+  // something else means "put the view back", and it is already
+  // underneath - opening a second one over the first is what the view
+  // refuses, and the refusal used to put the help straight back
+  if (lesskeyViewOpen()) return;
 
   // -? is the session's own input rather than an overlay, and asking
   // for the view CLOSES it. Keeping it underneath made a level out of

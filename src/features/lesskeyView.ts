@@ -333,6 +333,9 @@ export function nameLesskeyViewSession(): void {
   }
 }
 
+/** True while a view is on screen over a stashed session. */
+export const lesskeyViewOpen = (): boolean => stash !== null;
+
 /** True when opening a view again would only stack one on itself. */
 export const isLesskeyViewSession = (): boolean => isViewSession;
 

@@ -88,6 +88,14 @@ FLOWS = [
         ('q', 'q', 'lesskey view'),
         ('q', 'q', QUIT),
     ]),
+    # asking for the view while a help page is over it: the view is
+    # already underneath, so closing the page is the whole request
+    ('the view asked for again, from a page over it', [FILE], [
+        ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
+        ('h', 'h', 'command help'),
+        ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
+        ('q', 'q', 'the file'),
+    ]),
     ('switching pages inside help', [FILE], [
         ('h', 'h', 'command help'),
         ('--lesskey-help', '--lesskey-help\n', 'lesskey help'),
