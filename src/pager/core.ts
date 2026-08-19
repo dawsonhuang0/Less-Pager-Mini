@@ -851,10 +851,10 @@ const acts: Record<Actions, () => void> = {
     if (top === 'view' && exitLesskeyView(LESS_VERSION)) {
       overlays.pop();
 
-      // straight back to the page it was opened from, if it was
-      // opened from one: each q undoes one thing the user opened.
-      // Nothing to go back to means the session is over
-      if (!restoreHelpUnderView()) session.exit();
+      // back to the file, which is what a view is over once the help
+      // it was opened from has been closed. Nothing under it at all
+      // means the session is over
+      if (!anythingUnderView()) session.exit();
 
       return;
     }
@@ -3142,6 +3142,12 @@ hook.viewLesskey = (): void => {
   // more, or q when done" under a list of key bindings) and every
   // command that rings in help rang here too.
   //
+  // CLOSED, not parked. Asking for the view is moving on from the
+  // page it was asked from, and putting that page back on the way out
+  // made a level of a screen nobody was still reading: h, the view,
+  // then q went back to the help rather than to the file. It holds
+  // for every help alike - the h overlay and --help's own screen.
+  //
   // Unwinding through exitHelp rather than clearing the flag is the
   // point: the config, the content and the backspace modes all
   // belong to the page being left, and it is the one thing that
@@ -3178,7 +3184,6 @@ hook.viewLesskey = (): void => {
   // saw had neither the name nor the file count
   if (openLesskeyView()) {
     overlays.push('view');
-    helpUnderView = page;
     viewClosedStartupHelp = closedStartupHelp;
 
     return;
@@ -3210,33 +3215,22 @@ hook.viewLesskey = (): void => {
  */
 const overlays: ('help' | 'view')[] = [];
 
-/** The help page `q` owes the user once the lesskey view unwinds. */
-let helpUnderView: string[] | null = null;
-
 /** Whether opening the view is what closed a --help session's screen. */
 let viewClosedStartupHelp = false;
 
 /**
- * Puts back whatever the view was opened over, once it has unwound.
+ * Whether anything is left under a view that has just unwound.
  *
- * @returns False when there was nothing to go back to, so `q` means
- *          quit: the view was asked for from a --help session, which
- *          closed that screen for good.
+ * A help screen it was opened from was CLOSED on the way in, so the
+ * file is what waits underneath - except in a --help session, where
+ * that screen WAS the input and nothing is left at all.
  */
-function restoreHelpUnderView(): boolean {
-  const page = helpUnderView;
+function anythingUnderView(): boolean {
+  if (!viewClosedStartupHelp) return true;
 
-  helpUnderView = null;
+  viewClosedStartupHelp = false;
 
-  if (viewClosedStartupHelp) {
-    viewClosedStartupHelp = false;
-
-    return false;
-  }
-
-  if (page) openHelp(page);
-
-  return true;
+  return false;
 }
 
 function openHelp(text: string[] = help): void {

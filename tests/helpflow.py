@@ -44,16 +44,17 @@ MARKS = [
 ]
 
 FLOWS = [
+    # asking for the view CLOSES the page it was asked from, so what is
+    # under it is the file - not the help, which nobody is reading any
+    # more
     ('the view, opened from the command help', [FILE], [
         ('h', 'h', 'command help'),
         ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
-        ('q', 'q', 'command help'),
         ('q', 'q', 'the file'),
     ]),
     ('the view, opened from the lesskey help', [FILE], [
         ('--lesskey-help', '--lesskey-help\n', 'lesskey help'),
         ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
-        ('q', 'q', 'lesskey help'),
         ('q', 'q', 'the file'),
     ]),
     # -? is the session's own input rather than an overlay, and asking
@@ -74,8 +75,9 @@ FLOWS = [
         ('h', 'h', 'command help'),
         ('--view-lesskey', '--view-lesskey\n', 'lesskey view'),
         ('h', 'h', 'command help'),
+        # this h IS over the view, so it goes back to it - and the one
+        # the view was opened from closed on the way in
         ('q', 'q', 'lesskey view'),
-        ('q', 'q', 'command help'),
         ('q', 'q', 'the file'),
     ]),
     # the same ladder from a --help session: h over the view still has
