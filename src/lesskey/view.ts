@@ -15,7 +15,6 @@ import { switchToFile } from '../commands';
 
 import { renderLesskeyBinary } from './render';
 import { compileLesskey } from './compile';
-import { DEFAULT_KEYMAP } from './codes';
 
 import { lgetenv } from '../startup/environment';
 import { search } from '../features/searching';
@@ -253,12 +252,23 @@ export function applyLesskeyEdits(
   return messages;
 }
 
-/** Seeds a missing default file with less's built-in bindings. */
-export function seedDefaultKeymap(file: string): boolean {
+/**
+ * Creates the default lesskey file when there is none, EMPTY.
+ *
+ * It used to arrive holding less's built-in bindings, on the grounds
+ * that a page of examples beats a blank screen. But those bindings are
+ * already in effect - writing them down changes nothing, and it leaves
+ * the user deleting 245 lines they did not ask for to find the two
+ * they want. A blank file says what it is: nothing is bound yet.
+ *
+ * --lesskey-help is where the syntax lives, and the view is one key
+ * away from it.
+ */
+export function createLesskeyFile(file: string): boolean {
   if (fs.existsSync(file)) return false;
 
   try {
-    fs.writeFileSync(file, DEFAULT_KEYMAP.join('\n') + '\n');
+    fs.writeFileSync(file, '');
     return true;
   } catch {
     return false;
@@ -410,7 +420,7 @@ export function openLesskeyView(): boolean {
   // the defaults case writes the seed before opening it, so `v` has a
   // real file to edit and the loader finds it next time
   if (view.files.length === 1 && view.files[0].form === null) {
-    seedDefaultKeymap(view.files[0].path);
+    createLesskeyFile(view.files[0].path);
   }
 
   // the file being left keeps its position, like edit_ifile storing

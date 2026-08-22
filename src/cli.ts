@@ -27,7 +27,7 @@ import { help } from './startup/lessHelp';
 import { lesskeyHelp } from './startup/lesskeyHelp';
 
 import { lesskeyViewFiles, applyLesskeyEdits, cleanLesskeyView,
-  seedDefaultKeymap, markLesskeyViewSession }
+  createLesskeyFile, markLesskeyViewSession }
   from './lesskey/view';
 
 import { LESS_VERSION } from './lesskey';
@@ -300,7 +300,7 @@ async function main(): Promise<void> {
     markLesskeyViewSession(view.files);
 
     if (view.files.length === 1 && view.files[0].form === null) {
-      seedDefaultKeymap(view.files[0].path);
+      createLesskeyFile(view.files[0].path);
     }
 
     try {
