@@ -241,5 +241,16 @@ export function lastLineStart(bf: BlockFile): number {
   const scanFrom = lastByte === 0x0A ? bf.size - 1 : bf.size;
   const nl = bf.findNewlineBack(scanFrom, MAX_LINE);
 
-  return nl < 0 ? Math.max(scanFrom - MAX_LINE, 0) : nl + 1;
+  if (nl >= 0) return nl + 1;
+
+  // No newline within reach, so this line is longer than the cap and
+  // readForwLine is cutting it on the ABSOLUTE MAX_LINE grid - that is
+  // what makes the pieces line up whichever way they are walked.
+  //
+  // So the answer has to be on that grid too. `scanFrom - MAX_LINE`
+  // is not: it lands mid-piece, and the piece it opens ENDS at the
+  // next boundary rather than at the file's end, so G stopped on the
+  // last boundary and left the tail unreachable - 14,929 bytes of it
+  // on a 1.26 MB file, with ":" where less shows "(END)".
+  return Math.floor(scanFrom / MAX_LINE) * MAX_LINE;
 }

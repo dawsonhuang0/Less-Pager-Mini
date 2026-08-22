@@ -359,20 +359,36 @@ export class BigView {
   gotoPercent(percent: number): void {
     // less's percent_pos: integer division per step, round-up remainder
     const size = this.bf.size;
+
+    // less clamps to the last BYTE, not to the end: `if (pos >= len)
+    // pos = len-1` (jump.c:162). Clamped to the end instead, 100p sat
+    // exactly at EOF, the scan back found the file's own final
+    // newline, and the top landed past the last line - a screen of
+    // tildes and (END) where less shows the line
     const pos = Math.min(
       Math.floor(size / 100) * percent +
         Math.floor(((size % 100) * percent + 99) / 100),
-      size
+      Math.max(size - 1, 0)
     );
 
-    const nl = this.bf.findNewlineBack(pos, 1 << 16);
+    // ...and back to the START of that byte's line, however far back
+    // that is. less's jump_line_loc walks with ch_back_get until it
+    // meets a newline or the beginning of the file, with no limit
+    // (jump.c) - so a jump landing inside a line longer than the read
+    // cap still lands on the line, and the cap it used to stop at sent
+    // the top to byte 0 instead: on a one-megabyte line, 50p left the
+    // screen exactly where it started.
+    //
+    // Unbounded costs TIME, not memory - blockAt keeps an LRU and
+    // trims - and it is the same walk less makes.
+    const nl = this.bf.findNewlineBack(pos, pos);
     this.top = { pos: nl < 0 ? 0 : nl + 1, offset: 0 };
   }
 
   /** Jumps to an absolute byte position's line, like jump_line_loc. */
   gotoPos(pos: number): void {
     const clamped = Math.max(0, Math.min(pos, this.bf.size));
-    const nl = this.bf.findNewlineBack(clamped, 1 << 20);
+    const nl = this.bf.findNewlineBack(clamped, clamped);
     this.top = { pos: nl < 0 ? 0 : nl + 1, offset: 0 };
   }
 }
