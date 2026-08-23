@@ -602,21 +602,33 @@ export interface SearchRequest {
 
 export type SearchFinder = (request: SearchRequest) => boolean;
 
-export function execSearch(
-  content: string[],
-  finder: SearchFinder | null = null
-): void {
-  // less's exec_mca runs cmd_exec() before the search: the /pattern
-  // command line clears and flushes ahead of a possibly long walk
-  // (command.c:267); sync, since the search blocks the loop
+/**
+ * less's cmd_exec (command.c:124): `clear_attn(); clear_bot(); flush()`.
+ *
+ * exec_mca calls it BEFORE dispatching any multi-character command
+ * (command.c:267) - the search, the examine, the shell escape alike -
+ * so the command line is blank and flushed ahead of work that may be
+ * slow, or of a child process writing to the terminal on its own
+ * account. That is what makes a shell's glob complaint start on a
+ * cleared line instead of running on from "Examine:".
+ *
+ * Sync, because the work it precedes blocks the event loop.
+ */
+export function cmdExec(): void {
   fs.writeSync(1, (optNoInit() && !mode.DUMB
     ? '\r'
     : `\x1b[${config.window};1H`) + CLEAR_LINE);
 
-  // that WAS the frame's opening (less's cmd_exec clear_bot before a
-  // possibly long walk, command.c:267), so the message frame that may
-  // follow must not write another one
+  // that WAS the frame's opening, so a message frame that follows
+  // must not write another one
   search.cmdExecOpened = true;
+}
+
+export function execSearch(
+  content: string[],
+  finder: SearchFinder | null = null
+): void {
+  cmdExec();
 
   const input = search.input;
   if (!input) return;

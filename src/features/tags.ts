@@ -1,8 +1,10 @@
 import fs from 'fs';
 
+import { markFullRepaint } from '../helpers';
+
 import { spawnSync } from 'child_process';
 
-import { optNoShell, optTagsFile, resetTagsFile } from "../options";
+import { optTagsFile, resetTagsFile } from "../options";
 
 import { shellQuote } from "./prompt";
 
@@ -273,17 +275,28 @@ function findCtag(tag: string, tagsFile: string): string | null {
  */
 function findGtag(tag: string, flag: string): string | null {
   // global(1) is another process to launch
-  if (optNoShell()) return null;
 
   const cmd = lgetenv('LESSGLOBALTAGS');
   if (!cmd) return 'No tags file';
 
   const shell = lgetenv('SHELL') || '/bin/sh';
+  // popen(command, "r") in less (tags.c:551): stdout is the pipe, and
+  // stderr stays the terminal's, so global(1) complaining about its
+  // database is seen rather than swallowed. Re-emitted rather than
+  // inherited for the reason features/files.ts gives: a delta renderer
+  // has to know the screen was written behind its back.
   const result = spawnSync(
     shell,
     ['-c', `${cmd} -x${flag} ${shellQuote(tag)}`],
     { encoding: 'utf8' }
   );
+
+  const stderrText = typeof result.stderr === 'string' ? result.stderr : '';
+
+  if (stderrText) {
+    fs.writeSync(2, stderrText);
+    markFullRepaint();
+  }
 
   if (result.status !== 0) return 'No tags file';
 

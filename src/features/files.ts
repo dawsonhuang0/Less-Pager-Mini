@@ -7,7 +7,7 @@ import { spawnSync } from 'child_process';
 
 import { config, mode } from "../state/config";
 
-import { ringBell } from "../helpers";
+import { markFullRepaint, ringBell } from "../helpers";
 import { maxSubRow } from "../lines/helpers";
 
 import { secureAllow } from "./secure";
@@ -901,32 +901,87 @@ function shellExpand(pattern: string): string[] | null {
     ...[...metas].map(char => `-n0x${char.charCodeAt(0).toString(16)}`),
   ].join(' ');
 
-  const quoted = runShell(`${lessecho} ${flags} -- ${pattern}`);
-  if (quoted !== null) return splitWords(quoted);
+  const first = runShell(`${lessecho} ${flags} -- ${pattern}`);
+
+  // 127 is the shell saying it could not find lessecho, which less
+  // treats as fatal (it has no fallback) but we can do better. ANY
+  // other status - including zsh's 1 for a pattern that matched
+  // nothing - is an answer, and less takes it: `if (*gfilename ==
+  // '\0') return (filename)` returns the pattern unexpanded rather
+  // than asking a second time.
+  //
+  // Telling those apart matters for more than tidiness. Reading an
+  // empty stdout as "no lessecho" ran the fallback whenever a glob
+  // simply missed, so the shell evaluated the pattern TWICE and every
+  // side effect it has - the "no matches found" on the terminal, and
+  // the cost of a second process - happened twice over.
+  if (first.status !== 127) {
+    emitShellError(first.stderr);
+    return first.stdout === null ? null : splitWords(first.stdout);
+  }
 
   // no lessecho here. `for f in <pattern>` is the same expansion the
   // same shell would have done for it, and NUL keeps a name with
-  // spaces whole - which is the only thing lessecho's quoting buys
+  // spaces whole - which is the only thing lessecho's quoting buys.
+  // The first run's stderr is dropped: it is the shell reporting a
+  // missing lessecho, which is ours to handle and not the user's
+  // business
   const raw = runShell(`for f in ${pattern}; do printf '%s\\0' "$f"; done`);
-  if (raw === null) return null;
+  emitShellError(raw.stderr);
 
-  return raw.split('\0').filter(name => name !== '');
+  if (raw.stdout === null) return null;
+
+  return raw.stdout.split('\0').filter(name => name !== '');
 }
 
-/** One command through the shell, like less's shellcmd + readfd. */
-function runShell(cmd: string): string | null {
+/**
+ * Puts a child's stderr on the terminal, as less's popen does.
+ *
+ * less redirects STDOUT only (filename.c:614), so a shell complaining
+ * about the user's pattern is seen: with $SHELL=zsh, ":e nonexistent*"
+ * shows "zsh:1: no matches found" above less's own error. bash and
+ * dash say nothing there, because they pass an unmatched pattern
+ * through on stdout instead.
+ *
+ * Captured and re-emitted rather than inherited, because less can
+ * afford not to know: its next paint is a full repaint, so the scroll
+ * the child's newline caused is painted over. Ours is a DELTA
+ * renderer, so it has to be told the screen was written behind its
+ * back or the pre-scroll rows stay.
+ */
+function emitShellError(text: string): void {
+  if (!text) return;
+
+  fs.writeSync(2, text);
+  markFullRepaint();
+}
+
+/**
+ * One command through the shell, like less's shellcmd + readfd.
+ *
+ * @returns stdout (null when empty, less's `*gfilename == '\0'`),
+ *          the child's stderr, and the exit status the caller needs
+ *          to tell "no such command" from "the glob matched nothing".
+ */
+function runShell(cmd: string): {
+  stdout: string | null;
+  stderr: string;
+  status: number;
+} {
   const [shell, args] = shellArgv(cmd);
 
   try {
     const result = spawnSync(shell, args, { encoding: 'utf8' });
     const text = typeof result.stdout === 'string' ? result.stdout : '';
 
-    // less: `if (*gfilename == '\0') { return (filename); }` - no
-    // output means the name comes back unexpanded
-    return text.replace(/\n+$/, '') || null;
+    return {
+      stdout: text.replace(/\n+$/, '') || null,
+      stderr: typeof result.stderr === 'string' ? result.stderr : '',
+      status: result.status ?? 0,
+    };
   } catch {
     // less: `if (fd == NULL) return (filename)` - the pipe never opened
-    return null;
+    return { stdout: null, stderr: '', status: 127 };
   }
 }
 

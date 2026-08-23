@@ -33,7 +33,7 @@ import {
   activateSourceFile
 } from './features/files';
 
-import { search, repeatSearch, execFilter, SearchFinder }
+import { search, repeatSearch, execFilter, cmdExec, SearchFinder }
   from './features/searching';
 
 import { lastLine, jumpLoc, adoptFileMarks, recordLastPosition,
@@ -307,6 +307,12 @@ export function removeFile(): void {
  * unopenable ones drop out, and the first good one becomes current.
  */
 export function runExamine(): void {
+  // less's exec_mca runs cmd_exec() before the A_EXAMINE dispatch
+  // (command.c:267), so the prompt row is cleared and flushed before
+  // the glob shells out - and the shell's own stderr, which less does
+  // not capture, lands on a blank line rather than after "Examine:"
+  cmdExec();
+
   const names = expandExamineList(examine.text.trim());
   examine.text = '';
 
