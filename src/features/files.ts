@@ -26,7 +26,7 @@ import {
 
 import { search } from "./searching";
 
-import { opt, optNoHistDups, optNoShell, optQuotes, resetHeaderStart,
+import { opt, optNoHistDups, optQuotes, resetHeaderStart,
   checkModelines,
   chopLine } from "../options";
 
@@ -826,7 +826,7 @@ export function glob(pattern: string): string[] {
   //
   // There is no fast path for a pattern without metacharacters
   // either - less shells out for every name it is given.
-  if (!isWindows && !optNoShell()) {
+  if (!isWindows) {
     const expanded = shellExpand(pattern);
     return expanded !== null && expanded.length ? expanded : [plain];
   }

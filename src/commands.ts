@@ -56,8 +56,8 @@ import { inLesskeyView, refreshLesskeyView }
 
 import { LESS_VERSION } from './lesskey';
 
-import { optQuitAtEof, optNoEditWarn, optNoShell, optOldBot,
-  jumpSindex, resetHeaderStart, NO_SHELL_MESSAGE, hook } from './options';
+import { optQuitAtEof, optNoEditWarn, optOldBot,
+  jumpSindex, resetHeaderStart, SECURE_DENIED, hook } from './options';
 
 import {
   CONSOLE_CLEAR,
@@ -459,11 +459,6 @@ export function runShell(
   input?: string,
   onDone?: () => boolean
 ): void {
-  if (optNoShell()) {
-    search.message = NO_SHELL_MESSAGE;
-    return;
-  }
-
   // less's putchr fires --end-prompt before the clear_bot that erases
   // the prompt for the command's output (output.c:496)
   const endPrompt = eprPrefix();
@@ -706,12 +701,15 @@ export function runPipe(cmd: string): void {
  * displayed line, then re-examines it, like less's LESSEDIT proto.
  */
 export function runEditor(): void {
-  if (optNoShell()) {
-    search.message = NO_SHELL_MESSAGE;
+  // less breaks SILENTLY on the help file (`if (ch_getflags() &
+  // CH_HELPFILE) break`, command.c:2145) but reports a secure denial,
+  // so the two cannot share one return
+  if (mode.HELP) return;
+
+  if (!secureAllow('edit')) {
+    search.message = SECURE_DENIED;
     return;
   }
-
-  if (mode.HELP || !secureAllow('edit')) return;
 
   const entry = files.list[files.index];
 
@@ -788,11 +786,6 @@ export function runMiscInput(
   kind: '!' | '#' | '|' | 's' | 'S' | '+',
   text: string
 ): void {
-  if ((kind === '!' || kind === '#' || kind === '|') && optNoShell()) {
-    search.message = NO_SHELL_MESSAGE;
-    return;
-  }
-
   // ^P prefixed commands still join the history bare, like less
   const bare = text.replace(/^\x10/, '');
 

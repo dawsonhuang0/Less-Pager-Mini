@@ -99,6 +99,7 @@ import {
   optForwScroll,
   optStopOnFormFeed,
   optWheelLines,
+  SECURE_DENIED,
 } from '../options';
 
 import { setOsc8Display, transformContent }
@@ -672,7 +673,10 @@ export class FileInput implements PagerInput {
         this.findOsc8(-1, count || 1);
         return true;
       case 'OSC8_OPEN': {
-        if (!secureAllow('osc8')) return true;
+        if (!secureAllow('osc8')) {
+          search.message = SECURE_DENIED;
+          return true;
+        }
 
         // a link into the same file runs no handler: less searches for
         // the "id=" anchor it names, forward with wrap (search.c:1942)

@@ -1,8 +1,7 @@
 import { keyboard, dumbTerminal, watchWinch, unwatchWinch }
   from '../tty/keyboard';
 
-import { opt, scanOptions, initUnsupport, takeCliOptions, requestsNoShell,
-  flushPendopt, onRebuild, optKnowDumb } from '../options';
+import { opt, scanOptions, initUnsupport, takeCliOptions, flushPendopt, onRebuild, optKnowDumb } from '../options';
 
 import { search } from '../features/searching';
 
@@ -21,10 +20,9 @@ import { initAnsiChars, initTerminalCapabilities } from '../state/constants';
 
 import { resetProtos } from '../features/prompt';
 
-import { ambientEnv, initEnvironment, lgetenv, fromSessionEnv }
+import { initEnvironment, lgetenv }
   from './environment';
 
-import { lockLibraryShell } from './invocation';
 
 import { resetOsc8 } from '../features/osc8';
 
@@ -88,19 +86,7 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // $LESS_UNSUPPORT lists options the scan must ignore (init_unsupport)
   initUnsupport(lgetenv('LESS_UNSUPPORT') ?? '');
 
-  // whether the option string the scan is about to read belongs to
-  // the CALLER (its config map) or to the ambient environment
   const optionsEnv = opt.lessIsMore ? 'MORE' : 'LESS';
-  const callerOptions = fromSessionEnv(optionsEnv);
-
-  // an environment may TIGHTEN but never relax: a deployment that
-  // hardens every invocation with LESS=--no-shell keeps that hold
-  // even when the caller's own overlay replaces the string, so an
-  // application cannot configure its way around the policy. The whole
-  // ladder counts, not just the process environment: a lesskey #env
-  // line is loaded by now (less scans $LESS after init_cmds, like us)
-  // and belongs to whoever runs the application, not to the caller
-  const ambientLock = requestsNoShell(ambientEnv(optionsEnv) ?? '');
 
   const startup = scanOptions(lgetenv(optionsEnv) ?? '', content);
 
@@ -124,11 +110,6 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // main()".
   const tagError = resolvePendingTag();
   if (tagError) search.message = tagError;
-
-  // the scan is over: nothing the AMBIENT environment supplied may
-  // hand shell escapes back to a library call, though the caller's
-  // own overlay may ask for them
-  lockLibraryShell(callerOptions && !ambientLock);
 
   // less's pre-screen error() prints scan errors right away, ahead of
   // any binary-file question edit_first may ask

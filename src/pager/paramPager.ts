@@ -2,7 +2,6 @@ import { inputToString } from '../helpers';
 
 import { initContent } from '../features/files';
 
-import { initInvocationOptions } from '../startup/invocation';
 
 import { freshSession } from '../startup/freshSession';
 
@@ -19,7 +18,6 @@ export default async function paramPager(
   tabObject: boolean = false
 ): Promise<void> {
   freshSession();
-  initInvocationOptions();
 
   // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then

@@ -63,7 +63,6 @@ export const opt = {
   wantFileSize: 0,
   noVbell: 0,
   noEditWarn: 0,
-  noShell: 0,
   exitFollowOnClose: 0,
   showPreprocError: 0,
   redrawOnQuit: 0,

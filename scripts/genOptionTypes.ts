@@ -66,10 +66,9 @@ for (const spec of specs) {
 /**
  * The default this KEY carries, for value options only. A flag's table
  * default describes less's VARIABLE, not the named behavior: -B
- * --auto-buffers starts at 1 while its text reads "don't allocate", a
- * triple's 2 is not its uppercase key, and --no-shell starts ON for
- * library calls. Those are documented on the interface instead of
- * guessed per key.
+ * --auto-buffers starts at 1 while its text reads "don't allocate",
+ * and a triple's 2 is not its uppercase key. Those are documented on
+ * the interface instead of guessed per key.
  */
 function defaultOf(key: string, kind: 'flag' | 'value'): string | null {
   if (kind !== 'value') return null;
@@ -157,9 +156,9 @@ ${values}
  *
  * A flag left out keeps less's startup state, which for nearly every
  * option means off; the exceptions are less's own inverted names (-B
- * --auto-buffers, -G --HILITE-SEARCH) and --no-shell, which a library
- * call starts ON. Only value options carry an @default, since a
- * triple's table state does not map onto one key's boolean.
+ * --auto-buffers, -G --HILITE-SEARCH). Only value options carry an
+ * @default, since a triple's table state does not map onto one key's
+ * boolean.
  */
 export interface LessOptions {
 ${props}

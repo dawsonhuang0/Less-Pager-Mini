@@ -86,11 +86,6 @@ function splitArgs(args: readonly PagerArg[]): {
  * - `--use-js-regexp`: uses JavaScript's RegExp for searching;
  *   *off* by default - using `posix-regex`.
  *
- * Safeguard flag - *on* by default:
- * - `no-shell`: prevents shell command execution, `$LESSOPEN`, `$LESSCLOSE`
- *   and every other process launch. Set env `{ LESS: '--+no-shell' }` to
- *   toggle off (if `--no-shell` is absent). `lmn` excepted - *off* by default.
- *
  * @example
  * await pager(lines);
  * await pager('app.log', ['--examine-file', '-RS']);

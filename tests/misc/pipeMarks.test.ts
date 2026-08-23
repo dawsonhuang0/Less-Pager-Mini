@@ -155,7 +155,6 @@ beforeEach(() => {
   mode.EOF = false;
   mode.HELP = false;
 
-  opt.noShell = 0;
   opt.quiet = 0;
   search.message = '';
   files.index = 0;

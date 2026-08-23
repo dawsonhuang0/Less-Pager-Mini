@@ -234,8 +234,7 @@ import {
   optShowPreprocError,
   optTildes,
   optOldBot,
-  optNoShell,
-  NO_SHELL_MESSAGE,
+  SECURE_DENIED,
   opt
 } from "../options";
 
@@ -798,12 +797,17 @@ function startShellFeature(
   feature: 'shell' | 'pipe',
   start: () => void
 ): void {
-  if (optNoShell()) {
-    search.message = NO_SHELL_MESSAGE;
+  if (secureAllow(feature)) {
+    start();
     return;
   }
 
-  if (secureAllow(feature)) start();
+    // less's command dispatch ends every secure-denied case the same
+    // way: `error("Command not available", NULL_PARG)` (command.c:2029
+    // A_OSC8_OPEN, :2127 A_EXAMINE, :2142 A_VISUAL, :2339 A_SHELL,
+    // :2407 A_PIPE). Returning in silence left the key looking broken
+    // rather than forbidden.
+  search.message = SECURE_DENIED;
 }
 
 /**
@@ -915,7 +919,10 @@ const acts: Record<Actions, () => void> = {
   },
   OSC8_JUMP: () => { jumpOsc8(session.content); },
   OSC8_OPEN: () => {
-    if (!secureAllow('osc8')) return;
+    if (!secureAllow('osc8')) {
+      search.message = SECURE_DENIED;
+      return;
+    }
 
     // a link into the same file runs nothing: less searches for the
     // "id=" anchor it names, forward with wrap (search.c:1942)
@@ -1074,6 +1081,7 @@ const acts: Record<Actions, () => void> = {
   // the edit leaves the help screen
   OPEN_FILE: () => {
     if (secureAllow('examine')) startExamine();
+    else search.message = SECURE_DENIED;
   },
   // less's :n/:p carry no helpfile guard: stepping the file list
   // leaves help; with no target less stays (error on the help screen)

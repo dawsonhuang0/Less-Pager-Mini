@@ -99,10 +99,6 @@ await pager(example, ['-N', '--chop-long-lines']);
 await pager(example, ['-R'], { LESS: '-X' });
 ```
 
-JavaScript calls are safe by default: interactive process escapes (`!`, `#`,
-`|`, and `v`) are disabled. The `lmn` executable keeps them enabled unless it
-is started with `--no-shell`.
-
 ### Function Parameters
 
 <code>input</code>: Any unknown input to page.
@@ -170,7 +166,7 @@ compiling POSIX-compatible regex patterns with `posix-regex`.
 <code>--lesskey-help</code>: Displays the syntax of lesskey files.
 
 <code>--view-lesskey</code>: Shows the lesskeys in use — `v` edits and re-applies the one on screen;
-creates `~/.lesskey` if no lesskey is in use.
+creates `~/.lesskey` if it does not exist.
 
 ### Notice:
 <code>--examine-file</code> and <code>--tab-object</code> are not supported in `lmn`.

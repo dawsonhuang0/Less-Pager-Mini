@@ -285,8 +285,6 @@ export const help: string[] = [
   "                  Searches do not include header columns.",
   "                --no-search-headers",
   "                  Searches do not include header lines or columns.",
-  "                --no-shell",
-  "                  Disable shell, pipe and editor commands.",
   "                --no-vbell",
   "                  Disable the terminal's visual bell.",
   "                --redraw-on-quit",

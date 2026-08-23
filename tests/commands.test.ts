@@ -1,4 +1,6 @@
 import fs from 'fs';
+
+import { initSecure } from '../src/features/secure';
 import os from 'os';
 import path from 'path';
 
@@ -114,7 +116,6 @@ beforeEach(() => {
 
   opt.quitAtEof = 0;
   opt.noEditWarn = 0;
-  opt.noShell = 0;
   opt.oldBot = 0;
   opt.squeeze = 0;
   setNoSearchHeaders(0, 0);
@@ -285,19 +286,24 @@ describe(':e examine execution', () => {
 });
 
 describe('shell, pipe, and editor commands', () => {
-  it('blocks shell, pipe, and editor execution under --no-shell', () => {
-    opt.noShell = 1;
-    pipeMark.rows = [0, 1];
+  it('blocks the editor under LESSSECURE, like less\'s A_VISUAL', () => {
+    // less gates at the DISPATCH, not inside lsystem: A_VISUAL checks
+    // SF_EDIT (command.c:2142) while lsystem itself has no check at
+    // all. So runEditor is the right level to assert here, and the
+    // ! # | dispatch is covered end to end in bigfile/sessionLoop.
+    process.env.LESSSECURE = '1';
+    initSecure();
 
-    runShell('echo direct', null);
-    runMiscInput('!', 'echo bang');
-    runMiscInput('#', 'echo prompt');
-    runPipe('wc -l');
-    runEditor();
+    try {
+      runEditor();
 
-    expect(search.message).toBe('Command not available');
-    expect(fake.spawnSync).not.toHaveBeenCalled();
-    expect(fake.suspendTerminal).not.toHaveBeenCalled();
+      expect(search.message).toBe('Command not available');
+      expect(fake.spawnSync).not.toHaveBeenCalled();
+      expect(fake.suspendTerminal).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.LESSSECURE;
+      initSecure();
+    }
   });
 
   it('runs a hidden shell command and re-enters immediately', () => {

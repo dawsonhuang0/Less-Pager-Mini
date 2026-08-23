@@ -1,8 +1,10 @@
 import fs from 'fs';
+
+import { initSecure } from '../../src/features/secure';
 import os from 'os';
 import path from 'path';
 
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { config } from '../../src/state/config';
 
@@ -15,6 +17,15 @@ import { Readable, PassThrough } from 'stream';
 import streamPager, { pagerPipe } from '../../src/pager/streamPager';
 
 import { LtScreen } from '../lesstest/ltScreen';
+
+// ! # and v reach lsystem, and a REAL spawnSync with inherited stdio
+// blocks the worker synchronously - no test timeout can interrupt
+// that. A unit test has no business launching an editor, so it never
+// gets the chance to.
+vi.mock('child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('child_process')>(),
+  spawnSync: vi.fn(() => ({ status: 0, stdout: '', stderr: '' })),
+}));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-big-loop-'));
 const file = path.join(dir, 'large-path-small-fixture.txt');
@@ -134,7 +145,6 @@ beforeEach(() => {
   opt.mouseMode = 0;
   opt.emouse = 0;
   opt.noPaste = 0;
-  opt.noShell = 0;
   opt.quitOnIntr = 0;
   opt.modelines = 0;
   opt.wantFileSize = 0;
@@ -621,12 +631,30 @@ describe('unified file command loop', () => {
 
   it('warns instead of opening big-file shell and editor commands',
     async () => {
-      const output = await drive([
-        '!', '\r',
-        '#', '\r',
-        'v', '\r',
-      ], '--no-shell');
+      // less's own switch for this: --no-shell is gone, and LESSSECURE
+      // is what it always was in less (main.c's init_secure).
+      //
+      // LESSNOCONFIG has to NAME it: main.c reads no_config (:217)
+      // before init_secure (:231), and init_secure asks lgetenv, which
+      // returns NULL for any name no_config omits (decode.c:1190). So
+      // a bare LESSNOCONFIG=1 - which this suite sets for every test -
+      // switches LESSSECURE off entirely, in less exactly as here.
+      process.env.LESSNOCONFIG = 'LESSSECURE';
+      process.env.LESSSECURE = '1';
+      initSecure();
 
-      expect(output).toContain('Command not available');
+      try {
+        const output = await drive([
+          '!', '\r',
+          '#', '\r',
+          'v', '\r',
+        ]);
+
+        expect(output).toContain('Command not available');
+      } finally {
+        delete process.env.LESSSECURE;
+        process.env.LESSNOCONFIG = '1';
+        initSecure();
+      }
     }, 20000);
 });

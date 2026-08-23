@@ -343,11 +343,20 @@ export const optShowPreprocError = (): boolean => opt.showPreprocError > 0;
 /** True when --no-edit-warn skips the LESSOPEN editing warning. */
 export const optNoEditWarn = (): boolean => opt.noEditWarn > 0;
 
-/** True when interactive shell, pipe and editor commands are disabled. */
-export const optNoShell = (): boolean => opt.noShell > 0;
-
 /** less's deliberately terse error for an unavailable process escape. */
 export const NO_SHELL_MESSAGE = 'Command not available';
+
+/**
+ * What less says when $LESSSECURE forbids the command.
+ *
+ * Every secure-denied case in less's dispatch ends the same way -
+ * `error("Command not available", NULL_PARG)` at command.c:2029
+ * (A_OSC8_OPEN), :2127 (A_EXAMINE), :2142 (A_VISUAL), :2339 (A_SHELL)
+ * and :2407 (A_PIPE) - which is the same sentence --no-shell uses,
+ * for the same reason: the key is bound, the action is forbidden.
+ * Named separately because the two policies are not the same thing.
+ */
+export const SECURE_DENIED = NO_SHELL_MESSAGE;
 
 /** True when --follow-name makes F re-open the file by name. */
 export const optFollowName = (): boolean => opt.followName > 0;

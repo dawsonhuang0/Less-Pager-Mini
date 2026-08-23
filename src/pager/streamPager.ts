@@ -6,7 +6,6 @@ import { lgetenv, screenFillGrace } from '../startup/environment';
 
 import { keyboard, openTtyKeyboard } from '../tty/keyboard';
 
-import { initInvocationOptions } from '../startup/invocation';
 
 import { freshSession } from '../startup/freshSession';
 
@@ -48,7 +47,6 @@ import { PipeSpool } from './spool';
  */
 export async function pagerPipe(stream: Readable): Promise<void> {
   freshSession();
-  initInvocationOptions();
 
   // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then
@@ -136,7 +134,6 @@ function spooledNewlines(path: string, cap: number): number {
  */
 export default async function streamPager(input: unknown): Promise<void> {
   freshSession();
-  initInvocationOptions();
 
   // less never refuses to start over the keyboard: open_getchr takes
   // whatever open_tty hands it - the device stderr is on, then

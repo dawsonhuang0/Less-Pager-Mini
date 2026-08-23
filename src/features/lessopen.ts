@@ -2,7 +2,6 @@ import fs from 'fs';
 
 import { secureAllow } from "./secure";
 
-import { optNoShell } from '../options/shared';
 
 import { spawn, spawnSync, SpawnSyncReturns } from 'child_process';
 
@@ -148,7 +147,6 @@ function resolveLessopen(
   // --no-shell means this session launches no processes at all, and a
   // preprocessor is a process: $LESSOPEN comes from the environment,
   // which a library call's embedding application does not own
-  if (optNoShell()) return null;
 
   if (!optUseLessopen()) return null;
 
@@ -370,7 +368,6 @@ export function closeAltFile(
     return;
   }
 
-  if (optNoShell()) return;
 
   const cmd = lessclose
     .replace('%s', shellQuote(filename))

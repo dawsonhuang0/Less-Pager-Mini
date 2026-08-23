@@ -17,12 +17,10 @@ import { resetSearch } from '../features/searching';
  * the NEXT call inherits them.
  *
  * That leak is not theoretical: a `{ tabs: 4 }` call left the tab
- * stops behind for the following call, a squished first screen never
- * squished again because mode.INIT stayed false, and --no-shell
- * needed its own per-invocation dance to survive it.
+ * stops behind for the following call, and a squished first screen
+ * never squished again because mode.INIT stayed false.
  *
- * Runs BEFORE initInvocationOptions and the $LESS scan, so both write
- * onto defaults. Deliberately NOT reset: the queued CLI arguments
+ * Runs BEFORE the $LESS scan, so it writes onto defaults. Deliberately NOT reset: the queued CLI arguments
  * (the executable fills them before it calls in), and anything less
  * persists across invocations by design — the history file, and the
  * marks --save-marks restores.

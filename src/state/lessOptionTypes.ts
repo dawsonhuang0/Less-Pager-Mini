@@ -89,7 +89,6 @@ export const LESS_OPTION_VALUES = {
   'past-eof': 'flag',
   'no-edit-warn': 'flag',
   'no-warn-edit': 'flag',
-  'no-shell': 'flag',
   'no-number-headers': 'flag',
   'no-search-headers': 'flag',
   'no-search-header-lines': 'flag',
@@ -122,9 +121,9 @@ export const LESS_OPTION_VALUES = {
  *
  * A flag left out keeps less's startup state, which for nearly every
  * option means off; the exceptions are less's own inverted names (-B
- * --auto-buffers, -G --HILITE-SEARCH) and --no-shell, which a library
- * call starts ON. Only value options carry an @default, since a
- * triple's table state does not map onto one key's boolean.
+ * --auto-buffers, -G --HILITE-SEARCH). Only value options carry an
+ * @default, since a triple's table state does not map onto one key's
+ * boolean.
  */
 export interface LessOptions {
   /** Search skips current screen. */
@@ -294,7 +293,6 @@ export interface LessOptions {
   /** Don't warn when editing a file opened via LESSOPEN. */
   'no-warn-edit'?: boolean;
   /** Disable shell, pipe and editor commands. */
-  'no-shell'?: boolean;
   /** Don't give line numbers to header lines. */
   'no-number-headers'?: boolean;
   /** Searches do not include header lines or columns. */

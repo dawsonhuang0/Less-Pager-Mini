@@ -260,11 +260,10 @@ export async function runLt(lt: LtFile): Promise<LtResult> {
   };
 
   try {
-    // less ran with ordinary shell access; a library call defaults to
-    // --no-shell, and the caller's own config map is exactly how that
-    // default is meant to be lifted (see the invocation lock)
+    // shell access follows less now, so there is no library default
+    // to lift: the caller's overlay carries only what the test asked
     const session = pager(fileArgs, ['--examine-file'], {
-      LESS: `${lt.env.LESS ?? ''} --+no-shell`.trim(),
+      LESS: (lt.env.LESS ?? '').trim(),
     });
 
     // the pager registers its key handler synchronously after boot

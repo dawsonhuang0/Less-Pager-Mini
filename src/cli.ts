@@ -32,8 +32,6 @@ import { lesskeyViewFiles, applyLesskeyEdits, cleanLesskeyView,
 
 import { LESS_VERSION } from './lesskey';
 
-import { initInvocationOptions, markTerminalInvocation }
-  from './startup/invocation';
 
 import { actualEnv, initEnvironment, lgetenv } from './startup/environment';
 
@@ -186,8 +184,6 @@ async function main(): Promise<void> {
       // option scan, the lesskey files and $LESSOPEN all still apply
       // with output on a pipe, because main.c:376 runs edit_first()
       // before it starts copying (edit.c:936)
-      markTerminalInvocation();
-      initInvocationOptions();
       startupInit([]);
 
       initFiles(files);
@@ -279,7 +275,6 @@ async function main(): Promise<void> {
 
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pagerPipe(process.stdin);
     return;
   }
@@ -291,7 +286,6 @@ async function main(): Promise<void> {
   if (wantsViewLesskey && !files.length) {
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
 
     // no session to stash out here, so the forms simply ARE the file
     // list; the runtime form swaps them over a live one instead
@@ -319,7 +313,6 @@ async function main(): Promise<void> {
   if (files.length) {
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pager(files, ['--examine-file']);
     return;
   }
@@ -329,7 +322,6 @@ async function main(): Promise<void> {
     // pages the syntax first and the file after it
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pager(lesskeyHelp.join('\n'));
     return;
   }
@@ -339,7 +331,6 @@ async function main(): Promise<void> {
     // less's dohelp making FAKE_HELPFILE the only input
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pager(help.join('\n'));
     return;
   }
@@ -349,7 +340,6 @@ async function main(): Promise<void> {
     // file containing the tag, like less's main editing the tag file
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pager('');
     return;
   }
@@ -360,7 +350,6 @@ async function main(): Promise<void> {
     // an endless writer pages immediately
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    markTerminalInvocation();
     await pagerPipe(process.stdin);
     return;
   }
