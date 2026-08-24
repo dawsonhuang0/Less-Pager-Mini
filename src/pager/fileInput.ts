@@ -1514,6 +1514,24 @@ export class FileInput implements PagerInput {
     // like the array session's lineForward blankTop branch
     let want = rows;
 
+    // The pad goes FIRST, which is what the line above says and what
+    // the code did not do. A backward move leaves a seam, so after
+    // `j k K` the seam block below claimed the step and jumped the top
+    // a row forward while its own sync - with no keepPad - threw the
+    // pad away: one K padded a blank row, and the next j both ate the
+    // pad AND scrolled, ending a row past where less sits.
+    if (this.padTop > 0) {
+      const consumed = Math.min(this.padTop, want);
+      this.padTop -= consumed;
+      want -= consumed;
+
+      if (!want) {
+        this.keepPad = true;
+        this.sync();
+        return;
+      }
+    }
+
     // then the rows a backward move uncovered: less's forw() walks the
     // entries add_back_pos prepended, dropping table[0] each time
     // (position.c:63), before the grid below resumes
@@ -1531,17 +1549,7 @@ export class FileInput implements PagerInput {
       this.view.top = { pos: this.view.top.pos, offset: off };
 
       if (want <= 0) {
-        this.sync();
-        return;
-      }
-    }
-
-    if (this.padTop > 0) {
-      const consumed = Math.min(this.padTop, want);
-      this.padTop -= consumed;
-      want -= consumed;
-
-      if (!want) {
+        // the pad this move did not need is still owed to the screen
         this.keepPad = true;
         this.sync();
         return;
