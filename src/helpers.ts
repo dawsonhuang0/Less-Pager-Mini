@@ -2752,8 +2752,42 @@ function scrolledFrame(rows: string[], src: string[]): string | null {
   // screen (a wrapped prompt under -r) showed the repaint resetting
   // drift that less carries. The shift is still there to be read off the
   // rows, and shifted() below proves whichever k we pick.
-  const delta = topDelta(src, n) || shiftDelta(rows, prev, n);
-  if (delta === null || delta === 0) return null;
+  // topDelta is preferred - it is the POSITION arithmetic less uses -
+  // but it can be confidently wrong. The block-backed engine slides
+  // its WINDOW and leaves config.row at 0, so a backward step across a
+  // wrapped line's boundary looks to it like subRow simply rising:
+  // scrolling up from (row 0, sub 0) onto the previous 4-row line
+  // reads as +3 FORWARD where the screen moved 1 row BACK. Non-zero
+  // and wrong, so `||` never reached shiftDelta, the forward branch
+  // failed its own check, and the whole screen was repainted - 1965
+  // bytes where less sends 104, on every scroll that crosses a line.
+  //
+  // Both candidates are tried instead, in that order. Nothing is taken
+  // on trust: each is put through the same rows[k] === prev[0] and
+  // shifted() proof below, so a wrong delta simply does not verify and
+  // the next one gets its turn.
+  for (const delta of [topDelta(src, n), shiftDelta(rows, prev, n)]) {
+    if (delta === null || delta === 0) continue;
+
+    const frame = scrolledBy(delta, rows, prev, n);
+    if (frame !== null) return frame;
+  }
+
+  return null;
+}
+
+/**
+ * The frame for ONE candidate scroll distance, or null when the rows
+ * do not actually bear it out.
+ *
+ * @param delta - Rows the top moved: positive forward, negative back.
+ */
+function scrolledBy(
+  delta: number,
+  rows: string[],
+  prev: string[],
+  n: number
+): string | null {
 
   // scrolled forward: new rows show what was k rows lower; -y limits
   // how far the screen scrolls before repainting instead
