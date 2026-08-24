@@ -261,7 +261,14 @@ export class FileInput implements PagerInput {
       // over empty rows, so BOTTOM_PLUS_ONE - the last index - is read
       // rather than skipped
       for (let k = sindex; k <= config.window - 1; k++) {
-        const at = this.view.screenPos(k);
+        // a blank row over BOF is a NULL_POSITION entry, not a missing
+        // one: back() draws the line and adds it to the table
+        // (forwback.c:437), which SHIFTS every content row down by the
+        // pad. So screen row k holds content row k - padTop, and the
+        // rows above the content are what curr_byte walks past
+        if (k < this.padTop) continue;
+
+        const at = this.view.screenPos(k - this.padTop);
         if (at === null) continue;
 
         const line = forwLine(this.bf, at.pos);

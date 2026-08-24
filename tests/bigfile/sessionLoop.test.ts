@@ -59,6 +59,13 @@ fs.writeFileSync(followFile, 'follow start\n');
 const shortFile = path.join(dir, 'short-fixture.txt');
 fs.writeFileSync(shortFile, 'one\ntwo\nthree\n');
 
+// every line is three rows wide on the 50-column screen the driver
+// builds, so a blank row over BOF moves the bottom of the screen by
+// half a line - which a file-row answer cannot express
+const wrappedFile = path.join(dir, 'wrapped-fixture.txt');
+fs.writeFileSync(wrappedFile, Array.from({ length: 6 },
+  (_, i) => `L${i + 1} ` + 'x'.repeat(116)).join('\n') + '\n');
+
 fs.writeFileSync(bracketFile, Array.from({ length: 12000 }, (_, i) => {
   if (i === 0) return '{ DISTANT BRACKET START';
   if (i === 11999) return 'DISTANT BRACKET END }';
@@ -551,6 +558,23 @@ describe('unified file command loop', () => {
 
       expect(output).toContain(file);
       expect(output).toContain('byte ');
+    }, 20000);
+
+  it('reports the byte under a blank row over BOF, not the one over it',
+    async () => {
+      // Read off less on this fixture at 50x12: 460 with no pad, and
+      // one row less per K - 410, then 360. back() adds a
+      // NULL_POSITION entry per blank line it draws (forwback.c:437),
+      // which shifts every content row of the table DOWN, so
+      // BOTTOM_PLUS_ONE names a row that is 50 bytes earlier.
+      const flat = await drive(['=', '\r'], '', wrappedFile);
+      expect(flat).toContain('byte 460/720');
+
+      const padded = await drive(['K', '=', '\r'], '', wrappedFile);
+      expect(padded).toContain('byte 410/720');
+
+      const twice = await drive(['K', 'K', '=', '\r'], '', wrappedFile);
+      expect(twice).toContain('byte 360/720');
     }, 20000);
 
   it('drives search, case recompilation, marks, help, and colon errors',
