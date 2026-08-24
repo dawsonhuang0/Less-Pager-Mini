@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { config, mode } from '../src/state/config';
 
-import { render, resetRender } from '../src/helpers';
+import { render, resetRender, resetFirstPaint } from '../src/helpers';
 
 import { search } from '../src/features/searching';
 
@@ -234,6 +234,51 @@ describe('render', () => {
     // a scroll frame parks nothing: less's own newline has left the
     // cursor on the prompt row, right after the prompt it just wrote
     expect(writes[1].endsWith(':\x1b[K\x1b[?2026l')).toBe(true);
+  });
+
+  describe('a wrapped line is one write, not one per screen row', () => {
+    // less never breaks a line the terminal will break for it: pdone
+    // ends a row that reached the right margin with the deferred-wrap
+    // nudge, ' \b', and only a row SHORT of the margin gets a newline
+    // (line.c:1523). So a 314-column line on an 80-column screen goes
+    // out as one write carrying three nudges, not as four rows.
+    const wide = Array.from({ length: 60 },
+      (_, i) => `L${i} ` + 'x'.repeat(310));
+
+    beforeEach(() => {
+      config.chopLongLines = false;
+      // the file-level beforeEach never re-arms less's first_time,
+      // and only the FIRST paint takes forw()'s bare-row shape
+      resetFirstPaint();
+    });
+
+    it('nudges the wrap instead of cutting, on the first paint', () => {
+      render(wide, []);
+
+      expect(writes[0]).toContain('x \bx');
+      // counted off less on the same fixture: five newlines for the
+      // six lines that fit, and eighteen nudges inside them
+      expect(writes[0].split('\n').length - 1).toBe(5);
+      expect(writes[0].split(' \b').length - 1).toBe(18);
+    });
+
+    it('nudges the wrap on a forward scroll too', () => {
+      render(wide, []);
+
+      config.row = 1;
+      render(wide, []);
+
+      expect(writes[1]).toContain('x \bx');
+      expect(writes[1].split('\n').length - 1).toBe(1);
+    });
+
+    it('still ends a row short of the margin with a newline', () => {
+      config.chopLongLines = true;
+      render(content, []);
+
+      expect(writes[0]).toContain('line 0\nline 1\n');
+      expect(writes[0]).not.toContain(' \b');
+    });
   });
 });
 

@@ -1876,19 +1876,6 @@ function rowEnd(row: string): string {
 }
 
 /**
- * The same, between the rows of a whole-screen repaint.
- *
- * The paint addresses no row absolutely: it homes once and lets the
- * separators walk down. A deferring terminal leaves a full row's
- * cursor parked, so the newline moves down exactly one and this is
- * the '\n' it has always been; a terminal that wrapped on its own has
- * already moved, and the newline would move it again.
- */
-function frameRowEnd(row: string): string {
-  return !DEFER_WRAP && AUTO_WRAP && filledRow(row) ? '' : '\n';
-}
-
-/**
  * Row terminator for reverse-indexed (ESC M) rows: less's back() leaves
  * a full-width row bare - pdone skips the deferred-wrap ' \b' going
  * backward, and emitting it here would wrap onto the row BELOW and
@@ -2680,7 +2667,7 @@ function squishFrame(rows: string[], blanks: number): string {
 
   // no leading CR: term_init already parked the cursor there
   return syncOn() +
-    content.map(row => frameRowEnd(row) ? row + '\n' : row).join('') +
+    content.map(row => row + rowEnd(row)).join('') +
     bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
 }
 
@@ -2690,7 +2677,7 @@ function fullFrame(rows: string[]): string {
 
   const body = physical
     .map((row, i) => CLEAR_LINE + row +
-      (i === physical.length - 1 ? '' : frameRowEnd(row)))
+      (i === physical.length - 1 ? '' : rowEnd(row)))
     .join('');
 
   // CLEAR_BELOW blanks the rows the collapse freed, like less's paint
@@ -2810,7 +2797,9 @@ function scrolledBy(
       // blank is the flicker.
       let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
-      for (let r = n - 1 - k; r < n - 1; r++) frame += rows[r] + '\n';
+      for (let r = n - 1 - k; r < n - 1; r++) {
+        frame += rows[r] + rowEnd(rows[r]);
+      }
 
       // a bare frame's bottom row is the blank command line, and the
       // row the scroll just brought in is blank already - less writes
@@ -2839,7 +2828,7 @@ function scrolledBy(
     let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
     for (let r = k - 1; r >= 0; r--) {
-      frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + '\n';
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + revRowEnd(rows[r]);
     }
 
     // The reverse index scrolls the WHOLE screen down, so the last
