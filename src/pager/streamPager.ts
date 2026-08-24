@@ -89,11 +89,12 @@ export async function pagerPipe(stream: Readable): Promise<void> {
     }
     if (!lines.length) lines.push('');
 
-    initContent(lines);
+    // the spool is what knows whether more can arrive, and it says so
+    // in both flags together
+    initContent(lines, spool.ended);
 
     const entry = files.list[0];
     entry.size = spool.size;
-    entry.sizeKnown = spool.ended;
     entry.streaming = !spool.ended;
     entry.everOpened = true;
 

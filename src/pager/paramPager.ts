@@ -1,6 +1,6 @@
 import { inputToString } from '../helpers';
 
-import { initContent, files } from '../features/files';
+import { initContent } from '../features/files';
 
 
 import { freshSession } from '../startup/freshSession';
@@ -30,20 +30,8 @@ export default async function paramPager(
 
   const content = inputToString(input, tabObject);
 
-  initContent(content);
-
-  // initContent describes less reading STDIN, whose length is unknown
-  // until a read returns EOI - which is why streamPager corrects it
-  // from spool.ended. There is no read here: the caller handed us the
-  // whole value, so the length is known the way a seekable file's is,
-  // and ch_length() would answer at once.
-  //
-  // Left unknown, `?e` refused to expand and the last screen showed
-  // ":" instead of "(END)" - until some later move happened to run
-  // revealPipeEnd and set it, which is why scrolling back and
-  // returning fixed it.
-  const entry = files.list[0];
-  if (entry) entry.sizeKnown = true;
-
+  // the caller handed us the whole value, so its length is known at
+  // once - there is no read here that could still be outstanding
+  initContent(content, true);
   await contentPager(content);
 }

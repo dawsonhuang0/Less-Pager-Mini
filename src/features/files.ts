@@ -198,7 +198,7 @@ export function trimExamineHistory(length: number): void {
  *
  * @param lines - The content to page.
  */
-export function initContent(lines: string[]): void {
+export function initContent(lines: string[], sizeKnown = false): void {
   // new content, new screen: less's position table describes rows of the
   // file it was filled from, so it cannot outlive it (pos_clear)
   config.screen = [];
@@ -215,16 +215,27 @@ export function initContent(lines: string[]): void {
     path: '-',
     lines,
     size: 0,
-    sizeKnown: false,
+    sizeKnown,
     saved: null,
   };
 
   entry.lines = lines;
   entry.size = byteOffset(lines, lines.length) - 1;
-  // a pipe's length is unknown until a read returns EOI —
-  // --file-size runs that read up front (less's edit.c scan_eof),
-  // which reveals the size through the pipe machinery itself
-  entry.sizeKnown = false;
+
+  // Whether that size can be REPORTED is the caller's fact, not ours:
+  // a pipe's length is unknown until a read returns EOI (less's
+  // ch_length before ch has read to the end), and a value the caller
+  // already holds is known the moment it arrives. We measured it two
+  // lines up either way.
+  //
+  // It used to be hardcoded to a live pipe's answer, and every caller
+  // was expected to correct it afterwards. streamPager did, from
+  // spool.ended; paramPager did not, so the library path spent whole
+  // sessions unable to report a length it had already measured - and
+  // `?e` refused to expand, so the last screen said ":" until some
+  // later move happened to run revealPipeEnd. Stated here, at the one
+  // place each caller knows the answer, there is nothing to forget.
+  entry.sizeKnown = sizeKnown;
 
   files.list = [entry];
   files.index = 0;
