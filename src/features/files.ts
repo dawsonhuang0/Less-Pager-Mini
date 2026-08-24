@@ -8,7 +8,11 @@ import { spawnSync } from 'child_process';
 import { config, mode } from "../state/config";
 
 import { ringBell } from "../helpers";
-import { maxSubRow } from "../lines/helpers";
+import { maxSubRow, sourceLine, sourceIndexAt } from "../lines/helpers";
+
+import { getLayout } from "../lines/lineLayout";
+
+import { session } from "../state/session";
 
 import { secureAllow } from "./secure";
 
@@ -198,7 +202,11 @@ export function trimExamineHistory(length: number): void {
  *
  * @param lines - The content to page.
  */
-export function initContent(lines: string[], sizeKnown = false): void {
+export function initContent(
+  lines: string[],
+  sizeKnown = false,
+  size?: number
+): void {
   // new content, new screen: less's position table describes rows of the
   // file it was filled from, so it cannot outlive it (pos_clear)
   config.screen = [];
@@ -220,7 +228,12 @@ export function initContent(lines: string[], sizeKnown = false): void {
   };
 
   entry.lines = lines;
-  entry.size = byteOffset(lines, lines.length) - 1;
+
+  // the caller's own byte count when it has one: the lines cannot say
+  // whether a trailing newline was there, and less counts it (a
+  // two-line file reads 7 bytes without one and 8 with). Reconstructed
+  // otherwise, which is that count without the final newline.
+  entry.size = size ?? byteOffset(lines, lines.length) - 1;
 
   // Whether that size can be REPORTED is the caller's fact, not ours:
   // a pipe's length is unknown until a read returns EOI (less's
@@ -1215,6 +1228,98 @@ export function byteOffset(content: string[], row: number): number {
   }
 
   return bytes;
+}
+
+/**
+ * Where a DISPLAY row starts in the source, for a session with no
+ * position table to ask.
+ *
+ * less's `=` reports a byte in the FILE, and the file is not what is
+ * on the screen: -r spells a control character as "^A", an escape as
+ * "ESC[31m", a tab as spaces, and -s drops blank lines and an &
+ * filter drops whole lines. Measuring the displayed text answered in
+ * units of the rendering - on a file of colour codes read without -R
+ * it reported byte 1924 where less says 1251.
+ *
+ * So the row goes back through session.sourceRow to the line it was
+ * made from, and the count runs over the RAW lines. With no map (the
+ * help screen, a parked copy) the display text is all there is, which
+ * is what this always did.
+ */
+/**
+ * The display row `steps` below the screen's top, as a content row and
+ * a display-character offset into it.
+ *
+ * This is what the block engine reads off less's position table
+ * (position(sindex)) and what an array session has to walk for: on a
+ * wrapped line a screen row starts PART WAY into the line, and both
+ * "which line is at the bottom" and "what byte is the screen's last
+ * row" are answers about that offset, not about the line.
+ */
+export function screenPosAt(
+  content: string[],
+  steps: number
+): { row: number, offset: number } {
+  if (chopLine() || config.col) return { row: config.row + steps, offset: 0 };
+
+  let row = config.row;
+  let subRow = config.subRow;
+
+  while (steps > 0 && row < content.length) {
+    const currMaxSubRow = maxSubRow(content[row]);
+
+    if (subRow + steps <= currMaxSubRow) {
+      subRow += steps;
+      steps = 0;
+      break;
+    }
+
+    steps -= currMaxSubRow - subRow + 1;
+    row++;
+    subRow = 0;
+  }
+
+  // ...and a row PAST the last line stays past it. less's position
+  // table holds NULL_POSITION there and curr_byte walks forward to
+  // ch_length (prompt.c:196), so BOTTOM_PLUS_ONE on a short screen is
+  // the end of the file. Clamping to the last line answered with that
+  // line's start instead.
+  if (row >= content.length) return { row: content.length, offset: 0 };
+
+  const starts = getLayout(content[row] ?? '').rowStart;
+
+  return { row, offset: starts[subRow] ?? 0 };
+}
+
+export function sourceByteOffset(
+  content: string[],
+  row: number,
+  offset = 0
+): number {
+  const map = session.sourceRow;
+  const raw = session.fullContent;
+
+  if (!map.length || map.length < content.length || !raw.length) {
+    return byteOffset(content, row);
+  }
+
+  // one past the last row is the end of the file, like less's
+  // BOTTOM_PLUS_ONE at (END) reading ch_length
+  const at = row < map.length ? map[row] : raw.length;
+  const start = byteOffset(raw, at);
+
+  if (offset <= 0 || at >= raw.length) return start;
+
+  // a screen row that begins PART WAY into a wrapped line answers with
+  // a byte part way into it too. The offset counts DISPLAY characters
+  // and the file holds bytes, so it converts through the raw line the
+  // display was built from - the same trip the block engine makes
+  // through its own position table.
+  const shown = content[row] ?? '';
+  const source = sourceLine(shown) ?? raw[at];
+  const upto = source === shown ? offset : sourceIndexAt(source, offset);
+
+  return start + Buffer.byteLength(source.slice(0, upto));
 }
 
 /**

@@ -4,9 +4,9 @@ import { config, mode } from './config';
 
 import { Config, Mode } from './interfaces';
 
-import { transformContent } from '../lines/helpers';
+import { transformContent, transformedFrom } from '../lines/helpers';
 
-import { filterLines } from '../features/searching';
+import { filterIndices } from '../features/searching';
 
 import { lgetenv } from '../startup/environment';
 
@@ -22,6 +22,17 @@ export const session = {
   content: [] as string[],
   /** The raw input lines; pipes and streamed files append here. */
   fullContent: [] as string[],
+  /**
+   * Which fullContent line each displayed line came from.
+   *
+   * An & filter drops lines and -s drops runs of blanks, so a display
+   * row is not a source row, and the display TEXT is not the source
+   * text either once -r or a tab expansion has been through it. The
+   * block engine answers "where in the file is this row" from less's
+   * position table; an array session has to remember, and this is the
+   * remembering. Empty means the two are the same thing.
+   */
+  sourceRow: [] as number[],
 
   /** The main content parked while the help screen displays. */
   prevContent: [] as string[],
@@ -184,18 +195,37 @@ export function resetSession(content: string[]): void {
  * applies first, then the -s/-x/-r transform pipeline.
  */
 export function deriveContent(): string[] {
-  if (!session.lastFilter) return transformContent(session.fullContent);
+  if (!session.lastFilter) return transformed(session.fullContent, null);
 
   // filters run in guarded slices; a catastrophic pattern (or an
   // interrupt) drops the filter instead of hanging the pager
-  const filtered = filterLines(session.fullContent, session.lastFilter);
+  const kept = filterIndices(session.fullContent, session.lastFilter);
 
-  if (!filtered) {
+  if (!kept) {
     session.lastFilter = null;
-    return transformContent(session.fullContent);
+    return transformed(session.fullContent, null);
   }
 
-  return transformContent(filtered);
+  return transformed(kept.map(at => session.fullContent[at]), kept);
+}
+
+/**
+ * The transform, with the trail back to fullContent kept.
+ *
+ * @param lines - What the transform runs on: fullContent, or the lines
+ *   an & filter kept from it.
+ * @param kept - Where each of those came from in fullContent, or null
+ *   when they ARE fullContent.
+ */
+function transformed(lines: string[], kept: number[] | null): string[] {
+  const out = transformContent(lines);
+
+  session.sourceRow = out.map((_, row) => {
+    const at = transformedFrom(row) ?? row;
+    return kept ? kept[at] ?? at : at;
+  });
+
+  return out;
 }
 
 

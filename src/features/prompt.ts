@@ -6,8 +6,8 @@ import { config, mode } from "../state/config";
 
 import { visualWidth } from "../lines/helpers";
 
-import { files, bottomRow, byteOffset, percentage, sizeIsKnown,
-  byteBase } from "./files";
+import { files, bottomRow, sourceByteOffset, screenPosAt, percentage,
+  sizeIsKnown, byteBase } from "./files";
 
 import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
   vlinenumAbsolute }
@@ -348,9 +348,17 @@ function protochar(
     if (byRow !== undefined && byRow !== null) return byRow;
 
     const sourced = hook.sourceBytePosition?.(row);
-    return sourced === undefined
-      ? byteOffset(content, row) + byteBase()
-      : sourced ?? 0;
+    if (sourced !== undefined) return sourced ?? 0;
+
+    // no position table to read, so walk the screen for the same
+    // answer: which row the wanted SCREEN line falls in and how far
+    // into it. A wrapped line owns several rows, so the byte is
+    // usually part way through one - whereRow above can only name the
+    // line, and naming the line rounded every such answer back to its
+    // start.
+    const at = screenPosAt(content, sindex() - config.blankTop);
+
+    return sourceByteOffset(content, at.row, at.offset) + byteBase();
   };
 
   const absoluteLine = (): number => {

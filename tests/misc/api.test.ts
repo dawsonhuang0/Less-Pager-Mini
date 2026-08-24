@@ -310,6 +310,39 @@ describe('pager(input, args, env) API', () => {
       expect(out).toContain('(END)');
     });
 
+  it('reports the caller\'s own byte count, trailing newline and all',
+    async () => {
+      // less reads 7 bytes from a two-line file with no trailing
+      // newline and 8 from one with, and the lines cannot tell them
+      // apart - inputToString drops it. The size is taken from the
+      // text now, before the split, so both answer as less does.
+      const withNL = await drive(() => pager('aaa\nbbb\n', ['-M']), ['=']);
+      const without = await drive(() => pager('aaa\nbbb', ['-M']), ['=']);
+
+      expect(withNL).toContain('byte 8/8');
+      expect(without).toContain('byte 7/7');
+    });
+
+  it('reports a byte in the SOURCE, not in what was rendered',
+    async () => {
+      // `=` answers in FILE bytes, and the file is not what is on the
+      // screen: without -R an ESC is spelled out as the three letters
+      // "ESC", so measuring the displayed text runs ahead of the file
+      // by two bytes for every escape above the row.
+      //
+      // 20 lines on a 12-row screen, so the reported row is row 11 -
+      // well inside the file, where the two measures part company.
+      const lines = Array.from({ length: 20 }, (_, i) =>
+        i % 3 === 0 ? `\x1b[31mline ${i + 1}\x1b[0m` : `line ${i + 1}`);
+
+      const out = await drive(() => pager(lines.join('\n'), ['-M']), ['=']);
+
+      // counted off the source: 115 of 213. The display measure says
+      // 131, which is what this used to report.
+      expect(out).toContain('byte 115/213');
+      expect(out).not.toContain('byte 131');
+    });
+
   it('leaves objects flat without tab-object', async () => {
     const flat = await drive(() => pager({ a: 1, b: 2 }));
 

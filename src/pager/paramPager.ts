@@ -1,4 +1,4 @@
-import { inputToString } from '../helpers';
+import { inputToString, inputToText } from '../helpers';
 
 import { initContent } from '../features/files';
 
@@ -28,10 +28,14 @@ export default async function paramPager(
   // which is the ordinary case for `cmd | lmn`.
   if (!keyboard().isTTY) openTtyKeyboard();
 
+  const text = inputToText(input, tabObject);
   const content = inputToString(input, tabObject);
 
   // the caller handed us the whole value, so its length is known at
-  // once - there is no read here that could still be outstanding
-  initContent(content, true);
+  // once - there is no read here that could still be outstanding, and
+  // the text it came from still has the trailing newline the lines no
+  // longer remember
+  initContent(content, true, text === null ? undefined
+    : Buffer.byteLength(text));
   await contentPager(content);
 }

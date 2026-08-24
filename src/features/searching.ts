@@ -2239,10 +2239,23 @@ export function filterLines(
   lines: string[],
   filter: (line: string) => boolean
 ): string[] | null {
-  const kept: string[] = [];
+  const kept = filterIndices(lines, filter);
+  return kept && kept.map(at => lines[at]);
+}
 
-  const outcome = slicedWalk(lines, line => {
-    if (filter(line)) kept.push(line);
+/**
+ * The same walk, answering WHICH lines survived rather than what they
+ * say - so a caller can still trace a kept line back to where it came
+ * from. filterLines is this plus the lookup.
+ */
+export function filterIndices(
+  lines: string[],
+  filter: (line: string) => boolean
+): number[] | null {
+  const kept: number[] = [];
+
+  const outcome = slicedWalk(lines, (line, at) => {
+    if (filter(line)) kept.push(at);
   });
 
   if (outcome !== 'done') return null;

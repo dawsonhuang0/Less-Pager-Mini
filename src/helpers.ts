@@ -164,31 +164,49 @@ export function inputToString(
   input: unknown,
   tabObject: boolean
 ): string[] {
+  const text = inputToText(input, tabObject);
+  if (text === null) return [];
+
+  // a trailing newline ends the last line, it does not add an empty
+  // one, like less reading a pipe
+  return (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n');
+}
+
+/**
+ * The caller's value as the TEXT it will be paged as, before it is cut
+ * into lines.
+ *
+ * The size of a session is this string's byte length, and it cannot be
+ * recovered afterwards: the split above drops a trailing newline, so
+ * "a\nb" and "a\nb\n" arrive as the same two lines while less reports
+ * 3 bytes for one and 4 for the other. Null for a value with no text
+ * at all, which is a symbol.
+ */
+export function inputToText(
+  input: unknown,
+  tabObject: boolean
+): string | null {
   switch (typeof input) {
     case 'string':
-      // a trailing newline ends the last line, it does not add an
-      // empty one, like less reading a pipe
-      return (input.endsWith('\n') ? input.slice(0, -1) : input)
-        .split('\n');
+      return input;
 
     case 'undefined':
-      return ['undefined'];
+      return 'undefined';
 
     case 'number':
     case 'bigint':
     case 'boolean':
     case 'function':
-      return input.toString().split('\n');
-    
+      return input.toString();
+
     case 'object':
       // the indent is a tab, so the rendered nesting is whatever the
       // -x tab stops say — no option scan needed here
       return JSON
-        .stringify(input, null, tabObject ? config.tabObjectIndent : 0)
-        .split('\n');
+        .stringify(input, null, tabObject ? config.tabObjectIndent : 0);
   }
 
-  return [];
+  return null;
 }
 
 /**

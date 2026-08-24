@@ -204,6 +204,20 @@ function styleOsc8Line(
 let sourceLines = new Map<string, string>();
 const SOURCE_MAP_LIMIT = 8192;
 
+/**
+ * Which INPUT line each output line of the last transformContent came
+ * from, so a display row can be traced back to the bytes it was made
+ * of. -s drops runs of blanks, and the display text of what survives
+ * is not the source text, so a row index means two different things on
+ * the two sides of this function. The block engine has less's position
+ * table for the same job; an array session has only this.
+ */
+let sourceRows: number[] = [];
+
+/** The input row an output row of the last transform came from. */
+export const transformedFrom = (row: number): number | undefined =>
+  sourceRows[row];
+
 /** The raw line a display line was derived from, if it still differs. */
 export const sourceLine = (display: string): string | undefined =>
   sourceLines.get(display);
@@ -342,6 +356,7 @@ export function transformContent(lines: string[]): string[] {
   // survive that. The display text is the key, so an entry can only
   // be replaced by an identical rendering
   if (sourceLines.size > SOURCE_MAP_LIMIT) sourceLines = new Map();
+  sourceRows = [];
   let row = -1;
 
   for (const raw of lines) {
@@ -368,6 +383,7 @@ export function transformContent(lines: string[]): string[] {
     // only when the transform actually moved something: an untouched
     // line needs no map, and the search can run on the display text
     if (shown !== raw) sourceLines.set(shown, raw);
+    sourceRows.push(row);
     out.push(shown);
   }
 
