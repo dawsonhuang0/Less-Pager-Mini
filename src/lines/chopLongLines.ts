@@ -7,6 +7,8 @@ import { isStyled, isAscii, withReset, visualWidth, ansiRunEnd,
 
 import { getLayout } from "./lineLayout";
 
+import { setRowEnd } from "./rowEnds";
+
 import { highlightLine } from "../features/searching";
 
 import { optRscroll, optRscrollAttr, optHeader, optCtldisp }
@@ -109,6 +111,11 @@ export function chopLongLines(content: string[], lines: string[]): void {
     }
 
     config.screenWidth += shrink;
+
+    // a chopped line is read to its end and thrown away past the
+    // margin, so less's forw_line_seg reports endline TRUE for it
+    // (input.c:246) and pdone newlines the row however wide it is
+    for (let i = before; i < lines.length; i++) setRowEnd(i, true);
 
     if (decorated) {
       // -w and --status-line highlight the row in standout

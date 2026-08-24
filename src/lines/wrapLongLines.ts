@@ -3,6 +3,8 @@ import { config } from '../state/config';
 import { gutterFor, gutterOverflow, decoratedRows, highlightRow }
   from '../helpers';
 import { buildScreen, rowText } from './screenTable';
+import { setRowEnd } from './rowEnds';
+import { getLayout } from './lineLayout';
 
 import { highlightLine } from '../features/searching';
 
@@ -41,6 +43,12 @@ export function wrapLongLines(content: string[], lines: string[]): void {
     config.screenWidth -= shrink;
     const text = rowText(cell, lineAt(cell.row));
     config.screenWidth += shrink;
+
+    // less's forw_line_seg reports whether the newline or the screen
+    // width ended this segment, and pdone terminates the row on that
+    // answer (input.c:279) - so the table's own "did I reach the end
+    // of the line" test is what the painters need to be told
+    setRowEnd(at, cell.end >= getLayout(lineAt(cell.row)).chars.length);
 
     // every emitted row of the line gets the same gutter, like less's
     // per-row plinestart from base_pos; -w and --status-line

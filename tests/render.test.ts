@@ -279,6 +279,37 @@ describe('render', () => {
       expect(writes[0]).toContain('line 0\nline 1\n');
       expect(writes[0]).not.toContain(' \b');
     });
+
+    // pdone's other branch: with the LINE ending at the margin too
+    // there is no next row to nudge the wrap into, so less writes the
+    // newline (`endline && defer_wrap`, line.c:1523). Only a line
+    // whose width is an exact multiple of the screen's gets there.
+    it('newlines a full row that also ends its line', () => {
+      const twice = Array.from({ length: 60 },
+        (_, i) => `L${String(i).padStart(2, '0')} ` + 'x'.repeat(156));
+
+      render(twice, []);
+
+      // counted off less on the same fixture: eleven whole lines fit,
+      // so eleven rows END one and take a newline, and the twelve
+      // rows that only reached the margin take the nudge
+      expect(writes[0].split('\n').length - 1).toBe(11);
+      expect(writes[0].split(' \b').length - 1).toBe(12);
+    });
+
+    // a chopped line is read to its end and discarded past the margin,
+    // so forw_line_seg reports endline TRUE however wide it was
+    // (input.c:246) and every row takes the newline branch
+    it('newlines every chopped row, however wide', () => {
+      const twice = Array.from({ length: 60 },
+        (_, i) => `L${String(i).padStart(2, '0')} ` + 'x'.repeat(156));
+
+      config.chopLongLines = true;
+      render(twice, []);
+
+      expect(writes[0]).not.toContain(' \b');
+      expect(writes[0].split('\n').length - 1).toBe(23);
+    });
   });
 });
 

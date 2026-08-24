@@ -70,6 +70,9 @@ import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
 
 import { session } from './state/session';
 
+import { resetRowEnds, rowEndsLine, shiftRowEnds }
+  from './lines/rowEnds';
+
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
 } from './features/misc';
@@ -474,6 +477,10 @@ function noContentDrawn(content: string[]): boolean {
 
 export function formatContent(content: string[]): string[] {
   const lines: string[] = [];
+
+  // the answers belong to the screen about to be built, not the last
+  // one: chop and wrap each record their own rows below
+  resetRowEnds();
 
   // a file with no lines draws none: less's forw_line EOFs at once, so
   // the whole screen below is null lines (tildes), not one blank row
@@ -1318,6 +1325,10 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
       rows.length > 0) {
     const bottom = rows[rows.length - 1];
     rows = prevRows.slice();
+    // the content rows are the PREVIOUS frame's; the answers just
+    // recorded describe the current one (an -S toggled behind an open
+    // prompt rebuilds them), so they no longer name these rows
+    resetRowEnds();
     rows[rows.length - 1] = bottom;
   }
 
@@ -1372,7 +1383,10 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
       if (frozenHome) dumbHomePending = true;
       frozenHome = false;
     } else if (prevRows) {
+      // held content: the answers describe rows this frame is not
+      // drawing (see the mca hold above)
       rows = [...prevRows.slice(0, -1), rows[rows.length - 1]];
+      resetRowEnds();
     }
   }
 
@@ -1411,6 +1425,9 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   if (mode.INIT && onAlt && rows.length < config.window) {
     squishBlanks = config.window - collapseNulRows(rows).length;
     rows.unshift(...Array(squishBlanks).fill(''));
+    // the text moves to the BOTTOM of the window, so every row is that
+    // much further down than it was when its answer was recorded
+    shiftRowEnds(squishBlanks);
   }
 
   // less's G repaints through its pos_clear even when nothing moved
@@ -1865,13 +1882,21 @@ function mcaBare(): boolean {
  * defer_wrap is set. On xterm the nudge lands the cursor in the same
  * place, which is why our output has always matched.)
  */
-function rowEnd(row: string): string {
+function rowEnd(row: string, index = -1): string {
   // less ends every -r row with a newline: pdone's first branch takes
   // "ctldisp == OPT_ON" (line.c:1523), because nothing was counted and
   // it cannot know whether the row reached the edge
   if (optCtldisp() === 1) return '\n';
   if (!filledRow(row)) return '\n';
   if (!AUTO_WRAP) return '\n';
+
+  // pdone's "endline && defer_wrap": the LINE ended at the margin too,
+  // so there is no next row to nudge the wrap into and less writes the
+  // newline. Only a line whose width is an exact multiple of the
+  // screen's can reach this, and a CHOPPED line always does - it is
+  // read to its end whatever the margin cut off (input.c:246)
+  if (DEFER_WRAP && rowEndsLine(index)) return '\n';
+
   return DEFER_WRAP ? ' \b' : '';
 }
 
@@ -1881,8 +1906,19 @@ function rowEnd(row: string): string {
  * backward, and emitting it here would wrap onto the row BELOW and
  * overwrite its first column.
  */
-function revRowEnd(row: string): string {
-  const end = rowEnd(row);
+/**
+ * The recorded index for row `i` of a COLLAPSED row array.
+ *
+ * collapseNulRows merges the rows around a NUL, so an index into what
+ * it returned no longer names the row an answer was recorded against.
+ * -1 says so, and rowEnd falls back to wrapping the row.
+ */
+function uncollapsed(physical: string[], rows: string[], i: number): number {
+  return physical.length === rows.length ? i : -1;
+}
+
+function revRowEnd(row: string, index = -1): string {
+  const end = rowEnd(row, index);
   return end === '\n' ? end : '';
 }
 
@@ -2194,12 +2230,12 @@ function scrollFrame(
 
       if (rows.length >= base.length && prefixEqual(base, rows)) {
         const appended = rows.slice(base.length)
-          .map(r => r + rowEnd(r)).join('');
+          .map((r, i) => r + rowEnd(r, base.length + i)).join('');
         return (wasOpen ? '' : clearBot()) + appended;
       }
     }
 
-    return '\r' + rows.map(r => r + rowEnd(r)).join('');
+    return '\r' + rows.map((r, i) => r + rowEnd(r, i)).join('');
   }
 
   // the fill completed: remaining lines print, then less's forw_prompt
@@ -2216,7 +2252,8 @@ function scrollFrame(
         : rows[rows.length - 1] + tailClear(rows[rows.length - 1]) +
           scrollPark(rows);
 
-      return grown.slice(prev.length).map(r => r + rowEnd(r)).join('') + tail;
+      return grown.slice(prev.length)
+        .map((r, i) => r + rowEnd(r, prev.length + i)).join('') + tail;
     }
   }
 
@@ -2362,11 +2399,12 @@ function scrollFrame(
       if (optClearRepaint() && appended.length >= config.window - 1) break;
 
       if (promptless) {
-        return opening() +
-          rows.slice(overlap).map(r => r + rowEnd(r)).join('');
+        return opening() + rows.slice(overlap)
+          .map((r, i) => r + rowEnd(r, overlap + i)).join('');
       }
 
-      return opening() + appended.map(r => r + rowEnd(r)).join('') +
+      return opening() +
+        appended.map((r, i) => r + rowEnd(r, overlap + i)).join('') +
         (holdBot ? '' : bot);
     }
 
@@ -2376,11 +2414,12 @@ function scrollFrame(
     if (forwDist === prev.length - 1 && !optClearRepaint() &&
         rows.length === (promptless ? prev.length - 1 : prev.length)) {
       if (promptless) {
-        return opening() + rows.map(r => r + rowEnd(r)).join('');
+        return opening() + rows.map((r, i) => r + rowEnd(r, i)).join('');
       }
 
       const appended = rows.slice(0, last);
-      return opening() + appended.map(r => r + rowEnd(r)).join('') +
+      return opening() +
+        appended.map((r, i) => r + rowEnd(r, i)).join('') +
         (holdBot ? '' : bot);
     }
 
@@ -2417,7 +2456,8 @@ function scrollFrame(
           // less's cmd_exec clear_bots before back() starts inserting
           let frame = opening();
           for (let i = k - 1; i >= 0; i--) {
-            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
+            frame += CURSOR_HOME + REVERSE_INDEX + rows[i] +
+              revRowEnd(rows[i], i);
           }
 
           // less lower_lefts and THEN clear_bots before the prompt on a
@@ -2443,7 +2483,7 @@ function scrollFrame(
   // like every other row -- the prompt row it would otherwise be
   // does not scroll, and the skipping marker then survived on screen
   const body = (promptless ? rows : rows.slice(0, last))
-    .map(r => r + rowEnd(r)).join('');
+    .map((r, i) => r + rowEnd(r, i)).join('');
 
   // -c and the freeze-unlatching make_display (top_scroll forced)
   // clear and paint forward, like less's forw calling clear() + home().
@@ -2469,7 +2509,7 @@ function scrollFrame(
     // a bare frame's last row is CONTENT, so back() paints it too -
     // counting from `last - 1` there dropped less's topmost row
     for (let i = (promptless ? last : last - 1); i >= 0; i--) {
-      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i]);
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[i] + revRowEnd(rows[i], i);
     }
 
     frame += CURSOR_TO(config.window, 1) + clearBot();
@@ -2552,7 +2592,7 @@ export function screenRows(
   // gain a row: scrollFrame counts them)
   if (open) {
     if (!scrollMode()) content.push('');
-    return content.join('\n').split('\n');
+    return splitRows(content);
   }
 
   // less's lclear leaves rows it never redraws: back() drew fewer null
@@ -2577,7 +2617,22 @@ export function screenRows(
     content.push('');
   }
 
-  return content.join('\n').split('\n');
+  return splitRows(content);
+}
+
+/**
+ * The formatted lines as SCREEN ROWS.
+ *
+ * A row carrying a literal newline would split into two here and shift
+ * every recorded row-end answer past it. Nothing draws one today, but
+ * the answers are indexed by row and a silent shift is worse than
+ * losing them, so a split that changes the count drops the lot.
+ */
+function splitRows(content: string[]): string[] {
+  const rows = content.join('\n').split('\n');
+  if (rows.length !== content.length) resetRowEnds();
+
+  return rows;
 }
 
 // park the cursor after the prompt row's content, like less's
@@ -2667,7 +2722,8 @@ function squishFrame(rows: string[], blanks: number): string {
 
   // no leading CR: term_init already parked the cursor there
   return syncOn() +
-    content.map(row => row + rowEnd(row)).join('') +
+    content.map((row, i) =>
+      row + rowEnd(row, uncollapsed(physical, rows, i + blanks))).join('') +
     bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
 }
 
@@ -2677,7 +2733,7 @@ function fullFrame(rows: string[]): string {
 
   const body = physical
     .map((row, i) => CLEAR_LINE + row +
-      (i === physical.length - 1 ? '' : rowEnd(row)))
+      (i === physical.length - 1 ? '' : rowEnd(row, uncollapsed(physical, rows, i))))
     .join('');
 
   // CLEAR_BELOW blanks the rows the collapse freed, like less's paint
@@ -2798,7 +2854,7 @@ function scrolledBy(
       let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
       for (let r = n - 1 - k; r < n - 1; r++) {
-        frame += rows[r] + rowEnd(rows[r]);
+        frame += rows[r] + rowEnd(rows[r], r);
       }
 
       // a bare frame's bottom row is the blank command line, and the
@@ -2828,7 +2884,7 @@ function scrolledBy(
     let frame = syncOn() + (cmdExecOpened ? '' : clearBot());
 
     for (let r = k - 1; r >= 0; r--) {
-      frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + revRowEnd(rows[r]);
+      frame += CURSOR_HOME + REVERSE_INDEX + rows[r] + revRowEnd(rows[r], r);
     }
 
     // The reverse index scrolls the WHOLE screen down, so the last
@@ -2953,7 +3009,8 @@ function skippedFrame(
   nulCollapsed = 0;
 
   const last = physical.length - 1;
-  const body = physical.slice(0, last).map(r => r + rowEnd(r)).join('');
+  const body = physical.slice(0, last)
+    .map((r, i) => r + rowEnd(r, uncollapsed(physical, rows, i))).join('');
 
   // less prints the marker with a bare putstr at the cursor
   // (forwback.c:274). A normal command has already cleared the
