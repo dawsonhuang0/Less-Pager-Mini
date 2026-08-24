@@ -7,7 +7,7 @@ import { spawnSync } from 'child_process';
 
 import { config, mode } from "../state/config";
 
-import { markFullRepaint, ringBell } from "../helpers";
+import { ringBell } from "../helpers";
 import { maxSubRow } from "../lines/helpers";
 
 import { secureAllow } from "./secure";
@@ -943,17 +943,21 @@ function shellExpand(pattern: string): string[] | null {
  * dash say nothing there, because they pass an unmatched pattern
  * through on stdout instead.
  *
- * Captured and re-emitted rather than inherited, because less can
- * afford not to know: its next paint is a full repaint, so the scroll
- * the child's newline caused is painted over. Ours is a DELTA
- * renderer, so it has to be told the screen was written behind its
- * back or the pre-scroll rows stay.
+ * Written and then FORGOTTEN, exactly as less forgets it. popen tells
+ * less nothing, so less's screen model never learns the child's
+ * newline scrolled the terminal, and the text simply sits there: it
+ * survives RETURN, j, k and even a horizontal shift, and goes only
+ * when something repaints the whole screen (h, or the paint after a
+ * help exit). Measured on the binary - YES YES YES YES YES no no.
+ *
+ * Marking a full repaint here would be the tidier thing to do and the
+ * wrong one: it wiped the message a keystroke later, where less leaves
+ * it for the user to read.
  */
 function emitShellError(text: string): void {
   if (!text) return;
 
   fs.writeSync(2, text);
-  markFullRepaint();
 }
 
 /**

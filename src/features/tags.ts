@@ -1,7 +1,5 @@
 import fs from 'fs';
 
-import { markFullRepaint } from '../helpers';
-
 import { spawnSync } from 'child_process';
 
 import { optTagsFile, resetTagsFile } from "../options";
@@ -293,10 +291,7 @@ function findGtag(tag: string, flag: string): string | null {
 
   const stderrText = typeof result.stderr === 'string' ? result.stderr : '';
 
-  if (stderrText) {
-    fs.writeSync(2, stderrText);
-    markFullRepaint();
-  }
+  if (stderrText) fs.writeSync(2, stderrText);
 
   if (result.status !== 0) return 'No tags file';
 
