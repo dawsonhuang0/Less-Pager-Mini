@@ -66,6 +66,13 @@ const wrappedFile = path.join(dir, 'wrapped-fixture.txt');
 fs.writeFileSync(wrappedFile, Array.from({ length: 6 },
   (_, i) => `L${i + 1} ` + 'x'.repeat(116)).join('\n') + '\n');
 
+// more lines than the 11 rows the driver's screen has, so a session
+// that thinks it is at EOF is visibly wrong
+const headerFile = path.join(dir, 'header-fixture.txt');
+fs.writeFileSync(headerFile, Array.from({ length: 30 },
+  (_, i) => `L${String(i + 1).padStart(2, '0')} ` + 'x'.repeat(60))
+  .join('\n') + '\n');
+
 fs.writeFileSync(bracketFile, Array.from({ length: 12000 }, (_, i) => {
   if (i === 0) return '{ DISTANT BRACKET START';
   if (i === 11999) return 'DISTANT BRACKET END }';
@@ -559,6 +566,20 @@ describe('unified file command loop', () => {
       expect(output).toContain(file);
       expect(output).toContain('byte ');
     }, 20000);
+
+  it('does not open at (END) just because --header is set', async () => {
+    // calculateEOF hands mode.EOF to the engine whenever one is
+    // attached, and recalculateEOF - which every --header session runs
+    // through set_header - answered again from the materialized
+    // window. A 30-line file opened at (END) and then refused to move
+    // for G, since jump_forw bells when the end is already displayed.
+    const out = await drive([], '--header=2', headerFile);
+    expect(out).not.toContain('(END)');
+
+    const jumped = await drive(['G'], '--header=2', headerFile);
+    expect(jumped).toContain('L30');
+    expect(jumped).toContain('(END)');
+  }, 20000);
 
   it('reports the byte under a blank row over BOF, not the one over it',
     async () => {

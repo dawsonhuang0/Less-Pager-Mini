@@ -878,6 +878,16 @@ export function noSearchHeadersMessage(): void {
 export function recalculateEOF(content: string[]): void {
   calculateEOF(content);
 
+  // calculateEOF hands the flag to the engine whenever one is attached
+  // - see its own comment, and the four bugs that came of answering
+  // twice. This second answer was outside that rule: for a source
+  // engine `content` is a materialized WINDOW, so config.endRow
+  // describes a few screens rather than the file, and a top sitting on
+  // row 0 of it lit (END) with the whole file still below. --header
+  // reaches here on EVERY session, which is how a 30-line file opened
+  // at (END) and then refused to move for G
+  if (hook.sourceLineCount !== null) return;
+
   if (!mode.EOF) {
     mode.EOF = config.row > config.endRow || (
       config.row === config.endRow && config.subRow >= config.endSubRow
