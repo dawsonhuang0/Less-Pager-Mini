@@ -224,8 +224,16 @@ export let END_MARKER = INVERSE_ON + '(END)' + INVERSE_OFF;
 
 /** Rebuilds every terminal string that this pager consumes. */
 export function initTerminalCapabilities(): void {
-  ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ?? '\x1b[?1049h';
-  ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ?? '\x1b[?1049l';
+  // less's term_init: `sc_init = ltgetstr("ti"); if (NULL) sc_init = ""`
+  // (screen.c) - a terminal whose entry HAS no ti simply does not
+  // switch screens. The xterm strings are our guess for having found
+  // no entry at all, which less cannot be in; using them for a
+  // terminal that answered and said no - "ansi" is one - put an
+  // alternate-screen switch on a terminal that has none.
+  ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ??
+    (terminfoAnswered() ? '' : '\x1b[?1049h');
+  ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ??
+    (terminfoAnswered() ? '' : '\x1b[?1049l');
 
   // less's term_init only treats the screen as an ALTERNATE one when
   // both strings exist and "NR" does not deny it (screen.c:2061); a
@@ -236,8 +244,13 @@ export function initTerminalCapabilities(): void {
     !(terminalFlag('nrrmc', 'NR') ?? false);
   AUTO_WRAP = terminalFlag('am', 'am') ?? true;
   DEFER_WRAP = terminalFlag('xenl', 'xn') ?? true;
-  KEYPAD_ON = terminalCapability('smkx', 'ks') ?? '\x1b[?1h\x1b=';
-  KEYPAD_OFF = terminalCapability('rmkx', 'ke') ?? '\x1b[?1l\x1b>';
+  // same rule as the init strings above: less sends the keypad
+  // sequence only when the entry HAS one (screen.c's ltgetstr for
+  // "ks"/"ke"), so a terminal that answered without it gets nothing
+  KEYPAD_ON = terminalCapability('smkx', 'ks') ??
+    (terminfoAnswered() ? '' : '\x1b[?1h\x1b=');
+  KEYPAD_OFF = terminalCapability('rmkx', 'ke') ??
+    (terminfoAnswered() ? '' : '\x1b[?1l\x1b>');
 
   const mouseStart = terminalCapability('MOUSE_START', 'MOUSE_START');
   MOUSE_ON = mouseStart ?? '\x1b[?1000h\x1b[?1002h';

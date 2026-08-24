@@ -400,8 +400,22 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   const carried = scrollPrefix;
   if (carried !== null) scrollPrefix = null;
 
+  // ...and when cmd_exec has ALREADY put that clear on the terminal,
+  // this bell adds none - it is the same clear. It also SPENDS it:
+  // nothing painted forward, so less's prompt() finds forw_prompt
+  // FALSE and clear_bots again before writing (command.c:993). Leaving
+  // the flag up suppressed that second clear, and the two mistakes
+  // cancelled into the right byte count in the wrong order - less
+  // rings BETWEEN its two clears, we rang after both.
+  const opened = search.cmdExecOpened;
+  if (opened) {
+    search.cmdExecOpened = false;
+    cmdExecOpened = false;
+    forwPrompt = false;
+  }
+
   const prefix = eprPrefix() +
-    (carried ?? (kind === 'eof' ? clearBot() : ''));
+    (carried ?? (kind === 'eof' && !opened ? clearBot() : ''));
 
   if (prefix) {
     putstr(prefix);
@@ -1407,7 +1421,13 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // scrolling the last screenful up. A short file ends up with blank
   // rows above it - less's "squished" screen - but that is a
   // consequence of the same paint, not a different one.
-  const onAlt = !mode.DUMB && !optNoInit() && ON_ALTERNATE_SCREEN;
+  // ...and it is sequential whether or not that screen is an ALTERNATE
+  // one: term_init ends with line_left() either way (screen.c:2085),
+  // and forw() then writes rows from there. Only the bottom-line PARK
+  // is alt-only - less guards it on "ti" and "te" both existing
+  // (screen.c:2061) - so only the squish pad below asks about that.
+  const sequential = !mode.DUMB && !optNoInit();
+  const onAlt = sequential && ON_ALTERNATE_SCREEN;
 
   // less's `first_time`, not "the previous frame is gone": a repaint
   // mid-session (R, a shell's return, a message wider than the
@@ -1415,7 +1435,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // through repaint() -> forw(), which prints "...skipping..." and
   // does NOT re-park at the bottom. Only the session's very first
   // paint follows term_init's lower_left
-  const firstPaint = !firstPaintDone && onAlt;
+  const firstPaint = !firstPaintDone && sequential;
   let squishBlanks = 0;
 
   // the pad is the SCREEN MODEL, so it lasts as long as the screen is
@@ -1897,7 +1917,14 @@ function rowEnd(row: string, index = -1): string {
   // read to its end whatever the margin cut off (input.c:246)
   if (DEFER_WRAP && rowEndsLine(index)) return '\n';
 
-  return DEFER_WRAP ? ' \b' : '';
+  // A terminal that wraps by itself has already moved to the next row,
+  // and the character that pushed it there may have colored that row's
+  // background before the reset arrived. less sets clear_after_line for
+  // exactly this row (line.c:1552) and put_line sends clear_eol when
+  // the caller is scrolling FORWARD (output.c:102) - which is forw()'s
+  // put_line(TRUE) and nothing else, so back()'s reverse-indexed rows
+  // go without it (revRowEnd drops it with the rest)
+  return DEFER_WRAP ? ' \b' : CLEAR_LINE;
 }
 
 /**
@@ -2721,10 +2748,14 @@ function squishFrame(rows: string[], blanks: number): string {
   const bot = content.length ? '' : clearBot();
 
   // no leading CR: term_init already parked the cursor there
+  // no park either, for the same reason the far-jump repaint has none:
+  // less's forw() writes the rows and prompt() writes the prompt, and
+  // the cursor is left sitting after it. Addressing the row again is
+  // one sequence per session that less does not send
   return syncOn() +
     content.map((row, i) =>
       row + rowEnd(row, uncollapsed(physical, rows, i + blanks))).join('') +
-    bot + bottom + tailClear(bottom) + parkCursor(rows) + syncOff();
+    bot + bottom + tailClear(bottom) + scrollPark(rows) + syncOff();
 }
 
 function fullFrame(rows: string[]): string {
@@ -3016,11 +3047,30 @@ function skippedFrame(
   // (forwback.c:274). A normal command has already cleared the
   // bottom line by then, but an option prompt's echo has not, so the
   // marker lands after it: "-...skipping..."
-  const head = marker && shownBottomEcho ? '' : '\r' + CLEAR_LINE;
+  //
+  // ...and a command that already put cmd_exec's clear_bot on the
+  // terminal (command.c:124) has supplied this frame's opening, so
+  // forw() does not send a second: less spends ONE clear per command
+  // and we were spending two, blanking the prompt row twice per jump.
+  const head = (marker && shownBottomEcho) || cmdExecOpened
+    ? '' : '\r' + CLEAR_LINE;
+
+  // less's forw() ends with overlay_header and nothing else - its
+  // lower_left is commented out as "considered harmful"
+  // (forwback.c:376) - so the cursor stays wherever the last row left
+  // it, which is column 1 of the prompt row however that row was
+  // terminated, and prompt() writes there. It skips its own clear_bot
+  // too, since forw_prompt is set (command.c:993). So the rows are
+  // followed by the prompt and by NOTHING in between: no address, no
+  // clear. The forward scroll branch of scrolledBy has always had this
+  // shape; this one carried a park and an extra clear_eol, which is
+  // one addressing sequence and one blank of the prompt row per far
+  // jump that less does not spend.
+  const bottom = physical[last];
+  forwPrompt = !bottom;
 
   return syncOn() + head + marker + body +
-    physical[last] + tailClear(physical[last]) + parkCursor(rows) +
-    syncOff();
+    (bottom ? bottom + tailClear(bottom) : '') + syncOff();
 }
 
 /**

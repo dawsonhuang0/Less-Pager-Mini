@@ -371,6 +371,45 @@ describe('$LESS_LINES gives up less full_screen', () => {
   });
 });
 
+describe("a far jump's repaint ends where less's forw() ends", () => {
+  // less's forw() closes with overlay_header and nothing else - the
+  // lower_left is commented out as "considered harmful"
+  // (forwback.c:376). The cursor is already at column 1 of the prompt
+  // row, whatever terminated the last content row, and prompt() writes
+  // there without its clear_bot because forw_prompt is set
+  // (command.c:993). Read off less: "...\r\n" then the prompt, with no
+  // address and no second clear between them.
+  it('writes the prompt straight after the rows', () => {
+    config.row = 10;
+    render(content, []);
+
+    config.row = 36;
+    render(content, []);
+
+    expect(writes[1]).toContain('...skipping...');
+    expect(writes[1]).toContain('line 58\n:');
+    expect(writes[1]).not.toContain('\n\x1b[K:');
+    // no addressing of the prompt row at all, at any column
+    expect(writes[1]).not.toMatch(/\x1b\[24;\d+H/);
+  });
+
+  it('opens with one clear_bot, not the command\'s and its own', () => {
+    config.row = 10;
+    render(content, []);
+
+    // the command already put cmd_exec's clear on the terminal
+    // (command.c:124), which is what a long walk does before it starts
+    search.cmdExecOpened = true;
+    config.row = 36;
+    render(content, []);
+    search.cmdExecOpened = false;
+
+    // less spends ONE per command, and this frame is not the one
+    expect(writes[1]).not.toContain('\r\x1b[K');
+    expect(writes[1]).toContain('...skipping...');
+  });
+});
+
 describe('a width change keeps the top on the same text', () => {
   // less's table[TOP] is a byte position: a width change re-wraps from
   // the same byte, a forward move keeps that shifted grid, and a
