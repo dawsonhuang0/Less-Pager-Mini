@@ -59,7 +59,8 @@ const content = [longTail, 'second line'].join('\n');
 
 /** Runs one library pager call under mocked tty streams. */
 async function drive(
-  call: () => Promise<void>
+  call: () => Promise<void>,
+  keys: string[] = []
 ): Promise<string> {
   const stdout = process.stdout as unknown as Record<string, unknown>;
   const stdin = process.stdin as unknown as Record<string, unknown>;
@@ -114,6 +115,12 @@ async function drive(
     await new Promise(resolve => setImmediate(resolve));
 
     if (!dataHandler) throw new Error('pager did not install a key handler');
+
+    for (const key of keys) {
+      (dataHandler as (data: Buffer) => void)(Buffer.from(key));
+      await new Promise(resolve => setImmediate(resolve));
+    }
+
     (dataHandler as (data: Buffer) => void)(Buffer.from('q'));
     await running;
     return output;
@@ -286,6 +293,22 @@ describe('pager(input, args, env) API', () => {
 
     expect(nothing).toBe(empty);
   });
+
+  it('knows the length of what it was handed, so (END) shows at once',
+    async () => {
+      // initContent describes less reading stdin, whose length is
+      // unknown until a read returns EOI - streamPager corrects that
+      // from spool.ended and this path never did. `?e` then refused to
+      // expand and the last screen said ":" until some later move
+      // happened to run revealPipeEnd, which is why scrolling back and
+      // returning fixed it. There is no read here at all: the caller
+      // handed us the whole value.
+      const lines = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`);
+      const out = await drive(() => pager(lines.join('\n')), ['j']);
+
+      expect(out).toContain('line 12');
+      expect(out).toContain('(END)');
+    });
 
   it('leaves objects flat without tab-object', async () => {
     const flat = await drive(() => pager({ a: 1, b: 2 }));
