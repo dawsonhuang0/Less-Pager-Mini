@@ -315,6 +315,22 @@ describe('unified file command loop', () => {
       expect(rows[10]).toBe('~');
     });
 
+  it('rings the bell AFTER that repaint, where less rings it',
+    async () => {
+      // squish_check IS repaint() (forwback.c:121) and it runs at the
+      // top of back(); the eof_bell comes from the loop below it. So
+      // less's order is cmd_exec's clear, the whole screen, the bell,
+      // then the prompt - the bell sits between the last tilde and the
+      // prompt row. Clearing the squish flag and leaving the paint to
+      // the next render put our bell in front of the screen instead.
+      const out = await drive(['k'], '', shortFile);
+      const bell = out.indexOf('\x07');
+
+      expect(bell).toBeGreaterThan(-1);
+      expect(out.indexOf('~')).toBeLessThan(bell);
+      expect(out.indexOf('~', bell)).toBe(-1);
+    });
+
   it('leaves the squished first screen alone on a forward command',
     async () => {
       // less's forward() bells and returns BEFORE reaching forw(), so

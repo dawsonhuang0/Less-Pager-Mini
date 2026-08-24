@@ -70,8 +70,8 @@ import { files, examine, binaryConfirm, pipeDraining, pendingScroll,
 
 import { session } from './state/session';
 
-import { resetRowEnds, rowEndsLine, shiftRowEnds }
-  from './lines/rowEnds';
+import { resetRowEnds, rowEndsLine, shiftRowEnds, setNullRow,
+  sealRowClears, rowClearsAfter } from './lines/rowEnds';
 
 import { miscInput, pipeMark, overwrite,
   miscPromptLabel
@@ -96,8 +96,7 @@ import {
   TERMINAL_SUSPEND,
   TERMINAL_RESUME,
   VISUAL_BELL,
-  CURSOR_TO,
-  ON_ALTERNATE_SCREEN
+  CURSOR_TO
 } from './state/constants';
 
 /**
@@ -401,17 +400,18 @@ export function ringBell(kind: 'error' | 'eof' = 'error'): void {
   if (carried !== null) scrollPrefix = null;
 
   // ...and when cmd_exec has ALREADY put that clear on the terminal,
-  // this bell adds none - it is the same clear. It also SPENDS it:
-  // nothing painted forward, so less's prompt() finds forw_prompt
-  // FALSE and clear_bots again before writing (command.c:993). Leaving
-  // the flag up suppressed that second clear, and the two mistakes
-  // cancelled into the right byte count in the wrong order - less
-  // rings BETWEEN its two clears, we rang after both.
+  // this bell adds none - it is the same clear. It also SPENDS it, so
+  // the prompt that follows opens with one of its own where less's
+  // does (command.c:993). Leaving the flag up suppressed that second
+  // clear, and the two mistakes cancelled into the right byte count in
+  // the wrong order - less rings BETWEEN its two clears, we rang after
+  // both. forw_prompt is NOT touched: only a forward paint sets it and
+  // only prompt() clears it (command.c:996), so a squish_check repaint
+  // still owns the prompt that comes after the bell.
   const opened = search.cmdExecOpened;
   if (opened) {
     search.cmdExecOpened = false;
     cmdExecOpened = false;
-    forwPrompt = false;
   }
 
   const prefix = eprPrefix() +
@@ -509,6 +509,7 @@ export function formatContent(content: string[]): string[] {
   // like the ones past EOF; only ever set with the top at (0,0), so
   // pre-seeding does not disturb sub-row emission
   for (let i = 0; i < config.blankTop; i++) {
+    setNullRow(lines.length, 'bof');
     lines.push(optTildes() ? colored('tilde', '~', BOLD_ON, BOLD_OFF) : '');
   }
 
@@ -526,7 +527,11 @@ export function formatContent(content: string[]): string[] {
   if (abortSigs()) return lines;
 
   padToEOF(lines);
-  return overlayHeaderLines(content, lines);
+
+  const shown = overlayHeaderLines(content, lines);
+  sealRowClears(shown.length, i => filledRow(shown[i] ?? ''));
+
+  return shown;
 }
 
 /**
@@ -1423,11 +1428,12 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // consequence of the same paint, not a different one.
   // ...and it is sequential whether or not that screen is an ALTERNATE
   // one: term_init ends with line_left() either way (screen.c:2085),
-  // and forw() then writes rows from there. Only the bottom-line PARK
-  // is alt-only - less guards it on "ti" and "te" both existing
-  // (screen.c:2061) - so only the squish pad below asks about that.
+  // and forw() then writes rows from there. So is the squish that a
+  // short file leaves behind - less's `squished` is set by forw() on
+  // its own terms (forwback.c:355) and asks nothing about the screen.
+  // Only term_init's bottom-line park is alt-only, guarded on "ti" and
+  // "te" both existing (screen.c:2061), and that lives in the pager.
   const sequential = !mode.DUMB && !optNoInit();
-  const onAlt = sequential && ON_ALTERNATE_SCREEN;
 
   // less's `first_time`, not "the previous frame is gone": a repaint
   // mid-session (R, a shell's return, a message wider than the
@@ -1442,7 +1448,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // squished (less's `squished` flag), not just for the paint that
   // produced it: the next frame has to diff against the same rows the
   // terminal is showing
-  if (mode.INIT && onAlt && rows.length < config.window) {
+  if (mode.INIT && sequential && rows.length < config.window) {
     squishBlanks = config.window - collapseNulRows(rows).length;
     rows.unshift(...Array(squishBlanks).fill(''));
     // the text moves to the BOTTOM of the window, so every row is that
@@ -1903,11 +1909,20 @@ function mcaBare(): boolean {
  * place, which is why our output has always matched.)
  */
 function rowEnd(row: string, index = -1): string {
+  // pdone asks TWO independent questions, and this is the second: on a
+  // terminal that wraps by itself, a row that reached the margin sets
+  // clear_after_line and put_line follows the row with clear_eol
+  // (line.c:1552, output.c:102). It is not an alternative to the
+  // newline - a null line takes both - and it never fires where the
+  // wrap is deferred, which is why xterm has never seen it.
+  const clear = AUTO_WRAP && !DEFER_WRAP && rowClearsAfter(index)
+    ? CLEAR_LINE : '';
+
   // less ends every -r row with a newline: pdone's first branch takes
   // "ctldisp == OPT_ON" (line.c:1523), because nothing was counted and
   // it cannot know whether the row reached the edge
-  if (optCtldisp() === 1) return '\n';
-  if (!filledRow(row)) return '\n';
+  if (optCtldisp() === 1) return '\n' + clear;
+  if (!filledRow(row)) return '\n' + clear;
   if (!AUTO_WRAP) return '\n';
 
   // pdone's "endline && defer_wrap": the LINE ended at the margin too,
@@ -1917,14 +1932,7 @@ function rowEnd(row: string, index = -1): string {
   // read to its end whatever the margin cut off (input.c:246)
   if (DEFER_WRAP && rowEndsLine(index)) return '\n';
 
-  // A terminal that wraps by itself has already moved to the next row,
-  // and the character that pushed it there may have colored that row's
-  // background before the reset arrived. less sets clear_after_line for
-  // exactly this row (line.c:1552) and put_line sends clear_eol when
-  // the caller is scrolling FORWARD (output.c:102) - which is forw()'s
-  // put_line(TRUE) and nothing else, so back()'s reverse-indexed rows
-  // go without it (revRowEnd drops it with the rest)
-  return DEFER_WRAP ? ' \b' : CLEAR_LINE;
+  return DEFER_WRAP ? ' \b' : clear;
 }
 
 /**
@@ -1945,7 +1953,10 @@ function uncollapsed(physical: string[], rows: string[], i: number): number {
 }
 
 function revRowEnd(row: string, index = -1): string {
-  const end = rowEnd(row, index);
+  // put_line's clear_eol is sent only when the caller is scrolling
+  // FORWARD (output.c:102) - forw()'s put_line(TRUE), and nothing
+  // else - so back()'s reverse-indexed rows go without it
+  const end = rowEnd(row, index).split(CLEAR_LINE).join('');
   return end === '\n' ? end : '';
 }
 
@@ -2930,7 +2941,21 @@ function scrolledBy(
     // The forward branch above needs none: forw() ends its rows with a
     // newline, and the row that scrolls in at the bottom is already
     // blank.
-    const addressed = CURSOR_TO(promptRow(rows), 1) + clearBot();
+    //
+    // ...unless a forward paint got there first. back() opens with
+    // squish_check, and on a squished screen that repaint runs through
+    // forw() and sets forw_prompt (forwback.c:368) - so the prompt
+    // that follows this scroll skips its clear_bot exactly as less's
+    // does, and the row the reverse index leaked is a null line
+    // anyway, which is what a squished screen has above its text.
+    // and it is spent here, as less spends it: prompt() reads the flag
+    // and clears it in the same breath (command.c:993-996), so the
+    // NEXT backward scroll clears again
+    const opened = forwPrompt;
+    forwPrompt = false;
+
+    const addressed = CURSOR_TO(promptRow(rows), 1) +
+      (opened ? '' : clearBot());
     const bottom = rows[n - 1];
 
     if (!bottom) return frame + addressed + syncOff();
@@ -3422,7 +3447,10 @@ function padToEOF(lines: string[]): void {
       ? colored('tilde', '~', BOLD_ON, BOLD_OFF)
       : '';
 
-    for (let i = 0; i < rows; i++) lines.push(tilde);
+    for (let i = 0; i < rows; i++) {
+      setNullRow(lines.length, 'eof');
+      lines.push(tilde);
+    }
   }
 
   if (mode.INIT && lines.length === config.window - 1) mode.INIT = false;

@@ -18,6 +18,7 @@ import {
   render,
   renderBare,
   ringBell,
+  squishCheck,
 } from '../helpers';
 
 import {
@@ -1704,8 +1705,15 @@ export class FileInput implements PagerInput {
     // the squished short first screen — filling the blank rows above
     // with tildes — and only then bells at BOF. forward() is not
     // symmetric: it bells and returns before ever reaching forw(),
-    // so a clamped forward leaves the squish alone
-    if (mode.INIT) mode.INIT = false;
+    // so a clamped forward leaves the squish alone.
+    //
+    // squish_check REPAINTS (forwback.c:121), it does not merely note
+    // that the screen is no longer squished, and the difference shows
+    // in the order: less's eof_bell comes from the loop BELOW that
+    // repaint, so the bell lands between the tildes and the prompt.
+    // Clearing the flag and leaving the paint to the next render put
+    // our bell in front of the whole screen.
+    squishCheck();
 
     // --past-eof forces every backward scroll, like less's back()
     if (optPastEof()) force = true;
@@ -1725,19 +1733,29 @@ export class FileInput implements PagerInput {
       ? this.filteredBackward(rows)
       : this.fileBackward(rows);
 
-    if (moved && doRepaint) markPosClear();
-
     // less's forced back (K, ESC-b) keeps revealing null lines above
     // the beginning, capped one short of an empty screen — file
     // distance consumes first, like the array forceLineBackward
+    let padded = 0;
+
     if (force && moved < rows) {
       const cap = Math.max(config.window - 2, 0);
       const before = this.padTop;
       this.padTop = Math.min(this.padTop + (rows - moved), cap);
-      if (this.padTop === before && !moved) ringBell('eof');
+      padded = this.padTop - before;
+      if (!padded && !moved) ringBell('eof');
     } else if (!moved) {
       ringBell('eof');
     }
+
+    // `nlines == 0 ? eof_bell() : do_repaint && repaint()`
+    // (forwback.c:446) counts every line back() DREW, and a null line
+    // above the beginning is one of them - add_back_pos and nlines++
+    // run for it just the same (:437). So a K that only padded still
+    // repaints where the terminal cannot scroll backwards, which is
+    // any terminal without "al" or "ri": get_back_scroll answers 0
+    // there and every backward movement is a repaint.
+    if ((moved || padded) && doRepaint) markPosClear();
 
     noteScrollRows(-moved);
     this.keepPad = true;
