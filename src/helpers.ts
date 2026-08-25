@@ -1493,7 +1493,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     // for real; end_pr_string skips the help file
     if (promptPainted && !mode.HELP && optEndPrompt() !== null) {
       const bot = rows[rows.length - 1];
-      putstr(eprPrefix() + (scrollMode()
+      paint(eprPrefix() + clearBotIfNeeded() + (scrollMode()
         ? clearBot() + bot + tailClear(bot) + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), 1) + CLEAR_LINE + bot +
           parkCursor(rows)));
@@ -1506,7 +1506,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     // with --old-bot the first reprint after a forw_prompt visibly
     // jumps it from mid-screen to the bottom row, stale copy behind
     if (scrollMode() && optOldBot() && !promptAtBottom && !filling) {
-      putstr(eprPrefix() +
+      paint(eprPrefix() + clearBotIfNeeded() +
         clearBot() + rows[rows.length - 1] +
           tailClear(rows[rows.length - 1]) + scrollPark(rows)
       );
@@ -1519,7 +1519,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
       prevCursorCol = col;
       // -X owns no absolute rows: rewrite the prompt line in place
       // and backspace to the editing position, like less's cmdbuf
-      putstr(eprPrefix() + (scrollMode()
+      paint(eprPrefix() + clearBotIfNeeded() + (scrollMode()
         ? '\r' + CLEAR_LINE + rows[rows.length - 1] + scrollPark(rows)
         : CURSOR_TO(promptRow(rows), col)));
     }
@@ -1532,7 +1532,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     nulCollapsed = 0;
     const frame = dumbFrame(prevRows, rows, buffer, posClear);
     prevRows = rows;
-    putstr(eprPrefix() + frame);
+    paint(eprPrefix() + clearBotIfNeeded() + frame);
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
@@ -1547,7 +1547,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     if (!keepPrevRows) prevRows = rows;
     keepPrevRows = false;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
-    putstr(eprPrefix() + frame);
+    paint(eprPrefix() + clearBotIfNeeded() + frame);
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
@@ -1593,7 +1593,7 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 
     forwPrompt = false;
 
-    putstr(eprPrefix() +
+    paint(eprPrefix() + clearBotIfNeeded() +
       opening + bot + tailClear(bot) +
       (cmd.active ? parkCursor(rows) : ''));
     prompting = promptPainted;
@@ -1637,8 +1637,8 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // directly in the paint stream. Keep ours INSIDE the batch — a
   // terminal that isolates the ?2026 batch would otherwise drop
   // SGR state written just before it
-  const epr = eprPrefix();
-  putstr(epr && frame.startsWith(syncOn())
+  const epr = eprPrefix() + clearBotIfNeeded();
+  paint(epr && frame.startsWith(syncOn())
     ? syncOn() + epr + frame.slice(syncOn().length)
     : epr + frame);
   firstPaintDone = true;
@@ -1821,6 +1821,38 @@ let keepPrevRows = false;
 // WHICH mca the previous scroll-mode frame had open, so this one's
 // keystroke is a cmd_ichar echo and not another start_mca
 let prevMca = '';
+
+// less's need_clr (output.c:762): ierror/ixerror leaves its message
+// owning the bottom line, and the NEXT byte written to the terminal
+// clears that line first - clear_bot_if_needed() sits inside putchr,
+// so nothing else has to remember. It matters because prompt()'s own
+// clear_bot is gated on forw_prompt, which the F loop leaves SET: the
+// prompt after an aborted F would otherwise print onto the tail of
+// "Waiting for data... (^X or interrupt to abort)"
+let needClr = false;
+
+// which prompt the frame being built carries, so the write can arm
+// need_clr the way og arms it at the END of ierror_suffix
+let ierrorPrompt = false;
+
+function clearBotIfNeeded(): string {
+  if (!needClr) return '';
+  needClr = false;
+  return clearBot();
+}
+
+/**
+ * Writes one frame, arming need_clr like og's ierror_suffix.
+ *
+ * og arms it at the end of the CALL that printed the message; we build
+ * a whole frame before writing any of it, so the arming waits until
+ * the message is actually on the terminal - the same instant, and the
+ * same one-write-later consumption.
+ */
+function paint(frame: string): void {
+  putstr(frame);
+  needClr = ierrorPrompt;
+}
 
 // less's forw_prompt (forwback.c): forw() sets it after every line it
 // puts, and prompt() then SKIPS clear_bot - "the forward movement
@@ -3203,6 +3235,9 @@ export function getPrompt(content: string[]): string {
   // the --end-prompt marker
   promptPainted = false;
 
+  // and only ierror/ixerror's messages arm less's need_clr
+  ierrorPrompt = false;
+
 
   // during a pipe drain less leaves the command line blank for G and
   // shows ierror's interruptible note for % (jump.c/output.c), and
@@ -3212,11 +3247,14 @@ export function getPrompt(content: string[]): string {
   // bottom line
   if (pipeDraining.active || pendingScroll.rows) {
     if (session.pipeWaiting) {
+      ierrorPrompt = true;
       return colored('prompt',
         prExpand(content, wProto()) +
           `... (${prChar(optIntrChar())} or interrupt to abort)`,
         INVERSE_ON, INVERSE_OFF);
     }
+
+    ierrorPrompt = pipeDraining.active && pipeDraining.note !== '';
 
     return pipeDraining.active && pipeDraining.note
       ? colored('error',
@@ -3305,6 +3343,7 @@ export function getPrompt(content: string[]): string {
   // a stalled initial fill shows less's wait_message the same way
   // (ch.c ixerror while the blocked read polls)
   if (session.pipeWaiting) {
+    ierrorPrompt = true;
     return colored('prompt',
       prExpand(content, wProto()) +
         `... (${prChar(optIntrChar())} or interrupt to abort)`,
@@ -3314,6 +3353,7 @@ export function getPrompt(content: string[]): string {
   // the F command waits with the -Pw prompt plus ixerror's suffix,
   // naming the --intr char: "... (^X or interrupt to abort)"
   if (follow.active) {
+    ierrorPrompt = true;
     return colored('prompt',
       prExpand(content, wProto()) +
         `... (${prChar(optIntrChar())} or interrupt to abort)`,
