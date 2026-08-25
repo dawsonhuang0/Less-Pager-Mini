@@ -327,6 +327,35 @@ const isSpace = (char: string): boolean => char === ' ' || char === '\t';
  * --wordwrap breaks at spaces, so the answer cannot be translated from
  * the boundary grid - it has to be walked.
  */
+/**
+ * How many BYTES of the line the first `offset` display characters
+ * take up, ANSI codes included.
+ *
+ * A layout's offsets index `chars`, which holds no codes - they are
+ * kept aside in `codes`, anchored by the cluster they precede. So
+ * slicing the line by an offset skips every escape above it, and a
+ * position derived that way lands short: on a row of colour codes 80
+ * columns wide it read 80 bytes where the row really spans 103.
+ *
+ * A code anchored AT the offset counts: less reads a zero-width
+ * escape without triggering the wrap, so it belongs to the row that
+ * was being filled when it arrived, not to the one that starts next.
+ */
+export function rawByteLength(layout: LineLayout, offset: number): number {
+  let bytes = 0;
+
+  for (let i = 0; i < offset && i < layout.chars.length; i++) {
+    bytes += Buffer.byteLength(layout.chars[i]);
+  }
+
+  for (let j = 0; j < layout.codeIdx.length; j++) {
+    if (layout.codeIdx[j] > offset) break;
+    bytes += Buffer.byteLength(layout.codes[j]);
+  }
+
+  return bytes;
+}
+
 export function rowEndFrom(layout: LineLayout, from: number): number {
   const { chars, widths } = layout;
 

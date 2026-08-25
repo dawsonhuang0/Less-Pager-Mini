@@ -10,7 +10,7 @@ import { config, mode } from "../state/config";
 import { ringBell } from "../helpers";
 import { maxSubRow, sourceLine, sourceIndexAt } from "../lines/helpers";
 
-import { getLayout } from "../lines/lineLayout";
+import { getLayout, rawByteLength } from "../lines/lineLayout";
 
 import { session } from "../state/session";
 
@@ -1314,12 +1314,21 @@ export function sourceByteOffset(
   // a byte part way into it too. The offset counts DISPLAY characters
   // and the file holds bytes, so it converts through the raw line the
   // display was built from - the same trip the block engine makes
-  // through its own position table.
+  // through its own position table, and with the same two cases.
   const shown = content[row] ?? '';
-  const source = sourceLine(shown) ?? raw[at];
-  const upto = source === shown ? offset : sourceIndexAt(source, offset);
+  const source = sourceLine(shown);
 
-  return start + Buffer.byteLength(source.slice(0, upto));
+  // spelled out by a transform: the escapes are visible text now, so
+  // the offset counts them and the map back is the conversion
+  if (source !== undefined) {
+    return start +
+      Buffer.byteLength(source.slice(0, sourceIndexAt(source, offset)));
+  }
+
+  // untouched, which does NOT make the offset an index into it: the
+  // layout keeps ANSI codes out of its characters, so a slice skips
+  // every escape above the row
+  return start + rawByteLength(getLayout(shown), offset);
 }
 
 /**

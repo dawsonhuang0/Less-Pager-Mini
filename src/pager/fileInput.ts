@@ -62,7 +62,8 @@ import { onSourceTagJump, Tag } from '../features/tags';
 
 import { screenAhead } from '../lines/screenOps';
 
-import { getLayout, stringIndexAt } from '../lines/lineLayout';
+import { getLayout, stringIndexAt, rawByteLength }
+  from '../lines/lineLayout';
 
 import {
   Mark,
@@ -279,12 +280,22 @@ export class FileInput implements PagerInput {
         // byte, so it converts through the raw line the display was
         // built from
         const shown = displayText(line.text);
-        const raw = sourceLine(shown) ?? shown;
-        const upto = raw === shown
-          ? at.offset
-          : sourceIndexAt(raw, at.offset);
+        const raw = sourceLine(shown);
 
-        return at.pos + Buffer.byteLength(raw.slice(0, upto));
+        // A transform spelled the line out - the escapes are ordinary
+        // visible text now, so the offset counts them and the map back
+        // to the raw line is the whole conversion.
+        if (raw !== undefined) {
+          return at.pos +
+            Buffer.byteLength(raw.slice(0, sourceIndexAt(raw, at.offset)));
+        }
+
+        // Untouched, and that is NOT the same as "the offset is an
+        // index into it": the layout keeps ANSI codes out of `chars`,
+        // so slicing by the offset skips every escape above the row.
+        // Under -R that is most of what a coloured line is made of -
+        // 80 columns of it spanned 103 bytes, and we reported 80.
+        return at.pos + rawByteLength(getLayout(shown), at.offset);
       }
 
       return this.bf.size;

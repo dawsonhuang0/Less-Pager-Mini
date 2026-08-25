@@ -343,6 +343,31 @@ describe('pager(input, args, env) API', () => {
       expect(out).not.toContain('byte 131');
     });
 
+  it('counts the escapes a coloured row is made of, under -R',
+    async () => {
+      // The layout keeps ANSI codes out of its characters, so a screen
+      // row's offset is not an index into the line: slicing by it
+      // skips every escape above the row. Under -R that is most of
+      // what a coloured line is made of.
+      //
+      // Each run below is 29 bytes and 20 columns, so the 40-column
+      // screen fits two per row. The row past the 11-row window starts
+      // at column 440 - 22 runs, 638 bytes - plus the NEXT run's
+      // opening escape, which less has already read by then: a
+      // zero-width sequence does not trigger the wrap, so it belongs
+      // to the row being filled when it arrived. 643, read off less on
+      // this exact fixture. A slice by the offset says 440.
+      const run = (i: number): string =>
+        `\x1b[3${i % 7}m` + 'x'.repeat(20) + '\x1b[0m';
+      const wide = Array.from({ length: 30 }, (_, i) => run(i)).join('');
+
+      const out = await drive(
+        () => pager([wide, 'tail'].join('\n'), ['-M', '-R']), ['=']);
+
+      expect(out).toContain('byte 643/');
+      expect(out).not.toContain('byte 440/');
+    });
+
   it('leaves objects flat without tab-object', async () => {
     const flat = await drive(() => pager({ a: 1, b: 2 }));
 
