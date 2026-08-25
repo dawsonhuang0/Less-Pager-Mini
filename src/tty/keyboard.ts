@@ -2,8 +2,6 @@ import fs from 'fs';
 import os from 'os';
 import tty from 'tty';
 
-import { execFileSync } from 'child_process';
-
 import { terminalEnv } from '../startup/environment';
 
 /**
@@ -277,7 +275,19 @@ export function gateEndColumn(): number {
   return gateCol;
 }
 
-export function gateReturn(message: string): void {
+/**
+ * True while a gate is waiting, so the pager's own key handler stands
+ * aside: both listen to the same stream, and only one of them may
+ * answer the question on screen.
+ */
+let gateOpen = false;
+
+/** Whether a (press RETURN) gate currently owns the keyboard. */
+export function gateIsOpen(): boolean {
+  return gateOpen;
+}
+
+export async function gateReturn(message: string): Promise<void> {
   gateKind = 'dismiss';
   gateCol = message.length + '  (press RETURN)'.length + 1;
 
@@ -290,51 +300,46 @@ export function gateReturn(message: string): void {
   fs.writeSync(1, '\r\x1b[K\x1b[7m' + message +
     '  (press RETURN)\x1b[27m');
 
-  keyboard().pause();
+  // The wait leaves the event loop TURNING, which is the whole point:
+  // a synchronous one cannot be woken by SIGWINCH - node dispatches
+  // signals through the loop - so it had to spawn stty on a timer to
+  // notice a resize. Measured, that was 1.57ms of forking against an
+  // ioctl's 0.04ms, and it is gone: the ordinary handler fires here.
+  gateOpen = true;
 
-  // node's tty fd is non-blocking: less's getchr blocks, so spin on
-  // EAGAIN with a short sleep until a key arrives. A resize during
-  // the wait dismisses like less's lwinch longjmp out of the blocked
-  // read (READ_INTR at a tty read) - node can't deliver SIGWINCH
-  // while we spin, so poll the real ioctl size instead
-  const buf = Buffer.alloc(64);
-  const lock = new Int32Array(new SharedArrayBuffer(4));
-  const size0 = freshWindowSize();
-  let spins = 0;
-  let n = 0;
+  const bytes = await new Promise<Buffer>(resolve => {
+    const onKey = (data: Buffer): void => {
+      finish();
+      resolve(data);
+    };
 
-  for (;;) {
-    try {
-      n = fs.readSync(keyboardFd(), buf, 0, 64, null);
-      if (n > 0) break;
-    } catch (error) {
-      if ((error as { code?: string }).code !== 'EAGAIN') {
-        n = 0;
-        break;
-      }
-    }
+    // less's lwinch longjmps out of get_return, so a resize dismisses
+    // the message without a key (output.c)
+    const onWinch = (): void => {
+      gateKind = 'winch';
+      finish();
+      resolve(Buffer.alloc(0));
+    };
 
-    if ((++spins & 15) === 0) {
-      const size = freshWindowSize();
-      if (size && size0 &&
-          (size[0] !== size0[0] || size[1] !== size0[1])) {
-        gateKind = 'winch';
-        break;
-      }
-    }
+    const finish = (): void => {
+      keyboard().off('data', onKey);
+      unwatchWinch(onWinch);
+    };
 
-    Atomics.wait(lock, 0, 0, 20);
-  }
+    keyboard().on('data', onKey);
+    watchWinch(onWinch);
+  });
 
-  const key = n > 0 ? buf.toString('utf8', 0, n)[0] : '';
+  gateOpen = false;
+
+  const key = bytes.length > 0 ? bytes.toString('utf8')[0] : '';
 
   if (key && key !== '\r' && key !== '\n' && key !== ' ' &&
       key !== '\x03') {
-    pushUngot(buf.subarray(0, n));
+    pushUngot(bytes);
     gateKind = 'unget';
   }
 
-  keyboard().resume();
   fs.writeSync(1, '\r\x1b[K');
 }
 
@@ -369,38 +374,6 @@ export function wasSelfSigint(): boolean {
   return was;
 }
 
-/**
- * The terminal size straight from the kernel, like less's scrsize
- * ioctl: node caches the winsize and refreshes it only in its own
- * SIGWINCH processing — a blocking scan delays that past less's
- * update_term moment, and a raw SIGWINCH handler can run before
- * the refresh. Returns [columns, rows], falling back to node's
- * cache when stty is unavailable (Windows).
- */
-export function freshWindowSize(): [number, number] | null {
-  try {
-    // a freshly opened fd: spawning with our raw keyboard fd would
-    // flip its shared file description to blocking, hanging the
-    // interrupt poll's readSync
-    const fd = fs.openSync('/dev/tty', 'r');
-
-    try {
-      const out = execFileSync('stty', ['size'], {
-        stdio: [fd, 'pipe', 'ignore'],
-      }).toString().trim().split(/\s+/);
-
-      const rows = parseInt(out[0], 10);
-      const cols = parseInt(out[1], 10);
-      if (rows > 0 && cols > 0) return [cols, rows];
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    // no stty or /dev/tty (Windows): node's cache is the best left
-  }
-
-  return (process.stdout.getWindowSize?.() as [number, number]) ?? null;
-}
 
 /**
  * Watches window changes like less's lwinch: the handler fires on the

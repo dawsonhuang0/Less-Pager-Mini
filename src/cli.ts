@@ -233,7 +233,7 @@ async function main(): Promise<void> {
             // permission denied, open 'x'" and abandoned the rest of
             // the list.
             reportOpenError(`${files[i]}: ${errorText(error)}`);
-            closeAlt(fileList.list[i]);
+            await closeAlt(fileList.list[i]);
             continue;
           }
         }
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
 
         // leaving the file runs $LESSCLOSE, like close_file; quit()
         // does the same for the last one through edit(NULL)
-        closeAlt(fileList.list[i]);
+        await closeAlt(fileList.list[i]);
       }
 
       // less's main quits QUIT_ERROR only when edit_first found no file

@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe('$LESSOPEN pipe forms', () => {
-  it('pages the preprocessor output', () => {
+  it('pages the preprocessor output', async () => {
     process.env.LESSOPEN = '|tr a-z A-Z < %s';
 
     expect(open()).toEqual(['ONE', 'TWO']);
@@ -60,28 +60,28 @@ describe('$LESSOPEN pipe forms', () => {
     expect(files.list[0].size).toBe(8);
   });
 
-  it('falls back to the file when the pipe stays empty', () => {
+  it('falls back to the file when the pipe stays empty', async () => {
     process.env.LESSOPEN = '|true %s';
 
     expect(open()).toEqual(['one', 'two']);
     expect(files.list[0].alt).toBeUndefined();
   });
 
-  it('distinguishes an empty file with || and exit 0', () => {
+  it('distinguishes an empty file with || and exit 0', async () => {
     process.env.LESSOPEN = '||true %s';
 
     expect(open()).toEqual(['']);
     expect(files.list[0].alt).toBe('-');
   });
 
-  it('falls back with || when the preprocessor fails', () => {
+  it('falls back with || when the preprocessor fails', async () => {
     process.env.LESSOPEN = '||false %s';
 
     expect(open()).toEqual(['one', 'two']);
     expect(files.list[0].alt).toBeUndefined();
   });
 
-  it('reports failures with --show-preproc-errors', () => {
+  it('reports failures with --show-preproc-errors', async () => {
     process.env.LESSOPEN = '||exit 3; echo %s';
     scanOptions('--show-preproc-errors', []);
 
@@ -89,7 +89,7 @@ describe('$LESSOPEN pipe forms', () => {
     expect(search.message).toBe('Input preprocessor failed (status 3)');
   });
 
-  it('stays silent about failures by default', () => {
+  it('stays silent about failures by default', async () => {
     process.env.LESSOPEN = '||false %s';
 
     open();
@@ -98,7 +98,7 @@ describe('$LESSOPEN pipe forms', () => {
 });
 
 describe('$LESSOPEN temp file form', () => {
-  it('pages the named replacement file', () => {
+  it('pages the named replacement file', async () => {
     const alt = path.join(dir, 'orig.txt.alt');
     fs.writeFileSync(alt, 'ALT LINE\n');
     process.env.LESSOPEN = 'echo %s.alt';
@@ -107,7 +107,7 @@ describe('$LESSOPEN temp file form', () => {
     expect(files.list[0].alt).toBe(alt);
   });
 
-  it('falls back when the preprocessor names nothing', () => {
+  it('falls back when the preprocessor names nothing', async () => {
     process.env.LESSOPEN = 'true %s';
 
     expect(open()).toEqual(['one', 'two']);
@@ -116,7 +116,7 @@ describe('$LESSOPEN temp file form', () => {
 });
 
 describe('$LESSOPEN "-" forms feed the pseudo-file, like less', () => {
-  it('pipes the in-memory content through the preprocessor', () => {
+  it('pipes the in-memory content through the preprocessor', async () => {
     process.env.LESSOPEN = '|-cat %s | tr a-z A-Z';
 
     expect(openAltFile('-', 'one\ntwo\n')).toEqual({
@@ -128,14 +128,14 @@ describe('$LESSOPEN "-" forms feed the pseudo-file, like less', () => {
     });
   });
 
-  it('skips the pseudo-file without the "-" prefix', () => {
+  it('skips the pseudo-file without the "-" prefix', async () => {
     process.env.LESSOPEN = '|cat %s';
     expect(openAltFile('-', 'one\n')).toBeNull();
   });
 });
 
 describe('$LESSOPEN validation and -L', () => {
-  it('requires exactly one %s, like less', () => {
+  it('requires exactly one %s, like less', async () => {
     process.env.LESSOPEN = '|cat';
 
     expect(open()).toEqual(['one', 'two']);
@@ -144,7 +144,7 @@ describe('$LESSOPEN validation and -L', () => {
     );
   });
 
-  it('is disabled by -L', () => {
+  it('is disabled by -L', async () => {
     process.env.LESSOPEN = '|tr a-z A-Z < %s';
     scanOptions('-L', []);
 
@@ -153,31 +153,31 @@ describe('$LESSOPEN validation and -L', () => {
 });
 
 describe('$LESSCLOSE', () => {
-  it('runs with the original and replacement names', () => {
+  it('runs with the original and replacement names', async () => {
     const log = path.join(dir, 'close.log');
     process.env.LESSOPEN = '|tr a-z A-Z < %s';
     process.env.LESSCLOSE = `echo %s %s > ${log}`;
 
     open();
-    closeAlt(files.list[0]);
+    await closeAlt(files.list[0]);
 
     expect(fs.readFileSync(log, 'utf8')).toBe(`${orig} -\n`);
     expect(files.list[0].alt).toBeUndefined();
   });
 
-  it('rejects more than two %s markers, like less', () => {
+  it('rejects more than two %s markers, like less', async () => {
     process.env.LESSOPEN = '|tr a-z A-Z < %s';
     process.env.LESSCLOSE = 'echo %s %s %s';
 
     open();
-    closeAlt(files.list[0]);
+    await closeAlt(files.list[0]);
 
     expect(search.message).toBe(
       'LESSCLOSE ignored; must contain no more than 2 %s'
     );
   });
 
-  it('is disallowed by LESSSECURE, ahead of the %s check', () => {
+  it('is disallowed by LESSSECURE, ahead of the %s check', async () => {
     const log = path.join(dir, 'close3.log');
     process.env.LESSCLOSE = `echo %s %s %s > ${log}`;
     process.env.LESSSECURE = '1';
@@ -186,7 +186,7 @@ describe('$LESSCLOSE', () => {
       initSecure();
       // less's close_altfile returns on SF_LESSOPEN before it even
       // reads $LESSCLOSE, so the malformed value goes unreported
-      closeAltFile('-', orig);
+      await closeAltFile('-', orig);
     } finally {
       delete process.env.LESSSECURE;
       initSecure();
@@ -196,12 +196,12 @@ describe('$LESSCLOSE', () => {
     expect(search.message).toBe('');
   });
 
-  it('does nothing without a $LESSOPEN product', () => {
+  it('does nothing without a $LESSOPEN product', async () => {
     const log = path.join(dir, 'close2.log');
     process.env.LESSCLOSE = `echo closed > ${log}`;
 
     open();
-    closeAlt(files.list[0]);
+    await closeAlt(files.list[0]);
 
     expect(fs.existsSync(log)).toBe(false);
   });

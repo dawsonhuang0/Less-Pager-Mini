@@ -438,7 +438,7 @@ export function loadFile(index: number): string[] | null {
 
   // a re-open replaces any previous $LESSOPEN product, like less's edit
   // closing the old alt file first
-  closeAlt(entry);
+  closeAltQuiet(entry);
 
   // $LESSOPEN runs before the file itself opens (it may even handle
   // directories), like edit_ifile calling open_altfile
@@ -511,10 +511,26 @@ export function loadFile(index: number): string[] | null {
  * Runs $LESSCLOSE for an entry's $LESSOPEN product and forgets it,
  * like less's close_altfile when a file is left.
  */
-export function closeAlt(entry: FileEntry | undefined): void {
+export async function closeAlt(entry: FileEntry | undefined): Promise<void> {
   if (!entry || !entry.alt) return;
 
-  closeAltFile(entry.alt, entry.path, entry.preprocError);
+  await closeAltFile(entry.alt, entry.path, entry.preprocError);
+  entry.alt = undefined;
+  entry.preprocError = undefined;
+}
+
+/**
+ * The same, without the gate the preprocessor's complaint would open.
+ *
+ * For an entry being RE-opened: whatever its old product had to say
+ * was said when that product was on the screen, and gating here would
+ * ask the user to dismiss it a second time. It also keeps loadFile
+ * synchronous, which every file open depends on.
+ */
+export function closeAltQuiet(entry: FileEntry | undefined): void {
+  if (!entry || !entry.alt) return;
+
+  void closeAltFile(entry.alt, entry.path, undefined);
   entry.alt = undefined;
   entry.preprocError = undefined;
 }

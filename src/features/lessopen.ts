@@ -344,16 +344,16 @@ export async function streamAltFile(
  * @param altName - The replacement name (`-` for pipes).
  * @param filename - The original file name.
  */
-export function closeAltFile(
+export async function closeAltFile(
   altName: string,
   filename: string,
   preprocError?: string
-): void {
+): Promise<void> {
   // less's close_altfile checks the altpipe status as the file is
   // left, the flag read at close time (a mid-session toggle counts);
   // error() gates INLINE - the message blocks on the current screen
   // and the interrupted action (help, quit, :n) continues after
-  if (preprocError && optShowPreprocError()) gateReturn(preprocError);
+  if (preprocError && optShowPreprocError()) await gateReturn(preprocError);
 
   // the error report above is close_altpipe's, which less runs
   // unguarded; SF_LESSOPEN gates only LESSCLOSE, ahead of reading it

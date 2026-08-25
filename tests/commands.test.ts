@@ -138,13 +138,13 @@ beforeEach(() => {
 });
 
 describe('file command orchestration', () => {
-  it('saves the old position and restores the target position', () => {
+  it('saves the old position and restores the target position', async () => {
     config.row = 3;
     config.subRow = 1;
     files.list[1].saved = { row: 1, subRow: 0 };
     setFirstCmd('+G');
 
-    expect(switchToFile(1)).toBe(true);
+    expect(await switchToFile(1)).toBe(true);
 
     expect(files.list[0].saved).toEqual({ row: 3, subRow: 1 });
     expect(files.index).toBe(1);
@@ -156,7 +156,7 @@ describe('file command orchestration', () => {
     expect(files.newFile).toBe(true);
   });
 
-  it('starts the new file at column 0, like less edit_ifile hshift = 0', () => {
+  it('starts the new file at column 0, like less edit_ifile hshift = 0', async () => {
     // less's edit_ifile zeroes hshift (edit.c:680) in the same block as
     // pos_clear and clr_hilite: a switch starts at the left edge
     // however far the file being left was shifted. It has to - less
@@ -167,12 +167,12 @@ describe('file command orchestration', () => {
     // right-shifted file opened the next one mid-line.
     config.col = 40;
 
-    expect(switchToFile(1)).toBe(true);
+    expect(await switchToFile(1)).toBe(true);
 
     expect(config.col).toBe(0);
   });
 
-  it('leaves the current file alone when the target cannot load', () => {
+  it('leaves the current file alone when the target cannot load', async () => {
     files.list.push({
       path: missing,
       lines: null,
@@ -181,14 +181,14 @@ describe('file command orchestration', () => {
       saved: null,
     });
 
-    expect(switchToFile(2)).toBe(false);
+    expect(await switchToFile(2)).toBe(false);
     expect(files.index).toBe(0);
     expect(session.fullContent[0]).toBe('a1');
     expect(search.message).toContain('No such file or directory');
   });
 
-  it('inserts and opens a new name immediately after the current file', () => {
-    expect(openByName(fileC)).toBe(true);
+  it('inserts and opens a new name immediately after the current file', async () => {
+    expect(await openByName(fileC)).toBe(true);
 
     expect(files.list.map(entry => entry.path))
       .toEqual([fileA, fileC, fileB]);
@@ -196,37 +196,37 @@ describe('file command orchestration', () => {
     expect(session.fullContent).toEqual(['c1', 'c2']);
   });
 
-  it('removes a newly inserted entry again when opening fails', () => {
-    expect(openByName(missing)).toBe(false);
+  it('removes a newly inserted entry again when opening fails', async () => {
+    expect(await openByName(missing)).toBe(false);
 
     expect(files.list.map(entry => entry.path)).toEqual([fileA, fileB]);
     expect(files.index).toBe(0);
   });
 
-  it('uses a numeric :n count and quits past the end under -e', () => {
+  it('uses a numeric :n count and quits past the end under -e', async () => {
     session.buffer = ['1'];
-    stepFile(1);
+    await stepFile(1);
     expect(files.index).toBe(1);
 
     mode.EOF = true;
     opt.quitAtEof = 1;
     const exit = vi.fn();
     session.exit = exit;
-    stepFile(1);
+    await stepFile(1);
 
     expect(exit).toHaveBeenCalledOnce();
   });
 
-  it('rings instead of changing files from the help screen', () => {
+  it('rings instead of changing files from the help screen', async () => {
     mode.HELP = true;
 
-    stepFile(1);
+    await stepFile(1);
 
     expect(files.index).toBe(0);
     expect(stdoutWrite).toHaveBeenCalledWith('\x07');
   });
 
-  it('switches away before deleting the current file', () => {
+  it('switches away before deleting the current file', async () => {
     files.list.push({
       path: fileC,
       lines: null,
@@ -235,16 +235,16 @@ describe('file command orchestration', () => {
       saved: null,
     });
 
-    removeFile();
+    await removeFile();
 
     expect(files.list.map(entry => entry.path)).toEqual([fileB, fileC]);
     expect(files.index).toBe(0);
     expect(session.fullContent).toEqual(['b1', 'b2', 'b3']);
   });
 
-  it('refuses deletion when only one file or help is active', () => {
+  it('refuses deletion when only one file or help is active', async () => {
     files.list.splice(1);
-    removeFile();
+    await removeFile();
     expect(stdoutWrite).toHaveBeenCalledWith('\x07');
 
     stdoutWrite.mockClear();
@@ -256,16 +256,16 @@ describe('file command orchestration', () => {
       saved: null,
     });
     mode.HELP = true;
-    removeFile();
+    await removeFile();
     expect(stdoutWrite).toHaveBeenCalledWith('\x07');
   });
 });
 
 describe(':e examine execution', () => {
-  it('opens the first good name while preserving earlier errors', () => {
+  it('opens the first good name while preserving earlier errors', async () => {
     examine.text = `${missing} ${fileC}`;
 
-    runExamine();
+    await runExamine();
 
     expect(files.index).toBe(1);
     expect(files.list[1].path).toBe(fileC);
@@ -273,11 +273,11 @@ describe(':e examine execution', () => {
     expect(search.message).toContain('No such file or directory');
   });
 
-  it('an empty answer re-examines the current file', () => {
+  it('an empty answer re-examines the current file', async () => {
     files.list[0].lines = null;
     examine.text = '   ';
 
-    runExamine();
+    await runExamine();
 
     expect(files.index).toBe(0);
     expect(session.fullContent[0]).toBe('a1');
@@ -286,7 +286,7 @@ describe(':e examine execution', () => {
 });
 
 describe('shell, pipe, and editor commands', () => {
-  it('blocks the editor under LESSSECURE, like less\'s A_VISUAL', () => {
+  it('blocks the editor under LESSSECURE, like less\'s A_VISUAL', async () => {
     // less gates at the DISPATCH, not inside lsystem: A_VISUAL checks
     // SF_EDIT (command.c:2142) while lsystem itself has no check at
     // all. So runEditor is the right level to assert here, and the
@@ -295,7 +295,7 @@ describe('shell, pipe, and editor commands', () => {
     initSecure();
 
     try {
-      runEditor();
+      await runEditor();
 
       expect(search.message).toBe('Command not available');
       expect(fake.spawnSync).not.toHaveBeenCalled();
@@ -306,7 +306,7 @@ describe('shell, pipe, and editor commands', () => {
     }
   });
 
-  it('runs a hidden shell command and re-enters immediately', () => {
+  it('runs a hidden shell command and re-enters immediately', async () => {
     runShell('-echo hidden', null);
 
     expect(fake.spawnSync).toHaveBeenCalledOnce();
@@ -318,7 +318,7 @@ describe('shell, pipe, and editor commands', () => {
     expect(files.newFile).toBe(true);
   });
 
-  it('parks on the shell screen when a done message is requested', () => {
+  it('parks on the shell screen when a done message is requested', async () => {
     runShell('echo visible', '!done');
 
     expect(session.shellPause).toBe('shell');
@@ -327,7 +327,7 @@ describe('shell, pipe, and editor commands', () => {
       String(call[0]).includes('!done  (press RETURN)'))).toBe(true);
   });
 
-  it('pipes an inclusive marked range and parks on the pager screen', () => {
+  it('pipes an inclusive marked range and parks on the pager screen', async () => {
     pipeMark.rows = [1, 3];
 
     runPipe('wc -l');
@@ -338,44 +338,44 @@ describe('shell, pipe, and editor commands', () => {
     expect(fake.enterScreen).toHaveBeenCalledOnce();
   });
 
-  it('does nothing when a pipe command has no mark', () => {
+  it('does nothing when a pipe command has no mark', async () => {
     runPipe('wc');
 
     expect(fake.spawnSync).not.toHaveBeenCalled();
   });
 
-  it('rejects editing standard input', () => {
+  it('rejects editing standard input', async () => {
     initContent(['stdin']);
     resetSession(['stdin']);
 
-    runEditor();
+    await runEditor();
 
     expect(search.message).toBe('Cannot edit standard input');
     expect(fake.spawnSync).not.toHaveBeenCalled();
   });
 
-  it('warns once before editing a LESSOPEN replacement', () => {
+  it('warns once before editing a LESSOPEN replacement', async () => {
     files.list[0].alt = { path: fileC, lines: ['replacement'] };
 
-    runEditor();
+    await runEditor();
     expect(search.message).toBe('WARNING: This file was viewed via LESSOPEN');
     expect(session.pendingEditWarn).toBe(true);
     expect(fake.spawnSync).not.toHaveBeenCalled();
 
     search.message = '';
-    runEditor();
+    await runEditor();
     expect(fake.spawnSync).toHaveBeenCalledOnce();
     expect(session.pendingEditWarn).toBe(false);
   });
 
-  it('stores +cmd through the shared miscellaneous dispatcher', () => {
+  it('stores +cmd through the shared miscellaneous dispatcher', async () => {
     runMiscInput('+', '  ++42G');
     expect(getFirstCmd()).toBe('42G');
   });
 });
 
 describe('display filter orchestration', () => {
-  it('filters the visible content and returns to the top', () => {
+  it('filters the visible content and returns to the top', async () => {
     startSearch('&', 1);
     for (const char of 'a[24]') searchInputKey(char);
     config.row = 3;
@@ -390,7 +390,7 @@ describe('display filter orchestration', () => {
     expect(config.blankTop).toBe(0);
   });
 
-  it('stores a help-screen filter behind the help content', () => {
+  it('stores a help-screen filter behind the help content', async () => {
     mode.HELP = true;
     session.prevConfig = { ...config, row: 9, subRow: 2 };
     startSearch('&', 1);
@@ -404,7 +404,7 @@ describe('display filter orchestration', () => {
     expect(session.prevConfig.subRow).toBe(0);
   });
 
-  it('leaves content alone after an invalid filter pattern', () => {
+  it('leaves content alone after an invalid filter pattern', async () => {
     startSearch('&', 1);
     searchInputKey('[');
 

@@ -31,16 +31,13 @@ fs.writeSync = ((fd: number, ...args: unknown[]): number => {
 /**
  * Pins the terminal size to whatever a test stubs.
  *
- * freshWindowSize() asks the kernel through `stty size` on /dev/tty,
- * like less's scrsize ioctl, and falls back to node's cached window.
- * Neither route sees a test's stubbed process.stdout.columns/rows, so
- * a suite run FROM a terminal measured the developer's real window
- * and every screen assertion drifted with it — a chopped line stopped
- * being chopped on a wide screen, a squished screen came back the
- * wrong height. Piping the run hid it, because /dev/tty then failed.
+ * detectedDimensions() reads node's own columns/rows, which a test
+ * stubs directly - it no longer spawns `stty` on /dev/tty to ask the
+ * kernel, so a suite run FROM a terminal no longer measures the
+ * developer's real window and drifts with it.
  *
- * Opening /dev/tty is refused here so the probe falls through, and
- * the cached-window fallback reports the stubbed values.
+ * Opening /dev/tty is still refused here: the keyboard opens it too,
+ * and a test must not take the developer's terminal.
  */
 const realOpenSync = fs.openSync.bind(fs);
 

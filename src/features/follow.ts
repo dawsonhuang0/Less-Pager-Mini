@@ -253,7 +253,7 @@ function nameChanged(path: string): boolean {
  *
  * @param kind - `forever` (F), `bell` (ESC-f) or `hilite` (ESC-F).
  */
-export function beginFollow(kind: FollowKind): void {
+export async function beginFollow(kind: FollowKind): Promise<void> {
   // less's forw_loop is a no-op on the help file
   if (mode.HELP || follow.active) return;
 
@@ -263,7 +263,7 @@ export function beginFollow(kind: FollowKind): void {
   // further changes to the real file will not be seen (command.c:1813)
   if (files.list[files.index]?.alt) {
     squishCheck();
-    gateReturn('Warning: command may not work correctly ' +
+    await gateReturn('Warning: command may not work correctly ' +
       'when file is viewed via LESSOPEN');
 
     // "Printing the message has probably scrolled the screen"

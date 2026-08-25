@@ -17,7 +17,6 @@ import {
   gateReturn,
   raiseSigint,
   wasSelfSigint,
-  freshWindowSize,
   watchWinch,
   unwatchWinch,
   closeTtyKeyboard
@@ -182,29 +181,6 @@ describe('tty opening and dimensions', () => {
     expect(keyboardFd()).toBe(2);
   });
 
-  it('falls back to Node window size when /dev/tty is unavailable', () => {
-    vi.spyOn(fs, 'openSync').mockImplementation(() => {
-      throw new Error('no tty');
-    });
-    Object.defineProperty(process.stdout, 'getWindowSize', {
-      value: () => [123, 45],
-      configurable: true,
-    });
-
-    expect(freshWindowSize()).toEqual([123, 45]);
-  });
-
-  it('returns null when neither tty nor cached dimensions exist', () => {
-    vi.spyOn(fs, 'openSync').mockImplementation(() => {
-      throw new Error('no tty');
-    });
-    Object.defineProperty(process.stdout, 'getWindowSize', {
-      value: undefined,
-      configurable: true,
-    });
-
-    expect(freshWindowSize()).toBe(null);
-  });
 });
 
 describe('window-change subscriptions', () => {

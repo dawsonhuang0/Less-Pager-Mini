@@ -16,7 +16,7 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
-  gateReturn, gateReleasedByWinch, gateReleaseKind }
+  gateReturn, gateReleasedByWinch, gateReleaseKind, gateIsOpen }
   from "../tty/keyboard";
 
 
@@ -186,6 +186,7 @@ import {
   examineKey,
   fileInfo,
   closeAlt,
+  closeAltQuiet,
   binaryConfirm,
   revealPipeEnd,
   sizeIsKnown,
@@ -789,7 +790,7 @@ export async function contentPager(
     // first key arrives and pushes the buffer out
     flush();
   });
-  cleanUp();
+  await cleanUp();
 }
 
 /** Starts an interactive process escape unless policy forbids it. */
@@ -830,7 +831,7 @@ function mouseShift(direction: -1 | 1): void {
 }
 
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
-const acts: Record<Actions, () => void> = {
+const acts: Record<Actions, () => void | Promise<void>> = {
   FORCE_EXIT: () => session.exit(),
   EXIT: () => {
     // the lesskey view unwinds before help does, and before quitting:
@@ -890,7 +891,7 @@ const acts: Record<Actions, () => void> = {
   // the direction, so a lesskey file bound to code 66 scrolls with
   // --emouse off entirely - less's decoder never sees the key
   MOUSE_FORWARD: () => lineForward(session.content, optWheelLines()),
-  MOUSE_BACKWARD: () => lineBackward(session.content, optWheelLines()),
+  MOUSE_BACKWARD: () => { lineBackward(session.content, optWheelLines()); },
   MOUSE_LEFT: () => mouseShift(-1),
   MOUSE_RIGHT: () => mouseShift(1),
   SPAN_REPEAT_SEARCH: () => spanningSearch(
@@ -937,8 +938,9 @@ const acts: Record<Actions, () => void> = {
     const open = osc8OpenCommand();
     if (open) runShell(open.command, open.done);
   },
-  LINE_BACKWARD: () =>
-    lineBackward(session.content, bufferToNum(session.buffer) || 1),
+  LINE_BACKWARD: () => {
+    lineBackward(session.content, bufferToNum(session.buffer) || 1);
+  },
   WINDOW_FORWARD: () => windowForward(session.content, session.buffer),
   WINDOW_BACKWARD: () => windowBackward(session.content, session.buffer),
   SET_WINDOW_FORWARD: () => setWindowForward(session.content, session.buffer),
@@ -1139,7 +1141,7 @@ const CMD_EXEC_ACTIONS = new Set<Actions>([
   'MOUSE_FORWARD', 'MOUSE_BACKWARD', 'MOUSE_LEFT', 'MOUSE_RIGHT',
 ]);
 
-function act(action: Actions | undefined): void {
+async function act(action: Actions | undefined): Promise<void> {
   // a new command: the previous one's cmd_exec opening is spent
   search.cmdExecOpened = false;
 
@@ -1185,7 +1187,7 @@ function act(action: Actions | undefined): void {
   if (handled) {
     // The input already updated the shared config/content view.
   } else if (action !== undefined && action in acts) {
-    acts[action]();
+    await acts[action]();
   } else {
     ringBell();
   }
@@ -1299,14 +1301,19 @@ let heldKeyBytes = '';
  * leave the screen stale until the next keypress.
  */
 function keyHandler(data: Buffer): void {
+  // a (press RETURN) gate owns the keyboard while it is up, and both
+  // it and this listen to the same stream: the gate's own listener
+  // takes the key, and this must not run it as a command too
+  if (gateIsOpen()) return;
+
   try {
-    keyHandlerKeys(data);
+    void keyHandlerKeys(data);
   } finally {
     flush();
   }
 }
 
-function keyHandlerKeys(data: Buffer): void {
+async function keyHandlerKeys(data: Buffer): Promise<void> {
   // less's psignals clears sigs before handling it (signal.c:290), so
   // the flag lives only for the work the interrupt was meant to stop.
   // Clearing it at the top of every input chunk makes that fail-safe:
@@ -1846,8 +1853,8 @@ function filterPaste(text: string): string {
   return out;
 }
 
-function handleKey(sequence: string): void {
-  dispatchKey(sequence);
+async function handleKey(sequence: string): Promise<void> {
+  await dispatchKey(sequence);
 
   // less's prompt() checks -F after every command returns to a true
   // prompt: quit when the entire file is displayed, and either way
@@ -1941,7 +1948,7 @@ function x11ToSgr(rest: string): string | null {
 // length. Ours arrives pre-split, so the bytes are collected here.
 let mouseReport: { sgr: boolean, buf: string } | null = null;
 
-function dispatchKey(sequence: string): void {
+async function dispatchKey(sequence: string): Promise<void> {
   session.key = sequence;
   guardTrace('KEY ' + JSON.stringify(sequence) +
     ' msg=' + JSON.stringify(search.message.slice(0, 24)) +
@@ -2897,9 +2904,19 @@ function init() {
   calculateEOF(session.content);
 }
 
-/** Restores the terminal before dying on an unexpected error. */
+/**
+ * Restores the terminal before dying on an unexpected error.
+ *
+ * cleanUp can WAIT - a preprocessor's complaint gates on RETURN as it
+ * leaves - and this cannot: process.exit below runs the moment the
+ * stack unwinds, so an awaited cleanup would be cut off half way and
+ * leave the terminal on the alternate screen. Nobody is going to
+ * answer a question from a process that is already dying, so the
+ * crash path takes the ungated close and gets the terminal back.
+ */
 function onUncaught(error: unknown): void {
-  cleanUp();
+  closeAltQuiet(files.list[files.index]);
+  void cleanUp();
   console.error(error);
   process.exit(1);
 }
@@ -3188,7 +3205,7 @@ let helpClosedAlt = false;
  */
 // the --lesskey-help option reaches the pager through here: options
 // cannot import this module, so the entry point is a hook
-hook.showLesskeyHelp = (): void => openHelp(lesskeyHelp);
+hook.showLesskeyHelp = (): void => { void openHelp(lesskeyHelp); };
 
 // the nested session is what makes `q` mean "done looking": it
 // unwinds the lesskey pager and leaves this one exactly as it was
@@ -3298,7 +3315,7 @@ function anythingUnderView(): boolean {
   return false;
 }
 
-function openHelp(text: string[] = help): void {
+async function openHelp(text: string[] = help): Promise<void> {
   // already on a help page: switch to the other one rather than
   // refusing. Still ONE level deep - `q` goes back to the FILE, like
   // less's h does, not to the page this replaced. less has only the
@@ -3345,7 +3362,10 @@ function openHelp(text: string[] = help): void {
     seedFrameRows([...new Array(config.window - 1).fill(tilde), '']);
   }
 
-  closeAlt(helpEntry);
+  // only a close that can GATE suspends: without an alt there is
+  // nothing to run and nothing to wait for, and awaiting anyway would
+  // put a microtask between opening the help and the help being open
+  if (helpEntry?.alt) await closeAlt(helpEntry);
   helpGateUngot = gateReleaseKind() === 'unget';
 
   // less's winch-released gate resumes a half-open edit that the
@@ -3354,7 +3374,7 @@ function openHelp(text: string[] = help): void {
   // lower-left + clear, then the standout message)
   if (gateReleasedByWinch()) {
     fs.writeSync(1, CURSOR_TO(config.window, 1) + CLEAR_LINE);
-    gateReturn('Cannot seek to that file position');
+    await gateReturn('Cannot seek to that file position');
   }
 
   // less forces BS_SPECIAL + proc_backspace off for the help file
@@ -3433,7 +3453,7 @@ function paintHelpPage(text: string[]): void {
   }
 }
 
-function cleanUp(): void {
+async function cleanUp(): Promise<void> {
   endFollow();
 
   // quitting OUT of the lesskey view (Q, or -e reaching the end)
@@ -3444,7 +3464,13 @@ function cleanUp(): void {
   // less's quit() runs check_altpipe_error before restoring the
   // terminal: closeAlt's inline gate blocks at (press RETURN) on
   // the way out, like error()'s get_return before term_deinit
-  closeAlt(files.list[files.index]);
+  // only a close that can GATE suspends. Awaiting a no-op still hands
+  // the rest of this function to a microtask, and on a session whose
+  // keyboard has gone the process exits before that runs - the
+  // terminal never got its keypad back, and the teardown bytes less
+  // sends were simply missing
+  const leaving = files.list[files.index];
+  if (leaving?.alt) await closeAlt(leaving);
 
   // less's quit() edit-closes the file, whose lastmark raises
   // marks_modified (edit.c:385) - every clean tty quit with a screen

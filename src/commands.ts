@@ -71,7 +71,7 @@ import {
  * stores the position of the file being left, records the previous
  * position, and restores the target's saved position.
  */
-export function switchToFile(target: number): boolean {
+export async function switchToFile(target: number): Promise<boolean> {
   // less's edit_ifile returns at once for the file it already has open
   // (edit.c:465), so re-selecting the current file - `:x` with one
   // file, `:e` on the same name - re-reads nothing and repaints
@@ -86,9 +86,9 @@ export function switchToFile(target: number): boolean {
     if (binaryConfirm.request) {
       binaryConfirm.request = false;
       binaryConfirm.pending = true;
-      binaryConfirm.proceed = () => {
+      binaryConfirm.proceed = async () => {
         files.list[target].everOpened = true;
-        switchToFile(target);
+        await switchToFile(target);
       };
     }
 
@@ -102,7 +102,10 @@ export function switchToFile(target: number): boolean {
   // $LESSOPEN product closes ($LESSCLOSE)
   if (files.index >= 0 && files.index !== target) {
     setPreviousPath(files.list[files.index].path);
-    closeAlt(files.list[files.index]);
+    // only a close that can GATE suspends; without an alt this
+    // function runs to completion synchronously, which the callers
+    // that cannot await it depend on
+    if (files.list[files.index]?.alt) await closeAlt(files.list[files.index]);
   }
 
   files.index = target;
@@ -171,7 +174,7 @@ export function switchToFile(target: number): boolean {
  *
  * @returns True when the file displayed.
  */
-export function openByName(name: string): boolean {
+export async function openByName(name: string): Promise<boolean> {
   let at = files.list.findIndex(entry => entry.path === name);
 
   if (at < 0) {
@@ -185,9 +188,9 @@ export function openByName(name: string): boolean {
       if (binaryConfirm.request) {
         binaryConfirm.request = false;
         binaryConfirm.pending = true;
-        binaryConfirm.proceed = () => {
+        binaryConfirm.proceed = async () => {
           files.list[at].everOpened = true;
-          switchToFile(at);
+          await switchToFile(at);
         };
         return false;
       }
@@ -198,17 +201,17 @@ export function openByName(name: string): boolean {
   } else if (!loadFile(at)) {
     // switchToFile re-runs loadFile and arms the binary
     // confirmation itself when that is what failed
-    return switchToFile(at);
+    return await switchToFile(at);
   }
 
-  return switchToFile(at);
+  return await switchToFile(at);
 }
 
 /**
  * Jumps to the current tag match, like command.c after nexttag:
  * edit the tag's file, then land its line on the -j target.
  */
-export function gotoCurrentTag(): void {
+export async function gotoCurrentTag(): Promise<void> {
   const file = currTagFile();
   if (file === null) return;
 
@@ -227,7 +230,7 @@ export function gotoCurrentTag(): void {
 }
 
 /** Steps the tag list with t / T, like A_NEXT_TAG/A_PREV_TAG. */
-export function tagStep(delta: 1 | -1): void {
+export async function tagStep(delta: 1 | -1): Promise<void> {
   if (stepTag(delta, bufferToNum(session.buffer) || 1) === null) {
     search.message = delta > 0 ? 'No next tag' : 'No previous tag';
     return;
@@ -240,11 +243,11 @@ export function tagStep(delta: 1 | -1): void {
  * Repeats the search across the file list (ESC-n / ESC-N), like less's
  * A_T_AGAIN_SEARCH continuing into the next (or previous) files.
  */
-export function spanningSearch(
+export async function spanningSearch(
   reverse: boolean,
   finder: SearchFinder | null = null,
   sourceEnd: (() => boolean) | null = null
-): void {
+): Promise<void> {
   repeatSearch(
     session.content,
     bufferToNum(session.buffer) || 1,
@@ -257,7 +260,7 @@ export function spanningSearch(
     const target = files.index + (forward ? 1 : -1);
 
     if (target < 0 || target >= files.list.length) return;
-    if (!switchToFile(target)) return;
+    if (!await switchToFile(target)) return;
 
     // a fresh file searches from its top (its end going backward)
     if (!forward && !sourceEnd?.()) lastLine(session.content, 0);
@@ -267,7 +270,7 @@ export function spanningSearch(
   }
 }
 
-export function stepFile(delta: 1 | -1): void {
+export async function stepFile(delta: 1 | -1): Promise<void> {
   if (mode.HELP) {
     ringBell();
     return;
@@ -282,10 +285,10 @@ export function stepFile(delta: 1 | -1): void {
     return;
   }
 
-  switchToFile(target);
+  await switchToFile(target);
 }
 
-export function removeFile(): void {
+export async function removeFile(): Promise<void> {
   if (mode.HELP || files.list.length <= 1) {
     ringBell();
     return;
@@ -294,7 +297,7 @@ export function removeFile(): void {
   const removed = files.index;
   const target = removed < files.list.length - 1 ? removed + 1 : removed - 1;
 
-  if (!switchToFile(target)) return;
+  if (!await switchToFile(target)) return;
 
   // less's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
@@ -306,7 +309,7 @@ export function removeFile(): void {
  * edit_list: every name enters the list after the current file,
  * unopenable ones drop out, and the first good one becomes current.
  */
-export function runExamine(): void {
+export async function runExamine(): Promise<void> {
   // less's exec_mca runs cmd_exec() before the A_EXAMINE dispatch
   // (command.c:267), so the prompt row is cleared and flushed before
   // the glob shells out - and the shell's own stderr, which less does
@@ -363,9 +366,9 @@ export function runExamine(): void {
         binaryConfirm.pending = true;
 
         const target = at;
-        binaryConfirm.proceed = () => {
+        binaryConfirm.proceed = async () => {
           files.list[target].everOpened = true;
-          switchToFile(target);
+          await switchToFile(target);
         };
 
         // the query has not been answered yet, so edit_ifile has not
@@ -438,7 +441,7 @@ export function runExamine(): void {
     // less's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with
     // the filename
-    switchToFile(files.index);
+    await switchToFile(files.index);
   }
 
   if (errors.length) {
@@ -700,7 +703,7 @@ export function runPipe(cmd: string): void {
  * Edits the current file with $VISUAL or $EDITOR at the middle
  * displayed line, then re-examines it, like less's LESSEDIT proto.
  */
-export function runEditor(): void {
+export async function runEditor(): Promise<void> {
   // less breaks SILENTLY on the help file (`if (ch_getflags() &
   // CH_HELPFILE) break`, command.c:2145) but reports a secure denial,
   // so the two cannot share one return
@@ -745,7 +748,12 @@ export function runEditor(): void {
 
     saveFilePosition();
     files.index = -1;
-    switchToFile(index);
+
+    // this callback owes runShell a boolean now, so it cannot wait -
+    // and does not have to: a lesskey temp file has no $LESSOPEN
+    // product, so switchToFile never reaches its one await and every
+    // effect below is already applied
+    void switchToFile(index);
 
     const failed = refreshLesskeyView(LESS_VERSION);
 
@@ -779,7 +787,7 @@ export function runEditor(): void {
   });
 
   // the file may have changed: re-examine it, like less's reedit
-  switchToFile(files.index);
+  await switchToFile(files.index);
 }
 
 export function runMiscInput(
