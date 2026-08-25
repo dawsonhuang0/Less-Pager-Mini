@@ -19,7 +19,7 @@ import { searchInterrupted } from './searching';
 
 import { appendLogLines } from './misc';
 
-import { keyboard, consumeInterrupt } from '../tty/keyboard';
+import { consumeInterrupt, setKeyboardRaw } from '../tty/keyboard';
 
 import { startupErrors } from '../startup/startup';
 
@@ -304,7 +304,7 @@ export function pipeFullProbe(): Promise<void> {
     // less's raw mode is on from startup, so ^C reaches the scan as
     // an interrupt instead of killing the process; the keyboard
     // stays paused, leaving its bytes to the readSync poll
-    keyboard().setRawMode(true);
+    setKeyboardRaw(true);
 
     // huge pipes recycle their oldest data while scanning, like
     // less's ch buffers under -B during scan_eof

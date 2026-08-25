@@ -10,8 +10,8 @@ const fake = vi.hoisted(() => ({
   spawnSync: vi.fn(),
   suspendTerminal: vi.fn(),
   enterScreen: vi.fn(),
+  setKeyboardRaw: vi.fn(),
   keyboard: {
-    setRawMode: vi.fn(),
     resume: vi.fn(),
   },
 }));
@@ -24,6 +24,7 @@ vi.mock('child_process', async importOriginal => ({
 vi.mock('../src/tty/keyboard', async importOriginal => ({
   ...await importOriginal<typeof import('../src/tty/keyboard')>(),
   keyboard: () => fake.keyboard,
+  setKeyboardRaw: fake.setKeyboardRaw,
 }));
 
 vi.mock('../src/tty/screen', async importOriginal => ({
@@ -98,7 +99,7 @@ beforeEach(() => {
   fake.spawnSync.mockReset();
   fake.suspendTerminal.mockReset();
   fake.enterScreen.mockReset();
-  fake.keyboard.setRawMode.mockReset();
+  fake.setKeyboardRaw.mockReset();
   fake.keyboard.resume.mockReset();
   stdoutWrite.mockClear();
 
@@ -312,7 +313,7 @@ describe('shell, pipe, and editor commands', () => {
     expect(fake.spawnSync).toHaveBeenCalledOnce();
     expect(fake.suspendTerminal).toHaveBeenCalledOnce();
     expect(fake.enterScreen).toHaveBeenCalledOnce();
-    expect(fake.keyboard.setRawMode).toHaveBeenCalledWith(true);
+    expect(fake.setKeyboardRaw).toHaveBeenCalledWith(true);
     expect(fake.keyboard.resume).toHaveBeenCalledOnce();
     expect(session.shellPause).toBe(false);
     expect(files.newFile).toBe(true);

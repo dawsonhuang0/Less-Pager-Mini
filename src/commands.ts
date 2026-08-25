@@ -3,7 +3,7 @@ import { putstr } from './tty/output';
 
 import { shellArgv } from './tty/platform';
 
-import { keyboard } from './tty/keyboard';
+import { keyboard, setKeyboardRaw } from './tty/keyboard';
 
 import { config, mode } from './state/config';
 
@@ -503,7 +503,7 @@ export function runShell(
   recordLastPosition();
 
   // raw single-key input for the done pause, still on the shell screen
-  keyboard().setRawMode(true);
+  setKeyboardRaw(true);
   keyboard().resume();
 
   if (doneMsg) {

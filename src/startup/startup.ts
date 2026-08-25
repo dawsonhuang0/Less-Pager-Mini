@@ -1,4 +1,4 @@
-import { keyboard, dumbTerminal, watchWinch, unwatchWinch }
+import { keyboard, dumbTerminal, watchWinch, unwatchWinch, setKeyboardRaw }
   from '../tty/keyboard';
 
 import { opt, scanOptions, initUnsupport, takeCliOptions, flushPendopt, onRebuild, optKnowDumb } from '../options';
@@ -147,7 +147,7 @@ export function printStartupError(message: string): void {
 }
 
 export function warnReturn(): Promise<string> {
-  keyboard().setRawMode(true);
+  setKeyboardRaw(true);
   keyboard().resume();
 
   return new Promise(resolve => {

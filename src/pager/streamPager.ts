@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 
 import { lgetenv, screenFillGrace } from '../startup/environment';
 
-import { keyboard, openTtyKeyboard } from '../tty/keyboard';
+import { keyboard, openTtyKeyboard, setKeyboardRaw } from '../tty/keyboard';
 
 
 import { freshSession } from '../startup/freshSession';
@@ -204,7 +204,7 @@ async function filePagerBody(
       flush();
 
       const answer = await warnReturn();
-      keyboard().setRawMode(false);
+      setKeyboardRaw(false);
       keyboard().pause();
       putstr('\n');
 
@@ -264,7 +264,7 @@ async function blockFirstFile(
     );
 
     const answer = await warnReturn();
-    keyboard().setRawMode(false);
+    setKeyboardRaw(false);
     keyboard().pause();
     putstr('\n');
 

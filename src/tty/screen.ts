@@ -1,4 +1,4 @@
-import { keyboard } from './keyboard';
+import { keyboard, setKeyboardRaw } from './keyboard';
 import { putstr, flush } from './output';
 
 import { config, mode, setFullScreen } from '../state/config';
@@ -129,7 +129,7 @@ export function suspendTerminal(): void {
   // line away: less showed "hi", we showed nothing.
   flush();
 
-  keyboard().setRawMode(false);
+  setKeyboardRaw(false);
   keyboard().pause();
   hook.screenActive = false;
 }

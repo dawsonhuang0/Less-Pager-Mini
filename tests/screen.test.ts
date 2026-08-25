@@ -5,8 +5,8 @@ const fake = vi.hoisted(() => ({
   // dispatching SIGWINCH - detectedDimensions reads them rather than
   // spawning stty to ask again
   size: null as [number, number] | null,
+  setKeyboardRaw: vi.fn(),
   keyboard: {
-    setRawMode: vi.fn(),
     pause: vi.fn(),
   },
 }));
@@ -14,6 +14,7 @@ const fake = vi.hoisted(() => ({
 vi.mock('../src/tty/keyboard', async importOriginal => ({
   ...await importOriginal<typeof import('../src/tty/keyboard')>(),
   keyboard: () => fake.keyboard,
+  setKeyboardRaw: fake.setKeyboardRaw,
 }));
 
 import { config, mode, DEFAULT_COLUMN, DEFAULT_WINDOW }
@@ -64,7 +65,7 @@ function applyFakeSize(): void {
 beforeEach(() => {
   fake.size = null;
   applyFakeSize();
-  fake.keyboard.setRawMode.mockClear();
+  fake.setKeyboardRaw.mockClear();
   fake.keyboard.pause.mockClear();
   stdoutWrite.mockClear();
 
@@ -116,7 +117,7 @@ describe('terminal mode transitions', () => {
       KEYPAD_OFF,
       ALTERNATE_CONSOLE_OFF,
     ]);
-    expect(fake.keyboard.setRawMode).toHaveBeenCalledWith(false);
+    expect(fake.setKeyboardRaw).toHaveBeenCalledWith(false);
     expect(fake.keyboard.pause).toHaveBeenCalledOnce();
     expect(hook.screenActive).toBe(false);
   });
@@ -174,7 +175,7 @@ describe('terminal mode transitions', () => {
     suspendTerminal();
 
     expect(writes()).toEqual([]);
-    expect(fake.keyboard.setRawMode).toHaveBeenCalledWith(false);
+    expect(fake.setKeyboardRaw).toHaveBeenCalledWith(false);
   });
 
   it('enters every enabled screen mode and marks the screen active', () => {

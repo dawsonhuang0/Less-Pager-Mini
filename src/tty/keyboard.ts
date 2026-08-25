@@ -5,6 +5,7 @@ import tty from 'tty';
 import { terminalEnv } from '../startup/environment';
 
 import { flush } from './output';
+import { rawMode, termiosOwned, setIsig } from './termios';
 
 /**
  * The keyboard stream, like less's ttyin.c: keys come from the
@@ -28,6 +29,41 @@ let ttyFd: number | null = null;
 
 /** The keyboard's file descriptor, for synchronous interrupt polls. */
 export const keyboardFd = (): number => ttyFd ?? 0;
+
+/**
+ * Enters or leaves raw mode, like og's raw_mode(TRUE/FALSE).
+ *
+ * og sets the terminal modes itself and touches only the five lflag
+ * bits it needs, leaving ISIG - and therefore what a typed ^C means -
+ * to the terminal. termios.ts does the same through stty; node's
+ * setRawMode is the fallback where that is impossible (Windows, no
+ * stty), and it is the ONLY case in which a ^C byte has to be read as
+ * an interrupt, because there the kernel can no longer raise one.
+ */
+export function setKeyboardRaw(on: boolean): void {
+  if (stream.isTTY && rawMode(ttyFd ?? 0, on)) return;
+
+  // a keyboard that is not a terminal has no modes to set: og's
+  // tcsetattr simply fails on such an fd and it carries on (the fd 2
+  // fallback in attachPlain is exactly that case)
+  stream.setRawMode?.(on);
+}
+
+/** Whether the terminal modes are ours, so ISIG is the terminal's. */
+export const ownsTermios = (): boolean => termiosOwned();
+
+/**
+ * Turns the terminal's signal generation on or off.
+ *
+ * Only the --use-js-regexp guard asks: see termios.ts. Everything
+ * else leaves ISIG exactly as the terminal had it, which is og's
+ * whole behaviour here.
+ */
+export function setKeyboardIsig(on: boolean): void {
+  if (!stream.isTTY) return;
+
+  setIsig(ttyFd ?? 0, on);
+}
 
 /** Opens a device by name, or -1. */
 function openDevice(path: string): number {
@@ -289,6 +325,15 @@ export function gateIsOpen(): boolean {
   return gateOpen;
 }
 
+// ends the gate that is open, if one is: less's get_return returning
+// READ_INTR when a signal reaches the read it is blocked in
+let releaseGate: () => void = () => {};
+
+/** Ends an open (press RETURN) gate, like get_return's READ_INTR. */
+export function releaseGateOnInterrupt(): void {
+  releaseGate();
+}
+
 export async function gateReturn(message: string): Promise<void> {
   gateKind = 'dismiss';
   gateCol = message.length + '  (press RETURN)'.length + 1;
@@ -332,7 +377,18 @@ export async function gateReturn(message: string): Promise<void> {
       resolve(Buffer.alloc(0));
     };
 
+    // and an interrupt IS how get_return ends on a signal: getchr
+    // returns READ_INTR (ttyin.c:217), which get_return neither ungets
+    // nor waits past - the message goes and the interrupted command
+    // carries on with S_INTERRUPT still pending
+    releaseGate = (): void => {
+      gateKind = 'dismiss';
+      finish();
+      resolve(Buffer.alloc(0));
+    };
+
     const finish = (): void => {
+      releaseGate = () => {};
       keyboard().off('data', onKey);
       unwatchWinch(onWinch);
     };
@@ -345,11 +401,25 @@ export async function gateReturn(message: string): Promise<void> {
 
   const key = bytes.length > 0 ? bytes.toString('utf8')[0] : '';
 
-  if (key && key !== '\r' && key !== '\n' && key !== ' ' &&
-      key !== '\x03') {
+  // og's get_return ungets anything that is not RETURN, space or
+  // READ_INTR (output.c:696) - and READ_INTR on a tty read means a
+  // SIGNAL, which is why the interrupt path above resolves this
+  // promise instead of delivering a key. A 0x03 that arrives here as
+  // a BYTE is an ordinary character, ungot like any other, unless we
+  // could not take the terminal and are reading it as the interrupt
+  // ourselves
+  const intrByte = !termiosOwned() && key === '\x03';
+
+  if (key && key !== '\r' && key !== '\n' && key !== ' ' && !intrByte) {
     pushUngot(bytes);
     gateKind = 'unget';
   }
+
+  // where no kernel raises it for us, the byte still has to mean what
+  // the signal would have: S_INTERRUPT pending when the interrupted
+  // command resumes, which is why F answered with ^C never runs an
+  // iteration (forw_loop is `while (!sigs)`)
+  if (intrByte) raiseAbort();
 
   fs.writeSync(1, '\r\x1b[K');
 }

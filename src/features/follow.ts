@@ -8,7 +8,8 @@ import { optFollowName, optExitFollowOnClose } from "../options";
 
 import { POLLHUP_EXITS_F } from "../tty/platform";
 
-import { gateReturn, gateEndColumn } from "../tty/keyboard";
+import { gateReturn, gateEndColumn, abortSigs, clearAbort }
+  from "../tty/keyboard";
 
 import { session, deriveContent } from '../state/session';
 
@@ -292,6 +293,18 @@ export async function beginFollow(kind: FollowKind): Promise<void> {
   // F while already at the end rings the at-end bell (jump_loc's
   // back(0) hitting eof_bell); the first F just moves there
   if (!sourceFollowHooks?.pinEnd(true)) lastLine(session.content, 0);
+
+  // and only THEN does it test `while (!sigs)` (command.c:1358): a ^C
+  // that answered the warning gate left S_INTERRUPT pending, so the
+  // jump above still lands but the wait never starts. The command loop
+  // clears the flag in psignals before the prompt, which is why less
+  // ends up showing (END) rather than the wait message
+  if (abortSigs()) {
+    clearAbort();
+    endFollow();
+    return;
+  }
+
   session.followTimer = setInterval(followTick, 50);
 }
 

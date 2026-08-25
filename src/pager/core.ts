@@ -15,6 +15,7 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
   from '../features/osc8';
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
+  setKeyboardRaw,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
   gateReturn, gateReleasedByWinch, gateReleaseKind, gateIsOpen }
   from "../tty/keyboard";
@@ -52,7 +53,7 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
-import { trace as guardTrace } from "../features/jsRegexGuard";
+import { trace as guardTrace , guardHoldsIsig } from "../features/jsRegexGuard";
 
 import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
   lesskeyViewOpen,
@@ -60,7 +61,9 @@ import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
 
 import { LESS_VERSION } from "../lesskey";
 
-import { raiseAbort, clearAbort, ungotIsLive} from "../tty/keyboard";
+import { raiseAbort, clearAbort, ungotIsLive, consumeInterrupt,
+  abortSigs, ownsTermios, releaseGateOnInterrupt }
+  from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
   tailCascade } from "../keys";
@@ -535,7 +538,7 @@ export async function contentPager(
 
     // less's query() quits on a capital Q only (output.c:808)
     if (answer === 'Q') {
-      keyboard().setRawMode(false);
+      setKeyboardRaw(false);
       closeTtyKeyboard();
       process.exit(0);
     }
@@ -578,7 +581,7 @@ export async function contentPager(
       }
     }
 
-    keyboard().setRawMode(false);
+    setKeyboardRaw(false);
     keyboard().pause();
   }
 
@@ -1313,6 +1316,34 @@ function keyHandler(data: Buffer): void {
   }
 }
 
+/**
+ * Whether a ^C is less's interrupt.
+ *
+ * It is a KERNEL signal in less, never a byte. og's raw_mode leaves
+ * ISIG alone (screen.c set_termio_flags touches five lflag bits and
+ * ISIG is not one), so on a terminal that generates signals the byte
+ * never arrives at all - and on one that does NOT, 0x03 is an
+ * ordinary unbound character: it is in neither cmdtable nor edittable
+ * (decode.c), and check_poll compares the byte against intr_char (^X)
+ * alone, ungetcc_backing everything else. That is why less cannot be
+ * ^C'd out of F under -isig, measured by hand and reproduced on a pty
+ * with ISIG cleared.
+ *
+ * So the byte counts only where no kernel will raise the signal for
+ * us: a terminal node's raw mode took and we could not, and the
+ * window the --use-js-regexp guard holds ISIG off (termios.ts). The
+ * real signal announces itself the way less's u_interrupt does, by
+ * setting S_INTERRUPT before the handler runs.
+ */
+function intrIsByte(): boolean {
+  return !ownsTermios() || guardHoldsIsig();
+}
+
+/** True when this key is the interrupt rather than a plain ^C byte. */
+function isInterrupt(key: string): boolean {
+  return key === '\x03' && (intrIsByte() || abortSigs());
+}
+
 async function keyHandlerKeys(data: Buffer): Promise<void> {
   // less's psignals clears sigs before handling it (signal.c:290), so
   // the flag lives only for the work the interrupt was meant to stop.
@@ -1364,7 +1395,7 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   // the whole chunk aborted the paints of those first four j's too.
   // It is raised where the ^C is actually reached: in the key loop
   // below, or by the poll when one is typed during the work.
-  if (text.includes('\x03')) {
+  if (intrIsByte() && text.includes('\x03')) {
     // less's ISIG: the tty driver FLUSHES the input queue when it
     // generates SIGINT, so every key typed before the ^C is thrown
     // away by the KERNEL and less never sees them.
@@ -1387,18 +1418,20 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
     // less does not poll the tty while acquiring the first screen until
     // LESS_SCREENFILL_TIME expires. Queue ordinary keys for the command
     // loop, but let ^C interrupt the fill immediately.
-    if (pipeFilling() && screenFillGrace() && !text.includes('\x03')) {
+    if (pipeFilling() && screenFillGrace() &&
+        !(intrIsByte() && text.includes('\x03'))) {
       session.fillKeys.push(text);
       return;
     }
 
-    if (text.includes('\x03') || text.includes(optIntrChar())) {
+    if ((intrIsByte() && text.includes('\x03')) ||
+        text.includes(optIntrChar())) {
       if (pendingScroll.rows) {
-        abortPendingScroll(text.includes('\x03'));
+        abortPendingScroll(intrIsByte() && text.includes('\x03'));
       } else {
         // less's ^C is a SIGINT whose u_interrupt handler bells; the
         // --intr char reaches the read silently
-        if (text.includes('\x03')) ringBell();
+        if (intrIsByte() && text.includes('\x03')) ringBell();
         abortPipeFill();
       }
 
@@ -1426,9 +1459,9 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   // a movement/search/G wait over a growing spool is the pipe read
   // itself: ^C or --intr abandons it and restores bounded read-ahead,
   // like less's READ_INTR breaking out of a blocked pipe read
-  if ((text.includes('\x03') || text.includes(optIntrChar())) &&
-      pagerInput?.interrupt?.()) {
-    if (text.includes('\x03')) ringBell();
+  if (((intrIsByte() && text.includes('\x03')) ||
+      text.includes(optIntrChar())) && pagerInput?.interrupt?.()) {
+    if (intrIsByte() && text.includes('\x03')) ringBell();
     render(session.content, session.buffer);
 
     const cut = Math.max(
@@ -1482,7 +1515,7 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   //
   // I had this backwards at first - keeping the leading keys and
   // dropping the trailing ones - which matched only the first shape.
-  const intr = chunk.indexOf('\x03');
+  const intr = intrIsByte() ? chunk.indexOf('\x03') : -1;
 
   if (intr > 0) {
     chunk.splice(0, intr);
@@ -1748,7 +1781,16 @@ function drainKeys(): void {
   // message they answer has been showing the whole time
   if (!search.message || ungotIsLive()) {
     const pending = takeUngot();
-    if (pending && !session.exited) keyHandler(pending);
+
+    if (pending && !session.exited) {
+      // less's ungot queue is INVISIBLE to the F wait: check_poll polls
+      // the tty (os.c:158), never the queue, so a char ungotten before
+      // forw_loop started - get_return's pushback from the LESSOPEN
+      // warning - simply waits there, and even the --intr char does not
+      // abort the wait it preceded. Only a key typed INTO the wait can
+      if (follow.active) follow.queued.push(pending.toString('utf8'));
+      else keyHandler(pending);
+    }
   }
 }
 
@@ -2015,13 +2057,13 @@ async function dispatchKey(sequence: string): Promise<void> {
   // fails its ch_length check and errors ("Don't know length of
   // file"); ^C's u_interrupt handler rings the bell either way
   if (session.pipeDrainTo &&
-      (session.key === '\x03' || session.key === optIntrChar())) {
+      (isInterrupt(session.key) || session.key === optIntrChar())) {
     const jump = session.pipeDrainTo;
     session.pipeDrainTo = null;
     pipeDraining.active = false;
     session.pipeWaiting = false;
 
-    if (session.key === '\x03') ringBell();
+    if (isInterrupt(session.key)) ringBell();
 
     if (pipeDraining.cancelMessage) search.message = pipeDraining.cancelMessage;
     else jump();
@@ -2065,7 +2107,7 @@ async function dispatchKey(sequence: string): Promise<void> {
 
   // -K exits on ctrl-C, like less's quit_on_intr; less's psignals
   // quits with QUIT_INTERRUPT = 2 (signal.c:296)
-  if (session.key === '\x03' && optQuitOnIntr()) {
+  if (isInterrupt(session.key) && optQuitOnIntr()) {
     process.exitCode = 2;
     session.exit();
     return;
@@ -2082,7 +2124,7 @@ async function dispatchKey(sequence: string): Promise<void> {
   // ...but not while something is already WAITING on the interrupt:
   // F, a pipe drain and a pending scroll each read it as their own
   // stop signal below, ring their own bell and repaint their own way
-  if (session.key === '\x03' && !follow.active && !session.pipeDrainTo &&
+  if (isInterrupt(session.key) && !follow.active && !session.pipeDrainTo &&
       !pendingScroll.rows && !session.pipeWaiting) {
     ringBell();
 
@@ -2154,12 +2196,18 @@ async function dispatchKey(sequence: string): Promise<void> {
       return;
     }
 
-    if (session.key === '\x03' || session.key === optIntrChar()) {
+    if (isInterrupt(session.key) || session.key === optIntrChar()) {
       // ^C arrives as less's SIGINT, whose u_interrupt handler rings
       // the bell; the --intr char (READ_INTR) leaves silently — and
       // both run getcc_clear, discarding the keys typed in the wait
-      if (session.key === '\x03') ringBell();
+      if (isInterrupt(session.key)) ringBell();
 
+      // getcc_clear (os.c:309) empties the UNGOT queue too, not just
+      // the keys the wait collected: a char ungotten before forw_loop
+      // even started - get_return's pushback from the LESSOPEN warning
+      // - dies with the interrupt rather than running as the next
+      // command behind it
+      consumeInterrupt();
       endFollow();
       render(session.content, session.buffer);
     } else {
@@ -2849,7 +2897,7 @@ function init() {
     config.startLine = 0;
   }
 
-  keyboard().setRawMode(true);
+  setKeyboardRaw(true);
   keyboard().resume();
   keyboard().setEncoding('utf8');
 
@@ -2894,6 +2942,15 @@ function init() {
 
   // a SIGUSR1 runs the $LESS_SIGUSR1 keys, like less's sigusr()
   process.on('SIGUSR1', onSigusr1);
+
+  // og leaves ISIG alone, so its raw mode still generates these two
+  // from the keyboard - and it therefore has to own them
+  // (signal.c:181,190). ^\ is IGNORED outright; without a listener
+  // node dumps core on it and leaves the terminal in raw mode. ^Z is
+  // the S_STOP path: the same work the ^Z BYTE does where the driver
+  // does not signal for us
+  process.on('SIGQUIT', onQuit);
+  process.on('SIGTSTP', onStop);
 
   process.on('uncaughtException', onUncaught);
 
@@ -3048,8 +3105,14 @@ function onTerminate(): void {
 function onSigint(): void {
   // our own raiseSigint echo: the typed ^C's byte path already ran
   if (wasSelfSigint()) return;
+  if (session.exited) return;
 
-  if (!session.exited) handleKey('\x03');
+  // less's u_interrupt sets S_INTERRUPT before anything reads it
+  // (signal.c:48), and that flag is what tells the key handling this
+  // ^C is the interrupt and not a byte somebody typed
+  raiseAbort();
+  releaseGateOnInterrupt();
+  handleKey('\x03');
 }
 
 /** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like less's sigusr(). */
@@ -3062,6 +3125,18 @@ function onSigusr1(): void {
   for (const sequence of splitKeys(cmd)) handleKey(sequence);
 }
 
+/** less's `LSIGNAL(SIGQUIT, SIG_IGN)` (signal.c:190). */
+function onQuit(): void {
+  // nothing: ^\ is not a less command and must not kill the pager
+}
+
+/** less's SIGTSTP handler, whose S_STOP psignals runs the suspend. */
+function onStop(): void {
+  if (session.exited) return;
+
+  suspendSelf();
+}
+
 /**
  * Suspends on ^Z, like less's psignals S_STOP handling: the terminal
  * restores, the process stops, and the screen repaints when the
@@ -3072,12 +3147,18 @@ function suspendSelf(): void {
   if (!secureAllow('stop')) return;
 
   suspendTerminal();
+
+  // less's psignals goes SIG_DFL around its own kill() and rebinds
+  // after (signal.c:263,271): with our handler still on, node would
+  // catch the re-raise and suspend forever instead of stopping
+  process.off('SIGTSTP', onStop);
   process.kill(process.pid, 'SIGTSTP');
+  process.on('SIGTSTP', onStop);
 
   // execution continues here when the shell resumes us — or right
   // away when the kernel discards the stop (orphaned process
   // group); less's psignals resumes the same way after its kill()
-  keyboard().setRawMode(true);
+  setKeyboardRaw(true);
   keyboard().resume();
   enterScreen();
   calculateDimensions();
@@ -3525,11 +3606,13 @@ async function cleanUp(): Promise<void> {
   process.off('SIGHUP', onTerminate);
   process.off('SIGINT', onSigint);
   process.off('SIGUSR1', onSigusr1);
+  process.off('SIGQUIT', onQuit);
+  process.off('SIGTSTP', onStop);
   unwatchWinch(onResize);
   process.off('uncaughtException', onUncaught);
 
   keyboard().off('data', keyHandler);
-  keyboard().setRawMode(false);
+  setKeyboardRaw(false);
   keyboard().pause();
 
   // the -e hook holds this session's closure otherwise
