@@ -2926,63 +2926,20 @@ function onResize(): void {
   // tears down would paint into a terminal cleanUp has restored
   if (session.exited) return;
 
-  // The FIRST movement draws at once, so the screen answers the hand
-  // straight away. Everything after it is silence until the hand
-  // stops - drawing under a drag fights the terminal, which is
-  // re-laying the window out at the same time, and the binary draws
-  // nothing there either.
-  if (winchTimer === null) {
-    applyResize();
-    waitForStillness();
-    return;
-  }
-
-  winchPending = true;
+  // and then it paints, here, now. The binary repaints on every
+  // resize it is woken for - measured at 100ms apart it writes a full
+  // screen each time, 1974, 2281, 2606 bytes and so on - so the text
+  // follows the window under a moving hand rather than sitting at the
+  // size the drag began with. Nothing is deferred: what keeps this
+  // from running away is the same thing that bounds less, a standard
+  // signal that is already pending does not queue a second time.
+  applyResize();
 }
-
-/**
- * How long the hand has to hold still before the screen is worth
- * drawing.
- *
- * Short enough that a single resize - where nothing follows it - is
- * one imperceptible wait and then the paint.
- */
-const WINCH_SETTLE_MS = 16;
-
-let winchPending = false;
-let winchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // the size the last resize was painted for, so a duplicate signal for
 // the same size costs nothing
 let winchCols = -1;
 let winchRows = -1;
-
-function waitForStillness(): void {
-  winchPending = false;
-
-  winchTimer = setTimeout(() => {
-    // it moved again while we waited: keep waiting, draw nothing
-    if (winchPending) {
-      waitForStillness();
-      return;
-    }
-
-    winchTimer = null;
-
-    // where the hand let go
-    applyResize();
-  }, WINCH_SETTLE_MS);
-
-  // a pending wait must not hold a quitting process open
-  winchTimer.unref?.();
-}
-
-/** Drops a pending resize, so a torn-down session paints nothing. */
-function clearWinch(): void {
-  if (winchTimer !== null) clearTimeout(winchTimer);
-  winchTimer = null;
-  winchPending = false;
-}
 
 function applyResize(): void {
   if (session.exited || session.shellPause) return;
@@ -3543,7 +3500,6 @@ function cleanUp(): void {
   process.off('SIGINT', onSigint);
   process.off('SIGUSR1', onSigusr1);
   unwatchWinch(onResize);
-  clearWinch();
   process.off('uncaughtException', onUncaught);
 
   keyboard().off('data', keyHandler);
