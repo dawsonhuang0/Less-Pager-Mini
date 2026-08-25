@@ -4,6 +4,8 @@ import tty from 'tty';
 
 import { terminalEnv } from '../startup/environment';
 
+import { flush } from './output';
+
 /**
  * The keyboard stream, like less's ttyin.c: keys come from the
  * controlling terminal, not stdin, so piped input (`cmd | lmn`)
@@ -296,6 +298,15 @@ export async function gateReturn(message: string): Promise<void> {
     fs.writeSync(1, message + '\n');
     return;
   }
+
+  // Everything the command has drawn so far goes out FIRST. The
+  // renderer buffers and empties itself on the next turn of the event
+  // loop, on the stated assumption that "a command runs to completion
+  // inside a single turn" - which stopped being true the moment this
+  // gate started awaiting. The turn happens during the wait now, so a
+  // frame still sitting in that buffer was written straight over the
+  // message: the question vanished and only the blocking was left.
+  flush();
 
   fs.writeSync(1, '\r\x1b[K\x1b[7m' + message +
     '  (press RETURN)\x1b[27m');
