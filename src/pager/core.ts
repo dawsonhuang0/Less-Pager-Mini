@@ -31,7 +31,7 @@ import { startupInit, printStartupError, startupErrors, warnReturn }
   from "../startup/startup";
 
 import { calculateDimensions, suspendTerminal, enterScreen,
-  leaveScreenCodes, termInitTail }
+  leaveScreenCodes, termInitTail, detectedDimensions }
   from "../tty/screen";
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
@@ -2904,9 +2904,97 @@ function onUncaught(error: unknown): void {
   process.exit(1);
 }
 
-/** Repaints for the new size on SIGWINCH, like less's winch(). */
+/**
+ * less's lwinch: `sigs |= S_WINCH; intio()` and nothing else
+ * (signal.c:108). The work is psignals' at the next turn of the
+ * command loop, and the PAINT is prompt()'s - which opens with
+ * ABORT_SIGS() and returns without painting while any signal is still
+ * pending (command.c). So a drag, which delivers a signal per mouse
+ * movement, repaints when the hand STOPS, not once per movement.
+ *
+ * We repainted per signal, synchronously in the handler. Measured
+ * against the binary on fifty resizes: less wrote 6,740 bytes and went
+ * quiet 7ms later, we wrote 228,096 and took 177ms - and at a real
+ * drag's rate, 8ms apart, less settled 5ms after the last movement
+ * where we were still working 120ms later. One resize costs about the
+ * same in both; it is the COUNT that ran away.
+ */
 function onResize(): void {
   if (session.shellPause) return;
+
+  // the guard its neighbours have: a resize arriving while the session
+  // tears down would paint into a terminal cleanUp has restored
+  if (session.exited) return;
+
+  // A resize on its own paints AT ONCE - it is a drag that has to be
+  // held back, and only while it is still moving. Waiting to see
+  // whether more are coming would tax the common case to pay for the
+  // rare one: measured, that cost a lone resize 43ms where the binary
+  // takes 5.
+  if (winchTimer === null) {
+    startWinchFrame();
+    applyResize();
+    return;
+  }
+
+  winchPending = true;
+}
+
+/**
+ * The shortest gap between two resize paints.
+ *
+ * A drag delivers a signal per mouse movement and every one of them
+ * used to cost a full repaint; this bounds that to a frame, so the
+ * screen stays live under the hand instead of falling behind it.
+ */
+const WINCH_FRAME_MS = 33;
+
+let winchPending = false;
+let winchTimer: ReturnType<typeof setTimeout> | null = null;
+
+// the size the last resize was painted for, so a duplicate signal for
+// the same size costs nothing
+let winchCols = -1;
+let winchRows = -1;
+
+function startWinchFrame(): void {
+  winchTimer = setTimeout(() => {
+    winchTimer = null;
+
+    // the drag moved on during the frame: show where it ended up
+    if (winchPending) {
+      winchPending = false;
+      startWinchFrame();
+      applyResize();
+    }
+  }, WINCH_FRAME_MS);
+
+  // a pending frame must not hold a quitting process open
+  winchTimer.unref?.();
+}
+
+/** Drops a pending resize, so a torn-down session paints nothing. */
+function clearWinch(): void {
+  if (winchTimer !== null) clearTimeout(winchTimer);
+  winchTimer = null;
+  winchPending = false;
+}
+
+function applyResize(): void {
+  if (session.exited || session.shellPause) return;
+
+  // less asks whether the size actually CHANGED before acting on it
+  // (`if (sc_width != old_width || sc_height != old_height)`,
+  // signal.c). A single drag notch can deliver more than one SIGWINCH,
+  // and repainting the same screen for the duplicate cost a second
+  // paint a frame later - a lone resize measured 40ms, nearly all of
+  // it that.
+  const [cols, rows] = detectedDimensions();
+
+  if (cols === winchCols && rows === winchRows) return;
+
+  winchCols = cols;
+  winchRows = rows;
 
   mode.INIT = false;
 
@@ -3451,6 +3539,7 @@ function cleanUp(): void {
   process.off('SIGINT', onSigint);
   process.off('SIGUSR1', onSigusr1);
   unwatchWinch(onResize);
+  clearWinch();
   process.off('uncaughtException', onUncaught);
 
   keyboard().off('data', keyHandler);
