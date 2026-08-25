@@ -8,8 +8,6 @@ import { opt, optMouse, optNoInit, optNoKeypad, optNoPaste,
 
 import { resetRender, screenEntered } from '../helpers';
 
-import { freshWindowSize } from './keyboard';
-
 import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
@@ -31,11 +29,30 @@ import { terminalNumber } from './terminal';
 
 const atoi = (value: string): number => parseInt(value, 10) || 0;
 
-/** less scrsize precedence, before gutters are reserved. */
+/**
+ * less scrsize precedence, before gutters are reserved.
+ *
+ * The size comes from node's own, which it refreshes from the ioctl
+ * BEFORE dispatching SIGWINCH - measured: inside the handler
+ * process.stdout.columns already reads the new width. So the resize
+ * path knows the size the moment it is woken and has nothing to ask.
+ *
+ * It used to ask anyway, through freshWindowSize, which opens
+ * /dev/tty and SPAWNS stty: 1.57ms of forking against the ioctl's
+ * 0.04ms, and execFileSync blocks the whole event loop while it runs.
+ * applyResize called it twice, so every resize stopped the process
+ * dead for 3ms before drawing anything - and a drag is a resize per
+ * movement of the hand. That is the lag, and no byte count could see
+ * it: the output was the same, the time went into fork and exec.
+ *
+ * The live probe is still right where the loop CANNOT turn - the
+ * press-RETURN gate spins inside readSync, where no SIGWINCH can be
+ * delivered and the cache really would go stale - and that is the one
+ * place still calling it.
+ */
 export function detectedDimensions(): [number, number] {
-  const size = freshWindowSize();
-  const sysWidth = (size ? size[0] : process.stdout.columns) || 0;
-  const sysHeight = (size ? size[1] : process.stdout.rows) || 0;
+  const sysWidth = process.stdout.columns || 0;
+  const sysHeight = process.stdout.rows || 0;
 
   let rows = sysHeight > 0
     ? sysHeight

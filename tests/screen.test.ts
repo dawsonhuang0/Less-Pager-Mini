@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
+  // node's own columns/rows, which it refreshes from the ioctl before
+  // dispatching SIGWINCH - detectedDimensions reads them rather than
+  // spawning stty to ask again
   size: null as [number, number] | null,
   keyboard: {
     setRawMode: vi.fn(),
@@ -11,7 +14,6 @@ const fake = vi.hoisted(() => ({
 vi.mock('../src/tty/keyboard', async importOriginal => ({
   ...await importOriginal<typeof import('../src/tty/keyboard')>(),
   keyboard: () => fake.keyboard,
-  freshWindowSize: () => fake.size,
 }));
 
 import { config, mode, DEFAULT_COLUMN, DEFAULT_WINDOW }
@@ -50,8 +52,18 @@ const originalColumns = process.env.LESS_COLUMNS;
 const originalGenericLines = process.env.LINES;
 const originalGenericColumns = process.env.COLUMNS;
 
+/** Presents `fake.size` as node's reported terminal size. */
+function applyFakeSize(): void {
+  const stdout = process.stdout as unknown as Record<string, unknown>;
+  Object.defineProperty(stdout, 'columns',
+    { value: fake.size ? fake.size[0] : undefined, configurable: true });
+  Object.defineProperty(stdout, 'rows',
+    { value: fake.size ? fake.size[1] : undefined, configurable: true });
+}
+
 beforeEach(() => {
   fake.size = null;
+  applyFakeSize();
   fake.keyboard.setRawMode.mockClear();
   fake.keyboard.pause.mockClear();
   stdoutWrite.mockClear();
@@ -197,6 +209,7 @@ describe('terminal mode transitions', () => {
 describe('terminal dimensions', () => {
   it('prefers the fresh kernel size and derives halves', () => {
     fake.size = [101, 41];
+    applyFakeSize();
 
     calculateDimensions();
 
@@ -211,6 +224,7 @@ describe('terminal dimensions', () => {
 
   it('applies positive and negative LESS dimension overrides', () => {
     fake.size = [100, 40];
+    applyFakeSize();
     process.env.LESS_LINES = '-3';
     process.env.LESS_COLUMNS = '72';
 
@@ -229,6 +243,8 @@ describe('terminal dimensions', () => {
     expect(config.screenWidth).toBe(93);
 
     fake.size = [100, 40];
+
+    applyFakeSize();
     calculateDimensions();
     expect(config.window).toBe(40);
     expect(config.screenWidth).toBe(100);
@@ -236,6 +252,7 @@ describe('terminal dimensions', () => {
 
   it('falls back after zero or over-negative overrides', () => {
     fake.size = [20, 10];
+    applyFakeSize();
     process.env.LESS_LINES = '-10';
     process.env.LESS_COLUMNS = '0';
 
@@ -247,6 +264,7 @@ describe('terminal dimensions', () => {
 
   it('reserves status and line-number gutters inside detected width', () => {
     fake.size = [80, 24];
+    applyFakeSize();
     opt.statusCol = 1;
     opt.statusColWidth = 3;
     opt.linenums = 2;

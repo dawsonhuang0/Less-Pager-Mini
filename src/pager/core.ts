@@ -2926,14 +2926,14 @@ function onResize(): void {
   // tears down would paint into a terminal cleanUp has restored
   if (session.exited) return;
 
-  // A resize on its own paints AT ONCE - it is a drag that has to be
-  // held back, and only while it is still moving. Waiting to see
-  // whether more are coming would tax the common case to pay for the
-  // rare one: measured, that cost a lone resize 43ms where the binary
-  // takes 5.
+  // The FIRST movement draws at once, so the screen answers the hand
+  // straight away. Everything after it is silence until the hand
+  // stops - drawing under a drag fights the terminal, which is
+  // re-laying the window out at the same time, and the binary draws
+  // nothing there either.
   if (winchTimer === null) {
-    startWinchFrame();
     applyResize();
+    waitForStillness();
     return;
   }
 
@@ -2941,13 +2941,13 @@ function onResize(): void {
 }
 
 /**
- * The shortest gap between two resize paints.
+ * How long the hand has to hold still before the screen is worth
+ * drawing.
  *
- * A drag delivers a signal per mouse movement and every one of them
- * used to cost a full repaint; this bounds that to a frame, so the
- * screen stays live under the hand instead of falling behind it.
+ * Short enough that a single resize - where nothing follows it - is
+ * one imperceptible wait and then the paint.
  */
-const WINCH_FRAME_MS = 33;
+const WINCH_SETTLE_MS = 16;
 
 let winchPending = false;
 let winchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2957,19 +2957,23 @@ let winchTimer: ReturnType<typeof setTimeout> | null = null;
 let winchCols = -1;
 let winchRows = -1;
 
-function startWinchFrame(): void {
+function waitForStillness(): void {
+  winchPending = false;
+
   winchTimer = setTimeout(() => {
+    // it moved again while we waited: keep waiting, draw nothing
+    if (winchPending) {
+      waitForStillness();
+      return;
+    }
+
     winchTimer = null;
 
-    // the drag moved on during the frame: show where it ended up
-    if (winchPending) {
-      winchPending = false;
-      startWinchFrame();
-      applyResize();
-    }
-  }, WINCH_FRAME_MS);
+    // where the hand let go
+    applyResize();
+  }, WINCH_SETTLE_MS);
 
-  // a pending frame must not hold a quitting process open
+  // a pending wait must not hold a quitting process open
   winchTimer.unref?.();
 }
 
