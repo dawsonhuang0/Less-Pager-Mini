@@ -1580,6 +1580,11 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
       prevRows[rows.length - 1] !== rows[rows.length - 1] &&
       prefixEqual(prevRows.slice(0, -1), rows)) {
     prevInitAlt = mode.INIT;
+
+    // what the terminal is showing on that row right now, read before
+    // prevRows becomes this frame - the echo below needs the OLD one
+    const wasBot = prevRows ? prevRows[prevRows.length - 1] : null;
+
     prevRows = rows;
     prevCursorCol = cmd.active ? cursorCol(rows) : -1;
 
@@ -1627,9 +1632,17 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 
     const head = cmdInsertEcho(bot, buffer);
 
-    if (head !== null) {
+    if (head !== null && !(wasMca && wasBot !== null && head !== wasBot)) {
       const c = bot.slice(head.length);
       const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
+      // The echo ALONE only works when the row on screen is this one
+      // minus the key. An option name completing is not: cmd_setstring
+      // replaces the whole buffer, so "--use-" + "j" becomes
+      // "--use-js-regexp" in one step (mca_opt_nonfirst_char), and
+      // echoing the last character wrote "p" onto the end of "--use-".
+      // less repaints the line whenever it did not simply grow, and
+      // the branch below already does that when the mca OPENS - this
+      // is the same thing for the rest of the line's life.
 
       // the echo leaves the cursor exactly where the park would put
       // it, which is why less never sends one
@@ -2480,7 +2493,8 @@ function scrollFrame(
 
         const head = cmdInsertEcho(rows[last], buffer);
 
-        if (head !== null) {
+        if (head !== null &&
+            !(wasMca && head !== prev[last])) {
           const c = rows[last].slice(head.length);
           const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
 
