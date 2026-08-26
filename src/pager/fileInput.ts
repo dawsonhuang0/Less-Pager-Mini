@@ -143,6 +143,7 @@ export class FileInput implements PagerInput {
   // it interrupted is over - see the abort in countTo
   private topFallback = false;
   private topFallbackBell = false;
+  private topFallbackPending = false;
   private lineScanMessaged = false;
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
@@ -1011,7 +1012,14 @@ export class FileInput implements PagerInput {
     let interrupted = false;
 
     for (;;) {
-      this.lineScanAborted = false;
+      // NOT `lineScanAborted = false` here. An interrupt given during
+      // the -N gutter's own walk - which runs inside the paint, before
+      // this - had already set it, and clearing it started the whole
+      // file again: on a 5.9GB file that is seven more seconds of
+      // walking after the user asked it to stop, with the note still
+      // up and the view still at EOF. less's sigs stands for the whole
+      // command; ours is reset once per command in handle(), which is
+      // the same lifetime.
       if (this.countTo(this.view.top.pos) !== null) break;
 
       interrupted = true;
@@ -2379,6 +2387,22 @@ export class FileInput implements PagerInput {
    *
    * @returns Whether the view moved, so the caller repaints.
    */
+  /** Runs the fallback once the paint that was interrupted is over. */
+  private scheduleTopFallback(): void {
+    if (this.topFallbackPending) return;
+
+    this.topFallbackPending = true;
+
+    setImmediate(() => {
+      this.topFallbackPending = false;
+
+      if (session.exited || files.index !== this.fileIndex) return;
+      if (!this.abandonAbortedWalk()) return;
+
+      render(session.content, session.buffer);
+    });
+  }
+
   abandonAbortedWalk(): boolean {
     if (!this.topFallback) return false;
 
@@ -2590,6 +2614,14 @@ export class FileInput implements PagerInput {
           // ...and the bell belongs to the empty-table fallback, not
           // to abort_delayed_msg, which speaks through error() instead
           this.topFallbackBell = !messaged;
+
+          // Scheduled from HERE, not from the key drain. While the
+          // walk holds ISIG off, the interrupt is read by the poll
+          // inside this loop and never becomes a key at all - so
+          // hanging the fallback off the next keypress meant it never
+          // ran, and a -N interrupt sat at EOF with the note still up.
+          // setImmediate lands after the paint we are inside.
+          this.scheduleTopFallback();
         }
 
         return null;
