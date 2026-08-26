@@ -223,13 +223,9 @@ for (;;) {
   // nobody would ever run it, and the wait would never end
   try {
     const length = Atomics.load(header, ${LENGTH});
-    const { source, flags, text, test, from } = JSON.parse(
+    const { source, flags, text, test } = JSON.parse(
       decoder.decode(payload.subarray(0, length)));
     const re = new RegExp(source, flags);
-
-    // a fresh RegExp every call starts at 0, so a caller walking a line
-    // for its NEXT match has to say where it got to
-    if (from) re.lastIndex = from;
 
     if (test) {
       answer = { test: re.test(text) };
@@ -557,10 +553,7 @@ export function clearJsRegexAbort(): void {
  * @returns The worker's answer, and any keys the watcher took.
  */
 export function guardedMatch(
-  request: {
-    source: string, flags: string, text: string, test: boolean,
-    from?: number
-  },
+  request: { source: string, flags: string, text: string, test: boolean },
   anyKey: boolean,
   fallbackPoll?: () => boolean,
   messageUp = false

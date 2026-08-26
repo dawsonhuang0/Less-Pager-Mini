@@ -1476,7 +1476,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * reported, and treating the two alike had every remaining call in
    * the frame raise the question over again.
    */
-  const runGuarded = (text: string, test: boolean, from = 0):
+  const runGuarded = (text: string, test: boolean):
   { test?: boolean, match?: { index: number, groups: string[] } | null }
   | null | undefined => {
     // given up on already: not this frame, this PATTERN. The frame
@@ -1513,7 +1513,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
     // milliseconds after it starts, with the RETURN that dismisses
     // the message. Nothing gets a chance to happen, or to be seen
     const { answer, keys } = guardedMatch(
-      { source: re.source, flags: re.flags, text, test, from },
+      { source: re.source, flags: re.flags, text, test },
       false,
       fallbackPoll,
       search.message !== '');
@@ -1562,32 +1562,12 @@ function jsRegex(source: string, flags: string): SearchRegex {
       return answer?.test ?? false;
     },
     exec: (text: string) => {
-      // A global RegExp resumes from lastIndex and advances it; the
-      // worker builds a fresh one per call, so both halves have to be
-      // carried across by hand. Without them the highlighter's
-      // `while (exec(line))` re-found the SAME match for ever - one
-      // successful search, one toggle to this engine, and the pager
-      // span at 100% with no prompt and no way to quit.
-      const from = re.global ? re.lastIndex : 0;
-
-      if (from > text.length) {
-        re.lastIndex = 0;
-        return null;
-      }
-
-      const answer = runGuarded(text, false, from);
+      const answer = runGuarded(text, false);
       const found = answer?.match;
 
       if (answer === null) giveUp();
 
-      if (!found) {
-        if (re.global) re.lastIndex = 0;
-        return null;
-      }
-
-      // exactly RegExp's rule: past the match, and the caller's own
-      // zero-length guard (`match.index === lastIndex`) then steps on
-      if (re.global) re.lastIndex = found.index + found.groups[0].length;
+      if (!found) return null;
 
       const m = found.groups as unknown as RegExpExecArray;
 
