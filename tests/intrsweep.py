@@ -58,7 +58,11 @@ OFF = 'Line numbers turned off'
 
 
 def drive(who, opts, key, at, isig, watch):
-    """G, then `key` at `at` seconds. Returns (bottom rows over time)."""
+    """G, then `key` - at `at` seconds, or once the note is up.
+
+    Returns the screen sampled once a second afterwards, so a case can
+    assert both where it settled AND that the note never came back.
+    """
     argv = ([f'{P}/less/less'] if who == 'less' else ['node', f'{P}/dist/cli.js'])
     argv = argv + opts + [FIXTURE]
 
@@ -97,7 +101,20 @@ def drive(who, opts, key, at, isig, watch):
 
     drain(1.5)
     os.write(fd, b'G')
-    drain(at)
+
+    if at == AFTER:
+        # WAIT FOR THE MESSAGE, do not guess at a delay. The walk is IO
+        # bound, so a warm page cache finishes it in a second where a
+        # cold one takes four - and a fixed 3s pressed after the walk
+        # had ended, which tests nothing. Give up after a while and let
+        # the case fail honestly rather than pass by accident.
+        end = time.time() + 12
+
+        while time.time() < end and not any(MSG in r for r in rows()):
+            drain(0.2)
+    else:
+        drain(at)
+
     os.write(fd, key.encode())
 
     # sample until the bottom row has held still twice, not for a fixed

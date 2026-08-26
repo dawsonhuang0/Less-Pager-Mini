@@ -138,6 +138,10 @@ export class FileInput implements PagerInput {
   private positions: number[] = [];
   private lineAnchors = [{ pos: 0, num: 0 }];
   private lineScanAborted = false;
+
+  // an interrupted -N walk owes a jump back to the top, once the paint
+  // it interrupted is over - see the abort in countTo
+  private topFallback = false;
   private lineScanMessaged = false;
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
@@ -2358,6 +2362,38 @@ export class FileInput implements PagerInput {
     return false;
   }
 
+  /**
+   * og's fallback when the walk was interrupted with -N showing.
+   *
+   * less walks BEFORE it paints: currline(BOTTOM) runs and only then
+   * does forw put the rows up, so an interrupt under -N leaves forw
+   * with nothing drawn, the position table empty, and make_display
+   * falling back to jump_loc(ch_zero(), 1) - the top, with the at-end
+   * bell. Ours walks LAZILY, one gutter row at a time while painting,
+   * so by the time the interrupt lands the destination is already on
+   * the glass. This puts it back where less ends up.
+   *
+   * Only with the numbers SHOWING. Without -N nothing waited on the
+   * walk, so less keeps the rows it painted and so do we.
+   *
+   * @returns Whether the view moved, so the caller repaints.
+   */
+  abandonAbortedWalk(): boolean {
+    if (!this.topFallback) return false;
+
+    this.topFallback = false;
+
+    // the walk that failed was for a screen we are no longer showing;
+    // the top's numbers come off the first anchor and cost nothing
+    this.lineScanAborted = false;
+
+    ringBell('eof');
+    this.view.gotoStart();
+    this.sync();
+
+    return true;
+  }
+
   private lineNumber(row: number): number | null {
     const pos = this.positions[row];
     if (pos === undefined || this.lineScanAborted) return null;
@@ -2522,6 +2558,22 @@ export class FileInput implements PagerInput {
         if (messaged) {
           opt.linenums = 0;
           search.message = 'Line numbers turned off';
+        } else if (opt.linenums === 2) {
+          // Interrupted before the message, with the numbers SHOWING.
+          //
+          // less walks BEFORE it paints - currline(BOTTOM) runs and
+          // only then does forw put the rows up - so an interrupt here
+          // leaves forw with nothing drawn, the position table empty,
+          // and make_display falling back to jump_loc(ch_zero(), 1):
+          // the top, with the at-end bell. We walk LAZILY instead, one
+          // gutter row at a time WHILE painting, so the destination is
+          // already on the glass by the time the interrupt lands.
+          //
+          // Deferred because we are inside that paint: the fallback
+          // needs the frame it is undoing to have finished first.
+          // Without -N nothing waited on the walk, so less keeps the
+          // rows it painted and so do we - hence only linenums === 2.
+          this.topFallback = true;
         }
 
         return null;

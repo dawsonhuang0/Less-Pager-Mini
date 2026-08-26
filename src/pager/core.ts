@@ -1237,6 +1237,14 @@ async function act(action: Actions | undefined): Promise<void> {
     // (less's lsystem blocks inside the command; ours resumes at the
     // shellPause dismissal, which repaints)
     render(session.content, session.buffer);
+
+    // ...and the paint above is where a -N gutter's line-number walk
+    // actually runs, one row at a time. If an interrupt stopped it,
+    // less would never have drawn this screen at all - see
+    // abandonAbortedWalk - so the fallback can only be read afterwards
+    if (pagerInput?.abandonAbortedWalk?.()) {
+      render(session.content, session.buffer);
+    }
   }
 }
 
@@ -1724,6 +1732,14 @@ function drainKeys(): void {
     // slow enough to see holds the ":" off even without a backlog.
     const started = Date.now();
     handleKey(key);
+
+    // a -N gutter's line-number walk runs lazily, inside the paint, so
+    // an interrupt that stopped it can only be answered once the paint
+    // is over - see abandonAbortedWalk
+    if (pagerInput?.abandonAbortedWalk?.()) {
+      render(session.content, session.buffer);
+    }
+
     flush();
     markCommandTime(Date.now() - started);
 
