@@ -47,6 +47,25 @@ export const hook = {
   /** Rebuilds the compiled pattern, for when the ENGINE changed under
    *  it (--use-js-regexp) rather than the pattern or its case. */
   recompilePattern: (() => {}) as () => void,
+  /**
+   * Asks the current pattern again, the ENGINE having changed under it.
+   *
+   * Recompiling alone leaves the user with no answer at all - not a
+   * match, not "Pattern not found", nothing to show for the key they
+   * pressed - and the whole point of switching engines is to see what
+   * the other one says about this pattern. The same promise the
+   * "Try again with POSIX RegExp?" query already keeps when answered
+   * "y".
+   *
+   * Runs with the bottom row HELD, since the option's own report is
+   * already painted there and a "(press RETURN)" row belongs to its
+   * message until a key takes it back.
+   *
+   * Returns what the search had to say, for the caller to queue:
+   * toggle_option writes the report over search.message the moment
+   * set() returns, so the answer cannot simply be left there.
+   */
+  repeatSearch: ((() => '') as (held: string) => string),
   hiliteErase: ((() => {}) as () => void),
   /** Reads the top row's character offset, returning a function that
    *  restores it once the width has changed (less's table[TOP]). */

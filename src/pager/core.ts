@@ -145,7 +145,8 @@ import {
   onAutosave,
   onHistTouch,
   onHistRecord, posixRetry,
-  retryWithPosix, duringUserSearch} from "../features/searching";
+  retryWithPosix, duringUserSearch,
+  holdMessageRow} from "../features/searching";
 
 import {
   firstLine,
@@ -383,6 +384,41 @@ export async function contentPager(
   hook.hiliteRepaint = markHiliteRepaint;
   hook.hiliteErase = markHiliteErase;
   hook.reheadSource = () => pagerInput?.retopOffset(0);
+
+  // an engine toggle re-asks the pattern, exactly as answering "y" to
+  // "Try again with POSIX RegExp?" does - see hook.repeatSearch
+  hook.repeatSearch = (held: string): string => {
+    if (!search.regex) return '';
+
+    // the row already shows `held`, and it stays showing it: this
+    // stands the "Searching..." note down for as long as the search
+    // runs underneath a message
+    holdMessageRow(true);
+
+    // the search itself, not act('REPEAT_SEARCH'): this runs INSIDE
+    // the option command, and re-entering the dispatcher renders a
+    // frame in the middle of one - which left the prompt row blank
+    // whenever the repeat moved. No searchFlash either; that
+    // decorates the "n" key it belongs to
+    search.message = '';
+
+    try {
+      repeatSearch(
+        session.content,
+        1,
+        false,
+        request => duringUserSearch(() => pagerInput?.search(request) ?? false)
+      );
+    } finally {
+      holdMessageRow(false);
+    }
+
+    const answer = search.message;
+
+    search.message = held;
+
+    return answer;
+  };
 
   // less's table[TOP] survives a width change untouched; ours indexes
   // wrap boundaries, so the offset is captured before and restored

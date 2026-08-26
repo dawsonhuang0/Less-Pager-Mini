@@ -2,7 +2,7 @@ import { OptionSpec } from './spec';
 
 import { hook } from './shared';
 
-import { clearForcePosix } from '../features/searching';
+import { clearForcePosix, search } from '../features/searching';
 
 import { opt } from './state';
 
@@ -46,6 +46,20 @@ export const useJsRegexp: OptionSpec = {
       // next search — and the highlighting of the current screen —
       // goes through the new one
       hook.recompilePattern();
+
+      // ...and then ASK it again. Recompiling only changes what the
+      // NEXT search would do; the pattern already on screen keeps the
+      // answer the old engine gave it, which is the one thing this
+      // option exists to compare.
+      //
+      // Stacked, not shown: the flash above is a "(press RETURN)"
+      // message and owns the row until a key takes it back, so the
+      // answer waits behind it. toggle_option would overwrite it here
+      // anyway - the bool branch assigns search.message outright,
+      // where the string branch queues (options/index.ts)
+      const answer = hook.repeatSearch(useJsRegexp.messages[value as number]);
+
+      if (answer) search.messageQueue.push(answer);
     },
     get: () => opt.useJsRegexp,
   };

@@ -75,6 +75,7 @@ import {
   SearchRequest,
   filterLineMask,
   recordSearchMatch,
+  messageRowHeld,
   scanSearchBatch,
   search,
   searchInterrupted,
@@ -2792,7 +2793,12 @@ export class FileInput implements PagerInput {
       // for a search - search.c has no message at all, so a long walk
       // over a big file sits silent. This is the same clock the line
       // scan above already uses.
-      if (!noted && Date.now() - started >= 2000) {
+      // ...but never over a message: a "(press RETURN)" row belongs to
+      // its message until a key takes it back, and an option that runs
+      // a search from its own set() has one painted there already.
+      // Still !noted while held, so it goes out the moment the row is
+      // free rather than never
+      if (!noted && Date.now() - started >= 2000 && !messageRowHeld()) {
         noted = true;
         fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
           'Searching... (interrupt to abort)' + INVERSE_OFF);
@@ -3046,6 +3052,10 @@ export class FileInput implements PagerInput {
    */
   private noteLongWork(started: number): void {
     if (this.workNoted || Date.now() - started < 2000) return;
+
+    // a message owns the row until a key takes it back; left unnoted,
+    // so it still gets said once the row is free
+    if (messageRowHeld()) return;
 
     this.workNoted = true;
     fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +

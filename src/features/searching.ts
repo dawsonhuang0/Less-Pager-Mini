@@ -1516,7 +1516,7 @@ function jsRegex(source: string, flags: string): SearchRegex {
       { source: re.source, flags: re.flags, text, test, from },
       false,
       fallbackPoll,
-      search.message !== '');
+      messageRowHeld());
 
     // whatever the watcher took off the terminal belongs to the
     // command loop - EXCEPT the interrupt that ended the wait. less's
@@ -2050,7 +2050,38 @@ const LONGTIME_MS = 2000;
  * shape is what this borrows: nothing for the first two seconds, then
  * the note with ierror's suffix, written straight to the bottom line.
  */
-function searchNote(): void {
+/**
+ * A "(press RETURN)" message owns the bottom row, so nothing writes there.
+ *
+ * The rule is the user's: a message row is theirs until they take it
+ * back with a key. Nothing else may replace it - not a prompt, and
+ * not a note about work going on underneath. An option that runs a
+ * search from its own set() puts exactly that arrangement together:
+ * the report is already on the row, and two seconds later
+ * "Searching... (interrupt to abort)" would land on top of it.
+ *
+ * The host engine's watcher has always honoured this through MSG_UP
+ * (jsRegexGuard: "not while a message is holding the row: that
+ * message is waiting for an answer, and talking over it loses the
+ * question"). This is the same rule for the POSIX side, which has no
+ * watcher and wrote unconditionally.
+ */
+let rowHeld = false;
+
+/** Holds the bottom row for a message already painted on it. */
+export function holdMessageRow(on: boolean): void {
+  rowHeld = on;
+}
+
+/** Whether a message - painted or pending - owns the bottom row. */
+export const messageRowHeld = (): boolean =>
+  rowHeld || search.message !== '';
+
+function searchNote(): boolean {
+  // held: the row belongs to a message, and this note would be
+  // talking over a question the user is being asked
+  if (messageRowHeld()) return false;
+
   fs.writeSync(1, '\r' + CLEAR_LINE + colored('error',
     'Searching... (interrupt to abort)', INVERSE_ON, INVERSE_OFF));
 
@@ -2058,6 +2089,8 @@ function searchNote(): void {
   // renderer has to know the bottom line no longer holds what it
   // last painted there
   search.bottomClobbered = true;
+
+  return true;
 }
 
 function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
@@ -2109,9 +2142,11 @@ function guardedSlices(slice: () => boolean): 'done' | 'stop' | 'complex' {
       // which answers a ^C the moment the kernel hands it over
       if (searchInterrupted(true)) return 'stop';
 
+      // still !noted when the row was held, so the note goes out the
+      // moment it is free - the same "however long ago the two
+      // seconds passed" the watcher already does
       if (!noted && Date.now() - started >= LONGTIME_MS) {
-        noted = true;
-        searchNote();
+        noted = searchNote();
       }
     }
   } finally {
