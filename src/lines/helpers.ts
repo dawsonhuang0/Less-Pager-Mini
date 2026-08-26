@@ -2,7 +2,7 @@ import { strWidth } from 'char-width';
 
 import { config } from '../state/config';
 
-import { getLayout, stylesOpen } from './lineLayout';
+import { getLayout, closersFor } from './lineLayout';
 
 import {
   chopLine,
@@ -16,9 +16,9 @@ import {
   nextTabStop
 } from '../options';
 
-import { colored, attrText } from '../features/color';
+import { colored, attrText, coloredWrap } from '../features/color';
 
-import { rawByteOf, binByteText, utfBinText, ubinChar, omitChar }
+import { rawByteOf, binByteText, utfBinText, ubinChar, omitChar, binWrap }
   from '../features/charset';
 
 import {
@@ -202,6 +202,52 @@ function styleOsc8Line(
 // index would go stale between them. Only lines the transform
 // actually changed are stored, so a plain file adds nothing.
 let sourceLines = new Map<string, string>();
+
+/**
+ * Where each control/binary REPRESENTATION sits, in columns.
+ *
+ * og stores a rep as one unit: storeline refuses to store one that
+ * does not fit and the line breaks BEFORE it (line.c), so "^@" never
+ * arrives as "^" on one row and "@" on the next. We flatten the rep
+ * into the display string and lose that, so the spans travel beside
+ * it - COLUMNS, not character indices, because columns are what
+ * transformLine already counts exactly and what the layout's prefix
+ * table speaks. Keyed by the display text, like sourceLines: identical
+ * text renders identically, so a collision is the same answer.
+ */
+let atomSpans = new Map<string, number[]>();
+
+/**
+ * Where each expanded TAB sits, in columns, same shape and same reason.
+ *
+ * less measures a tab from the start of the SCREEN ROW: prewind() sets
+ * end_column = 0 and runs once per row (input.c:148), so store_tab's
+ * tab_spaces(end_column) counts from the row's left edge. We expand
+ * before anything knows where rows break, which agrees only while rows
+ * start on a multiple of the tab width - true at width 80, false the
+ * moment a row ends short. The layout re-measures them per row.
+ */
+let tabSpans = new Map<string, number[]>();
+
+/** The rep spans of a display line, for the wrap. */
+export function atomsOf(display: string): number[] | undefined {
+  return atomSpans.get(display);
+}
+
+/**
+ * How wide a tab starting at `col` is, with `col` measured from the
+ * start of the SCREEN ROW - less's tab_spaces(end_column).
+ *
+ * Lives here rather than in lineLayout so the layout keeps its one
+ * import of the option table: reaching for options/shared directly
+ * from there reorders module init and leaves lesskey's hook undefined.
+ */
+export const tabWidth = (col: number): number => nextTabStop(col) - col;
+
+/** The tab spans of a display line, for the wrap. */
+export function tabsOf(display: string): number[] | undefined {
+  return tabSpans.get(display);
+}
 const SOURCE_MAP_LIMIT = 8192;
 
 /**
@@ -356,6 +402,8 @@ export function transformContent(lines: string[]): string[] {
   // survive that. The display text is the key, so an entry can only
   // be replaced by an identical rendering
   if (sourceLines.size > SOURCE_MAP_LIMIT) sourceLines = new Map();
+  if (atomSpans.size > SOURCE_MAP_LIMIT) atomSpans = new Map();
+  if (tabSpans.size > SOURCE_MAP_LIMIT) tabSpans = new Map();
   sourceRows = [];
   let row = -1;
 
@@ -468,6 +516,12 @@ function transformLine(line: string, ctldispOverride?: number): string {
   let col = 0;
   let i = 0;
 
+  // start/end column of every rep, flat, in order - see atomSpans
+  const atoms: number[] = [];
+
+  // and of every expanded tab - see tabSpans
+  const tabs: number[] = [];
+
   // backspace handling, like line.c: --proc-backspace overrides the
   // -u/-U mode; less's DEFAULT is overstrike processing (BS_SPECIAL)
   if (line.includes('\x08')) {
@@ -538,6 +592,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
     if (char === '\t' && (pt === 1 || (pt === 0 && optBsMode() !== 2))) {
       const stop = nextTabStop(col);
       out += ' '.repeat(stop - col);
+      tabs.push(col, stop);
       col = stop;
       i++;
       continue;
@@ -635,6 +690,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       }
 
       out += entry[0];
+      atoms.push(col, col + entry[1]);
       col += entry[1];
       i++;
       continue;
@@ -653,8 +709,10 @@ function transformLine(line: string, ctldispOverride?: number): string {
 
         if (optBsMode() === 2) {
           const text = utfBinText(point);
+          const wide = text.replace(STYLE_REGEX_G, '').length;
           out += text;
-          col += text.replace(STYLE_REGEX_G, '').length;
+          atoms.push(col, col + wide);
+          col += wide;
         }
 
         i += key.length;
@@ -675,6 +733,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
       }
 
       out += entry[0];
+      atoms.push(col, col + entry[1]);
       col += entry[1];
       i += key.length;
       continue;
@@ -703,6 +762,7 @@ function transformLine(line: string, ctldispOverride?: number): string {
         }
 
         out += entry[0];
+        atoms.push(col, col + entry[1]);
         col += entry[1];
       }
 
@@ -715,7 +775,48 @@ function transformLine(line: string, ctldispOverride?: number): string {
     i += char.length;
   }
 
-  return out;
+  const shown = coalesceAttrRuns(out);
+
+  if (atoms.length) atomSpans.set(shown, atoms);
+  if (tabs.length) tabSpans.set(shown, tabs);
+
+  return shown;
+}
+
+/**
+ * Joins adjacent markers into one attribute run, like og's at_switch.
+ *
+ * og stores an ATTRIBUTE per character (line.c store_char) and put_line
+ * emits the escape only where that attribute CHANGES, so a stretch of
+ * binary bytes comes out as
+ *
+ *     ESC[7m <CA><FE><BA><BE>^@^@^@^B ESC[27m
+ *
+ * We build a string, and each marker arrived already wrapped in its own
+ * pair - which is the same picture on screen and a very different
+ * amount of work behind it. One 32K line of a Mach-O binary became
+ * 65,126 escape codes instead of a handful: the layout parsed every one
+ * of them, and a trackpad scroll over it cost seconds. Dropping the
+ * seam where a run closes and immediately reopens is exactly what
+ * at_switch does not emit in the first place.
+ *
+ * Only the exact pair each marker carries is dropped, so two markers of
+ * DIFFERENT attributes (a --use-color session colouring control and
+ * binary separately) keep their boundary, as og does.
+ */
+function coalesceAttrRuns(text: string): string {
+  if (text.length < 8) return text;
+
+  for (const [on, off] of [coloredWrap('ctrl', INVERSE_ON, INVERSE_OFF),
+                           binWrap()]) {
+    if (!on || !off) continue;
+
+    const seam = off + on;
+
+    if (text.includes(seam)) text = text.split(seam).join('');
+  }
+
+  return text;
 }
 
 /**
@@ -880,7 +981,9 @@ export function withReset(line: string): string {
     return line + COLOR_RESET;
   }
 
-  return stylesOpen(line) ? line + STYLE_RESET : line;
+  // og's pdone closes the row with at_exit(): the EXIT for each mode
+  // that is on, not a blanket reset (screen.c)
+  return line + closersFor(line);
 }
 
 const segmenter = new Intl.Segmenter();

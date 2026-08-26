@@ -2,7 +2,8 @@ import { strWidth } from 'char-width';
 
 import { config } from '../state/config';
 
-import { isAscii, splitChars } from './helpers';
+import { isAscii, splitChars, atomsOf, tabsOf, tabWidth }
+  from './helpers';
 
 import { controlByte } from '../features/charset';
 
@@ -34,6 +35,14 @@ export interface LineLayout {
   rowStart: number[];
   /** Active ANSI style prefix at each wrapped row start. */
   rowStyle: string[];
+  /** Column spans of the control/binary reps, which never split. */
+  atoms?: number[];
+  /** Column spans of the expanded tabs, re-measured per row. */
+  tabs?: number[];
+  /** The same styles unjoined, so a row can be drawn from its own
+   *  boundary instead of from the start of the line. Rows whose style
+   *  did not change share one array; emitRange copies before using it. */
+  rowActive: string[][];
 }
 
 const CACHE_LIMIT = 5000;
@@ -216,12 +225,16 @@ function buildLayout(line: string): LineLayout {
   prefix[0] = 0;
   for (let c = 0; c < chars.length; c++) prefix[c + 1] = prefix[c] + widths[c];
 
-  const rowStart = buildRowStarts(chars, widths);
+  const atoms = atomsOf(line);
+  const tabs = tabsOf(line);
+  const rowStart = buildRowStarts(chars, widths, prefix, atoms, tabs);
 
   const rowStyle = new Array<string>(rowStart.length);
+  const rowActive = new Array<string[]>(rowStart.length);
   const active: string[] = [];
   let k = 0;
   let joined = '';
+  let snapshot: string[] = [];
 
   for (let r = 0; r < rowStart.length; r++) {
     let changed = false;
@@ -231,11 +244,21 @@ function buildLayout(line: string): LineLayout {
       k++;
     }
 
-    if (changed) joined = active.join('');
+    if (changed) {
+      joined = active.join('');
+      // `active` keeps mutating, so the row keeps a copy - one per
+      // distinct style state, shared by every row that repeats it
+      snapshot = active.slice();
+    }
+
     rowStyle[r] = joined;
+    rowActive[r] = snapshot;
   }
 
-  return { chars, widths, prefix, codeIdx, codes, rowStart, rowStyle };
+  return {
+    chars, widths, prefix, codeIdx, codes, rowStart, rowStyle, rowActive,
+    atoms, tabs,
+  };
 }
 
 // SGR parameters that end styles, mapped to the openers they cancel
@@ -250,6 +273,62 @@ const SGR_CLOSERS = new Map<number, (open: number) => boolean>([
   [39, p => (p >= 30 && p <= 38) || (p >= 90 && p <= 97)],
   [49, p => (p >= 40 && p <= 48) || (p >= 100 && p <= 107)],
 ]);
+
+// the exit each opening SGR parameter needs, the inverse of
+// SGR_CLOSERS - og's at_exit undoes what is on, mode by mode
+function closerFor(param: number): number {
+  if (param === 1 || param === 2) return 22;
+  if (param >= 3 && param <= 9) return param + 20;
+  if ((param >= 30 && param <= 38) || (param >= 90 && param <= 97)) return 39;
+  if ((param >= 40 && param <= 48) || (param >= 100 && param <= 107)) return 49;
+
+  return 0;
+}
+
+/**
+ * The escapes that close whatever `text` leaves open.
+ *
+ * og's pdone ends a row with at_exit(), which emits the EXIT for each
+ * attribute mode that is on - "se" for standout, and so on - in the
+ * reverse order they were entered (screen.c). It does not blanket-
+ * reset: a row of binary markers closes with ESC[27m, not with sgr0.
+ * Ours only started needing this once the markers were coalesced into
+ * one run, which is what leaves an attribute open at the row edge.
+ */
+export function closersFor(text: string): string {
+  const active: string[] = [];
+  STYLE_REGEX_G.lastIndex = 0;
+
+  let code: RegExpExecArray | null;
+  while ((code = STYLE_REGEX_G.exec(text)) !== null) {
+    applyStyleCode(active, code[0]);
+  }
+
+  if (!active.length) return '';
+
+  const seen = new Set<number>();
+  let out = '';
+
+  // reverse, like at_exit undoing in the order it did them
+  for (let i = active.length - 1; i >= 0; i--) {
+    const param = firstSgrParam(active[i]);
+
+    // at_exit opens with tput_color("*"), which puts the COLOUR back
+    // to normal rather than naming what to undo. Ours has always spent
+    // a full reset for that, and a colour is the one thing here that
+    // may have been written by the file itself under -R
+    if (param >= 30) return STYLE_RESET;
+
+    const exit = closerFor(param);
+
+    if (exit && !seen.has(exit)) {
+      seen.add(exit);
+      out += '\x1b[' + exit + 'm';
+    }
+  }
+
+  return out || STYLE_RESET;
+}
 
 /**
  * Whether any style is still open at the end of a string.
@@ -274,8 +353,29 @@ export function stylesOpen(text: string): boolean {
   return active.length > 0;
 }
 
-const firstSgrParam = (code: string): number =>
-  parseInt(code.slice(2), 10) || 0;
+/**
+ * The first numeric parameter of an SGR code, or 0.
+ *
+ * Read digit by digit rather than through slice + parseInt: binary
+ * content puts an inverse-video pair around EVERY control byte, so a
+ * 32K line arrives as 65K codes and this is the hottest thing in the
+ * renderer - it was a quarter of the whole profile on a scroll.
+ */
+function firstSgrParam(code: string): number {
+  let value = 0;
+  let digits = false;
+
+  for (let i = 2; i < code.length; i++) {
+    const ch = code.charCodeAt(i);
+
+    if (ch < 48 || ch > 57) break;
+
+    value = value * 10 + (ch - 48);
+    digits = true;
+  }
+
+  return digits ? value : 0;
+}
 
 /**
  * Applies one ANSI code to the active-style list: a reset clears it,
@@ -287,13 +387,14 @@ const firstSgrParam = (code: string): number =>
  * @returns Whether the list changed.
  */
 function applyStyleCode(active: string[], code: string): boolean {
-  if (code === STYLE_RESET || firstSgrParam(code) === 0) {
+  const param = firstSgrParam(code);
+
+  if (code === STYLE_RESET || param === 0) {
     if (!active.length) return false;
     active.length = 0;
     return true;
   }
 
-  const param = firstSgrParam(code);
   const closes = SGR_CLOSERS.get(param);
 
   if (closes) {
@@ -357,7 +458,7 @@ export function rawByteLength(layout: LineLayout, offset: number): number {
 }
 
 export function rowEndFrom(layout: LineLayout, from: number): number {
-  const { chars, widths } = layout;
+  const { chars, widths, prefix, atoms, tabs } = layout;
 
   // less's fits_on_screen answers TRUE for everything under -r: "We're
   // not counting" (line.c:842). The whole line is then ONE screen row,
@@ -374,7 +475,12 @@ export function rowEndFrom(layout: LineLayout, from: number): number {
   let c = from;
 
   while (c < chars.length) {
-    if (len > 0 && len + widths[c] > width) {
+    // a tab is re-measured from THIS row's left edge, like less's
+    // end_column, and consumed whole
+    const tab = tabRunAt(tabs, prefix, c, len);
+    const step = tab ? tab[0] : widths[c];
+
+    if (len > 0 && len + step > width) {
       if (wordwrap && isSpace(chars[c])) {
         // the space itself no longer fits: swallow the run
         let next = c;
@@ -382,13 +488,25 @@ export function rowEndFrom(layout: LineLayout, from: number): number {
         return next;
       }
 
-      return wordwrap && wrapAt > from ? wrapAt : c;
+      const at = wordwrap && wrapAt > from ? wrapAt : c;
+
+      // og stores a control or binary rep as ONE unit: storeline
+      // refuses to store one that will not fit, so the row ends BEFORE
+      // it (line.c). Without this a "^@" at the right margin came out
+      // as "^" on this row and "@" on the next, which og never emits.
+      return backToRepStart(atoms, prefix, at, from);
     }
 
     if (isSpace(chars[c])) {
       if (seenNonSpace) wrapAt = c + 1;
     } else {
       seenNonSpace = true;
+    }
+
+    if (tab) {
+      len += tab[0];
+      c += tab[1];
+      continue;
     }
 
     len += widths[c];
@@ -458,15 +576,56 @@ export function charIndexAt(layout: LineLayout, at: number): number {
  * A space run --wordwrap swallowed at the break is inside the range
  * but past the screen edge, so the width guard still drops it.
  */
+/** The last index of `sorted` whose value is <= `target`, or 0. */
+function rowIndexAt(sorted: number[], target: number): number {
+  let lo = 0;
+  let hi = sorted.length - 1;
+
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+
+    if (sorted[mid] <= target) lo = mid;
+    else hi = mid - 1;
+  }
+
+  return lo < 0 ? 0 : lo;
+}
+
+/** The first index of `sorted` whose value is > `target`. */
+function upperBound(sorted: number[], target: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+
+    if (sorted[mid] <= target) lo = mid + 1;
+    else hi = mid;
+  }
+
+  return lo;
+}
+
 export function emitRange(
   layout: LineLayout,
   from: number,
   to: number
 ): string {
-  const { chars, widths, codeIdx, codes } = layout;
-  const active: string[] = [];
-  let k = 0;
+  const { chars, widths, prefix, codeIdx, codes, rowStart, rowActive } =
+    layout;
 
+  // Start from the row boundary at or before `from`, whose active
+  // styles the layout already worked out, rather than replaying the
+  // whole line's codes. Replaying was quadratic in the number of rows,
+  // and binary content is where that bites: every control byte becomes
+  // an inverse-video PAIR, so one 32K line is 65K codes across 821
+  // rows and drawing them all cost 1.9 SECONDS. A trackpad fling over
+  // a binary file therefore stopped painting until it caught up.
+  const r = rowIndexAt(rowStart, from);
+  const active = rowActive.length > r ? rowActive[r].slice() : [];
+  let k = upperBound(codeIdx, rowStart.length > r ? rowStart[r] : 0);
+
+  // whatever falls between that boundary and `from` - one row's worth
   while (k < codeIdx.length && codeIdx[k] <= from) {
     applyStyleCode(active, codes[k]);
     k++;
@@ -481,8 +640,20 @@ export function emitRange(
       k++;
     }
 
+    // a tab is as wide as THIS row makes it - the row walk measured it
+    // the same way, so the two agree on where the row ends
+    const tab = tabRunAt(layout.tabs, prefix, c, width);
+    const step = tab ? tab[0] : widths[c];
+
     // the same "not counting" rule: -r draws the whole row
-    if (optCtldisp() !== 1 && width + widths[c] > config.screenWidth) break;
+    if (optCtldisp() !== 1 && width + step > config.screenWidth) break;
+
+    if (tab) {
+      parts.push(' '.repeat(tab[0]));
+      width += tab[0];
+      c += tab[1] - 1;
+      continue;
+    }
 
     parts.push(chars[c]);
     width += widths[c];
@@ -502,7 +673,102 @@ export function emitRange(
  * overflowing space run is swallowed and a single long word still
  * breaks hard at the screen edge.
  */
-function buildRowStarts(chars: string[], widths: number[]): number[] {
+/**
+ * The column a rep containing `col` starts at, or -1.
+ *
+ * `atoms` is flat start/end pairs in ascending order, so a binary
+ * search over the starts finds the only span that can contain it.
+ */
+function atomStart(atoms: number[], col: number): number {
+  let lo = 0;
+  let hi = atoms.length / 2;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+
+    if (atoms[mid * 2] <= col) lo = mid + 1;
+    else hi = mid;
+  }
+
+  if (lo === 0) return -1;
+
+  const start = atoms[(lo - 1) * 2];
+
+  // strictly inside: a break exactly ON the start is already legal
+  return col > start && col < atoms[(lo - 1) * 2 + 1] ? start : -1;
+}
+
+/**
+ * The width of the tab run starting at char `c`, measured from `len`.
+ *
+ * less measures a tab from the start of the SCREEN ROW - prewind()
+ * zeroes end_column once per row (input.c:148) - while we expanded it
+ * against the whole logical line, before rows existed. `len` here IS
+ * less's end_column, so re-measuring against it is the same sum less
+ * does; the run's own recorded width is discarded.
+ *
+ * @returns [columns to emit, char entries the run occupies], or null.
+ */
+function tabRunAt(
+  tabs: number[] | undefined,
+  prefix: number[],
+  c: number,
+  len: number
+): [number, number] | null {
+  if (!tabs) return null;
+
+  const col = prefix[c];
+
+  // the runs are in order, so a binary search over the starts finds it
+  let lo = 0;
+  let hi = tabs.length / 2;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+
+    if (tabs[mid * 2] < col) lo = mid + 1;
+    else hi = mid;
+  }
+
+  if (lo >= tabs.length / 2 || tabs[lo * 2] !== col) return null;
+
+  // every column of an expanded tab is one space, so the run is as
+  // many char entries as it is columns
+  return [tabWidth(len), tabs[lo * 2 + 1] - col];
+}
+
+/**
+ * `at`, pulled back to the start of the rep it lands inside.
+ *
+ * Never past `floor`: a rep wider than the screen has to split, as it
+ * must in og too - storeline gives up and the char goes on alone.
+ */
+function backToRepStart(
+  atoms: number[] | undefined,
+  prefix: number[],
+  at: number,
+  floor: number
+): number {
+  if (!atoms) return at;
+
+  const start = atomStart(atoms, prefix[at]);
+
+  if (start < 0) return at;
+
+  let back = at;
+
+  while (back > 0 && prefix[back] > start) back--;
+
+  return back > floor ? back : at;
+}
+
+function buildRowStarts(
+  chars: string[],
+  widths: number[],
+  prefix: number[],
+  atoms?: number[],
+  tabs?: number[]
+): number[] {
   const width = config.screenWidth;
   const wordwrap = optWordwrap();
   const rowStart = [0];
@@ -513,7 +779,11 @@ function buildRowStarts(chars: string[], widths: number[]): number[] {
   let c = 0;
 
   while (c < chars.length) {
-    if (len > 0 && len + widths[c] > width) {
+    // re-measured from this row's left edge, like less's end_column
+    const tab = tabRunAt(tabs, prefix, c, len);
+    const step = tab ? tab[0] : widths[c];
+
+    if (len > 0 && len + step > width) {
       let next = c;
 
       if (wordwrap && isSpace(chars[c])) {
@@ -523,6 +793,10 @@ function buildRowStarts(chars: string[], widths: number[]): number[] {
       } else if (wordwrap && wrapAt > rowStart[rowStart.length - 1]) {
         next = wrapAt;
       }
+
+      // og keeps a rep whole - see backToRepStart
+      next = backToRepStart(
+        atoms, prefix, next, rowStart[rowStart.length - 1]);
 
       rowStart.push(next);
       len = 0;
@@ -536,6 +810,12 @@ function buildRowStarts(chars: string[], widths: number[]): number[] {
       if (seenNonSpace) wrapAt = c + 1;
     } else {
       seenNonSpace = true;
+    }
+
+    if (tab) {
+      len += tab[0];
+      c += tab[1];
+      continue;
     }
 
     len += widths[c];

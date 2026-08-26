@@ -1,7 +1,7 @@
 import { INVERSE_ON, INVERSE_OFF, BOLD_ON, BOLD_OFF, UNDERLINE_ON,
   UNDERLINE_OFF } from "../state/constants";
 
-import { colored } from "./color";
+import { colored, coloredWrap } from "./color";
 
 import { search } from "./searching";
 
@@ -366,6 +366,13 @@ function binText(text: string): string {
 
   // the BIN color wins under --use-color, like binattr's AT_COLOR_BIN
   return colored('bin', text, on, off);
+}
+
+/** The escape pair every binary marker carries, for the run coalescing. */
+export function binWrap(): [string, string] {
+  const [on, off] = attrWrap(binAttrKind);
+
+  return coloredWrap('bin', on, off);
 }
 
 /** UTF-8 sequence length from the lead byte, like utf_len. */

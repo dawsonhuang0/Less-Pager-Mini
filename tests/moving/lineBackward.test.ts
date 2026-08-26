@@ -10,7 +10,8 @@ import { calculateEOF } from '../../src/helpers';
 
 import { INVERSE_ON, INVERSE_OFF, END_MARKER } from '../../src/state/constants';
 
-import { CYAN, RESET, YELLOW, MAGENTA, UNDERLINE } from '../utils/constants';
+import { CYAN, RESET, YELLOW, MAGENTA, UNDERLINE, UNDERLINE_OFF }
+  from '../utils/constants';
 
 const COL_END_MARKER = INVERSE_ON + '>' + INVERSE_OFF;
 
@@ -102,7 +103,13 @@ describe('wrapLongLines', () => {
     // spanning styles close at each row end, like less's at_switch
     const expectOutputs = [
       UNDERLINE + line22.slice(306),
-      MAGENTA + line22.slice(210, 306) + RESET,
+      // og's pdone ends a row with at_exit(), which emits the EXIT for
+      // each mode that is on - "ue" for underline - not a blanket
+      // reset. Measured against less with an overstruck-underline line
+      // that wraps: it closes the row with ESC[24m, byte for byte. The
+      // rows above end inside a COLOUR, where at_exit's tput_color("*")
+      // is the full reset they already expect.
+      MAGENTA + line22.slice(210, 306) + UNDERLINE_OFF,
       YELLOW + line22.slice(103, 210) + RESET,
       line22.slice(0, 103) + RESET,
       text[20]

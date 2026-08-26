@@ -254,6 +254,44 @@ export function colored(
  * tput_inmode: a plain color replaces the attribute, a `+color`
  * prefixes the attribute to it.
  */
+/**
+ * The opener and closer `colored` would wrap text in.
+ *
+ * og stores an ATTRIBUTE per character and put_line emits the escape
+ * only where it changes (at_switch), so a run of binary markers shares
+ * one enter/exit. We build a string instead, so the coalescing needs
+ * to know the exact pair each marker would carry - see
+ * coalesceAttrRuns in lines/helpers.ts.
+ */
+export function coloredWrap(
+  kind: ColorKind,
+  fallbackOn: string = '',
+  fallbackOff: string = ''
+): [string, string] {
+  if (optUseColor()) {
+    const open = colorSgr(colorMap[kind]);
+    return open ? [open, COLOR_RESET] : ['', ''];
+  }
+
+  if (fallbackOn === INVERSE_ON && colorMap.standout) return attrWrap('standout');
+
+  return fallbackOn ? [fallbackOn, fallbackOff] : ['', ''];
+}
+
+/** attrText's two halves, for the same reason. */
+function attrWrap(
+  attr: 'bold' | 'underline' | 'blink' | 'standout'
+): [string, string] {
+  const map = colorMap[attr];
+  const [on, off] = modeStrings(attr);
+
+  if (!map) return [on, off];
+
+  const open = colorSgr(map) ?? '';
+
+  return map[0] === '+' ? [on + open, STYLE_RESET] : [open, STYLE_RESET];
+}
+
 export function attrText(
   attr: 'bold' | 'underline' | 'blink' | 'standout',
   text: string
