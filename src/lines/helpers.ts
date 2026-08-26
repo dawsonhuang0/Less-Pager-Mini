@@ -910,11 +910,18 @@ function procBackspaces(line: string): string {
   // underlines - X\b_ keeps the PREVIOUS char (line.c "we replace
   // prev_ch, but we keep its attributes" branch is only for
   // non-underscore overstrikes)
+  //
+  // Only over a character less stores AT_NORMAL. store_bs (line.c:1284)
+  // tests the PREVIOUS one first: with nothing behind it, or with an
+  // AT_BINARY rep or an AT_ANSI escape behind it, the backspace is
+  // stored as "^H" and no overstrike happens at all. A control byte
+  // becomes a rep, so "^@\b" is two reps to less and was an overstrike
+  // to us - it ate the ^@ and the ^H both, on every binary file.
   const out = line
-    .replace(/(.)\x08\1/g, (_, c: string) => own('bold', c))
+    .replace(/([^\x00-\x1f\x7f])\x08\1/g, (_, c: string) => own('bold', c))
     .replace(/_\x08(.)/g, (_, c: string) => own('underline', c))
-    .replace(/(.)\x08_/g, (_, c: string) => own('underline', c))
-    .replace(/.\x08(.)/g, '$1');
+    .replace(/([^\x00-\x1f\x7f])\x08_/g, (_, c: string) => own('underline', c))
+    .replace(/[^\x00-\x1f\x7f]\x08(.)/g, '$1');
 
   return coalesceOwnRuns(out);
 }
