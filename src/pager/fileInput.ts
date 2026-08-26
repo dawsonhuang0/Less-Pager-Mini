@@ -83,7 +83,8 @@ import {
   stripStyles,
 } from '../features/searching';
 
-import { consumeInterrupt } from '../tty/keyboard';
+import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig }
+  from '../tty/keyboard';
 
 import { keyboard } from '../tty/keyboard';
 
@@ -2447,8 +2448,10 @@ export class FileInput implements PagerInput {
 
     const started = Date.now();
     let messaged = false;
+    let dipped = false;
     let steps = 0;
 
+    try {
     while (pos < target) {
       const chunk = this.bf.readRange(pos, Math.min(64 * 1024, target - pos));
       if (!chunk.length) break;
@@ -2477,6 +2480,18 @@ export class FileInput implements PagerInput {
         // "Calculating line numbers... (interrupt to abort)(END)".
         search.cmdExecOpened = false;
         search.bottomClobbered = true;
+
+        // This loop IS the event loop, stopped: a node signal handler
+        // cannot run while it does, so a ^C on a terminal that
+        // generates one would never reach the poll below - less's
+        // ABORT_SIGS is set by a C handler that runs mid-loop and ours
+        // is not. Ask the driver to hand the byte over instead, for
+        // exactly as long as the wait lasts. Two forks, and only once
+        // the count has already run two seconds - see termios.ts.
+        if (keyboardHasIsig()) {
+          setKeyboardIsig(false);
+          dipped = true;
+        }
       }
 
       if (searchInterrupted(true)) {
@@ -2495,6 +2510,9 @@ export class FileInput implements PagerInput {
 
     this.addAnchor(target, num);
     return num;
+    } finally {
+      if (dipped) setKeyboardIsig(true);
+    }
   }
 
   private jumpMark(mark: Mark, sline: number): boolean {
