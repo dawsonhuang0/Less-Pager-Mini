@@ -1309,7 +1309,14 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // Nothing of less's is at stake: less has no hold, and this question is
   // not less's prompt but a query, which less writes and flushes on the
   // spot (query/error, output.c)
-  const promptHeld = !filling && pollWouldFire() && !posixRetry.pending;
+  // ...nor over a MESSAGE, for the same reason and by the same rule:
+  // less's error() is written and flushed where it happens (output.c),
+  // and only the ":" prompt is what cmd_exec's clear_bot withholds. A
+  // search long enough to look like a burst - "Pattern not found" on a
+  // 154K binary - had its answer blanked by the hold and left the row
+  // empty, so the search simply appeared to do nothing.
+  const promptHeld = !filling && pollWouldFire() && !posixRetry.pending &&
+    !search.message;
 
   // a command that already wrote less's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
