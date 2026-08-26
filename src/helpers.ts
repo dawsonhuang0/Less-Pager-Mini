@@ -1335,6 +1335,16 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   if (search.bottomClobbered) {
     search.bottomClobbered = false;
     dirtyBottomRow();
+
+    // and every one of those notes is an ierror - "Calculating line
+    // numbers...", "Searching..." - which in less arms need_clr, so
+    // that whatever prints NEXT clears the line first (output.c:762).
+    // Knowing the row is stale is not enough on its own: the frame's
+    // own opening is gated on forw_prompt, and with that set the reply
+    // went out on the end of the note. "Calculating line numbers...
+    // (interrupt to abort)Line numbers turned off  (press RETURN)",
+    // 86 columns of it, wrapping off an 80-column screen.
+    needClr = true;
   }
 
   let rows = screenRows(rawContent, buffer, filling);
