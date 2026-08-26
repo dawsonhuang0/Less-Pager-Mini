@@ -62,7 +62,7 @@ import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
 import { LESS_VERSION } from "../lesskey";
 
 import { raiseAbort, clearAbort, ungotIsLive, consumeInterrupt,
-  abortSigs, ownsTermios, releaseGateOnInterrupt }
+  abortSigs, ownsTermios, releaseGateOnInterrupt, keyboardHasIsig }
   from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
@@ -1330,13 +1330,21 @@ function keyHandler(data: Buffer): void {
  * with ISIG cleared.
  *
  * So the byte counts only where no kernel will raise the signal for
- * us: a terminal node's raw mode took and we could not, and the
- * window the --use-js-regexp guard holds ISIG off (termios.ts). The
- * real signal announces itself the way less's u_interrupt does, by
+ * us - and there are three such places. Two are forced on us: a
+ * terminal node's raw mode took and we could not, and the window the
+ * --use-js-regexp guard holds ISIG off (termios.ts).
+ *
+ * The third is a CHOICE. On a terminal whose ISIG is off, og cannot be
+ * interrupted at all: it ungetcc_backs the 0x03 and the scroll runs to
+ * the end of the backlog. We read it as the interrupt anyway, because
+ * "you cannot stop it" is not an answer a pager gets to give. That is
+ * the one place here that knowingly leaves og.
+ *
+ * The real signal announces itself the way less's u_interrupt does, by
  * setting S_INTERRUPT before the handler runs.
  */
 function intrIsByte(): boolean {
-  return !ownsTermios() || guardHoldsIsig();
+  return !ownsTermios() || guardHoldsIsig() || !keyboardHasIsig();
 }
 
 /** True when this key is the interrupt rather than a plain ^C byte. */
@@ -3111,6 +3119,17 @@ function onSigint(): void {
   // (signal.c:48), and that flag is what tells the key handling this
   // ^C is the interrupt and not a byte somebody typed
   raiseAbort();
+
+  // less's ISIG: the driver FLUSHES the input queue when it generates
+  // SIGINT, so everything typed before the ^C is thrown away by the
+  // KERNEL and less never sees it. Ours has already left the kernel -
+  // node drained it into userspace the moment it arrived - so the
+  // flush has to happen on the queue the bytes actually sit in. It
+  // used to, on the byte path; once the signal became real that path
+  // stopped running and a ^C left the whole scroll backlog to play
+  // out, which is a burst you cannot stop.
+  dropQueuedKeys();
+
   releaseGateOnInterrupt();
   handleKey('\x03');
 }

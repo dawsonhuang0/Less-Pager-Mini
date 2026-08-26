@@ -59,6 +59,10 @@ let savedTerm: string | null = null;
 // node's raw mode and its emulated interrupt
 let usable = true;
 
+// whether the terminal generates signals from the keyboard, read once
+// and only where something actually needs to know
+let isigOn: boolean | null = null;
+
 /** Whether the terminal modes are ours to set, og's way. */
 export const termiosOwned = (): boolean => usable && savedTerm !== null;
 
@@ -126,6 +130,10 @@ export function rawMode(fd: number, on: boolean): boolean {
   // live mode is that same edit
   const bsd = process.platform !== 'linux';
 
+  // a shell escape's child may have changed the terminal under us, so
+  // what it generates is worth asking again
+  isigOn = null;
+
   if (stty(fd, bsd ? OG_MASK_BSD : OG_MASK) === 0) return true;
 
   // a platform whose stty lacks one of the operands: og drops those
@@ -157,4 +165,35 @@ export function setIsig(fd: number, on: boolean): boolean {
   if (!termiosOwned()) return false;
 
   return stty(fd, [on ? 'isig' : '-isig']) === 0;
+}
+
+/** Whether the terminal generates signals from the keyboard. */
+function readIsig(fd: number): boolean {
+  try {
+    const run = spawnSync('stty', ['-a'], { stdio: [fd, 'pipe', 'ignore'] });
+    const out = run.error ? '' : run.stdout.toString();
+
+    return out !== '' && !/(^|[\s,])-isig([\s,]|$)/.test(out);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a typed ^C will reach us as a SIGNAL.
+ *
+ * og leaves ISIG exactly as the terminal has it, so on a terminal with
+ * it off nothing will ever raise SIGINT and og simply cannot be
+ * interrupted - it ungetcc_backs the 0x03 like any other byte. We read
+ * the byte as the interrupt there instead, which is a DELIBERATE
+ * divergence: og's answer is "you cannot", and a pager you cannot stop
+ * scrolling is worse than a pager that stops when you ask it to.
+ *
+ * Costs one stty, once, and only on a terminal we own.
+ */
+export function isigEnabled(fd: number): boolean {
+  if (!termiosOwned()) return false;
+  if (isigOn === null) isigOn = readIsig(fd);
+
+  return isigOn;
 }

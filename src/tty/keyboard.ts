@@ -5,7 +5,7 @@ import tty from 'tty';
 import { terminalEnv } from '../startup/environment';
 
 import { flush } from './output';
-import { rawMode, termiosOwned, setIsig } from './termios';
+import { rawMode, termiosOwned, setIsig, isigEnabled } from './termios';
 
 /**
  * The keyboard stream, like less's ttyin.c: keys come from the
@@ -59,6 +59,11 @@ export const ownsTermios = (): boolean => termiosOwned();
  * else leaves ISIG exactly as the terminal had it, which is og's
  * whole behaviour here.
  */
+/** Whether the terminal will raise SIGINT from a typed ^C. */
+export function keyboardHasIsig(): boolean {
+  return stream.isTTY && isigEnabled(ttyFd ?? 0);
+}
+
 export function setKeyboardIsig(on: boolean): void {
   if (!stream.isTTY) return;
 
