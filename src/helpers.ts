@@ -1600,9 +1600,46 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
 
     forwPrompt = false;
 
+    // less echoes a typed character WHERE IT STANDS: cmd_ichar is
+    // cmd_repaint(cp) - clear_eol, the tail from the insertion point,
+    // then backspaces back to it - followed by cmd_right, which prints
+    // the character again to step over it (cmdbuf.c). A "c" therefore
+    // costs "ESC[K c BS c" and nothing else.
+    //
+    // -X has done this all along; the alternate screen rewrote the
+    // whole command line and addressed the cursor absolutely instead,
+    // so every keystroke of a search cost a CUP, a CR, a clear, the
+    // line again and a second CUP. Same picture, five times the bytes,
+    // and not less's.
+    const nowMca = mcaOpen(buffer);
+    const wasMca = nowMca !== '' && prevMca === nowMca;
+    prevMca = nowMca;
+
+    const head = cmdInsertEcho(bot, buffer);
+
+    if (head !== null) {
+      const c = bot.slice(head.length);
+      const echo = CLEAR_LINE + c + '\b'.repeat(c.length) + c;
+
+      // the echo leaves the cursor exactly where the park would put
+      // it, which is why less never sends one
+      paint(eprPrefix() + clearBotIfNeeded() +
+        (wasMca ? echo : opening + head + echo));
+      prompting = promptPainted;
+      promptedInHelp = mode.HELP;
+      return;
+    }
+
+    // ...and no park when writing the row already left the cursor
+    // where the park would put it, which is every append: less
+    // positions inside its own text only when the cursor is NOT at the
+    // end, and it does that with backspaces (cmd_left), never a CUP.
+    const parked = cmd.active &&
+      cursorCol(rows) !== Math.min(visualWidth(bot) + 1, config.screenWidth);
+
     paint(eprPrefix() + clearBotIfNeeded() +
       opening + bot + tailClear(bot) +
-      (cmd.active ? parkCursor(rows) : ''));
+      (parked ? parkCursor(rows) : ''));
     prompting = promptPainted;
     promptedInHelp = mode.HELP;
     return;
