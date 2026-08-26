@@ -95,6 +95,9 @@ export function beginGuardedRun(): void {
   runAbandoned = false;
   trace('run');
 
+  // the search is still going, so the dip stands: see endGuardedRun
+  holdIsigRestore();
+
   const state = shared;
 
   if (!state?.watcher) return;
@@ -132,11 +135,57 @@ export function restoreIsig(): void {
   setKeyboardIsig(true);
 }
 
+/**
+ * Hands ISIG back at the END of the search, not the end of each run.
+ *
+ * One user search is many runs: duringUserSearch wraps every REQUEST
+ * the source engine makes, so a scan over 40MB opened 29 of them.
+ * Restoring on each one had the watcher dip it again on the next -
+ * MEASURED at 1427 stty forks in 11 seconds, one pair per run, which
+ * is a child process every 8ms taking the terminal's name with it.
+ * That is the title flicker, and the fork storm is why the search
+ * went sluggish and an interrupt took so long to land.
+ *
+ * A timer instead of the run boundary, and one long enough to span
+ * the gap between two runs of the same search. MEASURED at ~16ms
+ * apart, so a zero-delay restore fired between every pair and changed
+ * nothing; this outlives that and collapses a whole search into one
+ * dip and one restore.
+ *
+ * The overhang costs nothing. ISIG staying off for a moment after the
+ * search is exactly the window guardHoldsIsig() already exists to
+ * describe, and the key path reads a ^C arriving in it as the
+ * interrupt either way. unref'd, so a pending restore never holds the
+ * process open.
+ */
+const ISIG_COALESCE_MS = 200;
+
+let isigRestore: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleIsigRestore(): void {
+  if (isigRestore) return;
+
+  isigRestore = setTimeout(() => {
+    isigRestore = null;
+    restoreIsig();
+  }, ISIG_COALESCE_MS);
+
+  isigRestore.unref?.();
+}
+
+/** Cancels a restore that a new run has overtaken. */
+function holdIsigRestore(): void {
+  if (!isigRestore) return;
+
+  clearTimeout(isigRestore);
+  isigRestore = null;
+}
+
 /** Closes a run, so the watcher stops taking keys nobody asked it to. */
 export function endGuardedRun(): void {
   runStarted = 0;
 
-  restoreIsig();
+  scheduleIsigRestore();
 
   const state = shared;
 
@@ -380,9 +429,17 @@ for (;;) {
     Atomics.wait(header, ${WATCHING}, 1, 1);
   }
 
-  // the run is over: give the terminal its signals back. The main
-  // thread restores too, for the run this watcher does not outlive
-  if (Atomics.compareExchange(header, ${ISIG_OFF}, 1, 0) === 1) setIsig(true);
+  // ...and it is NOT restored here. This loop turns once per MATCH,
+  // not once per search - a scan over 40MB makes tens of thousands of
+  // requests - so restoring on the way out had the dip taken again on
+  // the way into the next one: MEASURED at 505 stty pairs in eleven
+  // seconds, a child process every 11ms, each one flashing its name
+  // into the terminal's title bar. That storm is what made the search
+  // sluggish and an interrupt slow to land.
+  //
+  // The main thread owns it instead (scheduleIsigRestore), which can
+  // tell the end of a SEARCH from the end of one match. killWorkers
+  // and endJsRegexGuard cover the exits this thread does not reach.
 }
 `;
 
@@ -504,6 +561,9 @@ function killWorkers(): void {
 
 /** Drops the workers, for a session that is closing down. */
 export function endJsRegexGuard(): void {
+  // NOW, not on a timer: this is the exit path, and an unref'd
+  // restore that never fires leaves the terminal without its signals
+  holdIsigRestore();
   killWorkers();
 }
 
