@@ -44,19 +44,23 @@ import pyte
 
 # big enough that counting lines runs past the two-second message; the
 # walk is IO bound, so this is a size and not a line count
-# Two sizes, because the two pagers walk at very different speeds and
-# each case needs a different window to land in:
-#
-#   MID  - the -N cases. The walk has to still be running when the key
-#          lands AND the screen has to settle inside the watch below.
-#   WIDE - the cases that press once the note is up. Our walk is
-#          QUICKER than less's, and on a warm cache it finishes in the
-#          gap between the note appearing and the key going out - the
-#          key then lands at an idle prompt and the case tests nothing.
-#          A bigger file holds that window open.
-MID = os.environ.get('FIXTURE', os.path.join(P, 'loong'))
-WIDE = os.environ.get('FIXTURE_WIDE', os.path.join(P, 'big'))
-NEED = 600 * 1024 * 1024
+# The fixture has to be big enough that OUR walk runs past its own
+# two-second message - and we count newlines four bytes at a time now,
+# about 1.1GB a second, so "big enough" moved: 1.1GB used to take 2.7s
+# and takes 1.0s, which never reaches the message at all. Pick the
+# largest file available rather than naming one, and say so if none of
+# them is big enough, because a fixture that is too small turns every
+# case here green without testing anything.
+NEED = 3 * 1024 * 1024 * 1024
+
+CANDIDATES = [os.environ[k] for k in ('FIXTURE',) if k in os.environ] or [
+    os.path.join(P, name) for name in ('long', 'big', 'loong')]
+
+
+def pick_fixture():
+    sized = [(os.path.getsize(f), f) for f in CANDIDATES if os.path.exists(f)]
+    return max(sized) if sized else (0, None)
+
 
 MSG = 'Calculating line numbers...'
 OFF = 'Line numbers turned off'
@@ -157,33 +161,34 @@ def drive(who, opts, key, at, isig, watch, fixture):
 # it. Nothing here is marked so to make a failure go quiet.
 BEFORE, AFTER = 0.5, 3.0
 CASES = [
-    ('before, no -N, ^X, isig on',  [],     '\x18', BEFORE, True,  True,  '(END)', MID),
-    ('before, no -N, ^X, isig off', [],     '\x18', BEFORE, False, True,  '(END)', MID),
-    ('before, -N,    ^X, isig on',  ['-N'], '\x18', BEFORE, True,  True,  ':', MID),
-    ('after,  no -N, ^X, isig on',  [],     '\x18', AFTER,  True,  True,  OFF, WIDE),
-    ('after,  no -N, ^C, isig on',  [],     '\x03', AFTER,  True,  True,  OFF, WIDE),
-    ('after,  -N,    ^X, isig on',  ['-N'], '\x18', AFTER,  True,  True,  OFF, MID),
-    ('after,  -N,    ^C, isig on',  ['-N'], '\x03', AFTER,  True,  True,  OFF, MID),
-    ('before, -N,    ^C, isig on',  ['-N'], '\x03', BEFORE, True,  True,  ':', MID),
+    ('before, no -N, ^X, isig on',  [],     '\x18', BEFORE, True,  True,  '(END)', None),
+    ('before, no -N, ^X, isig off', [],     '\x18', BEFORE, False, True,  '(END)', None),
+    ('before, -N,    ^X, isig on',  ['-N'], '\x18', BEFORE, True,  True,  ':', None),
+    ('after,  no -N, ^X, isig on',  [],     '\x18', AFTER,  True,  True,  OFF, None),
+    ('after,  no -N, ^C, isig on',  [],     '\x03', AFTER,  True,  True,  OFF, None),
+    ('after,  -N,    ^X, isig on',  ['-N'], '\x18', AFTER,  True,  True,  OFF, None),
+    ('after,  -N,    ^C, isig on',  ['-N'], '\x03', AFTER,  True,  True,  OFF, None),
+    ('before, -N,    ^C, isig on',  ['-N'], '\x03', BEFORE, True,  True,  ':', None),
 
     # less cannot be interrupted with ISIG off: no signal is ever raised
     # and check_poll compares the byte against intr_char (^X) alone. We
     # read the byte as the interrupt anyway - see intrIsByte in core.ts,
     # which says why.
-    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, '(END)', MID),
-    ('after,  -N,    ^C, isig off', ['-N'], '\x03', AFTER,  False, False, OFF, MID),
+    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, '(END)', None),
+    ('after,  -N,    ^C, isig off', ['-N'], '\x03', AFTER,  False, False, OFF, None),
 
     # A ^C landing BEFORE the walk starts is consumed by psignals and
     # the walk then runs to the end - measured: less shows the note at
     # +5s and reaches (END) at +7s. Ours holds ISIG off from 200ms, so
     # the byte reaches the poll and stops the walk where ^X does. Same
     # destination, seconds earlier.
-    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, '(END)', MID),
+    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, '(END)', None),
 ]
 
 
 def one(case):
-    label, opts, key, at, isig, same, want, fixture = case
+    label, opts, key, at, isig, same, want, _ = case
+    fixture = pick_fixture()[1]
     watch = 20
     ours = drive('ours', opts, key, at, isig, watch, fixture)
     less = drive('less', opts, key, at, isig, watch, fixture) if same else None
@@ -191,12 +196,11 @@ def one(case):
 
 
 def main():
-    missing = [f for f in (MID, WIDE)
-               if not os.path.exists(f) or os.path.getsize(f) < NEED]
+    size, fixture = pick_fixture()
 
-    if missing:
-        print(f'intrsweep needs files of at least {NEED >> 20}MB: '
-              f'{missing!r}\n'
+    if size < NEED:
+        print(f'intrsweep needs a file of at least {NEED >> 30}GB; '
+              f'largest found: {fixture!r} at {size >> 20}MB\n'
               f'  the line-number walk has to run past its own two-second '
               f'message, and that is a SIZE\n'
               f'  make one with:  yes 1234567890123456789 | '

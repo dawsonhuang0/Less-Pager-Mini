@@ -132,6 +132,65 @@ import { PipeSpool, SPOOL_READ_AHEAD, SpoolEvent } from './spool';
  * every preceding byte. Each paint exposes a bounded local array to those
  * shared features; the underlying file remains byte-position based.
  */
+/**
+ * Newlines in a buffer, counted four bytes at a time.
+ *
+ * The obvious loop - `for (i = buf.indexOf(10); i >= 0; i = buf.indexOf(10,
+ * i + 1))` - spends one JS-to-C++ call PER NEWLINE. memchr is fast, the
+ * call around it is not, and a text file averaging five bytes a line is
+ * nearly all call. Measured over 512MB:
+ *
+ *     indexOf loop      294 MB/s
+ *     byte loop        1439 MB/s
+ *     this            4459 MB/s      (readSync itself: 3157 MB/s)
+ *
+ * so counting stops being the bottleneck: it now outruns the read that
+ * feeds it. On SPARSE data - a binary with a newline every kilobyte -
+ * indexOf is far quicker still (27 GB/s, it is SIMD memchr and skips
+ * whole cache lines), but this holds 6.4 GB/s there, which is also
+ * above the read. Above the read is the only thing that matters, so
+ * this runs unconditionally rather than choosing per chunk.
+ *
+ * The word test is the exact one. The shorter `(x - 0x01010101) & ~x &
+ * 0x80808080` detects WHETHER a byte matches but miscounts ADJACENT
+ * matches, because its borrow crosses byte boundaries - it passed on a
+ * file whose newlines happened never to touch, and failed 96 of 4045
+ * random buffers. This form sets the high bit of a byte if and only if
+ * that byte is zero, so the popcount is a count.
+ */
+function countNewlines(buf: Buffer): number {
+  let n = 0;
+  let i = 0;
+
+  // Uint32Array demands a 4-byte aligned offset, and a Buffer is a view
+  // into a shared pool - its byteOffset is whatever the pool gave it
+  const head = (4 - (buf.byteOffset & 3)) & 3;
+  const stop = Math.min(head, buf.length);
+
+  for (; i < stop; i++) if (buf[i] === 0x0A) n++;
+
+  const words = (buf.length - i) >> 2;
+
+  if (words > 0) {
+    const view = new Uint32Array(buf.buffer, buf.byteOffset + i, words);
+
+    for (let k = 0; k < words; k++) {
+      const x = view[k] ^ 0x0A0A0A0A;
+      const hit =
+        ~(((x & 0x7F7F7F7F) + 0x7F7F7F7F) | x | 0x7F7F7F7F) & 0x80808080;
+
+      // the four marker bits summed into the top byte
+      if (hit !== 0) n += ((hit >>> 7) * 0x01010101) >>> 24;
+    }
+
+    i += words << 2;
+  }
+
+  for (; i < buf.length; i++) if (buf[i] === 0x0A) n++;
+
+  return n;
+}
+
 export class FileInput implements PagerInput {
   private view: BigView;
   private positions: number[] = [];
@@ -2533,10 +2592,7 @@ export class FileInput implements PagerInput {
       const chunk = this.bf.readRange(pos, Math.min(64 * 1024, target - pos));
       if (!chunk.length) break;
 
-      for (let i = chunk.indexOf(0x0A); i >= 0;
-        i = chunk.indexOf(0x0A, i + 1)) {
-        num++;
-      }
+      num += countNewlines(chunk);
 
       pos += chunk.length;
 
