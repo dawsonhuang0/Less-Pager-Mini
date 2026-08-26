@@ -142,6 +142,7 @@ export class FileInput implements PagerInput {
   // an interrupted -N walk owes a jump back to the top, once the paint
   // it interrupted is over - see the abort in countTo
   private topFallback = false;
+  private topFallbackBell = false;
   private lineScanMessaged = false;
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
@@ -2387,7 +2388,8 @@ export class FileInput implements PagerInput {
     // the top's numbers come off the first anchor and cost nothing
     this.lineScanAborted = false;
 
-    ringBell('eof');
+    if (this.topFallbackBell) ringBell('eof');
+    this.topFallbackBell = false;
     this.view.gotoStart();
     this.sync();
 
@@ -2555,10 +2557,15 @@ export class FileInput implements PagerInput {
         session.intrPending = true;
         this.lineScanAborted = true;
 
+        // read BEFORE abort_delayed_msg turns them off below
+        const showing = opt.linenums === 2;
+
         if (messaged) {
           opt.linenums = 0;
           search.message = 'Line numbers turned off';
-        } else if (opt.linenums === 2) {
+        }
+
+        if (showing) {
           // Interrupted before the message, with the numbers SHOWING.
           //
           // less walks BEFORE it paints - currline(BOTTOM) runs and
@@ -2572,8 +2579,17 @@ export class FileInput implements PagerInput {
           // Deferred because we are inside that paint: the fallback
           // needs the frame it is undoing to have finished first.
           // Without -N nothing waited on the walk, so less keeps the
-          // rows it painted and so do we - hence only linenums === 2.
+          // rows it painted and so do we - hence only `showing`.
+          //
+          // Either side of the message: whether abort_delayed_msg had
+          // anything to say has no bearing on where forw got to, and
+          // it got nowhere. Reading the bottom row alone hid this -
+          // the message was right while the view sat at EOF.
           this.topFallback = true;
+
+          // ...and the bell belongs to the empty-table fallback, not
+          // to abort_delayed_msg, which speaks through error() instead
+          this.topFallbackBell = !messaged;
         }
 
         return null;

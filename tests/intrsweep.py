@@ -22,14 +22,16 @@ What it pins down:
 
 KNOWN FAILING, and it is the to-do rather than a flake:
 
-  before, -N, ^X, isig on   less ':'   ours '(END)'
+  after, -N, ^X/^C, isig on   less top '      1 1'   ours top '1'
 
-    With -N the rows cannot go up before the walk - the gutter needs
-    the numbers - so less's forw paints nothing, its position table
-    stays empty, and make_display falls back to jump_loc(ch_zero(), 1):
-    the top. We paint the destination with blank numbers first, so the
-    interrupt leaves us at the end instead. Fixing it means not
-    painting under -N until the walk is done.
+    Same root, one step further in. abort_delayed_msg turns the
+    numbers off and OWES a screen_trashed, which make_display only
+    honours once the message is dismissed - so less goes on showing
+    the screen it already had, gutter and all. We repaint at once and
+    the gutter goes with it. The view and the message agree; only the
+    stale numbers differ. Fixing it properly is the same fix as
+    everything else here: walk before painting, the way less does,
+    instead of lazily per gutter row.
 
 SERIAL by default. Every case here is timed against the two-second
 message rather than against a settled screen, and eight workers on a
@@ -50,21 +52,32 @@ import pyte
 
 # big enough that counting lines runs past the two-second message; the
 # walk is IO bound, so this is a size and not a line count
-FIXTURE = os.environ.get('FIXTURE', os.path.join(P, 'loong'))
+# Two sizes, because the two pagers walk at very different speeds and
+# each case needs a different window to land in:
+#
+#   MID  - the -N cases. The walk has to still be running when the key
+#          lands AND the screen has to settle inside the watch below.
+#   WIDE - the cases that press once the note is up. Our walk is
+#          QUICKER than less's, and on a warm cache it finishes in the
+#          gap between the note appearing and the key going out - the
+#          key then lands at an idle prompt and the case tests nothing.
+#          A bigger file holds that window open.
+MID = os.environ.get('FIXTURE', os.path.join(P, 'loong'))
+WIDE = os.environ.get('FIXTURE_WIDE', os.path.join(P, 'big'))
 NEED = 600 * 1024 * 1024
 
 MSG = 'Calculating line numbers...'
 OFF = 'Line numbers turned off'
 
 
-def drive(who, opts, key, at, isig, watch):
+def drive(who, opts, key, at, isig, watch, fixture):
     """G, then `key` - at `at` seconds, or once the note is up.
 
     Returns the screen sampled once a second afterwards, so a case can
     assert both where it settled AND that the note never came back.
     """
     argv = ([f'{P}/less/less'] if who == 'less' else ['node', f'{P}/dist/cli.js'])
-    argv = argv + opts + [FIXTURE]
+    argv = argv + opts + [fixture]
 
     pid, fd = pty.fork()
 
@@ -108,10 +121,13 @@ def drive(who, opts, key, at, isig, watch):
         # cold one takes four - and a fixed 3s pressed after the walk
         # had ended, which tests nothing. Give up after a while and let
         # the case fail honestly rather than pass by accident.
+        # poll FINELY: our walk is quicker than less's on a warm cache
+        # and can finish in the gap between the note appearing and the
+        # key going out, which lands the key at an idle prompt instead
         end = time.time() + 12
 
         while time.time() < end and not any(MSG in r for r in rows()):
-            drain(0.2)
+            drain(0.03)
     else:
         drain(at)
 
@@ -142,49 +158,53 @@ def drive(who, opts, key, at, isig, watch):
     return seen
 
 
-# (label, opts, key, when, isig, same-as-less?, ours must end with)
+# (label, opts, key, when, isig, same-as-less?, ours ends with, fixture)
 #
 # `same` false marks a DELIBERATE divergence: the row is asserted
 # against ours and never against less, and the reason is written beside
 # it. Nothing here is marked so to make a failure go quiet.
 BEFORE, AFTER = 0.5, 3.0
 CASES = [
-    ('before, no -N, ^X, isig on',  [],     '\x18', BEFORE, True,  True,  '(END)'),
-    ('before, no -N, ^X, isig off', [],     '\x18', BEFORE, False, True,  '(END)'),
-    ('before, -N,    ^X, isig on',  ['-N'], '\x18', BEFORE, True,  True,  ':'),
-    ('after,  no -N, ^X, isig on',  [],     '\x18', AFTER,  True,  True,  OFF),
-    ('after,  no -N, ^C, isig on',  [],     '\x03', AFTER,  True,  True,  OFF),
-    ('after,  -N,    ^X, isig on',  ['-N'], '\x18', AFTER,  True,  True,  OFF),
-    ('after,  -N,    ^C, isig on',  ['-N'], '\x03', AFTER,  True,  True,  OFF),
+    ('before, no -N, ^X, isig on',  [],     '\x18', BEFORE, True,  True,  '(END)', MID),
+    ('before, no -N, ^X, isig off', [],     '\x18', BEFORE, False, True,  '(END)', MID),
+    ('before, -N,    ^X, isig on',  ['-N'], '\x18', BEFORE, True,  True,  ':', MID),
+    ('after,  no -N, ^X, isig on',  [],     '\x18', AFTER,  True,  True,  OFF, WIDE),
+    ('after,  no -N, ^C, isig on',  [],     '\x03', AFTER,  True,  True,  OFF, WIDE),
+    ('after,  -N,    ^X, isig on',  ['-N'], '\x18', AFTER,  True,  True,  OFF, MID),
+    ('after,  -N,    ^C, isig on',  ['-N'], '\x03', AFTER,  True,  True,  OFF, MID),
+    ('before, -N,    ^C, isig on',  ['-N'], '\x03', BEFORE, True,  True,  ':', MID),
 
     # less cannot be interrupted with ISIG off: no signal is ever raised
     # and check_poll compares the byte against intr_char (^X) alone. We
     # read the byte as the interrupt anyway - see intrIsByte in core.ts,
     # which says why.
-    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, '(END)'),
-    ('after,  -N,    ^C, isig off', ['-N'], '\x03', AFTER,  False, False, OFF),
+    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, '(END)', MID),
+    ('after,  -N,    ^C, isig off', ['-N'], '\x03', AFTER,  False, False, OFF, MID),
 
     # A ^C landing BEFORE the walk starts is consumed by psignals and
     # the walk then runs to the end - measured: less shows the note at
     # +5s and reaches (END) at +7s. Ours holds ISIG off from 200ms, so
     # the byte reaches the poll and stops the walk where ^X does. Same
     # destination, seconds earlier.
-    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, '(END)'),
+    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, '(END)', MID),
 ]
 
 
 def one(case):
-    label, opts, key, at, isig, same, want = case
-    watch = 12
-    ours = drive('ours', opts, key, at, isig, watch)
-    less = drive('less', opts, key, at, isig, watch) if same else None
+    label, opts, key, at, isig, same, want, fixture = case
+    watch = 20
+    ours = drive('ours', opts, key, at, isig, watch, fixture)
+    less = drive('less', opts, key, at, isig, watch, fixture) if same else None
     return (ours, less)
 
 
 def main():
-    if not os.path.exists(FIXTURE) or os.path.getsize(FIXTURE) < NEED:
-        print(f'intrsweep needs a file of at least {NEED >> 20}MB at '
-              f'{FIXTURE!r}\n'
+    missing = [f for f in (MID, WIDE)
+               if not os.path.exists(f) or os.path.getsize(f) < NEED]
+
+    if missing:
+        print(f'intrsweep needs files of at least {NEED >> 20}MB: '
+              f'{missing!r}\n'
               f'  the line-number walk has to run past its own two-second '
               f'message, and that is a SIZE\n'
               f'  make one with:  yes 1234567890123456789 | '
@@ -195,8 +215,9 @@ def main():
     bad = 0
 
     for case, (ours, less) in zip(CASES, fastpty.imap(one, CASES, jobs=1)):
-        label, opts, key, at, isig, same, want = case
+        label, opts, key, at, isig, same, want, fixture = case
         bot = ours[-1][23]
+        top = ours[-1][0]
         why = []
 
         # the walk must not start again: once an interrupt has stopped
@@ -213,8 +234,17 @@ def main():
         if not bot.startswith(want):
             why.append(f'bottom {bot[:46]!r} wanted {want!r}')
 
-        if same and less is not None and less[-1][23] != bot:
-            why.append(f'less {less[-1][23][:46]!r}')
+        if same and less is not None:
+            if less[-1][23] != bot:
+                why.append(f'less bot {less[-1][23][:46]!r}')
+
+            # WHERE IT ENDED UP, not just what it said. The -N teleport
+            # hid behind a correct message for a whole session: the row
+            # read "Line numbers turned off" while the view sat at EOF
+            # and less was still at the top.
+            if less[-1][0] != top:
+                why.append(f'less top {less[-1][0][:26]!r} '
+                           f'ours {top[:26]!r}')
 
         if why:
             bad += 1
