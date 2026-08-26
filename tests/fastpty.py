@@ -54,8 +54,19 @@ def _drain(fd, quiet, cap, need=False):
     return out
 
 
-def run(argv, keys, rows=24, cols=80, env=None, cwd=None):
-    """Run argv on a pty of the given size, feeding keys one at a time."""
+def run(argv, keys, rows=24, cols=80, env=None, cwd=None,
+        quiet=None, first=None, step=None, dead=None):
+    """Run argv on a pty of the given size, feeding keys one at a time.
+
+    The caps are per call as well as per module: a sweep that drives a
+    3GB file needs a longer leash than one that drives twenty lines,
+    and passing them beats mutating globals that parallel workers
+    would then fight over.
+    """
+    quiet = QUIET if quiet is None else quiet
+    first = FIRST if first is None else first
+    step = STEP if step is None else step
+    dead = DEAD if dead is None else dead
     pid, fd = pty.fork()
 
     if pid == 0:
@@ -70,16 +81,16 @@ def run(argv, keys, rows=24, cols=80, env=None, cwd=None):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
 
     started = time.time()
-    out = _drain(fd, QUIET, FIRST, need=True)
+    out = _drain(fd, quiet, first, need=True)
 
     for key in keys:
-        if time.time() - started > DEAD:
+        if time.time() - started > dead:
             break
         try:
             os.write(fd, key.encode())
         except OSError:
             break
-        out += _drain(fd, QUIET, STEP)
+        out += _drain(fd, quiet, step)
 
     try:
         os.kill(pid, signal.SIGKILL)
@@ -92,6 +103,80 @@ def run(argv, keys, rows=24, cols=80, env=None, cwd=None):
         pass
 
     return out
+
+
+def burst(argv, keys, rows=24, cols=80, env=None, cwd=None,
+          quiet=None, first=None, step=None, dead=None):
+    """runpty.py's shape: wait for the first screen, then ONE write.
+
+    Not the same test as feeding keys one at a time - a pager that
+    reads a byte at a time echoes each key where it stands, while a
+    whole string arriving at once is a burst it may collapse. Sweeps
+    built on runpty.py are asserting the burst shape, so keep it.
+    """
+    quiet = QUIET if quiet is None else quiet
+    first = FIRST if first is None else first
+    step = STEP if step is None else step
+
+    pid, fd = pty.fork()
+
+    if pid == 0:
+        os.environ.update(TERM='xterm-256color', LESS='',
+                          LESSHISTFILE='/dev/null', LESSNOCONFIG='1',
+                          LINES=str(rows), COLUMNS=str(cols))
+        os.environ.update(env or {})
+        if cwd:
+            os.chdir(cwd)
+        os.execvp(argv[0], argv)
+
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
+
+    out = _drain(fd, quiet, first, need=True)
+
+    try:
+        os.write(fd, keys if isinstance(keys, bytes) else keys.encode())
+    except OSError:
+        pass
+
+    out += _drain(fd, quiet, dead or step)
+
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    try:
+        os.close(fd)
+        os.waitpid(pid, 0)
+    except OSError:
+        pass
+
+    return out
+
+
+def imap(fn, items, jobs=None):
+    """`fn` over `items` in worker PROCESSES, order preserved.
+
+    A case is a pty session or two that only ever wait on the pager, so
+    they parallelise cleanly. PROCESSES, not threads: every session
+    forks, and forking out of a thread holding the interpreter's locks
+    is a way to hang for reasons that have nothing to do with the
+    pager. FORK, not macOS's default spawn, which re-imports the
+    caller's __main__ in every worker and re-runs the sweep inside
+    itself. JOBS=1 turns it off.
+    """
+    items = list(items)
+    jobs = int(os.environ.get('JOBS', jobs or min(8, os.cpu_count() or 4)))
+
+    if jobs <= 1 or len(items) < 2:
+        return [fn(x) for x in items]
+
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(
+            max_workers=jobs,
+            mp_context=multiprocessing.get_context('fork')) as pool:
+        return list(pool.map(fn, items))
 
 
 def screen(argv, keys, rows=24, cols=80, env=None, cwd=None):

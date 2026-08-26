@@ -29,15 +29,21 @@ Known failing on 2026-08-15, all pre-existing (HEAD scored 7/13):
 
 usage: dumbsweep.py [path/to/cli.js]
 """
-import os, subprocess, sys, tempfile
+import os, sys, tempfile, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fastpty
 
 S = os.path.dirname(os.path.abspath(__file__))
 P = os.path.dirname(S)
 CLI = sys.argv[1] if len(sys.argv) > 1 else f'{P}/dist/cli.js'
 
-env = dict(os.environ, TERM='dumb', RUNPTY_DELAY='1.0', RUNPTY_STAGE='0.7',
-           LESS='', LESSOPEN='', LESSCLOSE='', LESSHISTFILE='/dev/null',
-           LC_ALL='en_US.UTF-8')
+env = dict(TERM='dumb', LESS='', LESSNOCONFIG='', LESSOPEN='',
+           LESSCLOSE='', LESSHISTFILE='/dev/null', LC_ALL='en_US.UTF-8')
+
+# QUIET has to outlast the pager's own settle timers (PROMPT_SETTLE_MS
+# 150, EDGE_DWELL_MS 120), or the sweep compares a half-drawn screen
+QUIET = float(os.environ.get('QUIET', '0.30'))
 
 # colour, wide characters and a line past the screen edge: what -R has
 # to carry through to a terminal that cannot draw an attribute itself
@@ -49,10 +55,10 @@ COLOUR = ''.join(
 
 
 def run(shell, groups):
-    return subprocess.run(
-        ['python3', f'{P}/tests/runpty_staged.py', '24', '100', groups,
-         '--', '/bin/sh', '-c', shell],
-        cwd=S, env=env, capture_output=True).stdout
+    keys = [bytes.fromhex(g).decode('latin-1')
+            for g in groups.split(',') if g]
+    return fastpty.run(['/bin/sh', '-c', shell], keys, 24, 100, env, cwd=S,
+                       quiet=QUIET, first=2.5, step=2.5, dead=40)
 
 
 # (keys as staged hex groups, label, options, piped?)
@@ -81,15 +87,19 @@ with tempfile.TemporaryDirectory() as tmp:
     with open(fixture, 'w') as handle:
         handle.write(COLOUR)
 
-    bad = 0
-
-    for groups, label, opts, piped in CASES:
+    def one(case):
+        groups, label, opts, piped = case
         less = f'{P}/less/less {opts}'.strip()
         us = f'node {CLI} {opts}'.strip()
         shell = (f'cat {fixture} | %s' if piped else f'%s {fixture}')
 
-        a = run(shell % less, groups)
-        b = run(shell % us, groups)
+        return (run(shell % less, groups), run(shell % us, groups))
+
+    started = time.time()
+    bad = 0
+
+    for (groups, label, opts, piped), (a, b) in zip(
+            CASES, fastpty.imap(one, CASES)):
         how = 'pipe' if piped else 'file'
 
         if a != b:
@@ -97,6 +107,7 @@ with tempfile.TemporaryDirectory() as tmp:
             print(f'DIFF {how:4} {opts:3} [{label}]  '
                   f'less={len(a)} ours={len(b)}')
 
-    print(f'dumb: {len(CASES) - bad}/{len(CASES)} identical')
+    print(f'dumb: {len(CASES) - bad}/{len(CASES)} identical'
+          f'   [{time.time() - started:.1f}s]')
 
 sys.exit(1 if bad else 0)
