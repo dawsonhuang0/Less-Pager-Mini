@@ -18,8 +18,7 @@ import {
   render,
   renderBare,
   ringBell,
-  squishCheck,
-} from '../helpers';
+  squishCheck, markFullRepaint } from '../helpers';
 
 import {
   binaryConfirm,
@@ -2587,6 +2586,17 @@ export class FileInput implements PagerInput {
         if (messaged) {
           opt.linenums = 0;
           search.message = 'Line numbers turned off';
+
+          // abort_delayed_msg OWES a screen_trashed when the numbers
+          // were showing (linenum.c:262), and less only honours it at
+          // the next make_display - which is after the message has
+          // been dismissed. So less goes on showing the screen it
+          // already had, gutter and all, and repaints when you press
+          // RETURN. This is that debt: the frame being built right now
+          // is the one the interrupt landed in, and holding it keeps
+          // the previous screen on the glass instead of painting the
+          // half-numbered one underneath the message.
+          if (showing) markFullRepaint();
         }
 
         if (showing) {

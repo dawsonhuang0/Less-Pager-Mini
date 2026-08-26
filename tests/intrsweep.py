@@ -20,18 +20,10 @@ What it pins down:
   * ^C on a terminal with ISIG off: less cannot be interrupted at all
     there, and we deliberately can. Marked, not hidden.
 
-KNOWN FAILING, and it is the to-do rather than a flake:
-
-  after, -N, ^X/^C, isig on   less top '      1 1'   ours top '1'
-
-    Same root, one step further in. abort_delayed_msg turns the
-    numbers off and OWES a screen_trashed, which make_display only
-    honours once the message is dismissed - so less goes on showing
-    the screen it already had, gutter and all. We repaint at once and
-    the gutter goes with it. The view and the message agree; only the
-    stale numbers differ. Fixing it properly is the same fix as
-    everything else here: walk before painting, the way less does,
-    instead of lazily per gutter row.
+All eleven pass. Three are marked * because they assert against OURS
+rather than less, each for a reason written beside the case: less
+cannot be interrupted at all on a terminal with ISIG off, and a ^C
+landing before the walk starts is consumed by psignals there.
 
 SERIAL by default. Every case here is timed against the two-second
 message rather than against a settled screen, and eight workers on a
