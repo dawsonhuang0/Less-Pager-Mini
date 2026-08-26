@@ -83,7 +83,7 @@ import {
   stripStyles,
 } from '../features/searching';
 
-import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig }
+import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig, abortSigs }
   from '../tty/keyboard';
 
 import { keyboard } from '../tty/keyboard';
@@ -2429,6 +2429,14 @@ export class FileInput implements PagerInput {
 
   /** Fable's cached find_linenum walk, retaining only sparse anchors. */
   private countTo(target: number): number | null {
+    // an interrupt already given in THIS command: less's ABORT_SIGS is
+    // still set, so find_linenum returns at once rather than starting
+    // the count again (linenum.c:329). Without this an interrupt taken
+    // before the message merely ended one walk, and the next one - the
+    // same paint asking for the next line - ran the whole file again
+    // and put the message up after the abort.
+    if (abortSigs()) return null;
+
     const anchor = this.lineAnchors[this.anchorIndex(target)];
 
     let { pos, num } = anchor;
@@ -2480,18 +2488,22 @@ export class FileInput implements PagerInput {
         // "Calculating line numbers... (interrupt to abort)(END)".
         search.cmdExecOpened = false;
         search.bottomClobbered = true;
+      }
 
-        // This loop IS the event loop, stopped: a node signal handler
-        // cannot run while it does, so a ^C on a terminal that
-        // generates one would never reach the poll below - less's
-        // ABORT_SIGS is set by a C handler that runs mid-loop and ours
-        // is not. Ask the driver to hand the byte over instead, for
-        // exactly as long as the wait lasts. Two forks, and only once
-        // the count has already run two seconds - see termios.ts.
-        if (keyboardHasIsig()) {
-          setKeyboardIsig(false);
-          dipped = true;
-        }
+      // This loop IS the event loop, stopped: a node signal handler
+      // cannot run while it does, so a ^C on a terminal that generates
+      // one would never reach the poll below - less's ABORT_SIGS is
+      // set by a C handler that runs mid-loop and ours is not. Ask the
+      // driver to hand the byte over instead, for as long as the count
+      // lasts, and give it straight back (termios.ts).
+      //
+      // Well before the message: the count becomes interruptible the
+      // moment a human could react to it, not when it admits to being
+      // slow. Two forks, and only for a count that runs this long -
+      // which is a big file, and nothing a small one ever pays.
+      if (!dipped && Date.now() - started >= 200 && keyboardHasIsig()) {
+        setKeyboardIsig(false);
+        dipped = true;
       }
 
       if (searchInterrupted(true)) {

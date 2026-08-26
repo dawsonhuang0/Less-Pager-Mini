@@ -2436,7 +2436,15 @@ export function searchInterrupted(force = false): boolean {
     return true;
   }
 
-  if (text.includes(optIntrChar())) return true;
+  // check_poll's READ_INTR is `sigs |= S_SWINTERRUPT` (os.c:308), and
+  // that flag stays up until psignals clears it at the top of the
+  // command loop - so every later scan in the SAME command gives up
+  // the moment it starts, instead of setting off again on the work the
+  // user just stopped
+  if (text.includes(optIntrChar())) {
+    raiseAbort();
+    return true;
+  }
 
   // less's check_poll ungets ordinary keys for the command loop —
   // never back through the stream, whose flowing-mode unshift would
