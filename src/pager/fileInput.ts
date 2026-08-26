@@ -83,7 +83,7 @@ import {
   stripStyles,
 } from '../features/searching';
 
-import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig, abortSigs }
+import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig }
   from '../tty/keyboard';
 
 import { keyboard } from '../tty/keyboard';
@@ -1003,32 +1003,37 @@ export class FileInput implements PagerInput {
     renderBare(session.content, session.buffer);
 
     this.lineScanMessaged = false;
-    let retriedAfterEarlyInterrupt = false;
+    let interrupted = false;
 
     for (;;) {
       this.lineScanAborted = false;
       if (this.countTo(this.view.top.pos) !== null) break;
 
+      interrupted = true;
+
       // abort_delayed_msg after the message showed: countTo turned
       // line numbers off and queued the less error text
       if (opt.linenums === 0) break;
 
-      if (retriedAfterEarlyInterrupt) {
-        // A second early ^C interrupts jump_forw's recovery repaint.
-        // forw paints zero lines, leaving less's position table empty;
-        // make_display then falls back to jump_loc(ch_zero(), 1).
+      // og does NOT walk again. find_linenum gave up and that is the
+      // end of it: measured on a 1.1GB file, less shows "(END)" after
+      // an interrupt and never says "Calculating line numbers" a
+      // second time. We retried once, which ran the whole file again
+      // and put the message back up seconds after the abort.
+      //
+      // What it does instead depends on whether anything was PAINTED.
+      // Without -N the rows went up before the walk, so the interrupt
+      // leaves them there. With -N they could not - the gutter needs
+      // the numbers - so forw painted nothing, less's position table
+      // is empty, and make_display falls back to jump_loc(ch_zero(), 1):
+      // the top, with the at-end bell.
+      if (opt.linenums === 2) {
         ringBell('eof');
         this.view.gotoStart();
         this.sync();
-        break;
       }
 
-      // Before the delayed message, abort_delayed_msg is a no-op.
-      // jump_forw notices its incomplete landing and repaints the
-      // end, whose currline(BOTTOM) starts a fresh line-number walk.
-      retriedAfterEarlyInterrupt = true;
-      render(session.content, session.buffer);
-      fs.writeSync(1, '\r' + CLEAR_LINE);
+      break;
     }
 
     // A mid-scan message or the retry's blank bypassed the renderer,
@@ -1037,8 +1042,7 @@ export class FileInput implements PagerInput {
     // dirtying anyway destroyed the record of the bottom row the
     // bare frame HAD painted: the next frame then printed that line
     // a second time, which is why every scroll went out twice.
-    if (this.lineScanMessaged || retriedAfterEarlyInterrupt ||
-        opt.linenums === 0) {
+    if (this.lineScanMessaged || interrupted || opt.linenums === 0) {
       dirtyBottomRow();
     }
   }
@@ -2435,7 +2439,11 @@ export class FileInput implements PagerInput {
     // before the message merely ended one walk, and the next one - the
     // same paint asking for the next line - ran the whole file again
     // and put the message up after the abort.
-    if (abortSigs()) return null;
+    //
+    // This flag, not the global one: it is reset per command (handle),
+    // which is the lifetime psignals gives sigs, and it stops the WALK
+    // without telling the jump around it to give up too.
+    if (this.lineScanAborted) return null;
 
     const anchor = this.lineAnchors[this.anchorIndex(target)];
 
