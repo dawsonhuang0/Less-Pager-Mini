@@ -105,6 +105,9 @@ export const hook = {
    *  from the position table rather than from whatever the last
    *  command left standing. */
   sourceRepaint: null as null | (() => void),
+  /** Whether a line count is still out, so the prompt stays off the
+   *  row the way less's cmd_exec clear leaves it. */
+  sourceCounting: null as null | (() => boolean),
   /** Raw bytes between two absolute file positions, like less's
    *  pipe_data reading ch.c between spos and epos. The pipe needs the
    *  FILE, not the materialized window: session.content holds only the

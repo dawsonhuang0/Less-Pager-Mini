@@ -1315,9 +1315,15 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
   // search long enough to look like a burst - "Pattern not found" on a
   // 154K binary - had its answer blanked by the hold and left the row
   // empty, so the search simply appeared to do nothing.
-  const promptHeld = !filling && pollWouldFire() && !posixRetry.pending &&
-    !search.message;
-
+  // ...and while a line count is still out. less's cmd_exec clears
+  // the bottom row BEFORE the slow work and prompt() only runs once
+  // the command is done (command.c), so the row stays blank for as
+  // long as the walk lasts. Counting off the event loop makes the
+  // command return at once, which painted "(END)" over a count that
+  // had not finished - a screen less never shows.
+  const promptHeld = (!filling && pollWouldFire() &&
+    !posixRetry.pending && !search.message) ||
+    (hook.sourceCounting?.() === true && !search.message);
   // a command that already wrote less's cmd_exec clear_bot itself
   // (execSearch, ahead of a walk that may be long) has supplied this
   // frame's opening; error() then adds its own and the pair matches
@@ -1427,10 +1433,18 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     // prompt or echo on the bottom line; only a render back at the
     // true prompt - with NO ungot command pending - runs
     // make_display's repaint
+    // ...but not while a line count is still out. less does not move
+    // the screen until it knows the numbers: its walk is synchronous,
+    // so the destination sits unflushed in obuf and the OLD page stays
+    // on the glass for the whole count (fileInput's own note on this).
+    // Counting off the event loop loses that for free, and the screen
+    // jumped to a destination whose gutter was still blank - a frame
+    // less never shows. Holding it here puts that back, and costs
+    // nothing this time: the loop is free, so ^C still lands.
     const atPrompt = !search.message && !option.pending && !search.input &&
       !examine.pending && !miscInput.pending && !brackets.pending &&
       !marks.pending && !mode.BUFFERING && !config.keyPrefix &&
-      !hasUngot();
+      !hasUngot() && hook.sourceCounting?.() !== true;
 
     if (atPrompt) {
       frozenFrame = false;

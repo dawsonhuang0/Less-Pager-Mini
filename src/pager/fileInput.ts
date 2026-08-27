@@ -18,7 +18,7 @@ import {
   render,
   renderBare,
   ringBell,
-  squishCheck, markFullRepaint } from '../helpers';
+  squishCheck, markFullRepaint, freezeFrame } from '../helpers';
 
 import {
   binaryConfirm,
@@ -45,6 +45,23 @@ import { flush } from '../tty/output';
  * the stale page, and the write it would cost is pure fragmentation.
  */
 const FLUSH_AHEAD = 8 * 1024 * 1024;
+
+/**
+ * A gap this size or under is walked on the spot rather than handed to
+ * the counter.
+ *
+ * Not about speed: 4MB counts in a couple of milliseconds, which
+ * nobody can see, while a worker costs a message each way. It is about
+ * the event loop - past this, walking here stops it for long enough to
+ * matter. The anchors keep a resolved position within a screen of
+ * wherever the gutter is asking, so ordinary scrolling never crosses
+ * this line and never wakes the worker at all.
+ */
+const INLINE_COUNT = 4 * 1024 * 1024;
+
+/** less's LONGTIME (linenum.c:58): how long a loop runs before it
+ *  admits to being slow. */
+const LONGTIME = 2000;
 
 /** less's LINENUM_POOL (defines.h:234): how many resolved line-number
  *  positions the table keeps before it starts evicting. */
@@ -76,17 +93,13 @@ import {
   filterLineMask,
   recordSearchMatch,
   messageRowHeld,
-  abortedBySigint,
   posixRetry,
   scanSearchBatch,
   search,
-  searchInterrupted,
   shiftVisibleText,
   stripStyles,
 } from '../features/searching';
 
-import { consumeInterrupt, setKeyboardIsig, keyboardHasIsig }
-  from '../tty/keyboard';
 
 import { keyboard } from '../tty/keyboard';
 
@@ -115,6 +128,8 @@ import { CLEAR_LINE, INVERSE_OFF, INVERSE_ON } from '../state/constants';
 import { PipeDecoder } from '../features/charset';
 
 import { BlockFile } from './blockFile';
+
+import { countRange, countAbortedBySigint } from './lineCounter';
 
 import { BigView, ViewTop, displayText } from './fileView';
 
@@ -200,11 +215,15 @@ export class FileInput implements PagerInput {
   private lineAnchors = [{ pos: 0, num: 0 }];
   private lineScanAborted = false;
 
+  /** The furthest position the counter has been asked about, null when
+   *  nothing is out. */
+  private countWanted: number | null = null;
+
+  /** less's delayed_msg timer: fires if a count outlasts LONGTIME. */
+  private countNote: ReturnType<typeof setTimeout> | null = null;
+
   // an interrupted -N walk owes a jump back to the top, once the paint
   // it interrupted is over - see the abort in countTo
-  private topFallback = false;
-  private topFallbackBell = false;
-  private topFallbackPending = false;
   private lineScanMessaged = false;
   private selectedOscPos: number | null = null;
   // which link within that line (its text-start offset)
@@ -368,6 +387,8 @@ export class FileInput implements PagerInput {
 
       return this.bf.size;
     };
+
+    hook.sourceCounting = () => this.countWanted !== null;
 
     hook.sourceRepaint = () => {
       if (!this.sourceActive() || !this.blankGiveUp) return;
@@ -1094,6 +1115,13 @@ export class FileInput implements PagerInput {
       // the same lifetime.
       if (this.countTo(this.view.top.pos) !== null) break;
 
+      // null has two meanings. A count is OUT: the number is not known
+      // YET, which is not an abort - the screen keeps the move it just
+      // painted, the gutter pads with spaces the way less does while
+      // find_linenum has nothing (line.c:439), and the frame repaints
+      // when the answer arrives.
+      if (this.countWanted !== null) break;
+
       interrupted = true;
 
       // abort_delayed_msg after the message showed: countTo turned
@@ -1326,6 +1354,7 @@ export class FileInput implements PagerInput {
     hook.sourceHeaderChanged = null;
     hook.sourceRowByte = null;
     hook.sourceRepaint = null;
+    hook.sourceCounting = null;
     this.pending?.bf.close();
     this.bf.close();
   }
@@ -2447,54 +2476,7 @@ export class FileInput implements PagerInput {
     return false;
   }
 
-  /**
-   * og's fallback when the walk was interrupted with -N showing.
-   *
-   * less walks BEFORE it paints: currline(BOTTOM) runs and only then
-   * does forw put the rows up, so an interrupt under -N leaves forw
-   * with nothing drawn, the position table empty, and make_display
-   * falling back to jump_loc(ch_zero(), 1) - the top, with the at-end
-   * bell. Ours walks LAZILY, one gutter row at a time while painting,
-   * so by the time the interrupt lands the destination is already on
-   * the glass. This puts it back where less ends up.
-   *
-   * Only with the numbers SHOWING. Without -N nothing waited on the
-   * walk, so less keeps the rows it painted and so do we.
-   *
-   * @returns Whether the view moved, so the caller repaints.
-   */
-  /** Runs the fallback once the paint that was interrupted is over. */
-  private scheduleTopFallback(): void {
-    if (this.topFallbackPending) return;
 
-    this.topFallbackPending = true;
-
-    setImmediate(() => {
-      this.topFallbackPending = false;
-
-      if (session.exited || files.index !== this.fileIndex) return;
-      if (!this.abandonAbortedWalk()) return;
-
-      render(session.content, session.buffer);
-    });
-  }
-
-  abandonAbortedWalk(): boolean {
-    if (!this.topFallback) return false;
-
-    this.topFallback = false;
-
-    // the walk that failed was for a screen we are no longer showing;
-    // the top's numbers come off the first anchor and cost nothing
-    this.lineScanAborted = false;
-
-    if (this.topFallbackBell) ringBell('eof');
-    this.topFallbackBell = false;
-    this.view.gotoStart();
-    this.sync();
-
-    return true;
-  }
 
   private lineNumber(row: number): number | null {
     const pos = this.positions[row];
@@ -2587,6 +2569,17 @@ export class FileInput implements PagerInput {
 
     let { pos, num } = anchor;
 
+    // Too far to walk here without stopping the event loop for long
+    // enough to be seen. Hand it to the counter and answer what less
+    // answers while it does not know yet: nothing. find_linenum
+    // returns 0 and plinestart pads the gutter with spaces
+    // (line.c:439), which is a state every caller of this already
+    // handles - they all test the result for null.
+    if (target - pos > INLINE_COUNT) {
+      this.requestCount(target);
+      return null;
+    }
+
     // The destination screen is painted but still in obuf, and this
     // walk is synchronous - nothing will flush it until we return, so
     // a long count leaves the OLD page on the glass the whole time.
@@ -2600,132 +2593,179 @@ export class FileInput implements PagerInput {
     // fragmentation on a burst is what flicker IS.
     if (target - pos > FLUSH_AHEAD) flush();
 
-    const started = Date.now();
-    let messaged = false;
-    let dipped = false;
-    let steps = 0;
-
-    try {
+    // Bounded by INLINE_COUNT, so this is a few milliseconds of work.
+    // Everything that used to live here - the 200ms ISIG dip, the
+    // two-second message, the poll for an interrupt once a megabyte,
+    // the fallback to the top when one arrived - existed because this
+    // loop could run for seconds with the event loop stopped. It
+    // cannot any more: a gap that long goes to the counter above,
+    // which does it off the loop where a ^C is an ordinary signal.
     while (pos < target) {
       const chunk = this.bf.readRange(pos, Math.min(64 * 1024, target - pos));
+
       if (!chunk.length) break;
 
       num += countNewlines(chunk);
-
       pos += chunk.length;
-
-      if ((++steps & 15) !== 0) continue;
-      this.addAnchor(pos, num);
-
-      if (!messaged && Date.now() - started >= 2000) {
-        messaged = true;
-        this.lineScanMessaged = true;
-        fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
-          'Calculating line numbers... (interrupt to abort)' + INVERSE_OFF);
-
-        // This went straight to the terminal, so the command's
-        // cmd_exec clear no longer describes the bottom row: that
-        // clear went out BEFORE the walk, and this landed after it.
-        // Leaving the flag up made the next frame skip its own
-        // opening and print the prompt onto the end of the message -
-        // "Calculating line numbers... (interrupt to abort)(END)".
-        search.cmdExecOpened = false;
-        search.bottomClobbered = true;
-      }
-
-      // This loop IS the event loop, stopped: a node signal handler
-      // cannot run while it does, so a ^C on a terminal that generates
-      // one would never reach the poll below - less's ABORT_SIGS is
-      // set by a C handler that runs mid-loop and ours is not. Ask the
-      // driver to hand the byte over instead, for as long as the count
-      // lasts, and give it straight back (termios.ts).
-      //
-      // Well before the message: the count becomes interruptible the
-      // moment a human could react to it, not when it admits to being
-      // slow. Two forks, and only for a count that runs this long -
-      // which is a big file, and nothing a small one ever pays.
-      if (!dipped && Date.now() - started >= 200 && keyboardHasIsig()) {
-        setKeyboardIsig(false);
-        dipped = true;
-      }
-
-      if (searchInterrupted(true)) {
-        consumeInterrupt();
-        session.intrPending = true;
-        this.lineScanAborted = true;
-
-        // read BEFORE abort_delayed_msg turns them off below
-        const showing = opt.linenums === 2;
-
-        if (messaged) {
-          opt.linenums = 0;
-          search.message = 'Line numbers turned off';
-
-          // abort_delayed_msg OWES a screen_trashed when the numbers
-          // were showing (linenum.c:262), and less only honours it at
-          // the next make_display - which is after the message has
-          // been dismissed. So less goes on showing the screen it
-          // already had, gutter and all, and repaints when you press
-          // RETURN. This is that debt: the frame being built right now
-          // is the one the interrupt landed in, and holding it keeps
-          // the previous screen on the glass instead of painting the
-          // half-numbered one underneath the message.
-          if (showing) markFullRepaint();
-        }
-
-        // -N, or a ^C that caught the paint before it drew anything.
-        //
-        // Both are less's one rule: the position table is empty, so
-        // make_display runs jump_loc(ch_zero(), 1) (command.c:852) -
-        // pos_clear() ran and forw() then bailed at ABORT_SIGS
-        // (forwback.c:312). With -N our lazy walk stands in for that.
-        // Without it, a ^C still gets there, because a SIGNAL lands
-        // mid-read where the --intr char waits for a boundary - which
-        // is why ^X leaves both pagers at EOF and ^C does not.
-        if (showing || (!messaged && abortedBySigint())) {
-          // Interrupted before the message, with the numbers SHOWING.
-          //
-          // less walks BEFORE it paints - currline(BOTTOM) runs and
-          // only then does forw put the rows up - so an interrupt here
-          // leaves forw with nothing drawn, the position table empty,
-          // and make_display falling back to jump_loc(ch_zero(), 1):
-          // the top, with the at-end bell. We walk LAZILY instead, one
-          // gutter row at a time WHILE painting, so the destination is
-          // already on the glass by the time the interrupt lands.
-          //
-          // Deferred because we are inside that paint: the fallback
-          // needs the frame it is undoing to have finished first.
-          // Without -N nothing waited on the walk, so less keeps the
-          // rows it painted and so do we - hence only `showing`.
-          //
-          // Either side of the message: whether abort_delayed_msg had
-          // anything to say has no bearing on where forw got to, and
-          // it got nowhere. Reading the bottom row alone hid this -
-          // the message was right while the view sat at EOF.
-          this.topFallback = true;
-
-          // ...and the bell belongs to the empty-table fallback, not
-          // to abort_delayed_msg, which speaks through error() instead
-          this.topFallbackBell = !messaged;
-
-          // Scheduled from HERE, not from the key drain. While the
-          // walk holds ISIG off, the interrupt is read by the poll
-          // inside this loop and never becomes a key at all - so
-          // hanging the fallback off the next keypress meant it never
-          // ran, and a -N interrupt sat at EOF with the note still up.
-          // setImmediate lands after the paint we are inside.
-          this.scheduleTopFallback();
-        }
-
-        return null;
-      }
     }
 
     this.addAnchor(target, num);
+
     return num;
-    } finally {
-      if (dipped) setKeyboardIsig(true);
+  }
+
+
+  /**
+   * Asks the counter for a gap too long to walk here.
+   *
+   * One at a time, and the furthest target wins: the gutter asks about
+   * every row it paints, so a single screen produces a screenful of
+   * requests for positions a few hundred bytes apart. Answering the
+   * furthest one anchors the rest.
+   */
+  private requestCount(target: number): void {
+    if (this.countWanted !== null) {
+      this.countWanted = Math.max(this.countWanted, target);
+      return;
     }
+
+    this.countWanted = target;
+
+    // Keep the screen where it is until the numbers arrive, the way
+    // less does - it never paints a destination it cannot number. The
+    // count lands, the frame unfreezes, and the move and its gutter
+    // appear together. Only with -N: without a gutter there is nothing
+    // waiting on the count, so the move should not wait either.
+    if (opt.linenums === 2) freezeFrame();
+
+    this.runCount();
+  }
+
+  private runCount(): void {
+    const target = this.countWanted;
+
+    if (target === null) return;
+
+    const anchor = this.lineAnchors[this.anchorIndex(target)];
+    const { pos, num } = anchor;
+    const index = this.fileIndex;
+
+    // less's delayed message: silence for LONGTIME, then say what is
+    // taking so long (linenum.c). A timer rather than a check inside
+    // the loop, because the loop is on another thread now and this one
+    // is free to run one - which is the point of moving it.
+    //
+    // Still written straight to the row: it is an ierror, which less
+    // prints and flushes where it happens without waiting for a key
+    // (output.c), and the renderer has to be told the bottom row no
+    // longer holds what it last painted there.
+    this.countNote = setTimeout(() => {
+      this.countNote = null;
+      this.lineScanMessaged = true;
+
+      fs.writeSync(1, '\r' + CLEAR_LINE + INVERSE_ON +
+        'Calculating line numbers... (interrupt to abort)' + INVERSE_OFF);
+
+      search.cmdExecOpened = false;
+      search.bottomClobbered = true;
+    }, LONGTIME);
+
+    this.countNote.unref?.();
+
+    void countRange(this.bf.path, pos, target).then(done => {
+      if (this.countNote) {
+        clearTimeout(this.countNote);
+        this.countNote = null;
+      }
+
+      // a different file was opened while it counted
+      if (files.index !== index || this.fileIndex !== index) return;
+
+      if (!done) {
+        // Abandoned, and that ends it for the whole command. The
+        // gutter asks about every row it paints, so a further target
+        // is almost always queued behind this one - restarting it
+        // began the file again the instant the user stopped it, which
+        // looked exactly like a ^C that did nothing. less does not
+        // walk again either: find_linenum gave up and that is the end
+        // of it (linenum.c).
+        this.lineScanAborted = true;
+        this.countWanted = null;
+
+        // Past the message, abort_delayed_msg turns the numbers off and
+        // SAYS so (linenum.c:258) - and that is all it does. No jump:
+        // less's error() blocks in get_return, the screen it already
+        // painted stays, and both interrupts end here the same way.
+        // Before the message it returns at its first line and says
+        // nothing at all (`loopcount >= 0`, :256), which is why -N
+        // survives an early abort and why the branch below can move.
+        if (this.lineScanMessaged) {
+          this.lineScanMessaged = false;
+          opt.linenums = 0;
+          search.message = 'Line numbers turned off';
+
+          markFullRepaint();
+          render(session.content, session.buffer);
+
+          return;
+        }
+
+        // ...and with the numbers SHOWING, back to the top.
+        //
+        // Not cosmetic. lineScanAborted is cleared once per command in
+        // handle(), the lifetime psignals gives less's sigs - so the
+        // very next keypress asks the gutter again, and at EOF that is
+        // another walk of the whole file. The user interrupts, presses
+        // anything, and it starts over: a ^C that appears to do
+        // nothing. At the top the anchors answer instantly, so there
+        // is nothing left to restart.
+        //
+        // It is also where less ends up, by its own route: forw()
+        // painted nothing, so the position table is empty and
+        // make_display runs jump_loc(ch_zero(), 1) with the at-end
+        // bell (command.c:852).
+        // A ^C always: it is a signal, and less ends up at the top
+        // through the empty table it leaves behind. With -N showing,
+        // the --intr char too - not for parity but because the gutter
+        // would otherwise re-ask on the next key and walk the file
+        // again, which is the "^C that did nothing" above.
+        if (countAbortedBySigint() || opt.linenums === 2) {
+          ringBell('eof');
+          this.view.gotoStart();
+          this.sync();
+
+          // and the gutter comes back with it. lineScanAborted stands
+          // for the walk that was abandoned, not for the screen we
+          // just moved to: at the top the anchors answer from position
+          // zero without reading anything, so less prints "1" there
+          // and so should we. Leaving the flag up blanked a number
+          // that cost nothing to know.
+          this.lineScanAborted = false;
+        }
+
+        markFullRepaint();
+        render(session.content, session.buffer);
+
+        return;
+      }
+
+      this.addAnchor(done.at, num + done.lines);
+
+      const again = this.countWanted !== null && this.countWanted !== target;
+
+      this.countWanted = again ? this.countWanted : null;
+
+      if (again) {
+        this.runCount();
+        return;
+      }
+
+      // every gutter on screen gains its number at once, so this is a
+      // whole frame - sourceRepaint is the blank-give-up hook and
+      // declines anything else
+      markFullRepaint();
+      render(session.content, session.buffer);
+    });
   }
 
   private jumpMark(mark: Mark, sline: number): boolean {

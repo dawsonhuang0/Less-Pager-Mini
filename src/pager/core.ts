@@ -6,6 +6,9 @@ import { refreshWindowTitle } from '../tty/title';
 import { onHilitePaint, setHiliteHidden } from '../features/searching';
 
 import { endJsRegexGuard } from '../features/jsRegexGuard';
+
+import { abortCount as abortLineCount, endLineCounter, counting }
+  from './lineCounter';
 import { squishCheck, renderHiliteRepaint, markSearchFlash }
   from '../helpers';
 import { armReadWatch } from '../state/reads';
@@ -1275,14 +1278,6 @@ async function act(action: Actions | undefined): Promise<void> {
     // (less's lsystem blocks inside the command; ours resumes at the
     // shellPause dismissal, which repaints)
     render(session.content, session.buffer);
-
-    // ...and the paint above is where a -N gutter's line-number walk
-    // actually runs, one row at a time. If an interrupt stopped it,
-    // less would never have drawn this screen at all - see
-    // abandonAbortedWalk - so the fallback can only be read afterwards
-    if (pagerInput?.abandonAbortedWalk?.()) {
-      render(session.content, session.buffer);
-    }
   }
 }
 
@@ -1771,13 +1766,6 @@ function drainKeys(): void {
     const started = Date.now();
     handleKey(key);
 
-    // a -N gutter's line-number walk runs lazily, inside the paint, so
-    // an interrupt that stopped it can only be answered once the paint
-    // is over - see abandonAbortedWalk
-    if (pagerInput?.abandonAbortedWalk?.()) {
-      render(session.content, session.buffer);
-    }
-
     flush();
     markCommandTime(Date.now() - started);
 
@@ -2200,9 +2188,30 @@ async function dispatchKey(sequence: string): Promise<void> {
   // filter clearing, just the dismissal.
   const intrDismiss = search.message !== '' && isInterrupt(session.key);
 
+  // The --intr char, while a count runs. It is check_poll's
+  // READ_INTR (os.c:161): a key that ENDS work in progress and is
+  // consumed doing it, never handed on as input. The walk used to
+  // claim it from its own poll - the only reader that could reach
+  // the terminal while the event loop was stopped - and counting
+  // off the loop takes that poll away, leaving the byte to fall
+  // through to the command line and echo as a literal " ^X".
+  if (counting() && session.key === optIntrChar()) {
+    abortLineCount(false);
+    render(session.content, session.buffer);
+    return;
+  }
+
   if (isInterrupt(session.key) && !intrDismiss && !follow.active &&
       !session.pipeDrainTo && !pendingScroll.rows && !session.pipeWaiting) {
     ringBell();
+
+    // ...and end the count from here too. On a terminal with ISIG off
+    // the ^C never becomes a signal - it arrives as the byte 0x03 and
+    // reaches this branch instead of onSigint, so wiring the abort
+    // only into the handler left the count running on exactly those
+    // terminals. Both paths are the same interrupt and both must stop
+    // it; abortCount is idempotent.
+    abortLineCount(true);
 
     if (search.filters.length) {
       search.filters = [];
@@ -3189,6 +3198,12 @@ function onSigint(): void {
   // ^C is the interrupt and not a byte somebody typed
   raiseAbort();
 
+  // and the count, which cannot be signalled: a worker never
+  // receives one, so the flag it polls between chunks is set from
+  // the handler node can finally run - counting no longer stops
+  // the event loop that would deliver it
+  abortLineCount(true);
+
   // less's ISIG: the driver FLUSHES the input queue when it generates
   // SIGINT, so everything typed before the ^C is thrown away by the
   // KERNEL and less never sees it. Ours has already left the kernel -
@@ -3737,6 +3752,9 @@ async function cleanUp(): Promise<void> {
   // these belong with them; it also hands back any ISIG dip the
   // watcher still holds
   endJsRegexGuard();
+
+  // and the counter's, for the same reason
+  endLineCounter();
 
   // the -e hook holds this session's closure otherwise
   onEofForward(null);

@@ -51,9 +51,6 @@ export interface PagerInput {
    *  the prompt, with its delayed "Calculating..." and abort chain. */
   resolveBottom?(): void;
 
-  /** og's make_display fallback after an interrupted walk; see below. */
-  abandonAbortedWalk?(): boolean;
-
   /** Releases the source's file descriptors. */
   close(): void;
 }
