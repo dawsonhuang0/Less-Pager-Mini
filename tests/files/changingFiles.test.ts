@@ -28,7 +28,7 @@ import {
   revealPipeEnd
 } from '../../src/features/files';
 
-import { opt } from '../../src/options';
+import { opt, scanOptions } from '../../src/options';
 
 import { runExamine } from '../../src/commands';
 
@@ -345,6 +345,32 @@ describe('examine expansion', () => {
 
       await done;
     });
+
+  it('globs in process on request, under --use-zsh-glob', () => {
+    // NOT a less option: less's lglob always shells out
+    // (filename.c:750), and glob(3) appears once in all of less, under
+    // `#if MSDOS_COMPILER==DJGPPC`. This makes the in-process globber -
+    // the one Windows and a machine with no shell already use -
+    // reachable on purpose, so the two can be compared from one binary.
+    const brace = path.join(dir, '{a,b}.txt');
+
+    // the shell splits a brace list BEFORE it globs, so it expands here
+    expect(expandExamineList(brace)).toEqual([fileA, fileB]);
+
+    try {
+      scanOptions('--use-zsh-glob', []);
+
+      expect(expandExamineList(path.join(dir, '*.txt')))
+        .toEqual([fileA, fileB]);
+
+      // ...and cannot there. Word splitting is the shell's, not the
+      // matcher's, so an in-process globber never sees the braces -
+      // the one grammar difference the switch makes.
+      expect(expandExamineList(brace)).toEqual([brace]);
+    } finally {
+      opt.useZshGlob = 0;
+    }
+  });
 
   it('globs in process when no shell can be executed at all', () => {
     // less degrades here rather than deciding to: popen forks fine, the

@@ -54,6 +54,7 @@ export const opt = {
   incrSearch: 0,
   useColor: 0,
   useJsRegexp: 0,
+  useZshGlob: 0,
   headerLines: 0,
   headerCols: 0,
   headerStart: 0,

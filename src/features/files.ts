@@ -868,7 +868,9 @@ export function glob(pattern: string): string[] {
   //
   // There is no fast path for a pattern without metacharacters
   // either - less shells out for every name it is given.
-  if (!isWindows) {
+  // --use-zsh-glob asks for the globber below instead, which is ours
+  // and not less's - see options/use-zsh-glob.ts
+  if (!isWindows && !opt.useZshGlob) {
     const expanded = shellExpand(pattern);
 
     // a shell that ran is the answer, whatever it said. Only a shell
@@ -899,7 +901,8 @@ export function glob(pattern: string): string[] {
   // The name still comes back unexpanded either way: less's lglob
   // answers with what it was given and lets the open fail.
   //
-  // Unix reaches here too, by the one route that leaves it in the same
+  // Unix reaches here two ways. --use-zsh-glob asks for it outright,
+  // and otherwise by the one route that leaves it in the same
   // position Windows is always in: the shell could not be EXECUTED -
   // no /bin/sh, or a $SHELL that has been uninstalled. less degrades
   // there rather than deciding to: popen forks fine, the child cannot

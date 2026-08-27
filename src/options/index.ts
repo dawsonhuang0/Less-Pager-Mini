@@ -99,6 +99,7 @@ import { statusColWidth } from './status-col-width';
 import { incsearch } from './incsearch';
 import { useColor } from './use-color';
 import { useJsRegexp } from './use-js-regexp';
+import { useZshGlob } from './use-zsh-glob';
 import { header } from './header';
 import { noNumberHeaders } from './no-number-headers';
 import { noSearchHeaders } from './no-search-headers';
@@ -203,6 +204,7 @@ const OPTIONS: OptionSpec[] = [
   incsearch,
   useColor,
   useJsRegexp,
+  useZshGlob,
   fileSize,
   statusLine,
   header,

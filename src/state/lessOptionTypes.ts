@@ -81,6 +81,7 @@ export const LESS_OPTION_VALUES = {
   incsearch: 'flag',
   'use-color': 'flag',
   'use-js-regexp': 'flag',
+  'use-zsh-glob': 'flag',
   'file-size': 'flag',
   'status-line': 'flag',
   header: 'value',
@@ -238,7 +239,7 @@ export interface LessOptions {
   help?: boolean;
   /** Display lesskey help. */
   'lesskey-help'?: boolean;
-  /** A less option. */
+  /** View lesskeys in use. */
   'view-lesskey'?: boolean;
   /** Set horizontal scroll amount (0 = one half screen width). @default '0' */
   shift?: number | string;
@@ -276,6 +277,8 @@ export interface LessOptions {
   'use-color'?: boolean;
   /** Search with JavaScript's RegExp. */
   'use-js-regexp'?: boolean;
+  /** Expand filenames with zsh globbing, not $SHELL. */
+  'use-zsh-glob'?: boolean;
   /** Automatically determine the size of the input file. */
   'file-size'?: boolean;
   /** Highlight or color the entire line containing a mark. */
@@ -292,7 +295,6 @@ export interface LessOptions {
   'no-edit-warn'?: boolean;
   /** Don't warn when editing a file opened via LESSOPEN. */
   'no-warn-edit'?: boolean;
-  /** Disable shell, pipe and editor commands. */
   /** Don't give line numbers to header lines. */
   'no-number-headers'?: boolean;
   /** Searches do not include header lines or columns. */

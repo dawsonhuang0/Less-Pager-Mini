@@ -321,6 +321,8 @@ export const help: string[] = [
   "                  Enables colored text.",
   "                --use-js-regexp",
   "                  Search with JavaScript's RegExp.",
+  "                --use-zsh-glob",
+  "                  Expand filenames with zsh globbing, not $SHELL.",
   "                --view-lesskey",
   "                  View lesskeys in use.",
   "                --wheel-lines=[_\bN]",
