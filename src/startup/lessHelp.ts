@@ -322,7 +322,7 @@ export const help: string[] = [
   "                --use-js-regexp",
   "                  Search with JavaScript's RegExp.",
   "                --use-zsh-glob",
-  "                  Expand filenames with zsh globbing, not $SHELL.",
+  "                  Expand filenames with built-in zsh globbing.",
   "                --view-lesskey",
   "                  View lesskeys in use.",
   "                --wheel-lines=[_\bN]",

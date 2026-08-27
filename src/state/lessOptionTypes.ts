@@ -277,7 +277,7 @@ export interface LessOptions {
   'use-color'?: boolean;
   /** Search with JavaScript's RegExp. */
   'use-js-regexp'?: boolean;
-  /** Expand filenames with zsh globbing, not $SHELL. */
+  /** Expand filenames with built-in zsh globbing. */
   'use-zsh-glob'?: boolean;
   /** Automatically determine the size of the input file. */
   'file-size'?: boolean;
