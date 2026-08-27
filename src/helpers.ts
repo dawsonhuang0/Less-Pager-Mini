@@ -1623,7 +1623,18 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     // echo appended to a ":" the forward paint had told us to keep.
     const mcaOpening = prevBottomEcho && !shownBottomEcho;
 
-    const opening = mcaOpening
+    // ...and a MESSAGE opens unconditionally, like an mca. less's
+    // error() sends its own lower_left and clear_eol whatever came
+    // before it (output.c:722) - which is why its bytes carry two
+    // clear_bots where a command had already sent one.
+    //
+    // Declining here on cmdExecOpened left the cursor wherever the
+    // previous write had ended, and clear_eol only clears to the
+    // RIGHT of it, so a second queued message landed on the tail of
+    // the first: ":e tests/*" over eight directories stacked all eight
+    // onto one row. -X never showed it, because that path writes its
+    // own opening.
+    const opening = (mcaOpening || search.message)
       ? clearBot()
       : (forwPrompt || cmdExecOpened) ? '' : clearBot();
 
