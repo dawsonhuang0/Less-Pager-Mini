@@ -76,6 +76,7 @@ import {
   filterLineMask,
   recordSearchMatch,
   messageRowHeld,
+  abortedBySigint,
   scanSearchBatch,
   search,
   searchInterrupted,
@@ -2656,7 +2657,16 @@ export class FileInput implements PagerInput {
           if (showing) markFullRepaint();
         }
 
-        if (showing) {
+        // -N, or a ^C that caught the paint before it drew anything.
+        //
+        // Both are less's one rule: the position table is empty, so
+        // make_display runs jump_loc(ch_zero(), 1) (command.c:852) -
+        // pos_clear() ran and forw() then bailed at ABORT_SIGS
+        // (forwback.c:312). With -N our lazy walk stands in for that.
+        // Without it, a ^C still gets there, because a SIGNAL lands
+        // mid-read where the --intr char waits for a boundary - which
+        // is why ^X leaves both pagers at EOF and ^C does not.
+        if (showing || (!messaged && abortedBySigint())) {
           // Interrupted before the message, with the numbers SHOWING.
           //
           // less walks BEFORE it paints - currline(BOTTOM) runs and

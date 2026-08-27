@@ -173,16 +173,24 @@ CASES = [
     # less cannot be interrupted with ISIG off: no signal is ever raised
     # and check_poll compares the byte against intr_char (^X) alone. We
     # read the byte as the interrupt anyway - see intrIsByte in core.ts,
-    # which says why.
-    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, '(END)', None),
+    # which says why - and it is a ^C, so it lands where a ^C lands.
+    ('before, no -N, ^C, isig off', [],     '\x03', BEFORE, False, False, ':', None),
     ('after,  -N,    ^C, isig off', ['-N'], '\x03', AFTER,  False, False, OFF, None),
 
-    # A ^C landing BEFORE the walk starts is consumed by psignals and
-    # the walk then runs to the end - measured: less shows the note at
-    # +5s and reaches (END) at +7s. Ours holds ISIG off from 200ms, so
-    # the byte reaches the poll and stops the walk where ^X does. Same
-    # destination, seconds earlier.
-    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, '(END)', None),
+    # A ^C before the walk's message leaves less at LINE 1, not at EOF:
+    # SIGINT longjmps out of the read in progress (os.c:249) and can
+    # catch forw() with pos_clear() already done and no line put up, so
+    # the next make_display finds an empty table and runs
+    # jump_loc(ch_zero(), 1) (command.c:852). ^X cannot do that -
+    # check_poll only compares it against intr_char BETWEEN reads
+    # (os.c:161) - which is why the ^X rows above still want (END).
+    #
+    # Not compared against less directly: WHEN its message lands varies
+    # by seconds between identical runs, so the same keystroke falls
+    # either side of abort_delayed_msg's `loopcount >= 0` gate
+    # (linenum.c:256) and less answers differently run to run. The
+    # destination is the rule; the timing is a race.
+    ('before, no -N, ^C, isig on',  [],     '\x03', BEFORE, False, False, ':', None),
 ]
 
 

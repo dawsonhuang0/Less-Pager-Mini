@@ -2356,6 +2356,27 @@ let abortWasInterrupt = false;
 export const abortedByInterrupt = (): boolean => abortWasInterrupt;
 
 /**
+ * Whether the abort was a ^C rather than the --intr char.
+ *
+ * Not the same interrupt to less. ^C is a SIGNAL: it lands wherever
+ * the process happens to be and longjmps out of the read it caught
+ * (os.c:249), so it can catch forw() half-done - pos_clear() already
+ * run, no line put up - and the next make_display then finds an empty
+ * table and does jump_loc(ch_zero(), 1) (command.c:852). The --intr
+ * char is not a signal at all: check_poll only compares it against
+ * intr_char BETWEEN reads (os.c:161), so the abort lands on a
+ * boundary less chose and the screen keeps what it had.
+ *
+ * MEASURED on `long`: ^X leaves less at EOF, ^C leaves it at line 1.
+ *
+ * Readable here because the walk dips ISIG while it runs, so a ^C
+ * arrives as a byte on this very path instead of as a signal.
+ */
+let abortWasSigint = false;
+
+export const abortedBySigint = (): boolean => abortWasSigint;
+
+/**
  * Runs matching that nobody asked for - a frame's highlighting - so
  * that any key ends it, not only an interrupt.
  */
@@ -2423,11 +2444,13 @@ export function searchInterrupted(force = false): boolean {
       raiseAbort();
       pushUngot(Buffer.from('\x03', 'binary'));
       abortWasInterrupt = true;
+      abortWasSigint = true;
       return true;
     }
 
     if (text.includes(optIntrChar())) {
       abortWasInterrupt = true;
+      abortWasSigint = false;
       return true;
     }
 
@@ -2488,6 +2511,7 @@ export function searchInterrupted(force = false): boolean {
     raiseAbort();
     // queued so -K can still quit; an abort's getcc_clear drops it
     pushUngot(Buffer.from('\x03'));
+    abortWasSigint = true;
     return true;
   }
 
@@ -2498,7 +2522,10 @@ export function searchInterrupted(force = false): boolean {
   // the end. What has to outlive the interrupt is only the line-number
   // walk, and fileInput's own lineScanAborted already lives exactly
   // that long: reset per command, like psignals clearing sigs.
-  if (text.includes(optIntrChar())) return true;
+  if (text.includes(optIntrChar())) {
+    abortWasSigint = false;
+    return true;
+  }
 
   // less's check_poll ungets ordinary keys for the command loop —
   // never back through the stream, whose flowing-mode unshift would
