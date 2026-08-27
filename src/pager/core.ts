@@ -2184,8 +2184,22 @@ async function dispatchKey(sequence: string): Promise<void> {
   // ...but not while something is already WAITING on the interrupt:
   // F, a pipe drain and a pending scroll each read it as their own
   // stop signal below, ring their own bell and repaint their own way
-  if (isInterrupt(session.key) && !follow.active && !session.pipeDrainTo &&
-      !pendingScroll.rows && !session.pipeWaiting) {
+  // less's error() is BLOCKED inside get_return when the interrupt
+  // lands, and get_return consumes RETURN, space and READ_INTR alike
+  // (output.c:687). A ^C gets there as READ_INTR too: the signal
+  // longjmps out of the read and iread returns it (os.c:272). So an
+  // interrupt at a message DISMISSES it, exactly as RETURN does, and
+  // never reaches the command loop at all.
+  //
+  // Ours let it through, and the idle branch below returns before the
+  // dismissal further down - so the message sat there and a second ^C
+  // did nothing either. Skipping the branch is what "never reaches
+  // the command loop" means here: no bell of its own, no repaint, no
+  // filter clearing, just the dismissal.
+  const intrDismiss = search.message !== '' && isInterrupt(session.key);
+
+  if (isInterrupt(session.key) && !intrDismiss && !follow.active &&
+      !session.pipeDrainTo && !pendingScroll.rows && !session.pipeWaiting) {
     ringBell();
 
     if (search.filters.length) {
@@ -2321,7 +2335,7 @@ async function dispatchKey(sequence: string): Promise<void> {
     // lines" with "-" repainted the chopped screen here; less keeps
     // showing the old one behind the "-" prompt.
     const consumed = session.key === '\x0D' || session.key === '\x0A' ||
-      session.key === ' ';
+      session.key === ' ' || intrDismiss;
 
     if (consumed && fullRepaintArmed()) {
       markPosClear();
@@ -2334,7 +2348,8 @@ async function dispatchKey(sequence: string): Promise<void> {
   // reprocessed as commands, like less's get_return
   if (
     hadMessage &&
-    (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
+    (session.key === '\x0D' || session.key === '\x0A' ||
+      session.key === ' ' || intrDismiss)
   ) {
     /* raw get_return: the kent conversion below never applies */
     // dismissing the LESSOPEN warning continues into the editor,
