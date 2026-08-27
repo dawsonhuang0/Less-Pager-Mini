@@ -86,7 +86,7 @@ function splitArgs(args: readonly PagerArg[]): {
  * - `--use-js-regexp`: uses JavaScript's RegExp for searching;
  *   *off* by default - using `posix-regex`.
  * - `--use-zsh-glob`: expands a filename with zsh's globbing rules in process;
- *   *on* on Windows, else *off* by default - globbing via `$SHELL`.
+ *   *on* for Windows, else *off* by default - globbing via `$SHELL`.
  *
  * @example
  * await pager(lines);

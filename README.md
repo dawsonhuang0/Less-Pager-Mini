@@ -164,7 +164,7 @@ on:
 compiling POSIX-compatible regex patterns with `posix-regex`.
 
 <code>--use-zsh-glob</code>: Expands a filename with zsh's globbing rules in process.
-On on Windows, otherwise Off by default — globbing via `$SHELL`.
+On for Windows, Off elsewhere by default — globbing via `$SHELL`.
 
 <code>--lesskey-help</code>: Displays the syntax of lesskey files.
 
