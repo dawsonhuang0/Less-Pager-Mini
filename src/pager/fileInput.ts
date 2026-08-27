@@ -77,6 +77,7 @@ import {
   recordSearchMatch,
   messageRowHeld,
   abortedBySigint,
+  posixRetry,
   scanSearchBatch,
   search,
   searchInterrupted,
@@ -865,7 +866,18 @@ export class FileInput implements PagerInput {
     }
 
     if (found === null) {
-      search.message = `Pattern not found: ${request.pattern}`;
+      // ...unless the pattern was GIVEN UP on rather than missed. The
+      // host engine's guard kills a match it cannot finish, raises
+      // "Pattern too complex.  Try again with POSIX RegExp?" and then
+      // SKIPS every remaining match for that pattern - so the scan
+      // runs to the end finding nothing and looks exactly like a miss.
+      // Reporting one put "Pattern not found" on the row the question
+      // was waiting on, which is the answer to a question the user was
+      // still being asked.
+      if (!posixRetry.pending) {
+        search.message = `Pattern not found: ${request.pattern}`;
+      }
+
       return true;
     }
 
@@ -1156,7 +1168,11 @@ export class FileInput implements PagerInput {
     }
 
     if (found === null) {
-      search.message = `Pattern not found: ${request.pattern}`;
+      // given up on rather than missed - see the other miss report
+      if (!posixRetry.pending) {
+        search.message = `Pattern not found: ${request.pattern}`;
+      }
+
       return false;
     }
 
