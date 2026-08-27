@@ -434,7 +434,7 @@ export async function runExamine(): Promise<void> {
     // less's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with
     // the filename
-    await switchToFile(files.index);
+    void switchToFile(files.index);
   }
 
   if (errors.length) {

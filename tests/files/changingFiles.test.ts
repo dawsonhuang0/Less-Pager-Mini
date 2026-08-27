@@ -30,6 +30,8 @@ import {
 
 import { opt } from '../../src/options';
 
+import { runExamine } from '../../src/commands';
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-files-'));
 const fileA = path.join(dir, 'a.txt');
 const fileB = path.join(dir, 'b.txt');
@@ -316,6 +318,33 @@ describe('examine expansion', () => {
       path.join(dir, 'z*'),
     ]);
   });
+
+  it('reports a name it could not open, and does not defer the message',
+    async () => {
+      // less's edit_list error()s per failing name (edit.c), so a failed
+      // :e leaves "<name>: No such file or directory" holding the bottom
+      // line. The message must be armed by the time runExamine RETURNS:
+      // the caller renders on the next line and nothing repaints after.
+      files.list = [{ path: fileA, lines: null, size: 0, sizeKnown: true,
+        saved: null }];
+      files.index = 0;
+      search.message = '';
+
+      startExamine();
+      for (const ch of 'nosuchfile') examineKey(ch);
+      examineKey('\r');
+
+      // deliberately NOT awaited, which is the whole point: the caller
+      // renders on the very next line (core.ts, the examine dispatch),
+      // so an await inside runExamine that hands the tail to a
+      // microtask sets the message AFTER the paint that should carry
+      // it. Awaiting here would pass either way.
+      const done = runExamine();
+
+      expect(search.message).toBe('nosuchfile: No such file or directory');
+
+      await done;
+    });
 
   it('globs in process when no shell can be executed at all', () => {
     // less degrades here rather than deciding to: popen forks fine, the
