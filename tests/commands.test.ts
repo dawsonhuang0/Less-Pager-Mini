@@ -145,7 +145,11 @@ describe('file command orchestration', () => {
     files.list[1].saved = { row: 1, subRow: 0 };
     setFirstCmd('+G');
 
-    expect(await switchToFile(1)).toBe(true);
+    const switched1true = switchToFile(1);
+
+    expect(switched1true.ok).toBe(true);
+
+    await switched1true.done;
 
     expect(files.list[0].saved).toEqual({ row: 3, subRow: 1 });
     expect(files.index).toBe(1);
@@ -168,7 +172,11 @@ describe('file command orchestration', () => {
     // right-shifted file opened the next one mid-line.
     config.col = 40;
 
-    expect(await switchToFile(1)).toBe(true);
+    const switched1true = switchToFile(1);
+
+    expect(switched1true.ok).toBe(true);
+
+    await switched1true.done;
 
     expect(config.col).toBe(0);
   });
@@ -182,14 +190,18 @@ describe('file command orchestration', () => {
       saved: null,
     });
 
-    expect(await switchToFile(2)).toBe(false);
+    const switched2false = switchToFile(2);
+
+    expect(switched2false.ok).toBe(false);
+
+    await switched2false.done;
     expect(files.index).toBe(0);
     expect(session.fullContent[0]).toBe('a1');
     expect(search.message).toContain('No such file or directory');
   });
 
   it('inserts and opens a new name immediately after the current file', async () => {
-    expect(await openByName(fileC)).toBe(true);
+    expect(openByName(fileC)).toBe(true);
 
     expect(files.list.map(entry => entry.path))
       .toEqual([fileA, fileC, fileB]);
@@ -197,8 +209,13 @@ describe('file command orchestration', () => {
     expect(session.fullContent).toEqual(['c1', 'c2']);
   });
 
-  it('removes a newly inserted entry again when opening fails', async () => {
-    expect(await openByName(missing)).toBe(false);
+  it('removes a newly inserted entry again when opening fails', () => {
+    // NOT awaited, and that is the assertion. The callers that test
+    // this - gotoCurrentTag, the mark restore - render on their very
+    // next line and cannot suspend. While this returned a promise the
+    // test `if (!openByName(name))` was always false, because a
+    // promise is an object, and the recovery behind it never ran.
+    expect(openByName(missing)).toBe(false);
 
     expect(files.list.map(entry => entry.path)).toEqual([fileA, fileB]);
     expect(files.index).toBe(0);

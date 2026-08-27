@@ -444,7 +444,7 @@ export function openLesskeyView(): boolean {
   }
   files.index = -1;
 
-  if (!switchToFile(0)) {
+  if (!switchToFile(0).ok) {
     files.list = held.list;
     files.index = held.index;
     restoreLesskeyViewState(held);

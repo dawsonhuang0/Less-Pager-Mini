@@ -2955,7 +2955,7 @@ function init() {
       // the list, and a mark into a file no longer listed goes nowhere
       const index = files.list.indexOf(mark.file);
 
-      if (index < 0 || !switchToFile(index)) return;
+      if (index < 0 || !switchToFile(index).ok) return;
       jumpToMark(session.content, mark, sline, true);
     },
     (path, char, sline) => {

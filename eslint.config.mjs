@@ -36,6 +36,27 @@ export default defineConfig([
     }
   },
 
+  // A promise is an object, so `if (!switchToFile(i))` is always
+  // false and the recovery it guards is dead code. That shipped four
+  // times over when the (press RETURN) gate went async, and nothing
+  // caught it: tsc allows it, and the recommended preset cannot see
+  // it without types. This is the one type-aware rule worth the
+  // project service, and only its conditional half - the repo floats
+  // promises deliberately, all over the key dispatch.
+  {
+    files: ["src/**/*.ts"],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname }
+    },
+    rules: {
+      "@typescript-eslint/no-misused-promises": ["error", {
+        checksConditionals: true,
+        checksVoidReturn: false,
+        checksSpreads: false,
+      }],
+    }
+  },
+
   // A pager's subject matter IS control characters: \x1b in a regex
   // is the normal case here, not a suspicious one. src carried inline
   // disables at a dozen sites to say so; the rule earns nothing in

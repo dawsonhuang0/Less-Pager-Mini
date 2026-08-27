@@ -66,16 +66,34 @@ import {
 } from './state/constants';
 
 /**
+ * What a switch answers with: whether the file can be shown, decided
+ * before anything suspends, and the rest of the switch as a promise.
+ *
+ * One Promise<boolean> could not say both. Callers wrote
+ * `if (!switchToFile(i))`, and a promise is an object, so the test was
+ * always false and the recovery behind it was dead - four times over.
+ */
+export interface Switch {
+  /** Whether the file opened. loadFile decides it, before any await. */
+  ok: boolean;
+  /** The rest of the switch; already settled when there was none. */
+  done: Promise<void>;
+}
+
+const SETTLED_OK: Switch = { ok: true, done: Promise.resolve() };
+const SETTLED_FAIL: Switch = { ok: false, done: Promise.resolve() };
+
+/**
  * Switches the session to another file entry, like less's edit_ifile:
  * stores the position of the file being left, records the previous
  * position, and restores the target's saved position.
  */
-export async function switchToFile(target: number): Promise<boolean> {
+export function switchToFile(target: number): Switch {
   // less's edit_ifile returns at once for the file it already has open
   // (edit.c:465), so re-selecting the current file - `:x` with one
   // file, `:e` on the same name - re-reads nothing and repaints
   // nothing. We re-edited it, which showed the fresh-file prompt again
-  if (target === files.index) return true;
+  if (target === files.index) return SETTLED_OK;
 
   const lines = loadFile(target);
 
@@ -87,13 +105,28 @@ export async function switchToFile(target: number): Promise<boolean> {
       binaryConfirm.pending = true;
       binaryConfirm.proceed = async () => {
         files.list[target].everOpened = true;
-        await switchToFile(target);
+        await switchToFile(target).done;
       };
     }
 
-    return false;
+    return SETTLED_FAIL;
   }
 
+  // the answer is already known: loadFile has run, and nothing left
+  // can change it
+  return { ok: true, done: finishSwitch(target, lines) };
+}
+
+/**
+ * The half of a switch that may suspend: the outgoing file's
+ * $LESSCLOSE can put a (press RETURN) up, and that has to be answered
+ * before the new file is on screen.
+ *
+ * Runs synchronously to that one await, exactly as switchToFile did
+ * while it was a single async function - so a switch with no alt to
+ * close still finishes before the caller's next line.
+ */
+async function finishSwitch(target: number, lines: string[]): Promise<void> {
   saveFilePosition();
   recordLastPosition();
 
@@ -158,7 +191,6 @@ export async function switchToFile(target: number): Promise<boolean> {
   const firstCmd = getFirstCmd();
   session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
 
-  return true;
 }
 
 /**
@@ -167,7 +199,7 @@ export async function switchToFile(target: number): Promise<boolean> {
  *
  * @returns True when the file displayed.
  */
-export async function openByName(name: string): Promise<boolean> {
+export function openByName(name: string): boolean {
   let at = files.list.findIndex(entry => entry.path === name);
 
   if (at < 0) {
@@ -183,7 +215,7 @@ export async function openByName(name: string): Promise<boolean> {
         binaryConfirm.pending = true;
         binaryConfirm.proceed = async () => {
           files.list[at].everOpened = true;
-          await switchToFile(at);
+          await switchToFile(at).done;
         };
         return false;
       }
@@ -194,10 +226,12 @@ export async function openByName(name: string): Promise<boolean> {
   } else if (!loadFile(at)) {
     // switchToFile re-runs loadFile and arms the binary
     // confirmation itself when that is what failed
-    return await switchToFile(at);
+    return switchToFile(at).ok;
   }
 
-  return await switchToFile(at);
+  // the switch's remaining half is left to run on its own, as it was
+  // when this function was async and neither caller awaited it
+  return switchToFile(at).ok;
 }
 
 /**
@@ -253,7 +287,11 @@ export async function spanningSearch(
     const target = files.index + (forward ? 1 : -1);
 
     if (target < 0 || target >= files.list.length) return;
-    if (!await switchToFile(target)) return;
+    const opened = switchToFile(target);
+
+    if (!opened.ok) return;
+
+    await opened.done;
 
     // a fresh file searches from its top (its end going backward)
     if (!forward && !sourceEnd?.()) lastLine(session.content, 0);
@@ -278,7 +316,7 @@ export async function stepFile(delta: 1 | -1): Promise<void> {
     return;
   }
 
-  await switchToFile(target);
+  await switchToFile(target).done;
 }
 
 export async function removeFile(): Promise<void> {
@@ -290,7 +328,11 @@ export async function removeFile(): Promise<void> {
   const removed = files.index;
   const target = removed < files.list.length - 1 ? removed + 1 : removed - 1;
 
-  if (!await switchToFile(target)) return;
+  const opened = switchToFile(target);
+
+  if (!opened.ok) return;
+
+  await opened.done;
 
   // less's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
@@ -361,7 +403,7 @@ export async function runExamine(): Promise<void> {
         const target = at;
         binaryConfirm.proceed = async () => {
           files.list[target].everOpened = true;
-          await switchToFile(target);
+          await switchToFile(target).done;
         };
 
         // the query has not been answered yet, so edit_ifile has not
@@ -780,7 +822,7 @@ export async function runEditor(): Promise<void> {
   });
 
   // the file may have changed: re-examine it, like less's reedit
-  await switchToFile(files.index);
+  await switchToFile(files.index).done;
 }
 
 export function runMiscInput(
