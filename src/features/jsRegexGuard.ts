@@ -512,9 +512,7 @@ function ensureWorkers(need: number): Shared {
     // worker that dies BETWEEN requests, and never for one that dies
     // during the wait it would rescue. The matcher not throwing is
     // what actually keeps that wait finite
-    matcher.on('error', error => {
-      lastFailure = String(error);
-
+    matcher.on('error', () => {
       if (Atomics.compareExchange(header, STATE, REQUEST, ABORT) === REQUEST) {
         Atomics.notify(header, STATE);
       }
@@ -539,7 +537,11 @@ function ensureWorkers(need: number): Shared {
       },
     });
 
-    shared.watcher.on('error', error => { lastFailure = String(error); });
+    // attached for its own sake: a Worker 'error' with no listener is
+    // an unhandled event, which ends the process. Nothing reads what it
+    // said - the wait is ended by the matcher's handler above, and the
+    // watcher dying just means no notice and no interrupt
+    shared.watcher.on('error', () => {});
     shared.watcher.unref();
   }
 
@@ -567,21 +569,12 @@ export function endJsRegexGuard(): void {
   killWorkers();
 }
 
-let aborted = false;
 let noticed = false;
 let byInterrupt = false;
 
 /** An interrupt that ended a match, still owed to whoever asked for it. */
 let sawInterrupt = false;
 
-/** Whatever a worker said on its way down, for a caller that asks. */
-let lastFailure = '';
-
-/** The last worker error, empty when there has not been one. */
-export const jsRegexFailure = (): string => lastFailure;
-
-/** Whether the last guarded call was interrupted rather than answered. */
-export const jsRegexAborted = (): boolean => aborted;
 
 /** Whether the last guarded call announced itself before finishing. */
 export const jsRegexNoticed = (): boolean => noticed;
@@ -595,14 +588,6 @@ export const jsRegexNoticed = (): boolean => noticed;
  * other key" is why ^C stopped raising the offer to try POSIX.
  */
 export const jsRegexAbortedByInterrupt = (): boolean => byInterrupt;
-
-/** Clears both, at the start of a new search. */
-export function clearJsRegexAbort(): void {
-  aborted = false;
-  noticed = false;
-  byInterrupt = false;
-  sawInterrupt = false;
-}
 
 /**
  * Runs one match in the matcher, waiting until it or the watcher says
@@ -695,7 +680,6 @@ export function guardedMatch(
     ' ms=' + (Date.now() - now));
 
   if (Atomics.load(state.header, STATE) === ABORT) {
-    aborted = true;
     runAbandoned = true;
     if (byInterrupt) sawInterrupt = true;
     killWorkers();

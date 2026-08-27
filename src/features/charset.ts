@@ -174,14 +174,6 @@ const userTables: Record<'w' | 'b' | 'c' | 'p' | 'd', CodeRange[]> = {
 const inTable = (code: number, table: CodeRange[]): boolean =>
   table.some(r => code >= r.first && code <= r.last);
 
-/** True when a user range forces the wide class. */
-export const userWide = (code: number): boolean =>
-  inTable(code, userTables.w);
-
-/** True when a user range forces the composing class. */
-export const userComposing = (code: number): boolean =>
-  !inTable(code, userTables.p) && inTable(code, userTables.c);
-
 /** Parses LESSUTFCHARDEF, like ichardef_utf. */
 function parseUtfChardef(text: string): void {
   for (const key of Object.keys(userTables) as (keyof typeof userTables)[]) {

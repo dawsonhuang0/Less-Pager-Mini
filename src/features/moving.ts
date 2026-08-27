@@ -97,42 +97,6 @@ export function ffCapForward(content: string[], offset: number): number {
 }
 
 /**
- * How far a backward move may go before a form feed stops it.
- *
- * less's back() prints each newly exposed line at the TOP and breaks
- * after one that starts with \f (forwback.c:444), so the form feed
- * ends up the first visible row. Jumps pass do_stop_on_form_feed
- * FALSE and never stop.
- *
- * @param content - Full content lines.
- * @param offset - Display rows the move wants.
- * @returns The rows it may actually take.
- */
-export function ffCapBackward(content: string[], offset: number): number {
-  let r = config.row;
-  let s = config.subRow;
-
-  const retreat = (): boolean => {
-    if (s > 0) {
-      s--;
-      return true;
-    }
-
-    if (r <= 0) return false;
-    r--;
-    s = maxSubRow(content[r]);
-    return true;
-  };
-
-  for (let k = 1; k <= offset; k++) {
-    if (!retreat()) break;
-    if (s === 0 && isFormFeed(content[r])) return k;
-  }
-
-  return offset;
-}
-
-/**
  * less's attnpos for -w/-W: every move command first clears the old
  * highlight (cmd_exec's clear_attn, command.c:126), then remembers
  * the first unread line under its own condition (command.c:1660+).

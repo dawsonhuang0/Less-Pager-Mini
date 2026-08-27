@@ -48,9 +48,3 @@ export function armReadWatch(): void {
  * content that never reads, neither ever is.
  */
 export const sawSourceRead = (): boolean => readNow || readLast;
-
-/** Forgets both, for a fresh session or a new file. */
-export function resetReadWatch(): void {
-  readNow = false;
-  readLast = false;
-}

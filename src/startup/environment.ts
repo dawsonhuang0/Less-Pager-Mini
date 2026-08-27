@@ -23,16 +23,6 @@ export function sessionEnv(name: string): string | undefined {
   return value === undefined || value === '' ? undefined : value;
 }
 
-/**
- * True when the CALLER supplied this variable, rather than it coming
- * from the ambient process environment. The overlay is the embedding
- * application's own configuration, so it can be trusted with choices
- * the surrounding shell cannot be.
- */
-export function fromSessionEnv(name: string): boolean {
-  return sessionEnv(name) !== undefined;
-}
-
 /** Installs (or clears) a library call's environment overlay. */
 export function setSessionEnv(
   vars: Record<string, string | undefined> | null

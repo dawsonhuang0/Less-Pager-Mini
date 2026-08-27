@@ -31,8 +31,11 @@ describe('a host regex that can be killed', () => {
     // 40 a's against (a+)+b is 2^40 steps in a backtracking engine:
     // the call cannot finish, and the only reason anything comes back
     // is that the thread running it is killed
+    // the null answer IS the abort: guardedMatch returns it from the
+    // one branch that records one, so reading the flag back out of the
+    // module said nothing the return value had not already said - and
+    // it was the only reason src exported it
     expect(out.killed).toBeNull();
-    expect(out.aborted).toBe(true);
     expect(out.killedMs as number).toBeLessThan(5000);
   });
 

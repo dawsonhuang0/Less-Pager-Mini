@@ -331,29 +331,6 @@ export function closersFor(text: string): string {
 }
 
 /**
- * Whether any style is still open at the end of a string.
- *
- * A full reset is not the only way a style closes: ESC[27m ends the
- * inverse ESC[7m opened before it, and SGR_CLOSERS above knows every
- * such pairing. withReset used to look for a reset code alone, so a
- * line that closed its inverse properly looked unterminated and got a
- * second, redundant reset appended -- which less does not emit.
- *
- * @param text - The text to scan.
- */
-export function stylesOpen(text: string): boolean {
-  const active: string[] = [];
-  STYLE_REGEX_G.lastIndex = 0;
-
-  let code: RegExpExecArray | null;
-  while ((code = STYLE_REGEX_G.exec(text)) !== null) {
-    applyStyleCode(active, code[0]);
-  }
-
-  return active.length > 0;
-}
-
-/**
  * The first numeric parameter of an SGR code, or 0.
  *
  * Read digit by digit rather than through slice + parseInt: binary

@@ -59,11 +59,6 @@ export function resetRowEnds(): void {
   clears = [];
 }
 
-/** Forgets the carried clear_after_line, for a new session. */
-export function resetRowClearCarry(): void {
-  carried = false;
-}
-
 /**
  * Records that the row at `index` is one of less's null lines.
  *

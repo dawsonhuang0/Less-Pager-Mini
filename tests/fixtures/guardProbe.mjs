@@ -7,7 +7,7 @@
  * simply never ends. A plain process has no such trouble, so the test
  * runs this and reads the JSON back.
  */
-import { guardedMatch, endJsRegexGuard, jsRegexAborted, beginGuardedRun }
+import { guardedMatch, endJsRegexGuard, beginGuardedRun }
   from '../../dist/features/jsRegexGuard.js';
 
 const never = () => false;
@@ -41,7 +41,6 @@ out.killed = guardedMatch(
   false, () => ++polls > 2).answer;
 
 out.killedMs = Date.now() - started;
-out.aborted = jsRegexAborted();
 
 // and it still works afterwards, on a fresh pair of workers
 step('after');

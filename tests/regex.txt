@@ -1,0 +1,60 @@
+alpha abc match here
+ab abcd abcabc end
+xyz 123 456 digits
+literal d and w and b chars
+backref 1 one two
+brace a{1 and a{ and a{} here
+star a** and a+? forms
+empty x| and (d|) branch
+CASE Upper and lower Mixed
+café café naive
+emoji 😀😁 tail
+cjk 你好世界 done
+tab	sep and  spaces
+punct !@#$%^&*() here
+repeat aaa aaaa aaaaa
+anchor start only
+trailing anchor end
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+group abc-123 mix
+éèê accents
+filler 1
+filler 2
+filler 3
+filler 4
+filler 5
+filler 6
+filler 7
+filler 8
+filler 9
+filler 10
+filler 11
+filler 12
+filler 13
+filler 14
+filler 15
+filler 16
+filler 17
+filler 18
+filler 19
+filler 20
+filler 21
+filler 22
+filler 23
+filler 24
+filler 25
+filler 26
+filler 27
+filler 28
+filler 29
+filler 30
+filler 31
+filler 32
+filler 33
+filler 34
+filler 35
+filler 36
+filler 37
+filler 38
+filler 39
+filler 40

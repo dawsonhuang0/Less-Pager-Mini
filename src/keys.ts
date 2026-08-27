@@ -134,11 +134,6 @@ function boundKeys(): Record<string, Actions> {
   return bound;
 }
 
-/** Drops the cached table, for a TERM change between sessions. */
-export function resetBoundKeys(): void {
-  bound = null;
-}
-
 /**
  * less's cmd_match (decode.c:845): the largest N where the first N
  * chars of a binding equal the LAST N chars of the buffer.

@@ -939,11 +939,6 @@ const hiliteCache = new Map<number, HilitedLine>();
 let hiliteCacheMode = '';
 const HILITE_CACHE_MAX = 256;
 
-/** less's clr_hilite: the list stops applying, so drop it. */
-export function clearHiliteCache(): void {
-  hiliteCache.clear();
-}
-
 export function highlightLine(line: string, row: number = -1): string {
   // wrap the whole thing: the body returns early in half a dozen
   // places (no pattern, -g on another row, no match at all), and each
@@ -1292,15 +1287,6 @@ let inRepaint = false;
  * toggle that recompiles under the other engine.
  */
 let hiliteAbandoned = false;
-
-/** True while highlighting is being skipped for a pattern it cannot
- *  get through. */
-export const hiliteGivenUp = (): boolean => hiliteAbandoned;
-
-/** Lets highlighting be attempted again. */
-export function retryHilite(): void {
-  hiliteAbandoned = false;
-}
 
 /**
  * Marks the frame as the thing running, so matching done for it is
@@ -2346,9 +2332,6 @@ let lastInterruptPoll = 0;
  *
  * @returns True when the search should abort.
  */
-/** True while the caller wants any keypress to count as an abort. */
-let anyKeyAborts = false;
-
 /** Whether the last abort was an INTERRUPT or just some other key. */
 let abortWasInterrupt = false;
 
@@ -2375,20 +2358,6 @@ export const abortedByInterrupt = (): boolean => abortWasInterrupt;
 let abortWasSigint = false;
 
 export const abortedBySigint = (): boolean => abortWasSigint;
-
-/**
- * Runs matching that nobody asked for - a frame's highlighting - so
- * that any key ends it, not only an interrupt.
- */
-export function duringRepaintMatch<T>(run: () => T): T {
-  anyKeyAborts = true;
-
-  try {
-    return run();
-  } finally {
-    anyKeyAborts = false;
-  }
-}
 
 export function searchInterrupted(force = false): boolean {
   // an interrupt the watcher already took, owed to whoever asks next.
@@ -2456,17 +2425,6 @@ export function searchInterrupted(force = false): boolean {
 
     // less's check_poll ungets ordinary keys for the command loop
     pushUngot(Buffer.from(text, 'binary'));
-
-    // ...and for a repaint, an ordinary key IS the abort. A search is
-    // a command the user is waiting on, so only an interrupt ends it.
-    // Highlighting is not: it runs behind whatever they do next, and
-    // a key arriving means they have moved on. Without this the key
-    // sits unread until the matching finishes - which is how pressing
-    // RETURN to dismiss a message did nothing for seven seconds
-    if (anyKeyAborts) {
-      abortWasInterrupt = false;
-      return true;
-    }
   }
 
   // The tty poll is a syscall, so it is rate limited by default - but
