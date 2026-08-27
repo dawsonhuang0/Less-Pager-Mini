@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { homeDir, shellArgv } from '../../src/tty/platform';
 
@@ -95,5 +95,41 @@ describe('shellArgv, like less lsystem/HAVE_SHELL', () => {
 
     setEnv('COMSPEC', undefined);
     expect(shellArgv('dir')).toEqual(['cmd.exe', ['/c', 'dir']]);
+  });
+});
+
+describe('--use-zsh-glob, which is not a choice on Windows', () => {
+  // isWindows is fixed when the module loads, so the Windows shape can
+  // only be seen by loading it again under a different platform
+  const load = async (): Promise<{ noToggle?: boolean,
+    defaultValue: number | string, get: () => number | string }> => {
+    vi.resetModules();
+    return (await import('../../src/options/use-zsh-glob')).useZshGlob;
+  };
+
+  it('unix: off by default, and free to toggle', async () => {
+    // less assumes a shell exists everywhere but Windows - shellcmd
+    // falls through to popen(cmd) when $SHELL says nothing
+    // (filename.c:583) - so there is a real choice to offer
+    setPlatform('linux');
+
+    const spec = await load();
+
+    expect(spec.defaultValue).toBe(0);
+    expect(spec.noToggle).toBeFalsy();
+  });
+
+  it('windows: on, and refuses to change', async () => {
+    // less builds there with HAVE_SHELL=0 and lglob walks the
+    // directory itself (lglob.h:61). With no $SHELL to delegate to
+    // there is no second position, so O_NO_TOGGLE - and less answers
+    // "Cannot change the --use-zsh-glob option" (option.c:334)
+    setPlatform('win32');
+
+    const spec = await load();
+
+    expect(spec.defaultValue).toBe(1);
+    expect(spec.noToggle).toBe(true);
+    expect(spec.get()).toBe(1);
   });
 });

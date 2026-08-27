@@ -1,5 +1,7 @@
 import { OptionSpec } from './spec';
 
+import { isWindows } from '../tty/platform';
+
 import { opt } from './state';
 
 /**
@@ -25,17 +27,30 @@ import { opt } from './state';
  * survive, being expanded before this. What zsh does inside a pattern,
  * bracket expressions and `**` included, is kept: shell-glob is a port
  * of zsh's matcher.
+ *
+ * On Windows it is not a choice at all. less builds there with
+ * HAVE_SHELL=0 and its lglob walks the directory itself through
+ * _findfirst/_findnext (lglob.h:61); there is no $SHELL to delegate
+ * to, so this is always on and says so rather than offering a switch
+ * with one position. Everywhere else less assumes a shell exists -
+ * shellcmd falls through to popen(cmd) when $SHELL says nothing
+ * (filename.c:583) - and so do we.
  */
 export const useZshGlob: OptionSpec = {
   letter: '',
   names: ['use-zsh-glob'],
   type: 'bool',
+  // O_NO_TOGGLE, and less's own answer for it: "Cannot change the
+  // --use-zsh-glob option" (option.c:334)
+  noToggle: isWindows,
   messages: [
     'Expand filenames with $SHELL',
     'Expand filenames with zsh globbing',
   ],
-  defaultValue: 0,
-  get: () => opt.useZshGlob,
+  defaultValue: isWindows ? 1 : 0,
+  // Windows has nothing else to be: the shell branch in glob() is
+  // behind !isWindows, so the variable is not what decides there
+  get: () => isWindows ? 1 : opt.useZshGlob,
   set: value => {
     // nothing is compiled or cached: the next name to expand asks
     // again, so the switch is the whole change
