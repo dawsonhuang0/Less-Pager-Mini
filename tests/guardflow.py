@@ -27,6 +27,11 @@ import sys
 import termios
 import time
 
+try:
+    import pyte
+except ImportError:
+    sys.exit('guardflow needs pyte: pip3 install pyte')
+
 ROWS, COLS = 24, 80
 FIXTURE = 'tests/redos-long.txt'
 
@@ -56,61 +61,27 @@ EXPECTED = [
 
 
 class Screen:
-    """Enough of a terminal to know what the bottom row says."""
+    """The bottom row, through a real terminal emulator.
+
+    This used to be forty lines of hand-rolled escape handling, and it
+    had no auto-wrap: past the last column it advanced the column and
+    never moved to the next row. The fixture is one 10000-character
+    line, so the pager's very first screen wraps and the toy lost track
+    of which row was the bottom - it reported the startup step as
+    failing while both pagers were printing the file name there
+    correctly. Every other sweep in this directory uses pyte; so does
+    this one now.
+    """
 
     def __init__(self):
-        self.rows = [[' '] * COLS for _ in range(ROWS)]
-        self.r = self.c = 0
+        self.screen = pyte.Screen(COLS, ROWS)
+        self.stream = pyte.Stream(self.screen)
 
     def feed(self, data):
-        text = data.decode('latin-1', 'replace')
-        i = 0
-
-        while i < len(text):
-            ch = text[i]
-
-            if ch == '\x1b':
-                i += self._escape(text[i:])
-                continue
-
-            if ch == '\r':
-                self.c = 0
-            elif ch == '\n':
-                self.r = min(ROWS - 1, self.r + 1)
-            elif ch == '\b':
-                self.c = max(0, self.c - 1)
-            elif ch != '\x07':
-                if self.r < ROWS and self.c < COLS:
-                    self.rows[self.r][self.c] = ch
-                self.c += 1
-
-            i += 1
-
-    def _escape(self, text):
-        csi = re.match(r'\x1b\[([0-9;?]*)([a-zA-Z])', text)
-
-        if csi:
-            params, final = csi.group(1), csi.group(2)
-
-            if final == 'H':
-                nums = [int(n) for n in params.split(';') if n] or [1]
-                self.r = nums[0] - 1
-                self.c = (nums[1] - 1) if len(nums) > 1 else 0
-            elif final == 'K':
-                for x in range(self.c, COLS):
-                    self.rows[self.r][x] = ' '
-            elif final == 'J':
-                self.rows = [[' '] * COLS for _ in range(ROWS)]
-                self.r = self.c = 0
-
-            return csi.end()
-
-        other = re.match(r'\x1b[()][A-Z0-9]|\x1b[=><]', text)
-
-        return other.end() if other else 1
+        self.stream.feed(data.decode('latin-1', 'replace'))
 
     def bottom(self):
-        return ''.join(self.rows[ROWS - 1]).rstrip()
+        return self.screen.display[ROWS - 1].rstrip()
 
 
 def run():
