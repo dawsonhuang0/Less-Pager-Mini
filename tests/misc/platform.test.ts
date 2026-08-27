@@ -64,6 +64,23 @@ describe('shellArgv, like less lsystem/HAVE_SHELL', () => {
     expect(shellArgv('ls')).toEqual(['/bin/sh', ['-c', 'ls']]);
   });
 
+  it('unix: falls back to /bin/sh when $SHELL says nothing', () => {
+    // less's shellcmd tests isnullenv(shell) - NULL or "" alike - and
+    // drops to plain popen(cmd) (filename.c:583), whose shell is
+    // /bin/sh. So an unset $SHELL still globs, it just globs by POSIX
+    // rules rather than the user's own.
+    setPlatform('linux');
+    setEnv('LESS_SHELL_COPTION', undefined);
+
+    setEnv('SHELL', undefined);
+    expect(shellArgv('ls')).toEqual(['/bin/sh', ['-c', 'ls']]);
+
+    // isnullenv counts "" as nothing, so an emptied $SHELL is not a
+    // shell named "" - it is no shell at all
+    setEnv('SHELL', '');
+    expect(shellArgv('ls')).toEqual(['/bin/sh', ['-c', 'ls']]);
+  });
+
   it('windows: %COMSPEC% /c, like less system() with HAVE_SHELL=0', () => {
     setPlatform('win32');
     setEnv('COMSPEC', 'C:\\Windows\\system32\\cmd.exe');
