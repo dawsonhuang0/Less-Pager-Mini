@@ -1,4 +1,6 @@
 import fs from 'fs';
+
+import { globSync } from 'shell-glob';
 import os from 'os';
 
 import { Writable } from 'stream';
@@ -874,44 +876,36 @@ export function glob(pattern: string): string[] {
   // Windows has no such delegation: less walks the directory itself
   // through _findfirst/_findnext (lglob.h:61), which is DOS wildcard
   // matching - "*" and "?" only, case-insensitive, no bracket
-  // expressions. The walk below is neither that nor the shell; it is
-  // the one place left where we still answer for ourselves.
-  const absolute = plain.startsWith('/');
-  const segments = plain.split('/').filter(Boolean);
-  let candidates = [absolute ? '/' : ''];
+  // expressions. We used to answer with a hand-rolled walk of about
+  // the same power; shell-glob is a real globber, so the one platform
+  // where less does its own matching now gets a better one than less
+  // has. A deliberate divergence, and the only kind available here:
+  // there is no $SHELL to delegate to.
+  // zsh ERRORS rather than returning an empty list - `nomatch` - and a
+  // bad pattern throws as well; shell-glob keeps both, and words them
+  // as zsh does: "no matches found: nonexistent*", "bad pattern: [a".
+  //
+  // So it is SHOWN, not swallowed. That is what a zsh user already
+  // gets on unix, where the shell's own complaint reaches the terminal
+  // because less redirects stdout only (filename.c:614) - see
+  // emitShellError. This is the same complaint from the same grammar,
+  // on the one platform that has no shell to produce it.
+  //
+  // The name still comes back unexpanded either way: less's lglob
+  // answers with what it was given and lets the open fail.
+  let matched: string[];
 
-  for (const segment of segments) {
-    const next: string[] = [];
+  try {
+    matched = globSync(plain);
+  } catch (error) {
+    emitShellError(String((error as Error).message ?? '').trim() + '\n');
 
-    for (const base of candidates) {
-      const dir = base === '' ? '.' : base;
-
-      if (!/[*?[]/.test(segment)) {
-        next.push(joinPath(base, segment));
-        continue;
-      }
-
-      const regex = globRegex(segment);
-      let entries: string[];
-
-      try {
-        entries = fs.readdirSync(dir);
-      } catch {
-        continue;
-      }
-
-      for (const entry of entries.sort()) {
-        // like the shell, * does not match a leading dot
-        if (entry.startsWith('.') && !segment.startsWith('.')) continue;
-        if (regex.test(entry)) next.push(joinPath(base, entry));
-      }
-    }
-
-    candidates = next;
+    return [plain];
   }
 
-  const matches = candidates.filter(name => fs.existsSync(name));
-  return matches.length ? matches : [plain];
+  // like the unix branch, and like less: a pattern that expands to
+  // nothing comes back as itself, for the caller to try opening
+  return matched.length ? matched : [plain];
 }
 
 /**
@@ -1027,39 +1021,6 @@ function runShell(cmd: string): {
     // less: `if (fd == NULL) return (filename)` - the pipe never opened
     return { stdout: null, stderr: '', status: 127 };
   }
-}
-
-function joinPath(base: string, segment: string): string {
-  if (base === '') return segment;
-  return base.endsWith('/') ? base + segment : base + '/' + segment;
-}
-
-function globRegex(segment: string): RegExp {
-  let source = '^';
-
-  for (let i = 0; i < segment.length; i++) {
-    const char = segment[i];
-
-    if (char === '*') {
-      source += '[^/]*';
-    } else if (char === '?') {
-      source += '[^/]';
-    } else if (char === '[') {
-      const end = segment.indexOf(']', i + 2);
-
-      if (end < 0) {
-        source += '\\[';
-      } else {
-        const body = segment.slice(i + 1, end).replace(/^!/, '^');
-        source += `[${body}]`;
-        i = end;
-      }
-    } else {
-      source += char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-  }
-
-  return new RegExp(source + '$');
 }
 
 /**
