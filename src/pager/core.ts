@@ -2987,9 +2987,8 @@ function init() {
   keyboard().resume();
   keyboard().setEncoding('utf8');
 
-  // the kernel process name (what Terminal shows for less itself) is
-  // fixed at exec time; the OSC title is the best an interpreted
-  // program can do, and process.title at least fixes ps output
+  // less's own title is its argv, which nothing rewrites for the life
+  // of the process - so ours is named here, once, and left alone
   refreshWindowTitle();
 
   // a dumb terminal gets no title, init or keypad strings, like

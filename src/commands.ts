@@ -11,7 +11,6 @@ import { session, deriveContent } from './state/session';
 
 import { suspendTerminal, enterScreen } from './tty/screen';
 
-import { refreshWindowTitle } from './tty/title';
 
 import { ringBell, bufferToNum, calculateEOF, clearBot, eprPrefix,
   freezeFrame, render }
@@ -158,12 +157,6 @@ export async function switchToFile(target: number): Promise<boolean> {
   // schedule the +cmd replay for the newly examined file
   const firstCmd = getFirstCmd();
   session.pendingFirstCmds = firstCmd ? [firstCmd] : [];
-
-  // less renames the window on every prompt and its own source says the
-  // right place is here ("{{ Seems like this should be done in
-  // edit_ifile }}", command.c:969) - so here, where the name changes,
-  // rather than costing every frame a sequence it does not need
-  refreshWindowTitle();
 
   return true;
 }

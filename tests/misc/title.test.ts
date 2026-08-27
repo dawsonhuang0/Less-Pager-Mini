@@ -7,7 +7,7 @@ import path from 'path';
 
 import { files } from '../../src/features/files';
 
-import { windowTitle, windowTitles, refreshWindowTitle, resetWindowTitle }
+import { refreshWindowTitle, resetWindowTitle }
   from '../../src/tty/title';
 
 /**
@@ -41,57 +41,53 @@ afterAll(() => {
 });
 
 describe('window title', () => {
-  it('names the file being paged, like less\'s ?f', () => {
-    files.list = [entry('notes.txt')];
-
-    expect(windowTitle()).toBe('less-pager-mini notes.txt');
-  });
-
-  it('names whichever file is current after a switch', () => {
-    files.list = [entry('first.txt'), entry('second.txt')];
-    files.index = 1;
-
-    expect(windowTitle()).toBe('less-pager-mini second.txt');
-  });
-
-  it('says nothing about standard input', () => {
-    // less's ?f is false for "-", so a piped session has no name to
-    // show and the prompt does not carry one either
-    files.list = [entry('-')];
-
-    expect(windowTitle()).toBe('less-pager-mini');
-  });
-
-  it('says nothing about a library call over its own data', () => {
-    // paramPager pages what the caller passed: there is no file, so
-    // the entry carries no path and the rule needs no idea of who
-    // called - the same test covers both
-    files.list = [entry('')];
-
-    expect(windowTitle()).toBe('less-pager-mini');
-
-    files.list = [];
-    expect(windowTitle()).toBe('less-pager-mini');
-  });
-
-  it('renames the process, and writes nothing to the terminal', () => {
+  it('names the product, and writes nothing to the terminal', () => {
     files.list = [entry('log.txt')];
     process.title = 'something else';
 
     refreshWindowTitle();
 
-    expect(process.title).toBe('less-pager-mini log.txt');
+    expect(process.title).toBe('less-pager-mini');
     // a title made of escape bytes is what the OSC attempt did, and
     // what left one behind on the screen after quitting
     expect(process.title).not.toContain('\x1b');
   });
+
+  it('says the same thing whatever is being paged', () => {
+    // less writes no title on unix at all, so its bar says whatever the
+    // command line said - the file is not what varies. Ours does not
+    // vary either: the name is on the screen already, through the
+    // prompt's %f.
+    for (const list of [[entry('notes.txt')], [entry('-')], [entry('')], []]) {
+      files.list = list;
+      resetWindowTitle();
+      refreshWindowTitle();
+
+      expect(process.title).toBe('less-pager-mini');
+    }
+  });
+
+  it('is set once and not revised when the file changes', () => {
+    // less's title IS its argv, and :n and :e do not rewrite argv, so
+    // the bar keeps saying one thing for the whole session. MEASURED in
+    // Terminal.app: switching files leaves less's title alone.
+    files.list = [entry('first.txt'), entry('second.txt')];
+
+    refreshWindowTitle();
+    process.title = 'set by someone else';
+
+    files.index = 1;
+    refreshWindowTitle();
+
+    expect(process.title).toBe('set by someone else');
+  });
 });
 
 describe('a title too long for the argv block', () => {
-  it('is cut by node, which is the whole reason for the ladder', () => {
+  it('is cut by node, which is why there is a fallback at all', () => {
     // process.title overwrites argv IN PLACE, so the command line's
     // own length is the ceiling. Run a program whose argv is tiny to
-    // show it: this is the premise the ladder rests on, so it is
+    // show it: this is the premise the fallback rests on, so it is
     // measured rather than assumed.
     const dir = mkdtempSync(path.join(tmpdir(), 'lpm-title-'));
 
@@ -108,35 +104,41 @@ describe('a title too long for the argv block', () => {
     expect(budget).toBe([process.execPath, 'p.js'].join(' ').length);
   });
 
-  it('sheds the branding before the name, towards less\'s own shape', () => {
-    // less's title IS its argv, `less tests/editing`. When something
-    // has to go, going that way is closer to less than "less-pager-mini
-    // te" is - the file is the part ?f is about.
-    files.list = [entry('tests/editing')];
+  it('leaves the product name room on every real install path', () => {
+    // the budget is `node ` plus the resolved path of the bin script
+    // plus the arguments, so the shortest install decides it. The name
+    // needs 10 bytes of path; /usr/bin/lmn, the shortest anyone gets,
+    // has 12.
+    const need = 'less-pager-mini'.length - 'node '.length;
 
-    expect(windowTitles()).toEqual([
-      'less-pager-mini tests/editing',
-      'lmn tests/editing',
-      'tests/editing',
-      'lmn editing',
-      'editing'
-    ]);
+    for (const bin of ['/usr/bin/lmn', '/usr/local/bin/lmn',
+      '/opt/homebrew/bin/lmn', 'node_modules/.bin/lmn']) {
+      expect(bin.length).toBeGreaterThanOrEqual(need);
+    }
   });
 
-  it('keeps a bare name whole, having no directories to shed', () => {
-    files.list = [entry('notes.txt')];
-
-    expect(windowTitles()).toEqual([
-      'less-pager-mini notes.txt',
-      'lmn notes.txt',
-      'notes.txt'
-    ]);
-  });
-
-  it('falls back to the command name when even the product will not fit',
+  it('falls back to the command name when the product will not fit',
     () => {
-      files.list = [entry('-')];
+      // a short enough command line leaves no room for the product:
+      // argv0 makes one without needing a short path on disk, and the
+      // module comes in through the environment so it costs no argv
+      const dir = mkdtempSync(path.join(tmpdir(), 'lpm-title-'));
 
-      expect(windowTitles()).toEqual(['less-pager-mini', 'lmn']);
+      writeFileSync(path.join(dir, 'p.js'),
+        'const { refreshWindowTitle } = require(process.env.TITLE);\n' +
+        'refreshWindowTitle();\n' +
+        'console.log(process.argv.length, process.title);');
+
+      const shown = execFileSync(process.execPath, ['p.js'], {
+        argv0: 'n',                        // budget: "n p.js", 6 bytes
+        cwd: dir,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TITLE: path.join(process.cwd(), 'dist', 'tty', 'title.js')
+        }
+      }).trim();
+
+      expect(shown).toBe('2 lmn');
     });
 });
