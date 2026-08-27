@@ -870,7 +870,12 @@ export function glob(pattern: string): string[] {
   // either - less shells out for every name it is given.
   if (!isWindows) {
     const expanded = shellExpand(pattern);
-    return expanded !== null && expanded.length ? expanded : [plain];
+
+    // a shell that ran is the answer, whatever it said. Only a shell
+    // that could not run at all falls through to the globber below
+    if (expanded !== NO_SHELL) {
+      return expanded !== null && expanded.length ? expanded : [plain];
+    }
   }
 
   // Windows has no such delegation: less walks the directory itself
@@ -893,6 +898,17 @@ export function glob(pattern: string): string[] {
   //
   // The name still comes back unexpanded either way: less's lglob
   // answers with what it was given and lets the open fail.
+  //
+  // Unix reaches here too, by the one route that leaves it in the same
+  // position Windows is always in: the shell could not be EXECUTED -
+  // no /bin/sh, or a $SHELL that has been uninstalled. less degrades
+  // there rather than deciding to: popen forks fine, the child cannot
+  // exec, and lglob reads the empty pipe as "did not expand"
+  // (filename.c:790, which never looks at the status). Since we are
+  // already carrying a globber for Windows, spending it here costs
+  // nothing and keeps :e working on a machine whose shell is gone.
+  // A shell that RAN and matched nothing never arrives here - that is
+  // an answer, and it stays less's.
   let matched: string[];
 
   try {
@@ -909,6 +925,12 @@ export function glob(pattern: string): string[] {
 }
 
 /**
+ * The shell could not be executed at all - distinct from a shell that
+ * ran and matched nothing, which is an answer and stays less's.
+ */
+const NO_SHELL = Symbol('no shell');
+
+/**
  * less's lglob shell pipeline (filename.c:750): build a command, run it
  * through `$SHELL -c`, read back the names the shell expanded.
  *
@@ -922,7 +944,7 @@ export function glob(pattern: string): string[] {
  * @param pattern - The pattern, passed to the shell unquoted.
  * @returns The expanded names, or null when the shell produced none.
  */
-function shellExpand(pattern: string): string[] | null {
+function shellExpand(pattern: string): string[] | null | typeof NO_SHELL {
   // less: $LESSECHO, else LIBEXECDIR/lessecho, else "lessecho" on PATH
   const lessecho = lgetenv('LESSECHO') || 'lessecho';
   const { open, close } = optQuotes();
@@ -936,6 +958,12 @@ function shellExpand(pattern: string): string[] | null {
   ].join(' ');
 
   const first = runShell(`${lessecho} ${flags} -- ${pattern}`);
+
+  // nothing was asked, because there was nothing to ask. Reading the
+  // silence as "matched nothing" would hand the pattern back
+  // unexpanded, which is what less does - but less has no in-process
+  // globber on unix to do better with, and we do.
+  if (!first.ran) return NO_SHELL;
 
   // 127 is the shell saying it could not find lessecho, which less
   // treats as fatal (it has no fallback) but we can do better. ANY
@@ -1005,6 +1033,7 @@ function runShell(cmd: string): {
   stdout: string | null;
   stderr: string;
   status: number;
+  ran: boolean;
 } {
   const [shell, args] = shellArgv(cmd);
 
@@ -1016,10 +1045,15 @@ function runShell(cmd: string): {
       stdout: text.replace(/\n+$/, '') || null,
       stderr: typeof result.stderr === 'string' ? result.stderr : '',
       status: result.status ?? 0,
+      // spawnSync does not throw when the binary is missing: it comes
+      // back with an error and a NULL status, which reads exactly like
+      // a shell that ran and said nothing. They are not the same thing
+      // and only one of them has a fallback
+      ran: result.error === undefined,
     };
   } catch {
     // less: `if (fd == NULL) return (filename)` - the pipe never opened
-    return { stdout: null, stderr: '', status: 127 };
+    return { stdout: null, stderr: '', status: 127, ran: false };
   }
 }
 

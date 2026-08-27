@@ -317,6 +317,33 @@ describe('examine expansion', () => {
     ]);
   });
 
+  it('globs in process when no shell can be executed at all', () => {
+    // less degrades here rather than deciding to: popen forks fine, the
+    // child cannot exec, and lglob reads the empty pipe as "did not
+    // expand" (filename.c:790, which never looks at the status). It has
+    // no in-process globber on unix to do better with; we carry one for
+    // Windows already, so :e keeps working on a machine whose shell is
+    // gone. A DELIBERATE divergence, like the Windows branch.
+    const realShell = process.env.SHELL;
+
+    try {
+      process.env.SHELL = '/nonexistent-shell';
+
+      expect(expandExamineList(path.join(dir, '*.txt')))
+        .toEqual([fileA, fileB]);
+
+      // and a pattern that matches nothing is still the pattern, which
+      // is what less answers with and what the shell branch answers
+      // with - the fallback changes who looks, not what is said
+      expect(expandExamineList(path.join(dir, 'z*'))).toEqual([
+        path.join(dir, 'z*'),
+      ]);
+    } finally {
+      if (realShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = realShell;
+    }
+  });
+
   it('expands ~ and environment variables', () => {
     process.env.LPM_TEST_DIR = dir;
     expect(expandExamineList('$LPM_TEST_DIR/a.txt')).toEqual([fileA]);
