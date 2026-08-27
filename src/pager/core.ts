@@ -4,6 +4,8 @@ import { putstr, flush } from '../tty/output';
 import { refreshWindowTitle } from '../tty/title';
 
 import { onHilitePaint, setHiliteHidden } from '../features/searching';
+
+import { endJsRegexGuard } from '../features/jsRegexGuard';
 import { squishCheck, renderHiliteRepaint, markSearchFlash }
   from '../helpers';
 import { armReadWatch } from '../state/reads';
@@ -3700,6 +3702,15 @@ async function cleanUp(): Promise<void> {
   keyboard().off('data', keyHandler);
   setKeyboardRaw(false);
   keyboard().pause();
+
+  // the --use-js-regexp guard's two worker threads. Both are unref'd,
+  // so they never held the process open - this is not a leak being
+  // closed, it is a teardown that existed and was never called, which
+  // left the workers running for the rest of a LIBRARY caller's
+  // process. Every other listener above leaves with the session and
+  // these belong with them; it also hands back any ISIG dip the
+  // watcher still holds
+  endJsRegexGuard();
 
   // the -e hook holds this session's closure otherwise
   onEofForward(null);
