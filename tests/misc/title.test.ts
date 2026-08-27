@@ -1,8 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { execFileSync } from 'child_process';
+import { mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+
 import { files } from '../../src/features/files';
 
-import { windowTitle, refreshWindowTitle } from '../../src/tty/title';
+import { windowTitle, windowTitles, refreshWindowTitle, resetWindowTitle }
+  from '../../src/tty/title';
 
 /**
  * The terminal's title, which less sets only on Windows and gets on unix
@@ -25,6 +31,7 @@ const entry = (path: string): (typeof files.list)[number] =>
 beforeEach(() => {
   files.list = [];
   files.index = 0;
+  resetWindowTitle();
 });
 
 afterAll(() => {
@@ -78,4 +85,58 @@ describe('window title', () => {
     // what left one behind on the screen after quitting
     expect(process.title).not.toContain('\x1b');
   });
+});
+
+describe('a title too long for the argv block', () => {
+  it('is cut by node, which is the whole reason for the ladder', () => {
+    // process.title overwrites argv IN PLACE, so the command line's
+    // own length is the ceiling. Run a program whose argv is tiny to
+    // show it: this is the premise the ladder rests on, so it is
+    // measured rather than assumed.
+    const dir = mkdtempSync(path.join(tmpdir(), 'lpm-title-'));
+
+    writeFileSync(path.join(dir, 'p.js'),
+      'process.title = "X".repeat(500);\nconsole.log(process.title.length);');
+
+    const budget = Number(execFileSync(process.execPath, ['p.js'], {
+      cwd: dir, encoding: 'utf8'
+    }).trim());
+
+    // argv joined with spaces, to the byte - here execFileSync passes
+    // the interpreter's full path as argv[0], and every byte of it is
+    // room the title gets to use
+    expect(budget).toBe([process.execPath, 'p.js'].join(' ').length);
+  });
+
+  it('sheds the branding before the name, towards less\'s own shape', () => {
+    // less's title IS its argv, `less tests/editing`. When something
+    // has to go, going that way is closer to less than "less-pager-mini
+    // te" is - the file is the part ?f is about.
+    files.list = [entry('tests/editing')];
+
+    expect(windowTitles()).toEqual([
+      'less-pager-mini tests/editing',
+      'lmn tests/editing',
+      'tests/editing',
+      'lmn editing',
+      'editing'
+    ]);
+  });
+
+  it('keeps a bare name whole, having no directories to shed', () => {
+    files.list = [entry('notes.txt')];
+
+    expect(windowTitles()).toEqual([
+      'less-pager-mini notes.txt',
+      'lmn notes.txt',
+      'notes.txt'
+    ]);
+  });
+
+  it('falls back to the command name when even the product will not fit',
+    () => {
+      files.list = [entry('-')];
+
+      expect(windowTitles()).toEqual(['less-pager-mini', 'lmn']);
+    });
 });
