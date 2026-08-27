@@ -94,6 +94,13 @@ function shellCmd(cmd: string, input?: string): SpawnSyncReturns<Buffer> {
 function preprocStatusMessage(
   result: SpawnSyncReturns<Buffer>
 ): string | null {
+  // the shell never ran at all - no /bin/sh, or a $SHELL that has been
+  // uninstalled. less cannot see that case as anything special: its
+  // popen forks fine and the CHILD _exit(127)s when it cannot exec, so
+  // pclose hands close_pipe a plain 127 (edit.c:299). spawnSync reports
+  // it as an error with a null status instead, which read as success.
+  if (result.error) return exitMessage(127, null);
+
   return exitMessage(result.status, result.signal);
 }
 

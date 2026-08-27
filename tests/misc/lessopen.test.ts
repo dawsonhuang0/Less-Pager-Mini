@@ -89,6 +89,27 @@ describe('$LESSOPEN pipe forms', () => {
     expect(search.message).toBe('Input preprocessor failed (status 3)');
   });
 
+  it('reports a shell that never ran, like popen\'s child', () => {
+    // no /bin/sh, or a $SHELL that has been uninstalled. less cannot
+    // see that as anything special: its popen forks fine and the CHILD
+    // _exit(127)s when it cannot exec, so close_pipe is handed a plain
+    // 127 (edit.c:299). spawnSync reports it as an error with a NULL
+    // status instead, which read as success and said nothing at all.
+    const realShell = process.env.SHELL;
+
+    try {
+      process.env.SHELL = '/nonexistent-shell';
+      process.env.LESSOPEN = '||echo %s';
+      scanOptions('--show-preproc-errors', []);
+
+      open();
+      expect(search.message).toBe('Input preprocessor failed (status 127)');
+    } finally {
+      if (realShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = realShell;
+    }
+  });
+
   it('stays silent about failures by default', async () => {
     process.env.LESSOPEN = '||false %s';
 
