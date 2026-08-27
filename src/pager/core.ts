@@ -3374,7 +3374,33 @@ let helpClosedAlt = false;
  */
 // the --lesskey-help option reaches the pager through here: options
 // cannot import this module, so the entry point is a hook
-hook.showLesskeyHelp = (): void => { void openHelp(lesskeyHelp); };
+hook.showLesskeyHelp = (): void => {
+  // openHelp only STAGES the page: paintHelpPage swaps the content and
+  // resets the renderer, and the caller paints. The h command returns
+  // the promise to the dispatcher, which renders once it settles; an
+  // option's set() cannot await, so the paint has to hang off it here.
+  //
+  // Only ever wrong behind $LESSOPEN. openHelp runs synchronously as
+  // far as paintHelpPage unless there is an altpipe to close, and that
+  // one `await closeAlt` is what leaves the staging until AFTER the
+  // option machinery's own render - so the help was set up and never
+  // put on the glass, and the next keypress painted it.
+  //
+  // Asked AFTER starting it: mode.HELP already true means it staged
+  // synchronously and the render the option is about to do will show
+  // it, so hanging another paint off the promise would only repeat a
+  // screen less writes once.
+  const staging = openHelp(lesskeyHelp);
+
+  if (mode.HELP) {
+    void staging;
+    return;
+  }
+
+  void staging.then(() => {
+    if (mode.HELP) render(session.content, session.buffer);
+  });
+};
 
 // the nested session is what makes `q` mean "done looking": it
 // unwinds the lesskey pager and leaves this one exactly as it was
