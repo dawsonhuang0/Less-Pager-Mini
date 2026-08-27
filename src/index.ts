@@ -85,8 +85,8 @@ function splitArgs(args: readonly PagerArg[]): {
  *   from disk, invalid file paths are not paged.
  * - `--use-js-regexp`: uses JavaScript's RegExp for searching;
  *   *off* by default - using `posix-regex`.
- * - `--use-zsh-glob`: expands a filename with zsh's globbing rules in
- *   process; *off* by default - handing it to `$SHELL`, like less.
+ * - `--use-zsh-glob`: expands a filename with zsh's globbing rules in process;
+ *   *off* by default - globbing via `$SHELL`.
  *
  * @example
  * await pager(lines);

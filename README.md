@@ -163,6 +163,9 @@ on:
 <code>--use-js-regexp</code>: Searches with JavaScript's `RegExp`. Off by default —
 compiling POSIX-compatible regex patterns with `posix-regex`.
 
+<code>--use-zsh-glob</code>: Expands a filename with zsh's globbing rules in process.
+Off by default — globbing via `$SHELL`.
+
 <code>--lesskey-help</code>: Displays the syntax of lesskey files.
 
 <code>--view-lesskey</code>: Shows the lesskeys in use — `v` edits and re-applies the one on screen;
