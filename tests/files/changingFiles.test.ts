@@ -346,6 +346,34 @@ describe('examine expansion', () => {
       await done;
     });
 
+  it('leaves an overlay only when the examine actually switches', () => {
+    // less's help is an IFILE, so editing another file leaves it by
+    // definition - and an edit that FAILS leaves nothing, because
+    // edit_ifile never reaches its `curr_ifile = ifile`. MEASURED on
+    // less: h then `:e nosuchfile`, `:e` with no answer, and a pattern
+    // matching nothing all stay in the help, error printed over it.
+    files.list = [{ path: fileA, lines: null, size: 0, sizeKnown: true,
+      saved: null }];
+    files.index = 0;
+
+    let left = 0;
+    const leave = (): void => { left++; };
+
+    startExamine();
+    for (const ch of 'nosuchfile') examineKey(ch);
+    examineKey('\r');
+    void runExamine(leave);
+
+    expect(left).toBe(0);
+
+    startExamine();
+    for (const ch of fileB) examineKey(ch);
+    examineKey('\r');
+    void runExamine(leave);
+
+    expect(left).toBe(1);
+  });
+
   it('globs in process on request, under --use-zsh-glob', () => {
     // NOT a less option: less's lglob always shells out
     // (filename.c:750), and glob(3) appears once in all of less, under

@@ -2486,10 +2486,9 @@ async function dispatchKey(sequence: string): Promise<void> {
 
   if (examine.pending) {
     if (examineKey(session.key) === 'run') {
-      // less's edit from the help file leaves it (even an empty
-      // answer re-examines the current file)
-      exitHelp();
-      runExamine();
+      // the help is left by the SWITCH, not by the command: an examine
+      // that opens nothing leaves less exactly where it was
+      runExamine(exitHelp);
     }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;

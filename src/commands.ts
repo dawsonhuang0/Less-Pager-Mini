@@ -343,8 +343,11 @@ export async function removeFile(): Promise<void> {
  * Opens the files named at the `Examine: ` prompt, like less's
  * edit_list: every name enters the list after the current file,
  * unopenable ones drop out, and the first good one becomes current.
+ *
+ * @param leaveHelp - Run just before the switch a successful examine
+ *   ends with, and only then. See the call for why it is a parameter.
  */
-export async function runExamine(): Promise<void> {
+export async function runExamine(leaveHelp?: () => void): Promise<void> {
   // less's exec_mca runs cmd_exec() before the A_EXAMINE dispatch
   // (command.c:267), so the prompt row is cleared and flushed before
   // the glob shells out - and the shell's own stderr, which less does
@@ -470,6 +473,19 @@ export async function runExamine(): Promise<void> {
       setPreviousPath(files.list[current].path);
       files.newFile = true;
     }
+
+    // less's help is an IFILE, so editing another file leaves it by
+    // definition - and an edit that FAILS leaves nothing, because
+    // edit_ifile never reached its `curr_ifile = ifile`. MEASURED: h
+    // then `:e nosuchfile`, `:e` with no answer, or a pattern that
+    // matches nothing all keep less in the help, with the error and
+    // the shell's own complaint printed over it.
+    //
+    // Ours is an overlay rather than an entry in the list, so it has
+    // to be told - here, at the one moment less would have left it,
+    // and not before: leaving up front dropped the help on every
+    // failure too, and took the shell's stderr off the screen with it
+    leaveHelp?.();
 
     if (target >= 0) switchToFile(target);
   } else if (errors.length && files.index >= 0) {
