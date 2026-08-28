@@ -1,4 +1,3 @@
-import { ownsTermios, setKeyboardIsig } from '../tty/keyboard';
 import fs from 'fs';
 import { Worker } from 'worker_threads';
 
@@ -108,18 +107,6 @@ export function beginGuardedRun(): void {
 }
 
 /**
- * Whether the watcher currently has the terminal's signals held off.
- *
- * For exactly this window a ^C arrives as a BYTE rather than a signal,
- * so the key handling has to read it as the interrupt again.
- */
-export function guardHoldsIsig(): boolean {
-  const state = shared;
-
-  return state !== null && Atomics.load(state.header, ISIG_OFF) === 1;
-}
-
-/**
  * Gives the terminal its signals back if the watcher took them.
  *
  * The watcher restores them itself on the way out of a run; this is
@@ -132,7 +119,7 @@ export function restoreIsig(): void {
   if (!state) return;
   if (Atomics.compareExchange(state.header, ISIG_OFF, 1, 0) !== 1) return;
 
-  setKeyboardIsig(true);
+  // the watcher no longer takes ISIG: node's raw mode has it off
 }
 
 /**
@@ -533,7 +520,7 @@ function ensureWorkers(need: number): Shared {
         intr: intrChar,
         notice: noticeBytes,
         clearRow: clearBytes,
-        ownsTty: ownsTermios(),
+        ownsTty: false,
       },
     });
 

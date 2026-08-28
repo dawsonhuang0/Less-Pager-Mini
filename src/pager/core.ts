@@ -58,7 +58,7 @@ import { help } from "../startup/lessHelp";
 
 import { lesskeyHelp } from "../startup/lesskeyHelp";
 
-import { trace as guardTrace , guardHoldsIsig } from "../features/jsRegexGuard";
+import { trace as guardTrace } from "../features/jsRegexGuard";
 
 import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
   lesskeyViewOpen,
@@ -67,7 +67,7 @@ import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
 import { LESS_VERSION } from "../lesskey";
 
 import { raiseAbort, clearAbort, ungotIsLive, consumeInterrupt,
-  abortSigs, ownsTermios, releaseGateOnInterrupt, keyboardHasIsig }
+  abortSigs, releaseGateOnInterrupt }
   from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
@@ -1377,21 +1377,21 @@ function keyHandler(data: Buffer): void {
  * with ISIG cleared.
  *
  * So the byte counts only where no kernel will raise the signal for
- * us - and there are three such places. Two are forced on us: a
- * terminal node's raw mode took and we could not, and the window the
- * --use-js-regexp guard holds ISIG off (termios.ts).
+ * us: node's raw mode clears ISIG and offers no way back, so the byte
+ * is the ONLY spelling a typed ^C has. We used to keep the signal by
+ * driving termios through `stty`, which cost a process per change and
+ * gave one key two models; raiseSigint gives the byte the signal's
+ * reach instead - it kills the process GROUP, so `cmd | lmn` and ^C
+ * still takes the writer with it.
  *
- * The third is a CHOICE. On a terminal whose ISIG is off, og cannot be
- * interrupted at all: it ungetcc_backs the 0x03 and the scroll runs to
- * the end of the backlog. We read it as the interrupt anyway, because
- * "you cannot stop it" is not an answer a pager gets to give. That is
- * the one place here that knowingly leaves og.
- *
- * The real signal announces itself the way less's u_interrupt does, by
- * setting S_INTERRUPT before the handler runs.
+ * On a terminal whose ISIG is off, og cannot be interrupted at all: it
+ * ungetcc_backs the 0x03 and the scroll runs to the end of the
+ * backlog. We read it as the interrupt anyway, because "you cannot
+ * stop it" is not an answer a pager gets to give. That is the one
+ * place here that knowingly leaves og.
  */
 function intrIsByte(): boolean {
-  return !ownsTermios() || guardHoldsIsig() || !keyboardHasIsig();
+  return true;
 }
 
 /** True when this key is the interrupt rather than a plain ^C byte. */

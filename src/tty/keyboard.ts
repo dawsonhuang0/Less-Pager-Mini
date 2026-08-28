@@ -5,7 +5,6 @@ import tty from 'tty';
 import { terminalEnv } from '../startup/environment';
 
 import { flush } from './output';
-import { rawMode, termiosOwned, setIsig, isigEnabled } from './termios';
 
 /**
  * The keyboard stream, like less's ttyin.c: keys come from the
@@ -41,40 +40,22 @@ export const keyboardFd = (): number => ttyFd ?? 0;
  * an interrupt, because there the kernel can no longer raise one.
  */
 export function setKeyboardRaw(on: boolean): void {
-  const byTermios = stream.isTTY && rawMode(ttyFd ?? 0, on);
-
-  keyTrace(`raw ${on} isTTY=${stream.isTTY} termios=${byTermios} ` +
+  keyTrace(`raw ${on} isTTY=${stream.isTTY} ` +
     `isStdin=${(stream as unknown) === process.stdin} ` +
     `hasSetRawMode=${typeof stream.setRawMode}`);
 
-  if (byTermios) return;
-
-  // a keyboard that is not a terminal has no modes to set: og's
-  // tcsetattr simply fails on such an fd and it carries on (the fd 2
-  // fallback in attachPlain is exactly that case)
+  // node's, and only node's. We used to drive termios through `stty`
+  // to keep ISIG the way less keeps it, so a typed ^C stayed a kernel
+  // signal; that is a unix idea, it cost a process per change, and it
+  // gave the pager two models of the same key. There is one now: the
+  // ^C arrives as a BYTE everywhere, and raiseSigint gives it the
+  // signal's reach.
+  //
+  // A keyboard that is not a terminal has no modes to set, and node's
+  // ReadStream shim makes this the no-op it should be there.
   stream.setRawMode?.(on);
 }
 
-/** Whether the terminal modes are ours, so ISIG is the terminal's. */
-export const ownsTermios = (): boolean => termiosOwned();
-
-/**
- * Turns the terminal's signal generation on or off.
- *
- * Only the --use-js-regexp guard asks: see termios.ts. Everything
- * else leaves ISIG exactly as the terminal had it, which is og's
- * whole behaviour here.
- */
-/** Whether the terminal will raise SIGINT from a typed ^C. */
-export function keyboardHasIsig(): boolean {
-  return stream.isTTY && isigEnabled(ttyFd ?? 0);
-}
-
-export function setKeyboardIsig(on: boolean): void {
-  if (!stream.isTTY) return;
-
-  setIsig(ttyFd ?? 0, on);
-}
 
 /** Opens a device by name, or -1. */
 function openDevice(path: string): number {
@@ -466,7 +447,7 @@ export async function gateReturn(message: string): Promise<void> {
   // a BYTE is an ordinary character, ungot like any other, unless we
   // could not take the terminal and are reading it as the interrupt
   // ourselves
-  const intrByte = !termiosOwned() && key === '\x03';
+  const intrByte = key === '\x03';
 
   if (key && key !== '\r' && key !== '\n' && key !== ' ' && !intrByte) {
     pushUngot(bytes);
