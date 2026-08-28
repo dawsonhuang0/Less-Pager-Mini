@@ -30,14 +30,19 @@ let ttyFd: number | null = null;
 export const keyboardFd = (): number => ttyFd ?? 0;
 
 /**
- * Enters or leaves raw mode, like og's raw_mode(TRUE/FALSE).
+ * Enters or leaves raw mode, through node and nothing else.
  *
- * og sets the terminal modes itself and touches only the five lflag
+ * less sets the terminal modes itself and touches only the five lflag
  * bits it needs, leaving ISIG - and therefore what a typed ^C means -
- * to the terminal. termios.ts does the same through stty; node's
- * setRawMode is the fallback where that is impossible (Windows, no
- * stty), and it is the ONLY case in which a ^C byte has to be read as
- * an interrupt, because there the kernel can no longer raise one.
+ * to the terminal. We used to match that by driving termios through
+ * `stty`, which is a unix idea in a cross-platform pager: it cost a
+ * process per change, did nothing at all on Windows, and left the
+ * pager with two models of the same key.
+ *
+ * There is one model now. node's setRawMode clears ISIG and offers no
+ * way back, so a typed ^C is a BYTE on every platform, decided from
+ * the raw input by signalForKey (core.ts) rather than from what the
+ * kernel happened to deliver.
  */
 export function setKeyboardRaw(on: boolean): void {
   keyTrace(`raw ${on} isTTY=${stream.isTTY} ` +

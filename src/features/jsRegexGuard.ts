@@ -28,7 +28,7 @@ import { Worker } from 'worker_threads';
  */
 
 /** Header words: what is happening, and the sizes that go with it. */
-const HEADER = 11;
+const HEADER = 10;
 const STATE = 0;
 const LENGTH = 1;
 /** 1 while ANY key should end the wait, 0 for an interrupt only. */
@@ -47,10 +47,6 @@ const BY_INTR = 7;
 const WATCHING = 8;
 /** 1 when the watcher saw an interrupt with no match out to stop. */
 const PENDING = 9;
-
-// set by the watcher when it has told the driver to stop taking the
-// ^C, so whichever thread ends the run gives ISIG back
-const ISIG_OFF = 10;
 
 const IDLE = 0;
 const REQUEST = 1;
@@ -94,9 +90,6 @@ export function beginGuardedRun(): void {
   runAbandoned = false;
   trace('run');
 
-  // the search is still going, so the dip stands: see endGuardedRun
-  holdIsigRestore();
-
   const state = shared;
 
   if (!state?.watcher) return;
@@ -104,22 +97,6 @@ export function beginGuardedRun(): void {
   Atomics.store(state.header, PENDING, 0);
   Atomics.store(state.header, WATCHING, 1);
   Atomics.notify(state.header, WATCHING);
-}
-
-/**
- * Gives the terminal its signals back if the watcher took them.
- *
- * The watcher restores them itself on the way out of a run; this is
- * for the run it does not outlive, since an interrupt ANSWERS by
- * killing the workers and the shared buffer goes with them.
- */
-export function restoreIsig(): void {
-  const state = shared;
-
-  if (!state) return;
-  if (Atomics.compareExchange(state.header, ISIG_OFF, 1, 0) !== 1) return;
-
-  // the watcher no longer takes ISIG: node's raw mode has it off
 }
 
 /**
@@ -145,34 +122,9 @@ export function restoreIsig(): void {
  * interrupt either way. unref'd, so a pending restore never holds the
  * process open.
  */
-const ISIG_COALESCE_MS = 200;
-
-let isigRestore: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleIsigRestore(): void {
-  if (isigRestore) return;
-
-  isigRestore = setTimeout(() => {
-    isigRestore = null;
-    restoreIsig();
-  }, ISIG_COALESCE_MS);
-
-  isigRestore.unref?.();
-}
-
-/** Cancels a restore that a new run has overtaken. */
-function holdIsigRestore(): void {
-  if (!isigRestore) return;
-
-  clearTimeout(isigRestore);
-  isigRestore = null;
-}
-
 /** Closes a run, so the watcher stops taking keys nobody asked it to. */
 export function endGuardedRun(): void {
   runStarted = 0;
-
-  scheduleIsigRestore();
 
   const state = shared;
 
@@ -300,7 +252,6 @@ for (;;) {
  * thing that is not running.
  */
 const WATCHER = `
-const { spawnSync } = require('child_process');
 const fs = require('fs');
 const { workerData } = require('worker_threads');
 const header = new Int32Array(workerData.memory, 0, ${HEADER});
@@ -310,23 +261,6 @@ const buf = Buffer.alloc(64);
 const notice = Buffer.from(workerData.notice, 'binary');
 const clearRow = Buffer.from(workerData.clearRow, 'binary');
 const intr = workerData.intr;
-const ownsTty = workerData.ownsTty;
-
-const setIsig = on => {
-  let fd = -1;
-
-  try {
-    fd = fs.openSync('/dev/tty', 'r');
-    const run = spawnSync('stty', [on ? 'isig' : '-isig'],
-      { stdio: [fd, 'ignore', 'ignore'] });
-
-    return !run.error && run.status === 0;
-  } catch (error) {
-    return false;
-  } finally {
-    if (fd >= 0) { try { fs.closeSync(fd); } catch (error) {} }
-  }
-};
 
 const keep = bytes => {
   const at = Atomics.load(header, ${KEYLEN});
@@ -396,20 +330,6 @@ for (;;) {
       said = true;
       Atomics.store(header, ${NOTICED}, 1);
       fs.writeSync(1, notice);
-
-      // Two seconds in is where a user reaches for ^C, and a terminal
-      // with ISIG on takes that byte before this thread can read it -
-      // while the thread a signal WOULD reach is the one stopped
-      // inside the RegExp. So the driver is asked to stop taking it,
-      // here, on the only thread awake, and only once the wait has
-      // gone on long enough to be worth a fork. termios.ts holdIsig
-      // has the whole argument
-      if (Atomics.load(header, ${ISIG_OFF}) === 0 && ownsTty) {
-        // its OWN descriptor: workerData.fd is the non-blocking poll
-        // fd this thread reads keys through, and handing that to a
-        // child is not free
-        if (setIsig(false)) Atomics.store(header, ${ISIG_OFF}, 1);
-      }
     }
 
     // the sleep between reads; it ends early when the run does
@@ -520,7 +440,6 @@ function ensureWorkers(need: number): Shared {
         intr: intrChar,
         notice: noticeBytes,
         clearRow: clearBytes,
-        ownsTty: false,
       },
     });
 
@@ -539,10 +458,6 @@ function ensureWorkers(need: number): Shared {
 function killWorkers(): void {
   if (!shared) return;
 
-  // BEFORE the buffer goes: the watcher restores ISIG on its way out
-  // of a run, and terminating it is exactly the exit it does not get
-  restoreIsig();
-
   void shared.matcher.terminate();
   if (shared.watcher) void shared.watcher.terminate();
   shared = null;
@@ -552,7 +467,6 @@ function killWorkers(): void {
 export function endJsRegexGuard(): void {
   // NOW, not on a timer: this is the exit path, and an unref'd
   // restore that never fires leaves the terminal without its signals
-  holdIsigRestore();
   killWorkers();
 }
 
