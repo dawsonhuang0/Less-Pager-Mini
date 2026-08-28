@@ -272,37 +272,43 @@ export function initTerminalCapabilities(): void {
   // cheaper(home, cup(0,0), "|\b^") and sc_clear is "\n\n" with
   // missing_cap (screen.c:1626, :1680). A terminal that has neither
   // gets those, which is exactly what its dumb painter draws
-  // v1.12.1's fallbacks, restored. Every one of these is
-  // `terminalCapability(...) ?? <the ANSI spelling>` - unconditional,
-  // asking nothing about whether a database was found - and that build
-  // is the one known to work where nothing since has. A pager that
-  // cannot erase a row cannot repaint at all: the screen sits still
-  // while keys are accepted, and what was typed piles up on the bottom
-  // line.
+  // less does NOT guess at these, and a terminal that was DESCRIBED
+  // gets that exactly: el and ed missing means the empty string and
+  // missing_cap (screen.c:1613, :1618), so nothing at all is written
+  // where the clear would go; sc_home is cheaper(home, cup(0,0),
+  // "|\b^") and sc_clear is "\n\n" (screen.c:1626, :1680). That is
+  // what less's dumb painter is for, and TERM=dumb is meant to get it.
   //
-  // TODO: less does NOT guess at el/ed. A terminal whose entry omits
-  // them gets the empty string and missing_cap (screen.c:1613, :1618),
-  // and its dumb painter is the answer; sc_home is
-  // cheaper(home, cup(0,0), "|\b^") and sc_clear is "\n\n"
-  // (screen.c:1626, :1680). less can afford that because it links
-  // curses and always HAS an entry. Restoring it needs the same thing
-  // the key table's TODO needs: a way to tell "the entry omits this"
-  // from "there is no entry", verified on a box where the second is
-  // normal. The og-faithful spellings, for when it goes back:
-  //
-  //   CURSOR_HOME  '|\b^'      CLEAR_LINE   ''
-  //   CLEAR_SCREEN '\n\n'      CLEAR_BELOW  ''
-  //   REVERSE_INDEX ''
-  CURSOR_HOME = terminalCapability('home', 'ho') ?? '\x1b[H';
+  // An UNDESCRIBED terminal gets the ANSI spelling instead. less
+  // cannot be in that position - it links curses, so it always has an
+  // entry - and we can: on Windows there is no terminfo at all and
+  // $TERM is unset. The empty string there is not a dumb painter, it
+  // is a pager that cannot erase a row, so the screen sits still while
+  // keys are accepted and what was typed piles up on the bottom line.
+  // v1.12.1 guessed unconditionally and worked; this guesses only
+  // where nothing answered.
+  const described = terminfoAnswered();
+  const capOr = (
+    terminfo: string,
+    termcap: string,
+    absent: string,
+    guess: string
+  ): string => terminalCapability(terminfo, termcap) ??
+    (described ? absent : guess);
+
+  CURSOR_HOME = capOr('home', 'ho', '|\b^', '\x1b[H');
+  // the %i converts terminfo's 0-based row and column to ANSI's
+  // 1-based, and belongs to both spellings
   cursorToCapability = terminalCapability('cup', 'cm') ??
     '\x1b[%i%p1%d;%p2%dH';
-  CLEAR_LINE = terminalCapability('el', 'ce') ?? '\x1b[K';
-  CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '\x1b[J';
-  CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\x1b[H\x1b[2J';
-  // the al/ri chain is less's own (sc_addline is whichever is cheaper,
-  // screen.c:1707) and stays; only the fallback at its end is v1.12.1's
+  CLEAR_LINE = capOr('el', 'ce', '', '\x1b[K');
+  CLEAR_BELOW = capOr('ed', 'cd', '', '\x1b[J');
+  CLEAR_SCREEN = capOr('clear', 'cl', '\n\n', '\x1b[H\x1b[2J');
+  // the al/ri chain is less's own: sc_addline is whichever is cheaper,
+  // and EMPTY when the terminal has neither - which sets no_back_scroll
+  // and forces a repaint on every backward movement (screen.c:1707)
   REVERSE_INDEX = terminalCapability('ill', 'al') ??
-    terminalCapability('ri', 'sr') ?? '\x1bM';
+    terminalCapability('ri', 'sr') ?? (described ? '' : '\x1bM');
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
   // less's attribute exits go through tmodes(..., "sgr0", ..., "me")

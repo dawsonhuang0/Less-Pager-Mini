@@ -70,19 +70,22 @@ it('binds arrow keys to what terminfo says, like less', () => {
   expect(getAction('\x1B[1;5D')).toBe('FIRST_COL');
 });
 
-it('falls back to an ANSI spelling when terminfo does not name a key',
+it('falls back to ANSI only when no terminal described the session',
   async () => {
-    // REVERTED TO v1.12.1, whose rule was one line -
-    // `terminalCapability(ti, tc) ?? fallback` - and which worked on
-    // Windows where nothing since has. The fallback is UNCONDITIONAL:
-    // it asks nothing about whether a database was found. A terminal
-    // that names kcud1 still gets ONLY what it named, which is what
-    // the test above asserts; a terminal that names nothing gets the
-    // hardcoded spelling instead of no key at all.
+    // less's rule applies whenever one DID: the key is exactly what
+    // the terminal says, and a capability the entry omits leaves it
+    // unbound (special_key_str screen.c:1218, "\377" decode.c:390).
+    // The test above asserts that half.
+    //
+    // This is the case less cannot be in. It links curses and always
+    // HAS an entry; we read the compiled files ourselves and can find
+    // none - Windows has no terminfo at all and no $TERM. Reaching one
+    // through DEFAULT_TERM is not an answer either: that is "unknown",
+    // which is less's way of saying it does not know.
     const realTerm = process.env.TERM;
 
     try {
-      process.env.TERM = 'no-such-terminal-xyz';
+      delete process.env.TERM;
       vi.resetModules();
 
       const { resetTerminfo } = await import('../src/tty/terminal');
@@ -101,9 +104,43 @@ it('falls back to an ANSI spelling when terminfo does not name a key',
       expect(guessed('\x1b[F')).toBe('LAST_LINE');
       expect(guessed('\x1bOP')).toBe('HELP');
 
-      // one spelling per key, exactly as v1.12.1 bound them: the
-      // fallback REPLACES the capability, it does not join it
+      // one spelling per key: the fallback REPLACES the capability
+      // rather than joining it, exactly as v1.12.1 bound them
       expect(guessed('\x1bOB')).toBeUndefined();
+    } finally {
+      if (realTerm === undefined) delete process.env.TERM;
+      else process.env.TERM = realTerm;
+
+      vi.resetModules();
+    }
+  });
+
+it('leaves a described terminal\'s missing keys unbound, like less',
+  async () => {
+    // TERM=dumb HAS an entry and no kcud1, so less binds no arrow at
+    // all and a second spelling rings the bell. A fallback here would
+    // give a dumb terminal keys less says it does not have - which is
+    // what v1.12.1 did unconditionally, and the half of its rule that
+    // does not survive.
+    const realTerm = process.env.TERM;
+
+    try {
+      process.env.TERM = 'dumb';
+      vi.resetModules();
+
+      const { resetTerminfo } = await import('../src/tty/terminal');
+
+      resetTerminfo();
+
+      const { getAction: onDumb } = await import('../src/keys');
+
+      expect(onDumb('\x1b[B')).toBeUndefined();
+      expect(onDumb('\x1bOB')).toBeUndefined();
+      expect(onDumb('\x1b[5~')).toBeUndefined();
+
+      // an ordinary key is unaffected: this is about terminfo, not
+      // about the table
+      expect(onDumb('j')).toBe('LINE_FORWARD');
     } finally {
       if (realTerm === undefined) delete process.env.TERM;
       else process.env.TERM = realTerm;

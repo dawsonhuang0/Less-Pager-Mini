@@ -189,7 +189,23 @@ let terminfoEntry = false;
 function loadTerminfo(): void {
   if (terminfoLoaded) return;
   terminfoLoaded = true;
-  terminfoEntry = tgetent(terminalEnv() || DEFAULT_TERM) === 1;
+
+  const named = terminalEnv();
+
+  // the entry is still LOADED through DEFAULT_TERM, so every lookup
+  // gets less's own answers whatever happens here
+  const found = tgetent(named || DEFAULT_TERM) === 1;
+
+  // ...but reaching one only by falling back is not an answer about
+  // THIS terminal. "unknown" is the entry less loads to say it does
+  // not know which terminal this is - it is why it prints "WARNING:
+  // terminal is not fully functional" - so a session that never named
+  // its terminal has not been described, it has been guessed at.
+  //
+  // MEASURED with $TERM unset before this: terminfoAnswered() true,
+  // CLEAR_LINE "" so no row could be erased, and every special key
+  // unbound. That one boolean is what the two rules below turn on.
+  terminfoEntry = found && named !== '' && named !== undefined;
 }
 
 /**
