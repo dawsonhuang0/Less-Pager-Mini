@@ -189,21 +189,7 @@ let terminfoEntry = false;
 function loadTerminfo(): void {
   if (terminfoLoaded) return;
   terminfoLoaded = true;
-
-  const named = terminalEnv();
-
-  // the entry is still LOADED through DEFAULT_TERM, so every lookup
-  // gets less's own answers...
-  const found = tgetent(named || DEFAULT_TERM) === 1;
-
-  // ...but reaching one only by falling back is not an answer about
-  // THIS terminal. "unknown" is the entry less uses to say it does not
-  // know which terminal this is - it is why it prints "WARNING:
-  // terminal is not fully functional" - and calling that described
-  // suppressed every guess below: CLEAR_LINE went empty so the screen
-  // could not be repainted, and no special key was bound at all.
-  // MEASURED with TERM unset: ESC O B dead, j alive, nothing redrawn.
-  terminfoEntry = found && named !== '' && named !== undefined;
+  terminfoEntry = tgetent(terminalEnv() || DEFAULT_TERM) === 1;
 }
 
 /**

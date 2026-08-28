@@ -268,44 +268,25 @@ export function initTerminalCapabilities(): void {
 
   TERMINAL_SUSPEND = terminalCapability('SUSPEND', 'SUSPEND') ?? SYNC_ON;
   TERMINAL_RESUME = terminalCapability('RESUME', 'RESUME') ?? SYNC_OFF;
-
-  // A capability, or - when there is no terminal DATABASE at all - a
-  // guess. The two are different answers and less only ever has the
-  // first: it links curses, so a capability the entry omits is
-  // genuinely absent and its dumb painter is the right response.
-  //
-  // We can also find no database to read, which is Windows: TERM is
-  // unset and there is no terminfo anywhere. Taking "absent" there
-  // left CLEAR_LINE empty, so the pager could not erase a row - keys
-  // arrived, nothing on screen changed, and what had been typed piled
-  // up on the bottom line. MEASURED on Windows 11: every keystroke
-  // reached the key handler and the screen never moved.
-  const capOr = (
-    terminfo: string,
-    termcap: string,
-    absent: string,
-    guess: string
-  ): string => terminalCapability(terminfo, termcap) ??
-    (terminfoAnswered() ? absent : guess);
   // less's fallbacks are text, not ANSI guesses: sc_home is
   // cheaper(home, cup(0,0), "|\b^") and sc_clear is "\n\n" with
   // missing_cap (screen.c:1626, :1680). A terminal that has neither
   // gets those, which is exactly what its dumb painter draws
-  CURSOR_HOME = capOr('home', 'ho', '|\b^', '\x1b[H');
+  CURSOR_HOME = terminalCapability('home', 'ho') ?? '|\b^';
   cursorToCapability = terminalCapability('cup', 'cm') ??
     '\x1b[%i%p1%d;%p2%dH';
   // less does NOT guess at "el"/"ed": a terminal without them gets the
   // empty string and missing_cap (screen.c:1613, :1618), so nothing at
   // all is written where the clear would go. Guessing ESC[K put the
   // one escape sequence a dumb terminal ever saw into its output.
-  CLEAR_LINE = capOr('el', 'ce', '', '\x1b[K');
-  CLEAR_BELOW = capOr('ed', 'cd', '', '\x1b[J');
-  CLEAR_SCREEN = capOr('clear', 'cl', '\n\n', '\x1b[H\x1b[2J');
+  CLEAR_LINE = terminalCapability('el', 'ce') ?? '';
+  CLEAR_BELOW = terminalCapability('ed', 'cd') ?? '';
+  CLEAR_SCREEN = terminalCapability('clear', 'cl') ?? '\n\n';
   // less's sc_addline is "al" or "ri", whichever is cheaper, and EMPTY
   // when the terminal has neither - which sets no_back_scroll and
   // forces a repaint on every backward movement (screen.c:1707)
   REVERSE_INDEX = terminalCapability('ill', 'al') ??
-    terminalCapability('ri', 'sr') ?? (terminfoAnswered() ? '' : '\x1bM');
+    terminalCapability('ri', 'sr') ?? '';
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
   // less's attribute exits go through tmodes(..., "sgr0", ..., "me")
