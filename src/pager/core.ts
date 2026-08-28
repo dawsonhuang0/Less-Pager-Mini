@@ -1349,7 +1349,11 @@ let heldKeyBytes = '';
  * leave the screen stale until the next keypress.
  */
 function keyHandler(data: Buffer): void {
-  keyTrace('key ' + [...data].map(b => b.toString(16).padStart(2, '0')).join(' '));
+  // data arrives as a STRING once setEncoding is on, so the bytes have
+  // to be taken from the code points rather than iterated as a Buffer
+  keyTrace('key ' + [...String(data)]
+    .map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ') +
+    ` held=${JSON.stringify(heldKeyBytes)} gate=${gateIsOpen()}`);
 
   // a (press RETURN) gate owns the keyboard while it is up, and both
   // it and this listen to the same stream: the gate's own listener
