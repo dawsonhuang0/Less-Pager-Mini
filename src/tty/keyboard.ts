@@ -111,7 +111,16 @@ export function openTtyKeyboard(): boolean {
   // session whose stdin is a PIPE has no keyboard to be had, where
   // less has one.
   if (process.platform === 'win32') {
-    return tty.isatty(0) ? attach(0) : false;
+    // and node's console reader IS process.stdin. A SECOND
+    // tty.ReadStream over the same descriptor is not: libuv gives an
+    // fd one handle, so the new one constructs happily and then reads
+    // nothing - the pager opened and no key ever arrived.
+    if (process.stdin.isTTY !== true) return false;
+
+    stream = process.stdin as tty.ReadStream;
+    ttyFd = 0;
+
+    return true;
   }
 
   // less's open_tty (ttyin.c:67) tries THREE things in order and cannot

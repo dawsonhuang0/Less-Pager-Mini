@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import fs from 'fs';
-import tty from 'tty';
 
 import {
   keyboard,
@@ -168,24 +167,41 @@ describe('self SIGINT bookkeeping', () => {
 });
 
 describe('tty opening and dimensions', () => {
-  it('windows: takes the console node already has, and opens no device',
+  it('windows: is node\'s own stdin, not a device and not a second handle',
     () => {
       // less CreateFile()s "CONIN$" (ttyin.c) because C can; node
       // cannot - libuv hands CreateFileW a \\?\-prefixed path and the
       // prefix turns the DOS device namespace off. MEASURED on Windows
       // 11 / node 22, in Windows Terminal and VS Code alike: every
-      // spelling fails while fds 0, 1 and 2 are all consoles. So the
-      // name is not tried at all there - copying the mechanism was
-      // what stopped the session starting.
+      // spelling fails while fds 0, 1 and 2 are all consoles.
+      //
+      // And a second tty.ReadStream over fd 0 is not the answer
+      // either. libuv gives a descriptor ONE handle, so the new one
+      // constructs and then reads nothing: MEASURED on the same box,
+      // the pager opened and no key ever arrived. process.stdin is the
+      // reader node already made for that console.
       setPlatform('win32');
+      setTty(process.stdin, true);
 
       const named = vi.spyOn(fs, 'openSync');
-      const asked = vi.spyOn(tty, 'isatty').mockReturnValue(false);
 
-      expect(openTtyKeyboard()).toBe(false);
-      expect(asked).toHaveBeenCalledWith(0);
+      expect(openTtyKeyboard()).toBe(true);
+      expect(keyboard()).toBe(process.stdin);
+      expect(keyboardFd()).toBe(0);
       expect(named).not.toHaveBeenCalled();
     });
+
+  it('windows: has no keyboard when stdin is a pipe', () => {
+    // fds 1 and 2 are consoles there too, but they are console OUTPUT:
+    // a ReadStream over either constructs and then delivers no key,
+    // which would hang the pager with nothing that could quit it. less
+    // CreateFile()s CONIN$ and pages on; node can reach console input
+    // no other way.
+    setPlatform('win32');
+    setTty(process.stdin, false);
+
+    expect(openTtyKeyboard()).toBe(false);
+  });
 
   it('falls back to fd 2 when no terminal can be opened', () => {
     // less's open_tty tries ttyname(2), then "/dev/tty", then fd 2
