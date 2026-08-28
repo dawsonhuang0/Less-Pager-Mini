@@ -3349,6 +3349,22 @@ function suspendSelf(): void {
   setKeyboardRaw(true);
   keyboard().resume();
   enterScreen();
+
+  // nothing is open on this screen: it has been through a full leave
+  // and re-enter (\e[?1049l then \e[?1049h) and a terminal restores
+  // the alternate buffer on the way back, so what is showing is the
+  // OLD screen, prompt row included.
+  //
+  // cmd_exec's flag said otherwise. It means "the bottom row is
+  // already cleared for me" - less hides the ":" before slow work
+  // (command.c) - and the prompt trusts it and goes out bare. So the
+  // resume wrote ":\e[K" with no CR and no CUP, landing beside the
+  // restored prompt: MEASURED through $LMN_OUT_TRACE, scroll then ^Z
+  // then fg leaves "::" on the bottom row, the second one at column 1.
+  // resetRender() alone does not cover it - that clears forw_prompt,
+  // and the trace showed forwPrompt=false with cmdExecOpened=true.
+  search.cmdExecOpened = false;
+  resetRender();
   calculateDimensions();
   pagerInput?.rebuild();
   calculateEOF(session.content);
