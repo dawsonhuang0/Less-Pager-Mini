@@ -366,8 +366,13 @@ const keys: Record<string, Actions> = {
   '\x71': 'EXIT', // q
   '\x51': 'EXIT', // Q
 
-  // force exit
-  '\x1A': 'FORCE_EXIT', // ^Z
+  // NOT ^Z. That is VSUSP, which a terminal driver turns into SIGTSTP
+  // before any program sees the byte - which is why less binds it
+  // nowhere: CONTROL('Z') appears nowhere in decode.c, and its `ZZ`
+  // quit is two capital Zs (decode.c:236). node's raw mode clears
+  // ISIG, so the byte reaches us instead, and binding it here made ^Z
+  // EXIT the pager where less suspends. core.ts raises the signal
+  // instead, from SIGNAL_KEYS.
 
   // (*) forward one line (or (N) lines)
   '\x65': 'LINE_FORWARD', // e
