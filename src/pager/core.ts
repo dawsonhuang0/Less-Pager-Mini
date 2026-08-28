@@ -67,7 +67,7 @@ import { openLesskeyView, exitLesskeyView, isLesskeyViewSession,
 import { LESS_VERSION } from "../lesskey";
 
 import { raiseAbort, clearAbort, ungotIsLive, consumeInterrupt,
-  abortSigs, releaseGateOnInterrupt }
+  releaseGateOnInterrupt }
   from "../tty/keyboard";
 
 import { getAction, isKeyPrefix, splitKeys, kentSequence, kentToNewline,
@@ -1368,39 +1368,46 @@ function keyHandler(data: Buffer): void {
 }
 
 /**
- * Whether a ^C is less's interrupt.
+ * The interrupt, decided here and from the raw bytes alone.
  *
- * It is a KERNEL signal in less, never a byte. og's raw_mode leaves
- * ISIG alone (screen.c set_termio_flags touches five lflag bits and
- * ISIG is not one), so on a terminal that generates signals the byte
- * never arrives at all - and on one that does NOT, 0x03 is an
- * ordinary unbound character: it is in neither cmdtable nor edittable
- * (decode.c), and check_poll compares the byte against intr_char (^X)
- * alone, ungetcc_backing everything else. That is why less cannot be
- * ^C'd out of F under -isig, measured by hand and reproduced on a pty
- * with ISIG cleared.
+ * Nothing asks the terminal, the driver or the OS what a ^C meant. The
+ * pager reads its own input and 0x03 in it IS the interrupt - one
+ * decision, in one place, on the bytes we were handed.
  *
- * So the byte counts only where no kernel will raise the signal for
- * us: node's raw mode clears ISIG and offers no way back, so the byte
- * is the ONLY spelling a typed ^C has. We used to keep the signal by
- * driving termios through `stty`, which cost a process per change and
- * gave one key two models; raiseSigint gives the byte the signal's
- * reach instead - it kills the process GROUP, so `cmd | lmn` and ^C
- * still takes the writer with it.
+ * It has to be. node's raw mode clears ISIG and offers no way back, so
+ * a typed ^C never reaches us as a signal at all; the byte is its only
+ * spelling. We used to keep the signal by driving termios through
+ * `stty`, which cost a process per change and gave one key two models -
+ * on some terminals a signal, on others a byte, and every reader of it
+ * had to ask which. That is gone.
  *
- * On a terminal whose ISIG is off, og cannot be interrupted at all: it
- * ungetcc_backs the 0x03 and the scroll runs to the end of the
- * backlog. We read it as the interrupt anyway, because "you cannot
- * stop it" is not an answer a pager gets to give. That is the one
- * place here that knowingly leaves og.
+ * less is in the other position and can afford to be: its raw_mode
+ * leaves ISIG alone (set_termio_flags touches five lflag bits and ISIG
+ * is not one), so on a terminal that generates signals the byte never
+ * arrives - and on one whose ISIG is off, less cannot be ^C'd at all.
+ * It ungetcc_backs the 0x03, which is in neither cmdtable nor
+ * edittable, and check_poll compares only against intr_char (^X,
+ * decode.c). Measured by hand and reproduced on a pty with ISIG
+ * cleared: less cannot be interrupted out of F there. We read it as
+ * the interrupt anyway, because "you cannot stop it" is not an answer
+ * a pager gets to give. That is the one place here that knowingly
+ * leaves less.
+ *
+ * A signal still ARRIVES sometimes - `kill -INT`, or a group signal
+ * someone else raised - and onSigint handles that. It is a different
+ * event from a typed key, and it is no longer how a typed key is
+ * recognised.
  */
-function intrIsByte(): boolean {
-  return true;
+const INTR = '\x03';
+
+/** Whether a chunk of raw input carries the interrupt. */
+function hasInterrupt(text: string): boolean {
+  return text.includes(INTR);
 }
 
-/** True when this key is the interrupt rather than a plain ^C byte. */
+/** True when this key is the interrupt. */
 function isInterrupt(key: string): boolean {
-  return key === '\x03' && (intrIsByte() || abortSigs());
+  return key === INTR;
 }
 
 async function keyHandlerKeys(data: Buffer): Promise<void> {
@@ -1454,7 +1461,7 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   // the whole chunk aborted the paints of those first four j's too.
   // It is raised where the ^C is actually reached: in the key loop
   // below, or by the poll when one is typed during the work.
-  if (intrIsByte() && text.includes('\x03')) {
+  if (hasInterrupt(text)) {
     // less's ISIG: the tty driver FLUSHES the input queue when it
     // generates SIGINT, so every key typed before the ^C is thrown
     // away by the KERNEL and less never sees them.
@@ -1478,19 +1485,19 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
     // LESS_SCREENFILL_TIME expires. Queue ordinary keys for the command
     // loop, but let ^C interrupt the fill immediately.
     if (pipeFilling() && screenFillGrace() &&
-        !(intrIsByte() && text.includes('\x03'))) {
+        !hasInterrupt(text)) {
       session.fillKeys.push(text);
       return;
     }
 
-    if ((intrIsByte() && text.includes('\x03')) ||
+    if (hasInterrupt(text) ||
         text.includes(optIntrChar())) {
       if (pendingScroll.rows) {
-        abortPendingScroll(intrIsByte() && text.includes('\x03'));
+        abortPendingScroll(hasInterrupt(text));
       } else {
         // less's ^C is a SIGINT whose u_interrupt handler bells; the
         // --intr char reaches the read silently
-        if (intrIsByte() && text.includes('\x03')) ringBell();
+        if (hasInterrupt(text)) ringBell();
         abortPipeFill();
       }
 
@@ -1498,7 +1505,7 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
       // interrupt are still unread in less's tty buffer and run as
       // commands
       const cut = Math.max(
-        text.lastIndexOf('\x03'), text.lastIndexOf(optIntrChar()));
+        text.lastIndexOf(INTR), text.lastIndexOf(optIntrChar()));
       const tail = text.slice(cut + 1);
       if (tail && !session.exited) keyHandler(Buffer.from(tail));
 
@@ -1518,13 +1525,13 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   // a movement/search/G wait over a growing spool is the pipe read
   // itself: ^C or --intr abandons it and restores bounded read-ahead,
   // like less's READ_INTR breaking out of a blocked pipe read
-  if (((intrIsByte() && text.includes('\x03')) ||
+  if ((hasInterrupt(text) ||
       text.includes(optIntrChar())) && pagerInput?.interrupt?.()) {
-    if (intrIsByte() && text.includes('\x03')) ringBell();
+    if (hasInterrupt(text)) ringBell();
     render(session.content, session.buffer);
 
     const cut = Math.max(
-      text.lastIndexOf('\x03'), text.lastIndexOf(optIntrChar()));
+      text.lastIndexOf(INTR), text.lastIndexOf(optIntrChar()));
     const tail = text.slice(cut + 1);
     if (tail && !session.exited) keyHandler(Buffer.from(tail));
 
@@ -1574,7 +1581,7 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   //
   // I had this backwards at first - keeping the leading keys and
   // dropping the trailing ones - which matched only the first shape.
-  const intr = intrIsByte() ? chunk.indexOf('\x03') : -1;
+  const intr = chunk.indexOf(INTR);
 
   if (intr > 0) {
     chunk.splice(0, intr);
@@ -3198,7 +3205,15 @@ function onTerminate(): void {
   if (!session.exited) session.exit();
 }
 
-/** Treats an external SIGINT as the ^C key, like less's u_interrupt. */
+/**
+ * An EXTERNAL SIGINT - `kill -INT`, or a group signal someone else
+ * raised - treated as the ^C key, like less's u_interrupt.
+ *
+ * Not how a typed ^C is recognised. That is decided from the raw input
+ * by hasInterrupt(), because node's raw mode clears ISIG and a typed
+ * ^C never becomes a signal at all. This is the other event, and it
+ * ends up at the same place: handleKey(INTR) below.
+ */
 function onSigint(): void {
   // our own raiseSigint echo: the typed ^C's byte path already ran
   if (wasSelfSigint()) return;
@@ -3226,7 +3241,10 @@ function onSigint(): void {
   dropQueuedKeys();
 
   releaseGateOnInterrupt();
-  handleKey('\x03');
+
+  // fed back through the ordinary input path, so a signal and a typed
+  // key end in the SAME decision rather than each having their own
+  handleKey(INTR);
 }
 
 /** Runs the $LESS_SIGUSR1 keys on SIGUSR1, like less's sigusr(). */
