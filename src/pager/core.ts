@@ -1140,14 +1140,14 @@ const acts: Record<Actions, () => void | Promise<void>> = {
         stepFileTarget(1, bufferToNum(session.buffer) || 1) !== null) {
       exitHelp();
     }
-    stepFile(1);
+    stepFile(1, stepOffStartupHelp);
   },
   PREV_FILE: () => {
     if (mode.HELP &&
         stepFileTarget(-1, bufferToNum(session.buffer) || 1) !== null) {
       exitHelp();
     }
-    stepFile(-1);
+    stepFile(-1, stepOffStartupHelp);
   },
   // less's A_INDEX_FILE has no helpfile guard either: :x edits the
   // n-th file, leaving help
@@ -3426,6 +3426,21 @@ function leaveStartupHelp(): void {
   // to restore - and switchToFile is about to replace it anyway
   mode.HELP = false;
   overlays.length = 0;
+}
+
+/**
+ * Steps off a startup help page onto another file, closing the page.
+ *
+ * The page is spent once you have navigated away from it by hand: a
+ * :n or :p is a move within the list, not a detour, so there is
+ * nothing to come back to. Reaching a file with :e leaves it standing
+ * - that ADDS a file rather than moving among them, and the page stays
+ * until a new help replaces it.
+ */
+function stepOffStartupHelp(): void {
+  mode.HELP = false;
+  overlays.length = 0;
+  closeStaleHelp();
 }
 
 /**

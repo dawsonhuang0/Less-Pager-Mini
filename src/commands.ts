@@ -143,6 +143,15 @@ async function finishSwitch(target: number, lines: string[]): Promise<void> {
   files.index = target;
   files.newFile = true;
 
+  // arriving BACK on the startup help page puts its prompt back:
+  // being on that entry is what "in the help" means for it, so :p
+  // returning to it should look like the page you started on, not
+  // like a file that happens to hold help text. mode.HELP went false
+  // when the first switch took us off it and nothing else restores it.
+  if (session.startupHelp) {
+    mode.HELP = files.list[target].path === '-';
+  }
+
   // every opened file joins the examine history, like edit_ifile
   addExamineHistory(files.list[target].path);
 
@@ -301,8 +310,22 @@ export async function spanningSearch(
   }
 }
 
-export async function stepFile(delta: 1 | -1): Promise<void> {
-  if (mode.HELP) {
+export async function stepFile(
+  delta: 1 | -1,
+  leaveHelp?: () => void
+): Promise<void> {
+  // an `h` overlay has no place in the file list, so there is nothing
+  // to step to from it and the key rings.
+  //
+  // A STARTUP help page is an entry like any other, and being ON it is
+  // a fact about which ENTRY is current - not about mode.HELP, which
+  // went false the moment the first :e switched away and does not come
+  // back when :p returns to the page. So the test is the entry, and
+  // stepping off it is an ordinary switch that spends the page.
+  const onStartupHelp = session.startupHelp &&
+    files.current !== null && files.current.path === '-';
+
+  if (mode.HELP && !onStartupHelp) {
     ringBell();
     return;
   }
@@ -316,7 +339,14 @@ export async function stepFile(delta: 1 | -1): Promise<void> {
     return;
   }
 
-  await switchToFile(target).done;
+  const opened = switchToFile(target);
+
+  // AFTER the switch, so the page is still in the list while the
+  // target is chosen and loaded - files.current holds the entry, so
+  // removing one behind it cannot repoint anything
+  if (onStartupHelp && opened.ok) leaveHelp?.();
+
+  await opened.done;
 }
 
 export async function removeFile(): Promise<void> {
