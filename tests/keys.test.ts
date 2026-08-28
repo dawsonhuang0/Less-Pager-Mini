@@ -60,10 +60,14 @@ it('binds arrow keys to what terminfo says, like less', () => {
     // whatever this terminal reports is the binding...
     if (seq) expect(getAction(seq)).toBe(action);
 
-    // ...and the CSI spelling is bound only if terminfo named it,
-    // which no common TERM does — they all report the SS3 form
+    // ...and the CSI spelling is bound TOO, which is not less's rule.
+    // A terminal does not necessarily send one spelling for every
+    // source of a key: we send smkx, so the keyboard arrows arrive as
+    // ESC O B, while a wheel tick translated to an arrow commonly
+    // ignores DECCKM and arrives as ESC [ B. Binding only what
+    // terminfo named left the keyboard working and the wheel dead.
     const csi = '\x1B[' + { kcud1: 'B', kcuu1: 'A', kcuf1: 'C', kcub1: 'D' }[ti];
-    if (seq !== csi) expect(getAction(csi)).toBeUndefined();
+    expect(getAction(csi)).toBe(action);
   }
 
   expect(getAction('\x1B[1;5C')).toBe('LAST_COL');
@@ -122,39 +126,18 @@ it('falls back to ANSI only when no terminal described the session',
     }
   });
 
-it('leaves a described terminal\'s missing keys unbound, like less',
-  async () => {
-    // TERM=dumb HAS an entry and no kcud1, so less binds no arrow at
-    // all and a second spelling rings the bell. A fallback here would
-    // give a dumb terminal keys less says it does not have - which is
-    // what v1.12.1 did unconditionally, and the half of its rule that
-    // does not survive.
-    const realTerm = process.env.TERM;
-
-    try {
-      process.env.TERM = 'dumb';
-      vi.resetModules();
-
-      const { resetTerminfo } = await import('../src/tty/terminal');
-
-      resetTerminfo();
-
-      const { getAction: onDumb } = await import('../src/keys');
-
-      expect(onDumb('\x1b[B')).toBeUndefined();
-      expect(onDumb('\x1bOB')).toBeUndefined();
-      expect(onDumb('\x1b[5~')).toBeUndefined();
-
-      // an ordinary key is unaffected: this is about terminfo, not
-      // about the table
-      expect(onDumb('j')).toBe('LINE_FORWARD');
-    } finally {
-      if (realTerm === undefined) delete process.env.TERM;
-      else process.env.TERM = realTerm;
-
-      vi.resetModules();
-    }
-  });
+it('binds a dumb terminal\'s arrows too, which less does not', () => {
+  // A DELIBERATE divergence, and the price of the rule above. TERM=dumb
+  // has a real entry with no kcud1, so less binds no arrow at all and a
+  // second spelling rings the bell. We bind every spelling on every
+  // terminal, because one binary cannot know which of them a given
+  // terminal will use for a given source of the key - see keys.ts.
+  //
+  // Asserted so it stays a decision: if the strict rule goes back, this
+  // is the test that says what changed.
+  expect(getAction('\x1b[B')).toBe('LINE_FORWARD');
+  expect(getAction('\x1bOB')).toBe('LINE_FORWARD');
+});
 
 it('maps ESC combinations', () => {
   expect(getAction('\x1Bv')).toBe('WINDOW_BACKWARD');

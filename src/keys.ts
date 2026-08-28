@@ -1,6 +1,6 @@
 import { Actions } from "./state/interfaces";
 
-import { terminalCapability, terminfoAnswered } from './tty/terminal';
+import { terminalCapability } from './tty/terminal';
 
 /**
  * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),
@@ -82,40 +82,37 @@ export function getAction(key: string): Actions | undefined {
 }
 
 /**
- * The special keys: the capability less reads for each, and what the
- * key spells when NO terminal database described this session.
+ * The special keys: the capability less reads for each, and every
+ * other spelling the key is known by.
  *
- * less's rule, which applies whenever one did: a special key is
- * EXACTLY what the terminal says it is. less reserves a slot per key
- * in its command table and fills it from terminfo (special_key_str,
- * screen.c:1218); when the capability is missing it writes "\377"
- * (decode.c:390) - a byte no key produces - so the key is genuinely
- * unbound, and a second spelling of an arrow is an ordinary unknown
- * sequence, echoed to the prompt and belled. There is no hardcoded
- * arrow anywhere in less, and TERM=dumb is MEANT to have none.
+ * ALL of them are bound, whatever the terminal said - v1.12.1's rule,
+ * restored in full. Its line was
+ * `terminalCapability(ti, tc) ?? fallback`, and that build is the one
+ * known to work where nothing since has.
  *
- * The fallback is for the case less cannot be in. It links curses, so
- * it always HAS an entry; we read the compiled files ourselves and can
- * find none - on Windows there is no terminfo at all and $TERM is
- * unset. terminfoAnswered() is what tells the two apart, and it counts
- * only a terminal that was NAMED: reaching an entry through
- * DEFAULT_TERM means "unknown", which is less's way of saying it does
- * not know, not an answer about this terminal.
+ * The reason it has to be all of them, rather than the capability
+ * plus a fallback when nothing answered: a terminal does not
+ * necessarily send the same spelling for every source of the same
+ * key. We send smkx, asking for DECCKM, and the KEYBOARD arrows come
+ * back as \eOA - but a WHEEL tick translated to an arrow commonly
+ * ignores DECCKM and arrives as \e[A. Binding only what terminfo
+ * named left the keyboard working and the wheel dead, on a terminal
+ * that had described itself perfectly well.
  *
- * So a described terminal gets less's rule exactly, and an undescribed
- * one gets the ANSI spellings instead of no key at all.
+ * TODO: this is not less's rule, and less's is the better one where
+ * it can be applied. less fills each slot from terminfo
+ * (special_key_str, screen.c:1218) and writes "\377" when the
+ * capability is missing (decode.c:390), so a key the entry omits is
+ * genuinely unbound and a second spelling rings the bell - TERM=dumb
+ * is MEANT to have no arrows, and now gets them. less can afford that
+ * because it links curses and always HAS an entry, and because it is
+ * not trying to be one binary across terminals that disagree about
+ * which spelling a wheel produces. Putting it back means knowing what
+ * every source of a key actually sends, measured, not assumed:
+ * $LMN_KEY_TRACE prints exactly that.
  *
- * SPELLINGS, plural, and that is the whole point. We send smkx on an
- * undescribed terminal - constants.ts guesses "\e[?1h\e=" for the same
- * reason this table guesses - which asks for DECCKM, and a keypad in
- * application mode answers \eOA where one that ignored the request
- * answers \e[A. Binding one of them is a coin toss: MEASURED, binding
- * only the CSI form left every arrow dead on a terminal that honoured
- * the smkx we had just sent it. v1.12.1 bound both and worked
- * everywhere, which is what this restores.
- *
- * A DESCRIBED terminal still gets exactly one - whatever it named -
- * because it has told us which mode it will answer in.
+ * The SGR wheel reports are bound separately in getAction and are
+ * unaffected either way; they were identical in v1.12.1.
  */
 const SPECIAL_KEYS: Array<[string, string, string[], Actions]> = [
   ['kcuf1', 'kr', ['\x1b[C', '\x1bOC'], 'SET_HALF_SCREEN_RIGHT'],
@@ -145,16 +142,13 @@ function boundKeys(): Record<string, Actions> {
 
   bound = { ...keys };
 
-  // a terminal that was described has said everything there is to
-  // say, including by omission
-  const described = terminfoAnswered();
-
   for (const [ti, tc, fallbacks, action] of SPECIAL_KEYS) {
     const seq = terminalCapability(ti, tc);
 
     if (seq) bound[seq] = action;
-    else if (!described) for (const spelling of fallbacks) {
-      bound[spelling] = action;
+
+    for (const spelling of fallbacks) {
+      if (!(spelling in bound)) bound[spelling] = action;
     }
   }
 
