@@ -939,7 +939,14 @@ export function glob(pattern: string): string[] {
   if (!matched.length) return [plain];
 
   // shell-glob answers with "/" separators "as zsh writes them"; a
-  // name that went in with "\\" comes back with it
+  // name that went in with "\\" comes back with it.
+  //
+  // less does the same by construction: its Windows lglob _splitpath()s
+  // the ORIGINAL pattern and prefixes that drive+dir to each matched
+  // basename (filename.c:716), so whatever separator was typed is what
+  // comes back. A MIXED pattern is where we choose and it does not -
+  // "C:\\dir/sub\\*" keeps its mixture there and comes back all "\\"
+  // here. One backslash means the name is written the Windows way.
   return backslashed
     ? matched.map(name => name.replace(/\//g, '\\'))
     : matched;
