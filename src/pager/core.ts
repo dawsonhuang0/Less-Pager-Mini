@@ -300,6 +300,7 @@ import { wrapLongLines } from "../lines/wrapLongLines";
 
 import {
   ALTERNATE_CONSOLE_ON,
+  ALTERNATE_SCROLL_ON,
   ON_ALTERNATE_SCREEN,
   KEYPAD_ON,
   CLEAR_LINE,
@@ -3074,6 +3075,13 @@ function init() {
     // -X leaves the init/deinit strings unsent, like less
     if (!optNoInit()) {
       putstr(ALTERNATE_CONSOLE_ON);
+
+      // alternate scroll, which only applies while that screen is up:
+      // it is what turns a wheel tick into cursor keys, and without it
+      // the terminal sends nothing at all for one. See constants.ts -
+      // a deliberate divergence, and the reason the wheel works with
+      // no --mouse flag
+      putstr(ALTERNATE_SCROLL_ON);
 
       // less's term_init lower_lefts after switching to the alternate
       // screen (screen.c:2061), which is what makes a short first

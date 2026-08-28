@@ -10,6 +10,8 @@ import { resetRender, screenEntered } from '../helpers';
 
 import {
   ALTERNATE_CONSOLE_ON,
+  ALTERNATE_SCROLL_ON,
+  ALTERNATE_SCROLL_OFF,
   ALTERNATE_CONSOLE_OFF,
   KEYPAD_ON,
   KEYPAD_OFF,
@@ -109,6 +111,9 @@ export function leaveScreenCodes(): void {
     if (!optNoKeypad()) putstr(KEYPAD_OFF);
 
     if (!optNoInit()) {
+      // off before the screen goes, so the terminal is left as we
+      // found it - v1.12.1's order
+      putstr(ALTERNATE_SCROLL_OFF);
       putstr(ALTERNATE_CONSOLE_OFF);
     }
   }
@@ -138,6 +143,12 @@ export function enterScreen(): void {
   if (!mode.DUMB) {
     if (!optNoInit()) {
       putstr(ALTERNATE_CONSOLE_ON);
+
+      // ...and alternate scroll AFTER it, since it only applies while
+      // the alternate screen is up. This is what makes a wheel tick
+      // arrive at all: without it the terminal sends nothing and no
+      // key table can bind a key that never comes
+      putstr(ALTERNATE_SCROLL_ON);
     }
 
     if (!optNoKeypad()) putstr(KEYPAD_ON);

@@ -165,6 +165,25 @@ const SYNC_OFF = '\x1b[?2026l';
  *  testing sc_init and sc_deinit before it homes to the lower left. */
 export let ON_ALTERNATE_SCREEN = true;
 
+/**
+ * DECSET 1007, alternate scroll mode: while the alternate screen is
+ * up, the terminal turns a wheel tick into cursor keys.
+ *
+ * A DELIBERATE divergence. less sends no ?1007 anywhere and leans on
+ * whatever the terminal defaults to - it can, because its wheel
+ * arrives as a mouse REPORT it asked for with --mouse, and without
+ * that flag its wheel does nothing at all (mouse_wheel_up returns
+ * A_NOACTION unless emouse & EMOUSE_VSCROLL, decode.c:621).
+ *
+ * We ask for it, and that is what makes a wheel work with no flag: on
+ * a terminal whose alternate-scroll default is off, a tick produces
+ * NOTHING - no report, no key, nothing to bind - and no key table can
+ * rescue a key that never arrives. a55a617 removed this for parity and
+ * took the wheel with it; it is measured back.
+ */
+export const ALTERNATE_SCROLL_ON = '\x1b[?1007h';
+export const ALTERNATE_SCROLL_OFF = '\x1b[?1007l';
+
 export let ALTERNATE_CONSOLE_ON = '\x1b[?1049h';
 export let ALTERNATE_CONSOLE_OFF = '\x1b[?1049l';
 

@@ -23,6 +23,8 @@ import { config, mode, DEFAULT_COLUMN, DEFAULT_WINDOW }
 import {
   ALTERNATE_CONSOLE_ON,
   ALTERNATE_CONSOLE_OFF,
+  ALTERNATE_SCROLL_ON,
+  ALTERNATE_SCROLL_OFF,
   KEYPAD_ON,
   KEYPAD_OFF,
   MOUSE_ON,
@@ -115,6 +117,9 @@ describe('terminal mode transitions', () => {
       MOUSE_OFF + MOUSE_SGR_OFF,
       BRACKETED_PASTE_OFF,
       KEYPAD_OFF,
+      // and alternate scroll off before the screen it applied to, so
+      // the terminal is left exactly as it was found
+      ALTERNATE_SCROLL_OFF,
       ALTERNATE_CONSOLE_OFF,
     ]);
     expect(fake.setKeyboardRaw).toHaveBeenCalledWith(false);
@@ -186,6 +191,12 @@ describe('terminal mode transitions', () => {
 
     expect(writes()).toEqual([
       ALTERNATE_CONSOLE_ON,
+      // alternate scroll goes on AFTER the screen it applies to: it is
+      // what turns a wheel tick into cursor keys, and without it the
+      // terminal sends nothing for one. A deliberate divergence -
+      // less sends no ?1007 anywhere, because its wheel arrives as a
+      // report it asked for with --mouse
+      ALTERNATE_SCROLL_ON,
       KEYPAD_ON,
       MOUSE_SGR_ON + MOUSE_ON,
       BRACKETED_PASTE_ON,
