@@ -65,7 +65,7 @@
   "dependencies": {
     "char-width": "^1.0.0",
     "posix-regex": "^1.0.1",
-    "shell-glob": "^1.0.0"
+    "shell-glob": "^1.1.0"
   },
   "bin": {
     "lmn": "dist/cli.js"

@@ -912,10 +912,22 @@ export function glob(pattern: string): string[] {
   // nothing and keeps :e working on a machine whose shell is gone.
   // A shell that RAN and matched nothing never arrives here - that is
   // an answer, and it stays less's.
+  // shell-glob's patterns are written with "/" on every platform,
+  // because "\\" is its ESCAPE character - its README says so, and
+  // MEASURED: globSync("sub\\*") answers ["sub*"], the separator eaten
+  // and the star escaped. Windows users type "\\", so the translation
+  // is ours to do, both ways: the pattern goes in with "/", and names
+  // come back wearing whichever separator the pattern wore. (Its
+  // windowsPaths option needs nothing from us - it follows
+  // process.platform, so a drive letter and a UNC share are already
+  // read as absolute here.)
+  const backslashed = plain.includes('\\');
+  const slashed = backslashed ? plain.replace(/\\/g, '/') : plain;
+
   let matched: string[];
 
   try {
-    matched = globSync(plain);
+    matched = globSync(slashed);
   } catch (error) {
     emitShellError(String((error as Error).message ?? '').trim() + '\n');
 
@@ -924,7 +936,13 @@ export function glob(pattern: string): string[] {
 
   // like the unix branch, and like less: a pattern that expands to
   // nothing comes back as itself, for the caller to try opening
-  return matched.length ? matched : [plain];
+  if (!matched.length) return [plain];
+
+  // shell-glob answers with "/" separators "as zsh writes them"; a
+  // name that went in with "\\" comes back with it
+  return backslashed
+    ? matched.map(name => name.replace(/\//g, '\\'))
+    : matched;
 }
 
 /**
