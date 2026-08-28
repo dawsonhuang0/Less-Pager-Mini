@@ -2052,6 +2052,9 @@ let mouseReport: { sgr: boolean, buf: string } | null = null;
 
 async function dispatchKey(sequence: string): Promise<void> {
   session.key = sequence;
+  keyTrace('dispatch ' + [...sequence]
+    .map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ') +
+    ' -> ' + (getAction(sequence) ?? '(none)'));
   guardTrace('KEY ' + JSON.stringify(sequence) +
     ' msg=' + JSON.stringify(search.message.slice(0, 24)) +
     ' hilite=' + search.highlight + ' retry=' + posixRetry.pending);
