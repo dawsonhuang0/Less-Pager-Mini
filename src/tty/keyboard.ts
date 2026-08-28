@@ -41,7 +41,13 @@ export const keyboardFd = (): number => ttyFd ?? 0;
  * an interrupt, because there the kernel can no longer raise one.
  */
 export function setKeyboardRaw(on: boolean): void {
-  if (stream.isTTY && rawMode(ttyFd ?? 0, on)) return;
+  const byTermios = stream.isTTY && rawMode(ttyFd ?? 0, on);
+
+  keyTrace(`raw ${on} isTTY=${stream.isTTY} termios=${byTermios} ` +
+    `isStdin=${(stream as unknown) === process.stdin} ` +
+    `hasSetRawMode=${typeof stream.setRawMode}`);
+
+  if (byTermios) return;
 
   // a keyboard that is not a terminal has no modes to set: og's
   // tcsetattr simply fails on such an fd and it carries on (the fd 2
@@ -90,6 +96,24 @@ function attach(fd: number): boolean {
   }
 }
 
+/**
+ * A trail through the key path, for a platform this repo cannot be run
+ * on. Writes to the file $LMN_KEY_TRACE names, and does nothing at all
+ * when it names none - a terminal we cannot see is the one place where
+ * a printf beats any amount of reading.
+ */
+export function keyTrace(what: string): void {
+  const file = process.env.LMN_KEY_TRACE;
+
+  if (!file) return;
+
+  try {
+    fs.appendFileSync(file, what + '\n');
+  } catch {
+    // a trace that cannot be written is not worth an error
+  }
+}
+
 export function openTtyKeyboard(): boolean {
   // Windows is node's own from end to end, and deliberately so.
   //
@@ -111,6 +135,9 @@ export function openTtyKeyboard(): boolean {
   // session whose stdin is a PIPE has no keyboard to be had, where
   // less has one.
   if (process.platform === 'win32') {
+    keyTrace(`open win32 stdin.isTTY=${process.stdin.isTTY} ` +
+      `isatty0=${tty.isatty(0)} TERM=${process.env.TERM ?? '(unset)'}`);
+
     // and node's console reader IS process.stdin. A SECOND
     // tty.ReadStream over the same descriptor is not: libuv gives an
     // fd one handle, so the new one constructs happily and then reads

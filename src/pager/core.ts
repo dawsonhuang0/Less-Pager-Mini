@@ -21,7 +21,7 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
 
 import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
   setKeyboardRaw,
-  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint,
+  watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyTrace,
   gateReturn, gateReleasedByWinch, gateReleaseKind, gateIsOpen }
   from "../tty/keyboard";
 
@@ -771,6 +771,10 @@ export async function contentPager(
   // a half-read escape sequence never outlives its session
   heldKeyBytes = '';
 
+  keyTrace(`listen isTTY=${keyboard().isTTY} ` +
+    `isStdin=${(keyboard() as unknown) === process.stdin} ` +
+    `paused=${keyboard().isPaused?.()}`);
+
   keyboard().on('data', keyHandler);
 
   // less's getchr on an exhausted keyboard: "EOF on the tty means there
@@ -1345,6 +1349,8 @@ let heldKeyBytes = '';
  * leave the screen stale until the next keypress.
  */
 function keyHandler(data: Buffer): void {
+  keyTrace('key ' + [...data].map(b => b.toString(16).padStart(2, '0')).join(' '));
+
   // a (press RETURN) gate owns the keyboard while it is up, and both
   // it and this listen to the same stream: the gate's own listener
   // takes the key, and this must not run it as a command too
