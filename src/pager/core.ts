@@ -2621,6 +2621,15 @@ async function dispatchKey(sequence: string): Promise<void> {
       return;
     }
 
+    // the search that raised this question is over, and its cmd_exec
+    // clear went on the row the QUESTION then took. Leaving the flag
+    // set told the next prompt the row was still open for it, so the
+    // ":" went out bare and landed after the question instead of
+    // replacing it - "Try again with POSIX RegExp? :", with the
+    // question still sitting there. act() clears this when a command
+    // starts; answering a question is not a command, so nothing did.
+    search.cmdExecOpened = false;
+
     render(session.content, session.buffer);
     return;
   }
