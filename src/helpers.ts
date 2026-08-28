@@ -2191,16 +2191,6 @@ export function markFarBackClear(): void {
     (optClearRepaint() ? CURSOR_HOME : CLEAR_SCREEN);
 }
 
-/**
- * less's DO_SEARCH (command.c:1973): a repeated search runs
- * `mca_search(); cmd_exec();` first, so the search prompt is written
- * over the command line and then cleared away again before anything
- * is painted - a visible "/" flash on every n and N.
- */
-export function markSearchFlash(label: string): void {
-  scrollPrefix = clearBot() + label + clearBot();
-}
-
 /** Marks the next scroll-mode paint as a bare re-edit repaint. */
 export function markBareRepaint(prefix: string = ''): void {
   scrollPrefix = prefix;
