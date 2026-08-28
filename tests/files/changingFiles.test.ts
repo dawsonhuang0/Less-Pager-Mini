@@ -391,10 +391,16 @@ describe('examine expansion', () => {
       expect(expandExamineList(path.join(dir, '*.txt')))
         .toEqual([fileA, fileB]);
 
-      // ...and cannot there. Word splitting is the shell's, not the
-      // matcher's, so an in-process globber never sees the braces -
-      // the one grammar difference the switch makes.
-      expect(expandExamineList(brace)).toEqual([brace]);
+      // ...and here too, since shell-glob 1.2.0: expandWordsSync is the
+      // whole pipeline zsh runs on a word - braces, then ~ and =, then
+      // the globbing - so the stage before matching is supplied where
+      // there is no shell to supply it.
+      expect(expandExamineList(brace)).toEqual([fileA, fileB]);
+
+      // a brace part that matches nothing is still a name the user
+      // asked for, which is what less's edit_list reports per name
+      expect(expandExamineList(path.join(dir, '{a,zz}.txt')))
+        .toEqual([fileA, path.join(dir, 'zz.txt')]);
     } finally {
       opt.useZshGlob = 0;
     }

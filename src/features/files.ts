@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { globSync } from 'shell-glob';
+import { expandWordsSync } from 'shell-glob';
 import os from 'os';
 
 import { Writable } from 'stream';
@@ -914,7 +914,7 @@ export function glob(pattern: string): string[] {
   // an answer, and it stays less's.
   // shell-glob's patterns are written with "/" on every platform,
   // because "\\" is its ESCAPE character - its README says so, and
-  // MEASURED: globSync("sub\\*") answers ["sub*"], the separator eaten
+  // MEASURED: it answers ["sub*"] for "sub\\*", the separator eaten
   // and the star escaped. Windows users type "\\", so the translation
   // is ours to do, both ways: the pattern goes in with "/", and names
   // come back wearing whichever separator the pattern wore. (Its
@@ -927,7 +927,16 @@ export function glob(pattern: string): string[] {
   let matched: string[];
 
   try {
-    matched = globSync(slashed);
+    // expandWordsSync, not globSync: it is the WHOLE pipeline zsh
+    // runs on a word - braces, then ~ and =, then the globbing - and
+    // the earlier stages are exactly what a pager standing in for a
+    // shell has to supply. `{a,b}.txt` becomes two patterns, and a
+    // part that matches nothing comes back as the name the user
+    // asked for, which is what less's edit_list wants per name.
+    // globSync is filename generation alone and leaves a brace
+    // standing, correctly: brace expansion yields words that need not
+    // exist, and a globber returns only what does.
+    matched = expandWordsSync([slashed]);
   } catch (error) {
     emitShellError(String((error as Error).message ?? '').trim() + '\n');
 
