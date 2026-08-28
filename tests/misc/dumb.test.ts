@@ -14,7 +14,6 @@ import { render, resetRender, resetDumbPaint, calculateEOF, freezeFrame,
 import { initTerminalCapabilities, INVERSE_ON, INVERSE_OFF, BOLD_ON,
   UNDERLINE_ON } from '../../src/state/constants';
 
-import { resetTerminfo } from '../../src/tty/terminal';
 
 // mode.DUMB alone is a state no terminal is ever in: less reaches it by
 // loading an entry with no capabilities, which is also what empties
@@ -26,13 +25,11 @@ const realTerm = process.env.TERM;
 
 const useTerm = (term: string): void => {
   process.env.TERM = term;
-  resetTerminfo();
   initTerminalCapabilities();
 };
 
 afterAll(() => {
   process.env.TERM = realTerm;
-  resetTerminfo();
   initTerminalCapabilities();
 });
 

@@ -92,9 +92,6 @@ it('falls back to ANSI only when no terminal described the session',
       delete process.env.TERM;
       vi.resetModules();
 
-      const { resetTerminfo } = await import('../src/tty/terminal');
-
-      resetTerminfo();
 
       const { getAction: guessed } = await import('../src/keys');
 

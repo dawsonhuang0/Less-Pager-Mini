@@ -2,7 +2,7 @@
 import { lgetenv } from '../startup/environment';
 
 import { formatTerminalCapability, terminalCapability, terminalFlag,
-  terminfoAnswered } from '../tty/terminal';
+  dumbCapabilities } from '../tty/terminal';
 
 export const ASCII_REGEX = /^[\x00-\x7F]*$/;
 
@@ -250,9 +250,9 @@ export function initTerminalCapabilities(): void {
   // terminal that answered and said no - "ansi" is one - put an
   // alternate-screen switch on a terminal that has none.
   ALTERNATE_CONSOLE_ON = terminalCapability('smcup', 'ti') ??
-    (terminfoAnswered() ? '' : '\x1b[?1049h');
+    (dumbCapabilities() ? '' : '\x1b[?1049h');
   ALTERNATE_CONSOLE_OFF = terminalCapability('rmcup', 'te') ??
-    (terminfoAnswered() ? '' : '\x1b[?1049l');
+    (dumbCapabilities() ? '' : '\x1b[?1049l');
 
   // less's term_init only treats the screen as an ALTERNATE one when
   // both strings exist and "NR" does not deny it (screen.c:2061); a
@@ -267,9 +267,9 @@ export function initTerminalCapabilities(): void {
   // sequence only when the entry HAS one (screen.c's ltgetstr for
   // "ks"/"ke"), so a terminal that answered without it gets nothing
   KEYPAD_ON = terminalCapability('smkx', 'ks') ??
-    (terminfoAnswered() ? '' : '\x1b[?1h\x1b=');
+    (dumbCapabilities() ? '' : '\x1b[?1h\x1b=');
   KEYPAD_OFF = terminalCapability('rmkx', 'ke') ??
-    (terminfoAnswered() ? '' : '\x1b[?1l\x1b>');
+    (dumbCapabilities() ? '' : '\x1b[?1l\x1b>');
 
   const mouseStart = terminalCapability('MOUSE_START', 'MOUSE_START');
   MOUSE_ON = mouseStart ?? '\x1b[?1000h\x1b[?1002h';
@@ -306,14 +306,14 @@ export function initTerminalCapabilities(): void {
   // keys are accepted and what was typed piles up on the bottom line.
   // v1.12.1 guessed unconditionally and worked; this guesses only
   // where nothing answered.
-  const described = terminfoAnswered();
+  const drawsNothing = dumbCapabilities();
   const capOr = (
     terminfo: string,
     termcap: string,
     absent: string,
     guess: string
   ): string => terminalCapability(terminfo, termcap) ??
-    (described ? absent : guess);
+    (drawsNothing ? absent : guess);
 
   CURSOR_HOME = capOr('home', 'ho', '|\b^', '\x1b[H');
   // the %i converts terminfo's 0-based row and column to ANSI's
@@ -327,7 +327,7 @@ export function initTerminalCapabilities(): void {
   // and EMPTY when the terminal has neither - which sets no_back_scroll
   // and forces a repaint on every backward movement (screen.c:1707)
   REVERSE_INDEX = terminalCapability('ill', 'al') ??
-    terminalCapability('ri', 'sr') ?? (described ? '' : '\x1bM');
+    terminalCapability('ri', 'sr') ?? (drawsNothing ? '' : '\x1bM');
   VISUAL_BELL = terminalCapability('flash', 'vb') ?? null;
 
   // less's attribute exits go through tmodes(..., "sgr0", ..., "me")
@@ -364,8 +364,10 @@ export function initTerminalCapabilities(): void {
  * out as standout on a terminal that has only that. Present, the exit
  * is looked up on its own, then sgr0, then the empty string.
  *
- * `guess` is ours, not less's: it applies only where no terminal entry
- * was found at all, which for less cannot happen (see terminfoAnswered).
+ * `guess` is ours, not less's: there is no terminfo database here to
+ * look a capability up in, so every one of these is hardcoded ANSI
+ * unless $LESS_TERMCAP_* names it - except on a terminal less draws
+ * nothing on, which keeps less's empty answers (see dumbCapabilities).
  */
 function tmodes(
   enterInfo: string,
@@ -380,14 +382,14 @@ function tmodes(
   const enter = terminalCapability(enterInfo, enterCap);
 
   if (enter === undefined) {
-    return terminfoAnswered()
+    return dumbCapabilities()
       ? [defaultEnter, defaultExit]
       : [guessEnter, guessExit];
   }
 
   const exit = terminalCapability(exitInfo, exitCap) ??
     terminalCapability('sgr0', 'me') ??
-    (terminfoAnswered() ? '' : guessExit);
+    (dumbCapabilities() ? '' : guessExit);
 
   return [enter, exit];
 }

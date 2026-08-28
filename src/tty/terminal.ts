@@ -1,4 +1,3 @@
-import { tgetent, tgetflag, tgetnum, tgetstr } from './terminfo';
 
 import fs from 'fs';
 
@@ -149,83 +148,36 @@ export function terminalCapability(
     if (inline !== undefined) return inline;
   }
 
-  // and then the terminal's own strings. less links curses and calls
-  // tgetstr, so this is the tier that normally answers; without it
-  // every caller fell through to its own hardcoded default
-  if (terminfo !== null) {
-    loadTerminfo();
-    const value = tgetstr(terminfo);
-    if (value !== null) return stripPadding(value);
-  }
-
   return undefined;
 }
 
-/**
- * Drops a terminfo padding spec, the way less's tputs does at speed 0.
- *
- * A database string may carry "$<100/>" -- xterm's flash does -- which
- * is an instruction to tputs, not output. less calls
- * setupterm(term, -1, NULL), leaving ospeed 0, so tputs emits no
- * padding at all and the capability goes out bare. Passing the spec
- * through would print "$<100/>" on the screen.
- */
-function stripPadding(value: string): string {
-  return value.replace(/\$<[0-9.]*[*/]*>/g, '');
-}
 
-// less's DEFAULT_TERM (screen.c:133): an unset $TERM still names an
-// entry, and "unknown" is a real one - it is how a terminal with no
-// capabilities at all gets described rather than left undescribed.
-// (less's other spelling, "ansi", is the OS2 build's; node has none.)
-const DEFAULT_TERM = 'unknown';
-
-// tgetent is less's one-time load at init; doing it on first use keeps
-// the $TERM lookup after the environment tiers have been set up
-let terminfoLoaded = false;
-let terminfoEntry = false;
-
-/** Loads the compiled entry for $TERM, once, like less's tgetent. */
-function loadTerminfo(): void {
-  if (terminfoLoaded) return;
-  terminfoLoaded = true;
-
-  const named = terminalEnv();
-
-  // the entry is still LOADED through DEFAULT_TERM, so every lookup
-  // gets less's own answers whatever happens here
-  const found = tgetent(named || DEFAULT_TERM) === 1;
-
-  // ...but reaching one only by falling back is not an answer about
-  // THIS terminal. "unknown" is the entry less loads to say it does
-  // not know which terminal this is - it is why it prints "WARNING:
-  // terminal is not fully functional" - so a session that never named
-  // its terminal has not been described, it has been guessed at.
-  //
-  // MEASURED with $TERM unset before this: terminfoAnswered() true,
-  // CLEAR_LINE "" so no row could be erased, and every special key
-  // unbound. That one boolean is what the two rules below turn on.
-  terminfoEntry = found && named !== '' && named !== undefined;
-}
 
 /**
- * Whether the terminal database described this terminal.
+ * Whether this terminal is one less would draw nothing on.
  *
- * less always has an answer here: it links curses, so a capability the
- * entry omits is genuinely ABSENT and less uses the empty string. We
- * read the compiled entries ourselves, so a miss can also mean we
- * found no database to read - and there the hardcoded ANSI guesses
- * are the better answer. This tells the two apart.
+ * There is no terminfo database here to ask, and deliberately so: less
+ * links curses, and every unix box that has curses also has less
+ * itself, so the platform that needs this pager is the one with no
+ * terminfo at all. Reading a database bought exactly one thing on a
+ * real terminal - MEASURED, 14 of 15 capabilities on xterm-256color
+ * were byte-identical to the values hardcoded here - and cost 364
+ * lines to get it.
+ *
+ * What it did buy is this case, so this case is kept by name. TERM=dumb
+ * has a real entry that omits el, ed, smcup, smkx and every attribute
+ * string, and less answers with the empty string and its missing_cap
+ * painter (screen.c:1613, :1618). Hardcoding ANSI for it would write
+ * escapes to the one terminal less is careful to write none to.
+ *
+ * "unknown" counts for the same reason: it is the entry less loads
+ * when it does not know what it is talking to, and why it prints
+ * "WARNING: terminal is not fully functional".
  */
-export function terminfoAnswered(): boolean {
-  loadTerminfo();
-  return terminfoEntry;
-}
+export function dumbCapabilities(): boolean {
+  const term = terminalEnv();
 
-/** Forgets the loaded entry, so a fresh session re-reads $TERM. */
-export function resetTerminfo(): void {
-  terminfoLoaded = false;
-  terminfoEntry = false;
+  return term === 'dumb' || term === 'unknown';
 }
 
 export function terminalNumber(
@@ -234,19 +186,11 @@ export function terminalNumber(
 ): number | undefined {
   const value = terminalCapability(terminfo, termcap);
 
-  if (value !== undefined) {
-    const parsed = parseInt(value, 10);
-    return isNaN(parsed) ? undefined : parsed;
-  }
+  if (value === undefined) return undefined;
 
-  // likewise, a number lives in its own section
-  if (terminfo !== null) {
-    loadTerminfo();
-    const num = tgetnum(terminfo);
-    if (num >= 0) return num;
-  }
+  const parsed = parseInt(value, 10);
 
-  return undefined;
+  return isNaN(parsed) ? undefined : parsed;
 }
 
 export function terminalFlag(
@@ -254,17 +198,8 @@ export function terminalFlag(
   termcap: string | null
 ): boolean | undefined {
   const value = terminalCapability(terminfo, termcap);
-  if (value !== undefined) return value !== '' && value !== '0';
 
-  // a boolean lives in the database's flag section, which tgetstr
-  // cannot see
-  if (terminfo !== null) {
-    loadTerminfo();
-    const flag = tgetflag(terminfo);
-    if (flag >= 0) return flag !== 0;
-  }
-
-  return undefined;
+  return value === undefined ? undefined : value !== '' && value !== '0';
 }
 
 /** Small tparm/tgoto subset covering less's row/column capabilities. */
