@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 import { getAction, splitKeys, tailCascade } from '../src/keys';
 import { terminalCapability } from '../src/tty/terminal';
@@ -68,6 +68,46 @@ it('binds arrow keys to what terminfo says, like less', () => {
 
   expect(getAction('\x1B[1;5C')).toBe('LAST_COL');
   expect(getAction('\x1B[1;5D')).toBe('FIRST_COL');
+});
+
+it('guesses ANSI keys when there is no terminal database', async () => {
+  // The test above is less's rule: a capability the entry OMITS leaves
+  // the key unbound, and a second spelling rings the bell. This is the
+  // case less never meets, because it links curses - no database to
+  // read AT ALL, which is Windows. MEASURED there on 11 / node 22:
+  // arrows, keypad, PgUp/PgDn, Home/End and F1 all dead, and the wheel
+  // with them, since a terminal with mouse reporting off reports a
+  // wheel tick AS an arrow. v1.12.1 had every one of them.
+  const realTerm = process.env.TERM;
+
+  try {
+    process.env.TERM = 'no-such-terminal-xyz';
+    vi.resetModules();
+
+    const { resetTerminfo } = await import('../src/tty/terminal');
+
+    resetTerminfo();
+
+    const { getAction: guessed } = await import('../src/keys');
+
+    // both cursor spellings, because smkx asks for DECCKM and a
+    // terminal that ignored it answers the other way
+    expect(guessed('\x1bOA')).toBe('LINE_BACKWARD');
+    expect(guessed('\x1b[A')).toBe('LINE_BACKWARD');
+    expect(guessed('\x1bOB')).toBe('LINE_FORWARD');
+    expect(guessed('\x1b[B')).toBe('LINE_FORWARD');
+
+    expect(guessed('\x1b[5~')).toBe('WINDOW_BACKWARD');
+    expect(guessed('\x1b[6~')).toBe('WINDOW_FORWARD');
+    expect(guessed('\x1bOH')).toBe('FIRST_LINE');
+    expect(guessed('\x1bOF')).toBe('LAST_LINE');
+    expect(guessed('\x1bOP')).toBe('HELP');
+  } finally {
+    if (realTerm === undefined) delete process.env.TERM;
+    else process.env.TERM = realTerm;
+
+    vi.resetModules();
+  }
 });
 
 it('maps ESC combinations', () => {

@@ -1,6 +1,6 @@
 import { Actions } from "./state/interfaces";
 
-import { terminalCapability } from './tty/terminal';
+import { terminalCapability, terminfoAnswered } from './tty/terminal';
 
 /**
  * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),
@@ -110,6 +110,39 @@ const SPECIAL_KEYS: Array<[string, string, Actions]> = [
   ['kf1', 'k1', 'HELP'],
 ];
 
+/**
+ * What a special key spells when there is no terminal database at all.
+ *
+ * NOT a fallback for a capability the entry OMITS - that case is
+ * less's own and the key is meant to be unbound, which is what the
+ * note above is about. This is the other case terminfoAnswered()
+ * exists to tell apart: no database was found to read. That cannot
+ * happen to less, which links curses; it happens to us on Windows,
+ * where there is no terminfo at all.
+ *
+ * Without these, a Windows session sends smkx - constants.ts guesses
+ * it the same way, for the same reason - and then binds nothing to
+ * what comes back. MEASURED on Windows 11: arrows, keypad, PgUp/PgDn,
+ * Home/End and F1 all dead, and the wheel with them, because a
+ * terminal with mouse reporting off reports a wheel tick AS an arrow.
+ * v1.12.1 had every one of them.
+ *
+ * Both cursor spellings are here because the mode decides which
+ * arrives: smkx asks for DECCKM, so \eOA is what a terminal in
+ * application mode sends and \e[A what one that ignored it sends.
+ */
+const GUESSED_KEYS: Array<[string, Actions]> = [
+  ['\x1bOC', 'SET_HALF_SCREEN_RIGHT'], ['\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
+  ['\x1bOD', 'SET_HALF_SCREEN_LEFT'],  ['\x1b[D', 'SET_HALF_SCREEN_LEFT'],
+  ['\x1bOA', 'LINE_BACKWARD'],         ['\x1b[A', 'LINE_BACKWARD'],
+  ['\x1bOB', 'LINE_FORWARD'],          ['\x1b[B', 'LINE_FORWARD'],
+  ['\x1b[5~', 'WINDOW_BACKWARD'],
+  ['\x1b[6~', 'WINDOW_FORWARD'],
+  ['\x1bOH', 'FIRST_LINE'], ['\x1b[H', 'FIRST_LINE'], ['\x1b[1~', 'FIRST_LINE'],
+  ['\x1bOF', 'LAST_LINE'],  ['\x1b[F', 'LAST_LINE'],  ['\x1b[4~', 'LAST_LINE'],
+  ['\x1bOP', 'HELP'],       ['\x1b[11~', 'HELP'],
+];
+
 let bound: Record<string, Actions> | null = null;
 
 /**
@@ -129,6 +162,14 @@ function boundKeys(): Record<string, Actions> {
   for (const [ti, tc, action] of SPECIAL_KEYS) {
     const seq = terminalCapability(ti, tc);
     if (seq) bound[seq] = action;
+  }
+
+  // a database that answered has said everything there is to say,
+  // including by omission
+  if (terminfoAnswered()) return bound;
+
+  for (const [seq, action] of GUESSED_KEYS) {
+    if (!(seq in bound)) bound[seq] = action;
   }
 
   return bound;
