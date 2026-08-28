@@ -1,3 +1,4 @@
+import fs from 'fs';
 /**
  * The one place bytes reach the terminal, like less's output.c.
  *
@@ -30,8 +31,31 @@ let scheduled = false;
  * A full buffer flushes itself, as less's putchr does — that bounds the
  * memory and is the only flush the caller does not choose.
  */
+/**
+ * Every byte the pager writes, for a terminal this repo cannot run on.
+ *
+ * $LMN_OUT_TRACE names a file and every putstr lands in it, escapes
+ * spelled out; unset, it does nothing. The key trace answers "did the
+ * keystroke arrive"; this answers the other half, "what did we draw" -
+ * and the two together are the whole of what a terminal we cannot see
+ * could be doing differently.
+ */
+function outTrace(text: string): void {
+  const file = process.env.LMN_OUT_TRACE;
+
+  if (!file) return;
+
+  try {
+    fs.appendFileSync(file, JSON.stringify(text) + '\n');
+  } catch {
+    // a trace that cannot be written is not worth an error
+  }
+}
+
 export function putstr(text: string): void {
   if (!text) return;
+
+  outTrace(text);
 
   // The buffer exists to control what a TERMINAL draws. Off a tty
   // there is nothing rendering intermediate states — a pipe or a file
