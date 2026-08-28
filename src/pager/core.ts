@@ -2543,7 +2543,7 @@ async function dispatchKey(sequence: string): Promise<void> {
     if (examineKey(session.key) === 'run') {
       // the help is left by the SWITCH, not by the command: an examine
       // that opens nothing leaves less exactly where it was
-      runExamine(exitHelp);
+      runExamine(() => exitHelp(true));
     }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;
@@ -3403,7 +3403,7 @@ function suspendSelf(): void {
   render(session.content, session.buffer);
 }
 
-function exitHelp(): boolean {
+function exitHelp(switching = false): boolean {
   if (!mode.HELP) return false;
 
   // a --help/-? screen is less's FAKE_HELPFILE input, not the h
@@ -3412,8 +3412,16 @@ function exitHelp(): boolean {
   // ...but only while it is the page on screen. h opens a real
   // overlay even in a --help session - over the lesskey view, say -
   // and that one has somewhere to go back to, so the flag alone
-  // would quit the pager out from under it
-  if (session.startupHelp && !overlays.includes('help')) return false;
+  // would quit the pager out from under it.
+  //
+  // And only when we are QUITTING. less's help is an ifile, so
+  // editing another file leaves it the way leaving any file does -
+  // its prompt even counts it, "a.txt (file 2 of 2)". A :e from a
+  // --help session had nowhere to go back to and so refused to go
+  // anywhere, and the new file opened under "HELP -- END --".
+  if (!switching && session.startupHelp && !overlays.includes('help')) {
+    return false;
+  }
 
   const helpConfig = config;
 
