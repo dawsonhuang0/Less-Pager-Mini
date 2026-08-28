@@ -1,6 +1,6 @@
 import { Actions } from "./state/interfaces";
 
-import { terminalCapability, terminfoAnswered } from './tty/terminal';
+import { terminalCapability } from './tty/terminal';
 
 /**
  * Matches one key at a time: a full CSI escape sequence (arrows, SGR mouse),
@@ -82,66 +82,83 @@ export function getAction(key: string): Actions | undefined {
 }
 
 /**
- * The special keys, each named by the capability less reads for it
- * (special_key_str, screen.c:1218).
+ * The special keys: the capability less reads for each, and what the
+ * key spells when the terminal database does not name it.
  *
- * A special key is EXACTLY what this terminal says it is and nothing
- * else. less reserves a slot per key in its command table and fills it
- * from terminfo; when the capability is missing it writes "\377"
- * instead (decode.c:390) — a byte no key produces, so the key is
- * simply unbound. There is no hardcoded arrow anywhere in less, and a
- * second spelling of one is an ordinary unknown sequence: echoed to
- * the prompt and belled.
+ * REVERTED TO v1.12.1. That build's rule was one line -
+ * `terminalCapability(ti, tc) ?? fallback` - and it worked on Windows,
+ * where nothing since has. The fallback is UNCONDITIONAL: it does not
+ * ask whether a database was found, what DEFAULT_TERM resolved to, or
+ * whether the entry omitted the key on purpose. A key that no
+ * capability names still has a spelling.
  *
- * So DON'T add "\x1b[B" as a fallback. Every common TERM (xterm,
- * screen, tmux, vt100) reports kcud1=\EOB, because less sends smkx/ESC=
- * and the keypad answers in application mode; a terminal with no
- * kcud1 at all — TERM=dumb — is meant to have no arrow keys.
+ * TODO: less's own rule is stricter, and this suspends it. less
+ * reserves a slot per key in its command table and fills it from
+ * terminfo (special_key_str, screen.c:1218); when the capability is
+ * missing it writes "\377" (decode.c:390) - a byte no key produces -
+ * so the key is genuinely unbound and a second spelling of an arrow is
+ * an ordinary unknown sequence, echoed to the prompt and belled. There
+ * is no hardcoded arrow anywhere in less. TERM=dumb is MEANT to have
+ * no arrow keys.
+ *
+ * Restoring that rule needs the thing this session failed to get: a
+ * way to tell "the entry omits this key" from "there is no entry", on
+ * a platform where the second is normal. terminfoAnswered() was meant
+ * to be it and was wrong twice - true for an unset $TERM because
+ * DEFAULT_TERM resolves to the real "unknown" entry, and then still
+ * not enough to make a Windows session usable. Rebuild it from here,
+ * with a Windows box in the loop, and put the strict rule back behind
+ * it once the fallback is proven unnecessary rather than assumed to be.
+ *
+ * The commented table below is that rule, kept whole so it can go back
+ * in one piece.
  */
-const SPECIAL_KEYS: Array<[string, string, Actions]> = [
-  ['kcuf1', 'kr', 'SET_HALF_SCREEN_RIGHT'],
-  ['kcub1', 'kl', 'SET_HALF_SCREEN_LEFT'],
-  ['kcuu1', 'ku', 'LINE_BACKWARD'],
-  ['kcud1', 'kd', 'LINE_FORWARD'],
-  ['kpp', 'kP', 'WINDOW_BACKWARD'],
-  ['knp', 'kN', 'WINDOW_FORWARD'],
-  ['khome', 'kh', 'FIRST_LINE'],
-  ['kend', '@7', 'LAST_LINE'],
-  ['kf1', 'k1', 'HELP'],
+const SPECIAL_KEYS: Array<[string, string, string, Actions]> = [
+  ['kcuf1', 'kr', '\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
+  ['kcub1', 'kl', '\x1b[D', 'SET_HALF_SCREEN_LEFT'],
+  ['kcuu1', 'ku', '\x1b[A', 'LINE_BACKWARD'],
+  ['kcud1', 'kd', '\x1b[B', 'LINE_FORWARD'],
+  ['kpp', 'kP', '\x1b[5~', 'WINDOW_BACKWARD'],
+  ['knp', 'kN', '\x1b[6~', 'WINDOW_FORWARD'],
+  ['khome', 'kh', '\x1b[H', 'FIRST_LINE'],
+  ['kend', '@7', '\x1b[F', 'LAST_LINE'],
+  ['kf1', 'k1', '\x1bOP', 'HELP'],
 ];
 
-/**
- * What a special key spells when there is no terminal database at all.
- *
- * NOT a fallback for a capability the entry OMITS - that case is
- * less's own and the key is meant to be unbound, which is what the
- * note above is about. This is the other case terminfoAnswered()
- * exists to tell apart: no database was found to read. That cannot
- * happen to less, which links curses; it happens to us on Windows,
- * where there is no terminfo at all.
- *
- * Without these, a Windows session sends smkx - constants.ts guesses
- * it the same way, for the same reason - and then binds nothing to
- * what comes back. MEASURED on Windows 11: arrows, keypad, PgUp/PgDn,
- * Home/End and F1 all dead, and the wheel with them, because a
- * terminal with mouse reporting off reports a wheel tick AS an arrow.
- * v1.12.1 had every one of them.
- *
- * Both cursor spellings are here because the mode decides which
- * arrives: smkx asks for DECCKM, so \eOA is what a terminal in
- * application mode sends and \e[A what one that ignored it sends.
- */
-const GUESSED_KEYS: Array<[string, Actions]> = [
-  ['\x1bOC', 'SET_HALF_SCREEN_RIGHT'], ['\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
-  ['\x1bOD', 'SET_HALF_SCREEN_LEFT'],  ['\x1b[D', 'SET_HALF_SCREEN_LEFT'],
-  ['\x1bOA', 'LINE_BACKWARD'],         ['\x1b[A', 'LINE_BACKWARD'],
-  ['\x1bOB', 'LINE_FORWARD'],          ['\x1b[B', 'LINE_FORWARD'],
-  ['\x1b[5~', 'WINDOW_BACKWARD'],
-  ['\x1b[6~', 'WINDOW_FORWARD'],
-  ['\x1bOH', 'FIRST_LINE'], ['\x1b[H', 'FIRST_LINE'], ['\x1b[1~', 'FIRST_LINE'],
-  ['\x1bOF', 'LAST_LINE'],  ['\x1b[F', 'LAST_LINE'],  ['\x1b[4~', 'LAST_LINE'],
-  ['\x1bOP', 'HELP'],       ['\x1b[11~', 'HELP'],
-];
+// TODO: less's rule, suspended above. No fallback - a capability the
+// entry omits leaves the key unbound - paired with a set of guesses
+// used only when terminfoAnswered() said no database was found at all.
+// Both halves go back together or neither does.
+//
+// const SPECIAL_KEYS: Array<[string, string, Actions]> = [
+//   ['kcuf1', 'kr', 'SET_HALF_SCREEN_RIGHT'],
+//   ['kcub1', 'kl', 'SET_HALF_SCREEN_LEFT'],
+//   ['kcuu1', 'ku', 'LINE_BACKWARD'],
+//   ['kcud1', 'kd', 'LINE_FORWARD'],
+//   ['kpp', 'kP', 'WINDOW_BACKWARD'],
+//   ['knp', 'kN', 'WINDOW_FORWARD'],
+//   ['khome', 'kh', 'FIRST_LINE'],
+//   ['kend', '@7', 'LAST_LINE'],
+//   ['kf1', 'k1', 'HELP'],
+// ];
+//
+// Both cursor spellings, because the mode decides which arrives: smkx
+// asks for DECCKM, so \eOA is what a terminal in application mode
+// sends and \e[A what one that ignored it sends.
+//
+// const GUESSED_KEYS: Array<[string, Actions]> = [
+//   ['\x1bOC', 'SET_HALF_SCREEN_RIGHT'], ['\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
+//   ['\x1bOD', 'SET_HALF_SCREEN_LEFT'],  ['\x1b[D', 'SET_HALF_SCREEN_LEFT'],
+//   ['\x1bOA', 'LINE_BACKWARD'],         ['\x1b[A', 'LINE_BACKWARD'],
+//   ['\x1bOB', 'LINE_FORWARD'],          ['\x1b[B', 'LINE_FORWARD'],
+//   ['\x1b[5~', 'WINDOW_BACKWARD'],
+//   ['\x1b[6~', 'WINDOW_FORWARD'],
+//   ['\x1bOH', 'FIRST_LINE'], ['\x1b[H', 'FIRST_LINE'],
+//   ['\x1b[1~', 'FIRST_LINE'],
+//   ['\x1bOF', 'LAST_LINE'],  ['\x1b[F', 'LAST_LINE'],
+//   ['\x1b[4~', 'LAST_LINE'],
+//   ['\x1bOP', 'HELP'],       ['\x1b[11~', 'HELP'],
+// ];
 
 let bound: Record<string, Actions> | null = null;
 
@@ -159,18 +176,27 @@ function boundKeys(): Record<string, Actions> {
 
   bound = { ...keys };
 
-  for (const [ti, tc, action] of SPECIAL_KEYS) {
-    const seq = terminalCapability(ti, tc);
-    if (seq) bound[seq] = action;
+  // v1.12.1's line: what the terminal says, or what the key spells
+  // when it says nothing. No verdict about the database is consulted
+  for (const [ti, tc, fallback, action] of SPECIAL_KEYS) {
+    bound[terminalCapability(ti, tc) ?? fallback] = action;
   }
 
+  // TODO: less's rule, suspended with the table above.
+  //
+  // for (const [ti, tc, action] of SPECIAL_KEYS) {
+  //   const seq = terminalCapability(ti, tc);
+  //   if (seq) bound[seq] = action;
+  // }
+  //
   // a database that answered has said everything there is to say,
   // including by omission
-  if (terminfoAnswered()) return bound;
-
-  for (const [seq, action] of GUESSED_KEYS) {
-    if (!(seq in bound)) bound[seq] = action;
-  }
+  //
+  // if (terminfoAnswered()) return bound;
+  //
+  // for (const [seq, action] of GUESSED_KEYS) {
+  //   if (!(seq in bound)) bound[seq] = action;
+  // }
 
   return bound;
 }

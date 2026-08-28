@@ -70,45 +70,47 @@ it('binds arrow keys to what terminfo says, like less', () => {
   expect(getAction('\x1B[1;5D')).toBe('FIRST_COL');
 });
 
-it('guesses ANSI keys when there is no terminal database', async () => {
-  // The test above is less's rule: a capability the entry OMITS leaves
-  // the key unbound, and a second spelling rings the bell. This is the
-  // case less never meets, because it links curses - no database to
-  // read AT ALL, which is Windows. MEASURED there on 11 / node 22:
-  // arrows, keypad, PgUp/PgDn, Home/End and F1 all dead, and the wheel
-  // with them, since a terminal with mouse reporting off reports a
-  // wheel tick AS an arrow. v1.12.1 had every one of them.
-  const realTerm = process.env.TERM;
+it('falls back to an ANSI spelling when terminfo does not name a key',
+  async () => {
+    // REVERTED TO v1.12.1, whose rule was one line -
+    // `terminalCapability(ti, tc) ?? fallback` - and which worked on
+    // Windows where nothing since has. The fallback is UNCONDITIONAL:
+    // it asks nothing about whether a database was found. A terminal
+    // that names kcud1 still gets ONLY what it named, which is what
+    // the test above asserts; a terminal that names nothing gets the
+    // hardcoded spelling instead of no key at all.
+    const realTerm = process.env.TERM;
 
-  try {
-    process.env.TERM = 'no-such-terminal-xyz';
-    vi.resetModules();
+    try {
+      process.env.TERM = 'no-such-terminal-xyz';
+      vi.resetModules();
 
-    const { resetTerminfo } = await import('../src/tty/terminal');
+      const { resetTerminfo } = await import('../src/tty/terminal');
 
-    resetTerminfo();
+      resetTerminfo();
 
-    const { getAction: guessed } = await import('../src/keys');
+      const { getAction: guessed } = await import('../src/keys');
 
-    // both cursor spellings, because smkx asks for DECCKM and a
-    // terminal that ignored it answers the other way
-    expect(guessed('\x1bOA')).toBe('LINE_BACKWARD');
-    expect(guessed('\x1b[A')).toBe('LINE_BACKWARD');
-    expect(guessed('\x1bOB')).toBe('LINE_FORWARD');
-    expect(guessed('\x1b[B')).toBe('LINE_FORWARD');
+      expect(guessed('\x1b[A')).toBe('LINE_BACKWARD');
+      expect(guessed('\x1b[B')).toBe('LINE_FORWARD');
+      expect(guessed('\x1b[C')).toBe('SET_HALF_SCREEN_RIGHT');
+      expect(guessed('\x1b[D')).toBe('SET_HALF_SCREEN_LEFT');
+      expect(guessed('\x1b[5~')).toBe('WINDOW_BACKWARD');
+      expect(guessed('\x1b[6~')).toBe('WINDOW_FORWARD');
+      expect(guessed('\x1b[H')).toBe('FIRST_LINE');
+      expect(guessed('\x1b[F')).toBe('LAST_LINE');
+      expect(guessed('\x1bOP')).toBe('HELP');
 
-    expect(guessed('\x1b[5~')).toBe('WINDOW_BACKWARD');
-    expect(guessed('\x1b[6~')).toBe('WINDOW_FORWARD');
-    expect(guessed('\x1bOH')).toBe('FIRST_LINE');
-    expect(guessed('\x1bOF')).toBe('LAST_LINE');
-    expect(guessed('\x1bOP')).toBe('HELP');
-  } finally {
-    if (realTerm === undefined) delete process.env.TERM;
-    else process.env.TERM = realTerm;
+      // one spelling per key, exactly as v1.12.1 bound them: the
+      // fallback REPLACES the capability, it does not join it
+      expect(guessed('\x1bOB')).toBeUndefined();
+    } finally {
+      if (realTerm === undefined) delete process.env.TERM;
+      else process.env.TERM = realTerm;
 
-    vi.resetModules();
-  }
-});
+      vi.resetModules();
+    }
+  });
 
 it('maps ESC combinations', () => {
   expect(getAction('\x1Bv')).toBe('WINDOW_BACKWARD');
