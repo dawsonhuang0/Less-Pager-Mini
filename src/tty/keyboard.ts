@@ -91,10 +91,27 @@ function attach(fd: number): boolean {
 }
 
 export function openTtyKeyboard(): boolean {
-  // less's ttyin.c opens "CON" on Windows
+  // Windows is node's own from end to end, and deliberately so.
+  //
+  // less CreateFile()s "CONIN$" (ttyin.c) because C can. node cannot:
+  // libuv hands CreateFileW a \\?\-prefixed path, and that prefix turns
+  // the DOS device namespace OFF, so the name never resolves. MEASURED
+  // on Windows 11 / node 22, in Windows Terminal and VS Code alike -
+  // "CONIN$" and "CON" come back ENOENT, and the \\.\ and \\?\ forms
+  // with a Win32 error libuv could not even map. We were copying less's
+  // MECHANISM where node has its own, and the session would not start.
+  //
+  // It does not need one. The console is already on the descriptors
+  // node was handed, and tty.ReadStream is the provider for it.
+  //
+  // fds 1 and 2 are not offered here even though both are consoles.
+  // They are console OUTPUT: a ReadStream over either constructs
+  // happily and then delivers no key, which would hang the pager with
+  // nothing that could quit it - worse than saying so. So a Windows
+  // session whose stdin is a PIPE has no keyboard to be had, where
+  // less has one.
   if (process.platform === 'win32') {
-    const con = openDevice('CONIN$');
-    return con >= 0 && attach(con);
+    return tty.isatty(0) ? attach(0) : false;
   }
 
   // less's open_tty (ttyin.c:67) tries THREE things in order and cannot

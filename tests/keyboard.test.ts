@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import fs from 'fs';
+import tty from 'tty';
 
 import {
   keyboard,
@@ -167,6 +168,25 @@ describe('self SIGINT bookkeeping', () => {
 });
 
 describe('tty opening and dimensions', () => {
+  it('windows: takes the console node already has, and opens no device',
+    () => {
+      // less CreateFile()s "CONIN$" (ttyin.c) because C can; node
+      // cannot - libuv hands CreateFileW a \\?\-prefixed path and the
+      // prefix turns the DOS device namespace off. MEASURED on Windows
+      // 11 / node 22, in Windows Terminal and VS Code alike: every
+      // spelling fails while fds 0, 1 and 2 are all consoles. So the
+      // name is not tried at all there - copying the mechanism was
+      // what stopped the session starting.
+      setPlatform('win32');
+
+      const named = vi.spyOn(fs, 'openSync');
+      const asked = vi.spyOn(tty, 'isatty').mockReturnValue(false);
+
+      expect(openTtyKeyboard()).toBe(false);
+      expect(asked).toHaveBeenCalledWith(0);
+      expect(named).not.toHaveBeenCalled();
+    });
+
   it('falls back to fd 2 when no terminal can be opened', () => {
     // less's open_tty tries ttyname(2), then "/dev/tty", then fd 2
     // itself, terminal or not (ttyin.c:67) - it cannot come away
