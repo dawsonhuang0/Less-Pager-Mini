@@ -110,7 +110,39 @@ export interface FileEntry {
  */
 export const files = {
   list: [] as FileEntry[],
-  index: -1,
+
+  /**
+   * The file being shown, held as the ENTRY and not as a position.
+   *
+   * less's curr_ifile is a POINTER into a linked list (ifile.c), so
+   * removing another file relinks two pointers and the current one
+   * still means what it meant. Ours was an index into an array, and an
+   * index is not an identity: splicing an entry out moves every file
+   * after it, so files.index quietly began naming its neighbour and
+   * anything else holding a position - runExamine's target, for one -
+   * named the wrong file or none.
+   *
+   * The array stays, because the order is real: less inserts a new
+   * ifile AFTER the current one (edit_ifile), which is what puts the
+   * first globbed name last, and a Set cannot insert in the middle.
+   * Only the CURRENT file stops being a number.
+   */
+  current: null as FileEntry | null,
+
+  /**
+   * Where the current file sits, derived. Every reader of a position -
+   * "file N of M", :n and :p, inserting after the current one - still
+   * gets one, and none of them can go stale, because it is computed
+   * from the entry each time rather than remembered.
+   */
+  get index(): number {
+    return this.current === null ? -1 : this.list.indexOf(this.current);
+  },
+
+  set index(at: number) {
+    this.current = at >= 0 && at < this.list.length ? this.list[at] : null;
+  },
+
   newFile: false,
 };
 

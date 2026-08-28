@@ -2543,7 +2543,7 @@ async function dispatchKey(sequence: string): Promise<void> {
     if (examineKey(session.key) === 'run') {
       // the help is left by the SWITCH, not by the command: an examine
       // that opens nothing leaves less exactly where it was
-      runExamine(() => exitHelp(true));
+      runExamine(leaveStartupHelp);
     }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;
@@ -3403,7 +3403,60 @@ function suspendSelf(): void {
   render(session.content, session.buffer);
 }
 
-function exitHelp(switching = false): boolean {
+/**
+ * Leaves a startup help page for a file.
+ *
+ * The page STAYS in the list, as less keeps it: `--help` is file 1,
+ * `:e a.txt` makes a.txt file 2, and the prompt counts both. Only the
+ * help MODE ends here - what closes the page is a second help being
+ * opened, which is closeStaleHelp.
+ *
+ * exitHelp refuses a startup page because that page is less's
+ * FAKE_HELPFILE and `q` on it QUITS rather than returning to anything.
+ * That is a rule about quitting; switching to a file is not quitting,
+ * so it comes here instead.
+ */
+function leaveStartupHelp(): void {
+  if (!session.startupHelp) {
+    exitHelp();
+    return;
+  }
+
+  // the page IS this session's content, so there is nothing underneath
+  // to restore - and switchToFile is about to replace it anyway
+  mode.HELP = false;
+  overlays.length = 0;
+}
+
+/**
+ * Closes a startup help page that a NEW help is replacing.
+ *
+ * less would keep both: its `--help` page is an input file, so opening
+ * help again from file 2 lands back on file 1 rather than overlaying
+ * anything - and `q` there quits the pager. MEASURED: `--help`, `:e
+ * a.txt`, `h`, `q` exits less.
+ *
+ * A DELIBERATE divergence. Two help pages in one session is one too
+ * many: the stale one goes, the new one is an ordinary overlay, and
+ * its `q` comes back to the file underneath like every other help.
+ *
+ * Safe to splice because files.current holds the ENTRY - the index is
+ * derived from it, so removing a file cannot silently repoint it.
+ */
+function closeStaleHelp(): void {
+  if (!session.startupHelp) return;
+
+  session.startupHelp = false;
+
+  // initContent gives the paged-content entry the path "-", like
+  // less's stdin ifile; only a startupHelp session reaches here, so no
+  // piped session loses its own entry to this
+  const at = files.list.findIndex(entry => entry.path === '-');
+
+  if (at >= 0 && files.list.length > 1) files.list.splice(at, 1);
+}
+
+function exitHelp(): boolean {
   if (!mode.HELP) return false;
 
   // a --help/-? screen is less's FAKE_HELPFILE input, not the h
@@ -3414,14 +3467,9 @@ function exitHelp(switching = false): boolean {
   // and that one has somewhere to go back to, so the flag alone
   // would quit the pager out from under it.
   //
-  // And only when we are QUITTING. less's help is an ifile, so
-  // editing another file leaves it the way leaving any file does -
-  // its prompt even counts it, "a.txt (file 2 of 2)". A :e from a
-  // --help session had nowhere to go back to and so refused to go
-  // anywhere, and the new file opened under "HELP -- END --".
-  if (!switching && session.startupHelp && !overlays.includes('help')) {
-    return false;
-  }
+  // A switch does not come through here: it CLOSES the page, see
+  // closeStartupHelp. This refuses a quit and nothing else.
+  if (session.startupHelp && !overlays.includes('help')) return false;
 
   const helpConfig = config;
 
@@ -3678,6 +3726,12 @@ async function openHelp(text: string[] = help): Promise<void> {
 
     return;
   }
+
+  // a session that STARTED as a help page still has that page in the
+  // list, left behind by the switch that took us to a file. Opening
+  // help again replaces it rather than adding a second: see
+  // closeStaleHelp
+  closeStaleHelp();
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file

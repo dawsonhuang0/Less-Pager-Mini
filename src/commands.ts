@@ -487,7 +487,14 @@ export async function runExamine(leaveHelp?: () => void): Promise<void> {
     // failure too, and took the shell's stderr off the screen with it
     leaveHelp?.();
 
-    if (target >= 0) switchToFile(target);
+    // resolved AFTER leaveHelp, by NAME: closing a help page removes
+    // its entry, and `target` is a plain number taken before that -
+    // files.current survives a splice, a local index does not. less
+    // keeps good_filename as a name for the same reason, and resolves
+    // it again at the end (edit.c)
+    const at = files.list.findIndex(entry => entry.path === goodName);
+
+    if (at >= 0) switchToFile(at);
   } else if (errors.length && files.index >= 0) {
     // less's failed edit_ifile re-edits the current file
     // (reedit_ifile), so the next prompt is the new-file one with
