@@ -229,6 +229,7 @@ import {
   checkModelines,
   optEmouseLclick,
   optEmouseRclick,
+  optWheelEnabled,
   EMOUSE_HSCROLL,
   EMOUSE_HDRAG,
   EMOUSE_VDRAG,
@@ -2736,20 +2737,7 @@ async function dispatchKey(sequence: string): Promise<void> {
     // even one whose action does nothing: the report is swallowed but
     // the prompt is still reprinted, which is visible on the first one
     // because that is when the filename prompt gives way to ":"
-    // NOT gated on --mouse, and that is a deliberate divergence.
-    // less's mouse_wheel_up returns A_NOACTION unless
-    // `emouse & EMOUSE_VSCROLL` (decode.c:621), and emouse is 0 until
-    // --mouse sets it to "vmove,click" (optfunc.c:1035) - so a wheel
-    // tick does nothing in less by default. less can afford that: the
-    // report only ARRIVES because it asked for it, and if it did not
-    // ask, none comes.
-    //
-    // Terminals send them anyway. A report we never enabled still
-    // reaches us, and dropping it leaves a wheel that does nothing on
-    // a terminal where it plainly should - which is what v1.12.1 got
-    // right by never asking the question. We still do not ENABLE
-    // reporting without --mouse (screen.ts is unchanged); this only
-    // decides what to do with a report that turned up regardless.
+    if (!optWheelEnabled()) return void render(session.content, session.buffer);
 
     const up = session.key.startsWith('\x1b[<64;');
 
