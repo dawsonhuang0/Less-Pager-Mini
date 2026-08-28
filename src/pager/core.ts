@@ -9,7 +9,7 @@ import { endJsRegexGuard } from '../features/jsRegexGuard';
 
 import { abortCount as abortLineCount, endLineCounter, counting }
   from './lineCounter';
-import { squishCheck, renderHiliteRepaint, markSearchFlash }
+import { squishCheck, renderHiliteRepaint }
   from '../helpers';
 import { armReadWatch } from '../state/reads';
 
@@ -2996,7 +2996,22 @@ function searchFlash(reverse: boolean): void {
     ? (search.lastDir === 1 ? -1 : 1)
     : search.lastDir;
 
-  markSearchFlash(dir === 1 ? '/' : '?');
+  const label = dir === 1 ? '/' : '?';
+
+  // og's DO_SEARCH runs both halves BEFORE multi_search (command.c:1973),
+  // and cmd_exec ends in flush() - so the prompt is off the screen for
+  // the whole search, however long it takes. Deferring the pair to the
+  // next paint put it AFTER the work: a slow repeat ran with the ":"
+  // still showing, which reads as a pager that has died, and a repeat
+  // that found nothing never scrolled so the pair was dropped
+  // altogether. MEASURED against less, bytes for one n: it sends
+  // "\r\e[K" "/" "\r\e[K" and we sent a bare "\e[K" with no label.
+  putstr(clearBot() + label + clearBot());
+  flush();
+
+  // the pair IS this frame's opening, so the paint that follows must
+  // not write another
+  search.cmdExecOpened = true;
 }
 
 function init() {
