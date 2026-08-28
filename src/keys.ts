@@ -103,20 +103,30 @@ export function getAction(key: string): Actions | undefined {
  * not know, not an answer about this terminal.
  *
  * So a described terminal gets less's rule exactly, and an undescribed
- * one gets the ANSI spelling instead of no key at all - which is what
- * v1.12.1 did unconditionally, and what makes a session usable where
- * there is nothing to ask.
+ * one gets the ANSI spellings instead of no key at all.
+ *
+ * SPELLINGS, plural, and that is the whole point. We send smkx on an
+ * undescribed terminal - constants.ts guesses "\e[?1h\e=" for the same
+ * reason this table guesses - which asks for DECCKM, and a keypad in
+ * application mode answers \eOA where one that ignored the request
+ * answers \e[A. Binding one of them is a coin toss: MEASURED, binding
+ * only the CSI form left every arrow dead on a terminal that honoured
+ * the smkx we had just sent it. v1.12.1 bound both and worked
+ * everywhere, which is what this restores.
+ *
+ * A DESCRIBED terminal still gets exactly one - whatever it named -
+ * because it has told us which mode it will answer in.
  */
-const SPECIAL_KEYS: Array<[string, string, string, Actions]> = [
-  ['kcuf1', 'kr', '\x1b[C', 'SET_HALF_SCREEN_RIGHT'],
-  ['kcub1', 'kl', '\x1b[D', 'SET_HALF_SCREEN_LEFT'],
-  ['kcuu1', 'ku', '\x1b[A', 'LINE_BACKWARD'],
-  ['kcud1', 'kd', '\x1b[B', 'LINE_FORWARD'],
-  ['kpp', 'kP', '\x1b[5~', 'WINDOW_BACKWARD'],
-  ['knp', 'kN', '\x1b[6~', 'WINDOW_FORWARD'],
-  ['khome', 'kh', '\x1b[H', 'FIRST_LINE'],
-  ['kend', '@7', '\x1b[F', 'LAST_LINE'],
-  ['kf1', 'k1', '\x1bOP', 'HELP'],
+const SPECIAL_KEYS: Array<[string, string, string[], Actions]> = [
+  ['kcuf1', 'kr', ['\x1b[C', '\x1bOC'], 'SET_HALF_SCREEN_RIGHT'],
+  ['kcub1', 'kl', ['\x1b[D', '\x1bOD'], 'SET_HALF_SCREEN_LEFT'],
+  ['kcuu1', 'ku', ['\x1b[A', '\x1bOA'], 'LINE_BACKWARD'],
+  ['kcud1', 'kd', ['\x1b[B', '\x1bOB'], 'LINE_FORWARD'],
+  ['kpp', 'kP', ['\x1b[5~'], 'WINDOW_BACKWARD'],
+  ['knp', 'kN', ['\x1b[6~'], 'WINDOW_FORWARD'],
+  ['khome', 'kh', ['\x1b[H', '\x1bOH', '\x1b[1~'], 'FIRST_LINE'],
+  ['kend', '@7', ['\x1b[F', '\x1bOF', '\x1b[4~'], 'LAST_LINE'],
+  ['kf1', 'k1', ['\x1bOP', '\x1b[11~'], 'HELP'],
 ];
 
 let bound: Record<string, Actions> | null = null;
@@ -139,11 +149,13 @@ function boundKeys(): Record<string, Actions> {
   // say, including by omission
   const described = terminfoAnswered();
 
-  for (const [ti, tc, fallback, action] of SPECIAL_KEYS) {
+  for (const [ti, tc, fallbacks, action] of SPECIAL_KEYS) {
     const seq = terminalCapability(ti, tc);
 
     if (seq) bound[seq] = action;
-    else if (!described) bound[fallback] = action;
+    else if (!described) for (const spelling of fallbacks) {
+      bound[spelling] = action;
+    }
   }
 
   return bound;

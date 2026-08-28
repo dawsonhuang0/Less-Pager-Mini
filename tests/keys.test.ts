@@ -104,9 +104,16 @@ it('falls back to ANSI only when no terminal described the session',
       expect(guessed('\x1b[F')).toBe('LAST_LINE');
       expect(guessed('\x1bOP')).toBe('HELP');
 
-      // one spelling per key: the fallback REPLACES the capability
-      // rather than joining it, exactly as v1.12.1 bound them
-      expect(guessed('\x1bOB')).toBeUndefined();
+      // BOTH spellings, which is the point. We send smkx on an
+      // undescribed terminal, asking for DECCKM, and a keypad in
+      // application mode answers \eOA where one that ignored the
+      // request answers \e[A. Binding one is a coin toss: MEASURED,
+      // binding only the CSI form left every arrow dead on a terminal
+      // that honoured the smkx we had just sent it.
+      expect(guessed('\x1bOA')).toBe('LINE_BACKWARD');
+      expect(guessed('\x1bOB')).toBe('LINE_FORWARD');
+      expect(guessed('\x1bOC')).toBe('SET_HALF_SCREEN_RIGHT');
+      expect(guessed('\x1bOD')).toBe('SET_HALF_SCREEN_LEFT');
     } finally {
       if (realTerm === undefined) delete process.env.TERM;
       else process.env.TERM = realTerm;
