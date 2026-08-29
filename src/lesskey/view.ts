@@ -89,7 +89,7 @@ export function lesskeyViewFiles(): { files: ViewFile[], dir: string | null } {
       continue;
     }
 
-    let text: string | null = null;
+    let text: string | null;
 
     if (form.kind === 'binary') {
       try {

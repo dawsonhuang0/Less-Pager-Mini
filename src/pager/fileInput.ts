@@ -3162,7 +3162,7 @@ export class FileInput implements PagerInput {
     }
 
     let bodyStart = positions.indexOf(this.view.top.pos);
-    let atEof = false;
+    let atEof: boolean;
     // where the bottom line ENDS in the file, for less's eof_displayed:
     // -1 when no filter hid anything, so atEof answers on its own
     let bottomNext = -1;

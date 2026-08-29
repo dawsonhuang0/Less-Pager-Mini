@@ -99,7 +99,7 @@ export function searchOsc8(
   count: number = 1
 ): boolean {
   const links = osc8Links(lines);
-  let remaining = Math.max(count, 1);
+  const remaining = Math.max(count, 1);
 
   let at: number;
 
@@ -122,7 +122,6 @@ export function searchOsc8(
   }
 
   at += direction * remaining;
-  remaining = 0;
 
   if (at < 0 || at >= links.length) {
     // less errors and returns: the old selection survives

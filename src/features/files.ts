@@ -1474,7 +1474,6 @@ export function screenPosAt(
 
     if (subRow + steps <= currMaxSubRow) {
       subRow += steps;
-      steps = 0;
       break;
     }
 
