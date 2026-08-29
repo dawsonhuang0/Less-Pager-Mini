@@ -7,7 +7,7 @@ import { config, mode } from "../state/config";
 import { visualWidth } from "../lines/helpers";
 
 import { files, bottomRow, sourceByteOffset, screenPosAt, percentage,
-  sizeIsKnown, byteBase } from "./files";
+  sizeIsKnown, byteBase, virtualCount, virtualIndex } from "./files";
 
 import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
   vlinenumAbsolute }
@@ -259,7 +259,9 @@ function cond(content: string[], out: string, char: string): boolean {
       return entry !== undefined && entry.path !== '-';
 
     case 'm':
-      return ntags() ? ntags() > 1 : files.list.length > 1;
+      // the help page counts: with one open there IS more than one
+      // place to be, and %i/%m below say so
+      return ntags() ? ntags() > 1 : virtualCount() > 1;
 
     case 'n':
       // less: with an active tag list ?n is ALWAYS true (prompt.c:242)
@@ -426,7 +428,7 @@ function protochar(
       return out + (entry ? shellQuote(path.basename(entry.path)) : '?');
 
     case 'i':
-      return out + (ntags() ? currTag() : files.index + 1);
+      return out + (ntags() ? currTag() : virtualIndex(mode.HELP) + 1);
 
     case 'l':
       return out +
@@ -447,7 +449,7 @@ function protochar(
       }
       return out + (content.length ? String(vlinenum(content.length)) : '?');
     case 'm':
-      return out + (ntags() ? ntags() : files.list.length);
+      return out + (ntags() ? ntags() : virtualCount());
 
     case 'p':
       return out + (sizeIsKnown() && size > 0

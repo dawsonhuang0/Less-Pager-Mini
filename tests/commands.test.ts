@@ -235,13 +235,48 @@ describe('file command orchestration', () => {
     expect(exit).toHaveBeenCalledOnce();
   });
 
-  it('rings instead of changing files from the help screen', async () => {
+  it('steps off the help page, closing it', async () => {
+    // the page is a POSITION in this list - `h` in file 1 puts it at
+    // slot 1, making file 2 slot 2 - so :n from it is an ordinary
+    // step. It used to ring, because the page had no position at all
+    files.helpAt = 1;
     mode.HELP = true;
 
-    await stepFile(1);
+    const leave = vi.fn(() => { files.helpAt = -1; });
 
+    await stepFile(1, { enter: () => {}, leave });
+
+    expect(leave).toHaveBeenCalledOnce();
+    expect(files.index).toBe(1);
+    expect(files.helpAt).toBe(-1);
+  });
+
+  it('steps ONTO the help page rather than past it', async () => {
+    // [file 1, help, file 2]: :n from file 1 lands on the page, and
+    // opening it is the whole step
+    files.helpAt = 1;
+
+    const enter = vi.fn();
+
+    await stepFile(1, { enter, leave: () => {} });
+
+    expect(enter).toHaveBeenCalledOnce();
     expect(files.index).toBe(0);
-    expect(stdoutWrite).toHaveBeenCalledWith('\x07');
+  });
+
+  it('passes THROUGH the page without spending it', async () => {
+    // `2:n` over [file 1, help, file 2] reaches file 2: the page is
+    // counted, but landing on it is what closes it
+    files.helpAt = 1;
+    session.buffer = ['2'];
+
+    const leave = vi.fn();
+
+    await stepFile(1, { enter: () => {}, leave });
+
+    expect(leave).not.toHaveBeenCalled();
+    expect(files.index).toBe(1);
+    expect(files.helpAt).toBe(1);
   });
 
   it('switches away before deleting the current file', async () => {

@@ -11,8 +11,8 @@ import { openTtyKeyboard } from './tty/keyboard';
 
 import { printVersion } from './features/misc';
 
-import { closeAlt, errorText, files as fileList, initFiles, openForCat }
-  from './features/files';
+import { closeAlt, errorText, files as fileList, initFiles, openForCat,
+  setHelpOnly } from './features/files';
 
 import {
   OptionSpec,
@@ -317,21 +317,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (wantsLesskeyHelp) {
-    // as --help does with no files; WITH a file, startup.lesskeyHelp
-    // pages the syntax first and the file after it
+  if (wantsLesskeyHelp || wantsHelp) {
+    // the page is the whole session: nothing is named, so nothing is
+    // paged UNDER it. startup.dohelp/lesskeyHelp opens the page over
+    // whatever was given, and setHelpOnly says there was nothing -
+    // which is what leaves the file list empty, makes the page "file 1
+    // of 1", and gives its q nowhere to go but out.
+    //
+    // It used to page the help TEXT here and open the page over it,
+    // so the same 351 lines were the session's input and its overlay
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    await pager(lesskeyHelp.join('\n'));
-    return;
-  }
-
-  if (wantsHelp) {
-    // `lmn --help` with no files pages the help file alone, like
-    // less's dohelp making FAKE_HELPFILE the only input
-    if (!openTtyKeyboard()) usageError('cannot open terminal');
-
-    await pager(help.join('\n'));
+    setHelpOnly();
+    await pager('');
     return;
   }
 

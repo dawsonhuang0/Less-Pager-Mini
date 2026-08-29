@@ -42,7 +42,7 @@ import { calculateDimensions, suspendTerminal, enterScreen,
 
 import { switchToFile, gotoCurrentTag, tagStep, spanningSearch,
   stepFile, removeFile, runExamine, runEditor, runMiscInput,
-  applyFilter, openByName, runShell } from "../commands";
+  applyFilter, openByName, runShell, HelpStep } from "../commands";
 
 import {
   config,
@@ -202,7 +202,8 @@ import {
   revealAltEnd,
   pipeDraining,
   pendingScroll,
-  stepFileTarget,
+  fileAtVirtual,
+  takeHelpOnly,
   lineBase,
 } from "../features/files";
 
@@ -678,14 +679,23 @@ export async function contentPager(
   // file's text under a "HELP --" prompt whenever -?/--help was given
   // a filename. This is also the order the h command already works
   // in, since by then the engine has long been ready.
-  if (startup.dohelp || startup.lesskeyHelp) {
-    openHelp(startup.lesskeyHelp ? lesskeyHelp : help);
-    session.startupHelp = true;
+  //
+  // The overlay stack is emptied first: it outlives the pager it
+  // belongs to, being a module global, so a library caller's second
+  // session would otherwise start with the first one's screens on it.
+  overlays.length = 0;
 
-    // THIS page is not over anything - it is the session's input, and
-    // its q quits rather than going back. An h opened later, over the
-    // lesskey view say, is a real overlay and does stack
-    overlays.length = 0;
+  if (startup.dohelp || startup.lesskeyHelp) {
+    // -?/--help on its own pages a value nobody supplied: the entry
+    // initContent made for it stands for no input at all. Dropped, so
+    // the page is the only place there is - "file 1 of 1", and a q
+    // with nowhere to go back to, which is what ends the session
+    if (takeHelpOnly()) {
+      files.list = [];
+      files.current = null;
+    }
+
+    openHelp(startup.lesskeyHelp ? lesskeyHelp : help);
   } else if (isLesskeyViewSession()) {
     // this session IS the view: nothing to open over, only the temp
     // files to name after what they came from
@@ -879,6 +889,22 @@ function mouseShift(direction: -1 | 1): void {
     : config.col + optWheelLines();
 }
 
+/**
+ * How :n/:p and :x reach the help page.
+ *
+ * The page is a POSITION in this session's list rather than an entry
+ * in it, so a step that lands on it has to open the same page again -
+ * at the slot it already holds, not at "after the current file", which
+ * is where a fresh `h` would put it.
+ */
+const helpStep: HelpStep = {
+  enter: () => openHelp(
+    session.helpSource.length ? session.helpSource : help,
+    files.helpAt
+  ),
+  leave: () => { exitHelp(); },
+};
+
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
 const acts: Record<Actions, () => void | Promise<void>> = {
   EXIT: () => {
@@ -891,13 +917,27 @@ const acts: Record<Actions, () => void | Promise<void>> = {
     const top = overlays[overlays.length - 1];
 
     if (top === 'help') {
-      if (exitHelp()) {
-        overlays.pop();
+      // q on the page is :p that also spends it - so it lands on the
+      // file BEFORE the page, which for the ordinary `h` is the file
+      // it was opened over. Nothing before it means nothing to go back
+      // to, and that is what ends the session: a `--help` with no file
+      // named puts the page at slot 0.
+      const back = files.helpAt - 1;
+
+      if (back < 0) {
+        session.exit();
 
         return;
       }
 
-      session.exit();
+      overlays.pop();
+      exitHelp();
+
+      // exitHelp gives back the file the page was PARKED over, which
+      // is the one before it unless the screen has since travelled -
+      // `h`, `:e b`, `:p` lands on the page from the far side, and the
+      // way back is then a real switch
+      if (files.index !== back) return switchToFile(back).done;
 
       return;
     }
@@ -1135,29 +1175,22 @@ const acts: Record<Actions, () => void | Promise<void>> = {
   },
   // less's :n/:p carry no helpfile guard: stepping the file list
   // leaves help; with no target less stays (error on the help screen)
-  NEXT_FILE: () => {
-    if (mode.HELP &&
-        stepFileTarget(1, bufferToNum(session.buffer) || 1) !== null) {
-      exitHelp();
-    }
-    stepFile(1, stepOffStartupHelp);
-  },
-  PREV_FILE: () => {
-    if (mode.HELP &&
-        stepFileTarget(-1, bufferToNum(session.buffer) || 1) !== null) {
-      exitHelp();
-    }
-    stepFile(-1, stepOffStartupHelp);
-  },
+  NEXT_FILE: () => stepFile(1, helpStep),
+  PREV_FILE: () => stepFile(-1, helpStep),
   // less's A_INDEX_FILE has no helpfile guard either: :x edits the
   // n-th file, leaving help
   INDEX_FILE: () => {
     const target = indexFileTarget(bufferToNum(session.buffer) || 1);
 
-    if (target !== null) {
-      exitHelp();
-      switchToFile(target);
-    }
+    if (target === null) return;
+
+    const dest = fileAtVirtual(target);
+
+    // :x can name the page, which is a file number like any other
+    if (dest === null || dest === undefined) return helpStep.enter();
+
+    exitHelp();
+    switchToFile(dest);
   },
   REMOVE_FILE: () => removeFile(),
   CURRENT_INFO: () => fileInfo(session.content),
@@ -2543,7 +2576,7 @@ async function dispatchKey(sequence: string): Promise<void> {
     if (examineKey(session.key) === 'run') {
       // the help is left by the SWITCH, not by the command: an examine
       // that opens nothing leaves less exactly where it was
-      runExamine(leaveStartupHelp);
+      runExamine(parkHelpPage);
     }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;
@@ -3404,87 +3437,45 @@ function suspendSelf(): void {
 }
 
 /**
- * Leaves a startup help page for a file.
+ * Moves the screen off the help page while LEAVING it in the list.
  *
- * The page STAYS in the list, as less keeps it: `--help` is file 1,
- * `:e a.txt` makes a.txt file 2, and the prompt counts both. Only the
- * help MODE ends here - what closes the page is a second help being
- * opened, which is closeStaleHelp.
+ * What `:e` does. Examining a file ADDS one rather than moving among
+ * them, so the page keeps its position and the prompt keeps counting
+ * it: `h` in file 1 then `:e b` makes b "file 3 of 3", and :p comes
+ * back to the page. A move - :n, :p, :x, q - spends it instead, and
+ * goes through exitHelp.
  *
- * exitHelp refuses a startup page because that page is less's
- * FAKE_HELPFILE and `q` on it QUITS rather than returning to anything.
- * That is a rule about quitting; switching to a file is not quitting,
- * so it comes here instead.
+ * Only what would OUTLIVE the page is undone here. The content and
+ * the screen belong to the switch that is about to happen, and
+ * restoring them first would paint a file nobody asked for.
  */
-function leaveStartupHelp(): void {
-  if (!session.startupHelp) {
-    exitHelp();
-    return;
+function parkHelpPage(): void {
+  if (!mode.HELP) return;
+
+  // less's save_bs_mode: the help file is forced to BS_SPECIAL, and
+  // the file being switched to must not inherit it
+  if (helpSavedBs) {
+    opt.bsMode = helpSavedBs.bs;
+    opt.procBackspace = helpSavedBs.pb;
+    helpSavedBs = null;
   }
 
-  // the page IS this session's content, so there is nothing underneath
-  // to restore - and switchToFile is about to replace it anyway
+  applyConfig(session.prevConfig);
+  applyMode(session.prevMode);
+
   mode.HELP = false;
-  overlays.length = 0;
-}
 
-/**
- * Steps off a startup help page onto another file, closing the page.
- *
- * The page is spent once you have navigated away from it by hand: a
- * :n or :p is a move within the list, not a detour, so there is
- * nothing to come back to. Reaching a file with :e leaves it standing
- * - that ADDS a file rather than moving among them, and the page stays
- * until a new help replaces it.
- */
-function stepOffStartupHelp(): void {
-  mode.HELP = false;
-  overlays.length = 0;
-  closeStaleHelp();
-}
-
-/**
- * Closes a startup help page that a NEW help is replacing.
- *
- * less would keep both: its `--help` page is an input file, so opening
- * help again from file 2 lands back on file 1 rather than overlaying
- * anything - and `q` there quits the pager. MEASURED: `--help`, `:e
- * a.txt`, `h`, `q` exits less.
- *
- * A DELIBERATE divergence. Two help pages in one session is one too
- * many: the stale one goes, the new one is an ordinary overlay, and
- * its `q` comes back to the file underneath like every other help.
- *
- * Safe to splice because files.current holds the ENTRY - the index is
- * derived from it, so removing a file cannot silently repoint it.
- */
-function closeStaleHelp(): void {
-  if (!session.startupHelp) return;
-
-  session.startupHelp = false;
-
-  // initContent gives the paged-content entry the path "-", like
-  // less's stdin ifile; only a startupHelp session reaches here, so no
-  // piped session loses its own entry to this
-  const at = files.list.findIndex(entry => entry.path === '-');
-
-  if (at >= 0 && files.list.length > 1) files.list.splice(at, 1);
+  if (overlays[overlays.length - 1] === 'help') overlays.pop();
 }
 
 function exitHelp(): boolean {
   if (!mode.HELP) return false;
 
-  // a --help/-? screen is less's FAKE_HELPFILE input, not the h
-  // command's overlay: quitting it quits the pager.
-  //
-  // ...but only while it is the page on screen. h opens a real
-  // overlay even in a --help session - over the lesskey view, say -
-  // and that one has somewhere to go back to, so the flag alone
-  // would quit the pager out from under it.
-  //
-  // A switch does not come through here: it CLOSES the page, see
-  // closeStartupHelp. This refuses a quit and nothing else.
-  if (session.startupHelp && !overlays.includes('help')) return false;
+  // the page is spent: a move off it, or a q, and there is nothing to
+  // come back to. Only :e leaves it standing (parkHelpPage), and
+  // opening another help sets this afresh - which is what makes two
+  // pages in one session impossible
+  files.helpAt = -1;
 
   const helpConfig = config;
 
@@ -3498,6 +3489,12 @@ function exitHelp(): boolean {
   session.content = session.prevContent;
   applyConfig(session.prevConfig);
   applyMode(session.prevMode);
+
+  // the parked mode is the FILE's, taken before the page opened, so
+  // its HELP is already false - stated anyway, because "left the help"
+  // is what this function promises and the flag is how everything else
+  // reads it
+  mode.HELP = false;
 
   // Quitting help re-edits the file, and less's edit_ifile sets
   // `hshift = 0` (edit.c:680) for that switch like any other - so less
@@ -3641,7 +3638,8 @@ hook.viewLesskey = (): void => {
   // point: the config, the content and the backspace modes all
   // belong to the page being left, and it is the one thing that
   // knows how to give them back
-  const page = mode.HELP && !session.startupHelp ? session.helpSource : null;
+  const page = mode.HELP ? session.helpSource : null;
+  const at = files.helpAt;
 
   if (page) {
     exitHelp();
@@ -3656,22 +3654,6 @@ hook.viewLesskey = (): void => {
   // refuses, and the refusal used to put the help straight back
   if (lesskeyViewOpen()) return;
 
-  // -? is the session's own input rather than an overlay, and asking
-  // for the view CLOSES it. Keeping it underneath made a level out of
-  // a screen the user had already moved on from: q left the view, put
-  // --help back, and wanted another q to get out of a session that no
-  // longer had anywhere else to go
-  const closedStartupHelp = mode.HELP;
-
-  if (closedStartupHelp) {
-    mode.HELP = false;
-
-    // no longer a --help session: the help it names is gone, and what
-    // is on screen from here is the view and whatever is opened over
-    // it, each of which exits normally
-    session.startupHelp = false;
-  }
-
   // NO render here: the command that ran this renders when it
   // returns, and a frame drawn now would be the one that spends
   // less's new_file - pr_string clears it as it builds the prompt
@@ -3680,18 +3662,12 @@ hook.viewLesskey = (): void => {
   // saw had neither the name nor the file count
   if (openLesskeyView()) {
     overlays.push('view');
-    viewClosedStartupHelp = closedStartupHelp;
 
     return;
   }
 
   // refused - put back exactly what was on screen before
-  if (closedStartupHelp) {
-    mode.HELP = true;
-    session.startupHelp = true;
-  }
-
-  if (page) openHelp(page);
+  if (page) openHelp(page, at);
 };
 
 /**
@@ -3706,30 +3682,33 @@ hook.viewLesskey = (): void => {
  * leaving the file's own text under a "HELP --" prompt, and the help
  * it was opened from never closed at all.
  *
- * The startup help (-?/--help) is not in here: it is not over
- * anything, it IS the session's input, and its q quits.
+ * A -?/--help page is in here like any other: it is opened over the
+ * session's content the same way, and only where it SITS in the file
+ * list (files.helpAt) makes its q an exit rather than a return.
  */
 const overlays: ('help' | 'view')[] = [];
-
-/** Whether opening the view is what closed a --help session's screen. */
-let viewClosedStartupHelp = false;
 
 /**
  * Whether anything is left under a view that has just unwound.
  *
- * A help screen it was opened from was CLOSED on the way in, so the
- * file is what waits underneath - except in a --help session, where
- * that screen WAS the input and nothing is left at all.
+ * A help screen it was opened from was CLOSED on the way in, so what
+ * waits underneath is the file list - and `--help` with no file named
+ * has an EMPTY one, which is the session with nothing left in it.
  */
 function anythingUnderView(): boolean {
-  if (!viewClosedStartupHelp) return true;
-
-  viewClosedStartupHelp = false;
-
-  return false;
+  return files.list.length > 0;
 }
 
-async function openHelp(text: string[] = help): Promise<void> {
+/**
+ * Opens the help page.
+ *
+ * @param at - Which virtual slot the page takes. Defaults to just
+ *   after the current file, like less's edit_ifile inserting there -
+ *   so `h` in file 1 makes the page file 2. A step ONTO a page that is
+ *   already in the list passes its own slot, which is not "after the
+ *   current file" once the screen has moved on from it.
+ */
+async function openHelp(text: string[] = help, at?: number): Promise<void> {
   // already on a help page: switch to the other one rather than
   // refusing. Still ONE level deep - `q` goes back to the FILE, like
   // less's h does, not to the page this replaced. less has only the
@@ -3742,11 +3721,15 @@ async function openHelp(text: string[] = help): Promise<void> {
     return;
   }
 
-  // a session that STARTED as a help page still has that page in the
-  // list, left behind by the switch that took us to a file. Opening
-  // help again replaces it rather than adding a second: see
-  // closeStaleHelp
-  closeStaleHelp();
+  // less would keep two: its `--help` page is an input file, so opening
+  // help again from file 2 lands back on file 1 rather than overlaying
+  // anything - and `q` there quits the pager. MEASURED: `--help`, `:e
+  // a.txt`, `h`, `q` exits less.
+  //
+  // A DELIBERATE divergence, and the reason the page is a NUMBER: two
+  // help pages in one session is one too many, and writing where this
+  // one sits is all it takes to close wherever the last one was.
+  files.helpAt = at ?? files.index + 1;
 
   // leaving the current content records the previous position, like
   // less's edit_ifile calling lastmark when switching to the help file

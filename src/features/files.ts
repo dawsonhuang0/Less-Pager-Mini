@@ -143,8 +143,81 @@ export const files = {
     this.current = at >= 0 && at < this.list.length ? this.list[at] : null;
   },
 
+  /**
+   * Where this session's help page sits, as a VIRTUAL position.
+   *
+   * The list holds real files only. The help page is not one - there
+   * is nothing to open, stat, log or shell out to - but it is a place
+   * you can be, and every count on the prompt has to agree: `h` in
+   * file 1 then `:e b` makes b "file 3 of 3", with the page between
+   * them. So the page is a NUMBER rather than an entry, and the list
+   * it appears in is computed (virtualCount, virtualIndex).
+   *
+   * -1 when this session has no help page. Opening one always sets it
+   * afresh, which is what closes the last: two help pages in one
+   * session is one too many.
+   */
+  helpAt: -1,
+
   newFile: false,
 };
+
+/**
+ * How many files there are to step through, the help page included.
+ *
+ * This is what `%m` reports and what bounds `:x`, so a session with a
+ * page open counts one more than it can open.
+ */
+export function virtualCount(): number {
+  return files.list.length + (files.helpAt >= 0 ? 1 : 0);
+}
+
+/**
+ * Where the screen sits among them, 0-based.
+ *
+ * @param onHelp - Whether the help page is what is being shown; the
+ *   list cannot say, because the page is not in it.
+ */
+export function virtualIndex(onHelp: boolean): number {
+  if (files.helpAt < 0) return files.index;
+  if (onHelp) return files.helpAt;
+
+  const at = files.index;
+
+  return at < 0 ? -1 : at + (files.helpAt <= at ? 1 : 0);
+}
+
+/**
+ * The real file at a virtual position.
+ *
+ * @returns The index into files.list, or null for the help page, or
+ *   undefined when the position is off either end.
+ */
+export function fileAtVirtual(at: number): number | null | undefined {
+  if (at < 0 || at >= virtualCount()) return undefined;
+  if (files.helpAt < 0) return at;
+  if (at === files.helpAt) return null;
+
+  return at > files.helpAt ? at - 1 : at;
+}
+
+/**
+ * Keeps the help page where it was when the list around it changes.
+ *
+ * The page is a virtual POSITION, so an entry added or removed before
+ * it moves it: without this, deleting file 1 of [file 1, file 2, help]
+ * leaves the page one slot past the end, where nothing can reach it.
+ *
+ * A change AT the page's own slot leaves the number alone, which puts
+ * the new file after the page - `h` in file 1 then `:e b` inserts at
+ * real index 1, and b is meant to be file 3 of [file 1, help, b].
+ *
+ * @param at - Where the list changed, as a REAL index.
+ * @param delta - 1 for an entry added there, -1 for one removed.
+ */
+export function shiftHelpAt(at: number, delta: 1 | -1): void {
+  if (files.helpAt > at) files.helpAt += delta;
+}
 
 interface SourceFileHooks {
   /** Undefined declines the file; null is an acquisition failure. */
@@ -231,6 +304,31 @@ export function trimExamineHistory(length: number): void {
 }
 
 /**
+ * Whether the help page is the whole session, with no file under it.
+ *
+ * `lmn --help` pages a value nobody supplied: the content is empty and
+ * the `-` entry initContent makes for it stands for nothing. Counting
+ * that entry would make the page "file 1 of 2", and `q` would go back
+ * to a blank screen instead of quitting. So the executable says so
+ * here, and the pager drops the entry before the page opens.
+ *
+ * Read once and cleared, like takeCliOptions: it describes the session
+ * being STARTED, and a library caller's next one starts over.
+ */
+let helpOnly = false;
+
+export function setHelpOnly(): void {
+  helpOnly = true;
+}
+
+export function takeHelpOnly(): boolean {
+  const was = helpOnly;
+  helpOnly = false;
+
+  return was;
+}
+
+/**
  * Starts a session over in-memory content, registered as the pseudo-file
  * `-` so `:e`/`:p` can navigate back to it, like less reading stdin.
  *
@@ -286,6 +384,7 @@ export function initContent(
 
   files.list = [entry];
   files.index = 0;
+  files.helpAt = -1;
   files.newFile = false;
   examine.pending = false;
   examine.text = '';
@@ -317,6 +416,7 @@ export function makeFileList(paths: string[]): FileEntry[] {
 export function initFiles(paths: string[]): void {
   files.list = makeFileList(paths);
   files.index = -1;
+  files.helpAt = -1;
   files.newFile = false;
   examine.pending = false;
   examine.text = '';
@@ -584,12 +684,20 @@ export function saveFilePosition(): void {
  *
  * @param delta - 1 for next, -1 for previous.
  * @param n - How many files to step.
- * @returns The target index, or null with a message set.
+ * @param onHelp - Whether the step starts from the help page.
+ * @returns The target VIRTUAL index, or null with a message set.
  */
-export function stepFileTarget(delta: 1 | -1, n: number): number | null {
-  const target = files.index + delta * n;
+export function stepFileTarget(
+  delta: 1 | -1,
+  n: number,
+  onHelp = false
+): number | null {
+  // counted over the VIRTUAL list, so a help page between two files is
+  // a step like any other: `2:p` from file 3 reaches file 1 by passing
+  // THROUGH the page, and passing through is not landing on it
+  const target = virtualIndex(onHelp) + delta * n;
 
-  if (target < 0 || target >= files.list.length) {
+  if (target < 0 || target >= virtualCount()) {
     const nth = n > 1 ? '(N-th) ' : '';
     search.message = `No ${nth}${delta > 0 ? 'next' : 'previous'} file`;
     return null;
@@ -601,11 +709,11 @@ export function stepFileTarget(delta: 1 | -1, n: number): number | null {
 /**
  * Resolves the target of `:x`, reporting like less when out of range.
  *
- * @param n - 1-based file number.
- * @returns The target index, or null with a message set.
+ * @param n - 1-based file number, counted over the virtual list.
+ * @returns The target VIRTUAL index, or null with a message set.
  */
 export function indexFileTarget(n: number): number | null {
-  if (n < 1 || n > files.list.length) {
+  if (n < 1 || n > virtualCount()) {
     search.message = 'No such file';
     return null;
   }

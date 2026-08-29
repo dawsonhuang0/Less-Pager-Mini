@@ -294,6 +294,8 @@ export function cleanLesskeyView(dir: string | null): void {
 interface Stash {
   list: FileEntry[];
   index: number;
+  /** Where the outer session's help page sat, if it had one. */
+  helpAt: number;
   files: ViewFile[];
   dir: string | null;
   /** So the ' mark cannot name a temp file that is about to go. */
@@ -430,6 +432,7 @@ export function openLesskeyView(): boolean {
   const held: Stash = {
     list: files.list,
     index: files.index,
+    helpAt: files.helpAt,
     files: view.files,
     dir: view.dir,
     marks: markSnapshot(),
@@ -439,6 +442,11 @@ export function openLesskeyView(): boolean {
 
   files.list = makeFileList(view.files.map(file => file.path));
 
+  // the page belongs to the list being stashed, not to this one: it is
+  // already closed by the time the view opens, and saying so keeps a
+  // slot from the outer session out of the view's own counting
+  files.helpAt = -1;
+
   for (const [at, file] of view.files.entries()) {
     if (file.display !== undefined) files.list[at].display = file.display;
   }
@@ -447,6 +455,7 @@ export function openLesskeyView(): boolean {
   if (!switchToFile(0).ok) {
     files.list = held.list;
     files.index = held.index;
+    files.helpAt = held.helpAt;
     restoreLesskeyViewState(held);
     cleanLesskeyView(view.dir);
     return false;
@@ -505,6 +514,7 @@ export function exitLesskeyView(version: number): boolean {
 
   files.list = held.list;
   files.index = -1;
+  files.helpAt = held.helpAt;
 
   // -1 first, so this is a real switch rather than edit_ifile's
   // "already open" early return

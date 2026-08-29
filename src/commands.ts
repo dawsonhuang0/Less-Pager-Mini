@@ -23,6 +23,8 @@ import {
   loadFile,
   saveFilePosition,
   stepFileTarget,
+  fileAtVirtual,
+  shiftHelpAt,
   expandExamineList,
   addExamineHistory,
   setPreviousPath,
@@ -143,15 +145,6 @@ async function finishSwitch(target: number, lines: string[]): Promise<void> {
   files.index = target;
   files.newFile = true;
 
-  // arriving BACK on the startup help page puts its prompt back:
-  // being on that entry is what "in the help" means for it, so :p
-  // returning to it should look like the page you started on, not
-  // like a file that happens to hold help text. mode.HELP went false
-  // when the first switch took us off it and nothing else restores it.
-  if (session.startupHelp) {
-    mode.HELP = files.list[target].path === '-';
-  }
-
   // every opened file joins the examine history, like edit_ifile
   addExamineHistory(files.list[target].path);
 
@@ -215,6 +208,7 @@ export function openByName(name: string): boolean {
     at = files.index + 1;
     files.list.splice(at, 0, { path: name, lines: null, size: 0,
       sizeKnown: true, saved: null });
+    shiftHelpAt(at, 1);
 
     if (!loadFile(at)) {
       // a binary-looking file keeps its entry and asks first,
@@ -230,6 +224,7 @@ export function openByName(name: string): boolean {
       }
 
       files.list.splice(at, 1);
+      shiftHelpAt(at, -1);
       return false;
     }
   } else if (!loadFile(at)) {
@@ -310,27 +305,34 @@ export async function spanningSearch(
   }
 }
 
+/**
+ * What :n/:p need from the help page, which only the pager can do.
+ *
+ * The page is a POSITION in this list (files.helpAt) and a step can
+ * land on it like any other, so stepping has to be able to open and
+ * close it - and both live in the pager core, over the renderer.
+ */
+export interface HelpStep {
+  /** Shows the page already sitting at files.helpAt. */
+  enter(): void | Promise<void>;
+  /** Closes it: a move OFF the page is what spends it. */
+  leave(): void;
+}
+
 export async function stepFile(
   delta: 1 | -1,
-  leaveHelp?: () => void
+  help?: HelpStep
 ): Promise<void> {
-  // an `h` overlay has no place in the file list, so there is nothing
-  // to step to from it and the key rings.
-  //
-  // A STARTUP help page is an entry like any other, and being ON it is
-  // a fact about which ENTRY is current - not about mode.HELP, which
-  // went false the moment the first :e switched away and does not come
-  // back when :p returns to the page. So the test is the entry, and
-  // stepping off it is an ordinary switch that spends the page.
-  const onStartupHelp = session.startupHelp &&
-    files.current !== null && files.current.path === '-';
+  // the help page is a place in this list, so stepping from it is an
+  // ordinary step - it used to ring, because the page was an overlay
+  // with no position of its own
+  const onHelp = mode.HELP;
 
-  if (mode.HELP && !onStartupHelp) {
-    ringBell();
-    return;
-  }
-
-  const target = stepFileTarget(delta, bufferToNum(session.buffer) || 1);
+  const target = stepFileTarget(
+    delta,
+    bufferToNum(session.buffer) || 1,
+    onHelp
+  );
 
   if (target === null) {
     // :n past the last file quits with -e at end-of-file, like
@@ -339,12 +341,25 @@ export async function stepFile(
     return;
   }
 
-  const opened = switchToFile(target);
+  const dest = fileAtVirtual(target);
 
-  // AFTER the switch, so the page is still in the list while the
-  // target is chosen and loaded - files.current holds the entry, so
-  // removing one behind it cannot repoint anything
-  if (onStartupHelp && opened.ok) leaveHelp?.();
+  // stepping ONTO the page. Passing THROUGH it is not landing on it:
+  // `2:p` over [file, help, file] reaches the first file and leaves
+  // the page alone
+  if (dest === null || dest === undefined) {
+    await help?.enter();
+    return;
+  }
+
+  // BEFORE the switch: leaving restores the file the page was opened
+  // over, and doing that afterwards would paint it over the file just
+  // switched to. A step to the file underneath is then the whole move,
+  // and switchToFile's already-open return makes it a no-op
+  if (onHelp) help?.leave();
+
+  const opened = switchToFile(dest);
+
+  if (!opened.ok) return;
 
   await opened.done;
 }
@@ -366,6 +381,7 @@ export async function removeFile(): Promise<void> {
 
   // less's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
+  shiftHelpAt(removed, -1);
   if (files.index > removed) files.index--;
 }
 
@@ -403,7 +419,12 @@ export async function runExamine(leaveHelp?: () => void): Promise<void> {
   // an open a1.txt inserts UP.txt after a1, makes it current, then
   // meets a1.txt itself - which exists, so current jumps back to
   // index 0 - and every later name lands after a1, ahead of UP.
-  let current = files.index;
+  // from the help page, names land after the PAGE rather than after
+  // the last real file that was current: `h` in file 1, `:e x` makes
+  // x file 3 of [file 1, help, x, ...], which is where the page is
+  let current = mode.HELP && files.helpAt >= 0
+    ? files.helpAt - 1
+    : files.index;
 
   // less keeps good_filename as a NAME, not a position, and resolves
   // it again at the end (edit.c) - which it has to, because a later
@@ -424,6 +445,7 @@ export async function runExamine(leaveHelp?: () => void): Promise<void> {
         sizeKnown: true,
         saved: null,
       });
+      shiftHelpAt(at, 1);
     }
 
     if (!loadFile(at)) {
@@ -456,6 +478,7 @@ export async function runExamine(leaveHelp?: () => void): Promise<void> {
       // (edit.c) - a name that was already in the list and now
       // cannot be opened is dropped from it too
       files.list.splice(at, 1);
+      shiftHelpAt(at, -1);
       if (at <= current) current--;
       continue;
     }

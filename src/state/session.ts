@@ -63,10 +63,6 @@ export const session = {
   exited: false,
   exit: (() => {}) as () => void,
 
-  /** True when the help screen IS the input (--help/-?), like less's
-   *  dohelp FAKE_HELPFILE: q then quits instead of restoring. */
-  startupHelp: false,
-
   /** Inside bracketed paste markers, text accepted (--no-paste). */
   pasting: false,
   /** Dropping pasted input until the end marker or the timeout. */
@@ -157,7 +153,6 @@ export function resetSession(content: string[]): void {
   session.exited = false;
   session.exit = () => {};
 
-  session.startupHelp = false;
   session.helpSource = [];
 
   session.pasting = false;
