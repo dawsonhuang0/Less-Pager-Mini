@@ -55,9 +55,12 @@ export function resetTags(): void {
   cur = 0;
 }
 
+/** Whether the tag is now on screen; false is one of less's quit gates. */
+type TagJump = () => boolean;
+
 // the jump is performed by the pager (it switches files); a -t from
 // $LESS arrives before the pager registers, so it stays pending
-let tagJumpHook: (() => void) | null = null;
+let tagJumpHook: TagJump | null = null;
 let pendingJump = false;
 
 // less's opt_t INIT stores the tag and defers: "Do the rest in main()".
@@ -94,14 +97,24 @@ export function requestTagJump(): void {
   else pendingJump = true;
 }
 
-/** Registers the pager's tag jump, running one queued by $LESS -t. */
-export function onTagJump(fn: (() => void) | null): void {
+/**
+ * Registers the pager's tag jump, running one queued by $LESS -t.
+ *
+ * @returns True when a QUEUED jump ran and could not show the tag. A
+ *   queued one is a STARTUP -t by definition - nothing else can ask
+ *   before the pager exists - and less quit(QUIT_ERROR)s there
+ *   (main.c:422, :428) rather than paging what it found.
+ */
+export function onTagJump(fn: TagJump | null): boolean {
   tagJumpHook = fn;
 
   if (fn && pendingJump) {
     pendingJump = false;
-    fn();
+
+    return !fn();
   }
+
+  return false;
 }
 
 /**

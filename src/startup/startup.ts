@@ -34,6 +34,16 @@ import { resolvePendingTag } from '../features/tags';
 export const startupErrors = { count: 0 };
 
 /**
+ * Whether a startup `-t` could not be looked up.
+ *
+ * less runs the tag inline in main and quit(QUIT_ERROR)s on each of
+ * its gates (main.c:415-428) - BEFORE the errmsgs gate and before
+ * term_init, so nothing is paged and no RETURN is asked for. findtag's
+ * own error() still prints; only the pager does not happen.
+ */
+export const startupTag = { fatal: false };
+
+/**
  * Applies $LESS/$MORE and the command line options, like less's main()
  * before edit_first: session state resets first so ++cmd and -o
  * survive to startup, and the rebuild hook drops so -s/-x/-r cannot
@@ -45,6 +55,7 @@ export const startupErrors = { count: 0 };
 export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   initEnvironment();
   startupErrors.count = 0;
+  startupTag.fatal = false;
   resetMisc();
   resetBellTimer();
   resetPrompting();
@@ -109,7 +120,11 @@ export function startupInit(content: string[]): ReturnType<typeof scanOptions> {
   // in either order. opt_t's INIT only records the tag: "Do the rest in
   // main()".
   const tagError = resolvePendingTag();
-  if (tagError) search.message = tagError;
+
+  if (tagError) {
+    search.message = tagError;
+    startupTag.fatal = true;
+  }
 
   // less's pre-screen error() prints scan errors right away, ahead of
   // any binary-file question edit_first may ask

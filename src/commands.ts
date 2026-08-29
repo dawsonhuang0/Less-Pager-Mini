@@ -242,22 +242,40 @@ export function openByName(name: string): boolean {
  * Jumps to the current tag match, like command.c after nexttag:
  * edit the tag's file, then land its line on the -j target.
  */
-export async function gotoCurrentTag(): Promise<void> {
+export function gotoCurrentTag(): boolean {
+  // less's main runs the three gates in a row and quit(QUIT_ERROR)s on
+  // each (main.c:415-428): no tag loaded, the file will not open, the
+  // line is not in it. Only a STARTUP -t quits on them - the runtime
+  // t/T and the -t prompt report and stay - so the answer is returned
+  // rather than acted on, and onTagJump decides which this was.
   const file = currTagFile();
-  if (file === null) return;
+  if (file === null) return false;
 
-  if (!openByName(file)) return;
+  // whether the edit below actually SWITCHES: t/T between two tags in
+  // the file already open re-edits nothing (edit.c:465)
+  const from = files.current;
 
-  if (jumpSourceTag()) return;
+  if (!openByName(file)) return false;
+
+  if (jumpSourceTag()) return true;
 
   const row = tagRow(session.content);
 
   if (row === null) {
     search.message = 'Tag not found';
-    return;
+    return false;
   }
 
-  jumpLoc(session.content, row, 0, jumpSindex());
+  // a tag in a file the edit just OPENED lands on a screen less has
+  // not painted: edit_ifile pos_clear()s the table, so jump_loc's
+  // onscreen() returns -1 and it takes the full path - never the
+  // already-there branch, which is the one that can ring. `less -t`
+  // on a tag at the top of its file rang a bell at startup; less is
+  // silent. MEASURED both ways round, and t/T inside one file still
+  // scrolls as it did
+  jumpLoc(session.content, row, 0, jumpSindex(), files.current !== from);
+
+  return true;
 }
 
 /** Steps the tag list with t / T, like A_NEXT_TAG/A_PREV_TAG. */

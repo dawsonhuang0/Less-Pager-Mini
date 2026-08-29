@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { putstr, flush } from '../tty/output';
+import { putstr, flush, discardOutput } from '../tty/output';
 
 import { refreshWindowTitle } from '../tty/title';
 
@@ -33,7 +33,8 @@ import { PagerInput } from './input';
 import { session, resetSession, deriveContent, shellReserveLines }
   from "../state/session";
 
-import { startupInit, printStartupError, startupErrors, warnReturn }
+import { startupInit, printStartupError, startupErrors, startupTag,
+  warnReturn }
   from "../startup/startup";
 
 import { calculateDimensions, suspendTerminal, enterScreen,
@@ -358,6 +359,16 @@ export async function contentPager(
   // sessions (less's main scans them before edit_first opens anything);
   // in-memory and pipe sessions scan here with their content
   const startup = startupOverride ?? startupInit(session.fullContent);
+
+  // a startup -t that found no tag never reaches the screen: less
+  // prints findtag's message and quit(QUIT_ERROR)s (main.c:422), which
+  // is ahead of both the errmsgs gate and term_init. The message is
+  // already out - startupInit printed it, like less's error()
+  if (startupTag.fatal) {
+    process.exitCode = 1;
+
+    return;
+  }
 
   // -V prints the version and never starts the pager, like less
   if (startup.version) {
@@ -759,8 +770,29 @@ export async function contentPager(
     markBareRepaint();
   });
 
-  // -t from $LESS queued a tag jump before the pager could run it
-  onTagJump(gotoCurrentTag);
+  // -t from $LESS queued a tag jump before the pager could run it.
+  //
+  // less runs THAT one inline in main and quit(QUIT_ERROR)s when it
+  // cannot show the tag - the file will not open (main.c:422) or the
+  // line is not in it (main.c:428) - rather than paging what it found.
+  // Still before term_init, so the screen never opens: `less -t lost`
+  // prints "missing.txt: No such file or directory" and is gone. The
+  // runtime t/T and the -t prompt report and stay, as they always did.
+  if (onTagJump(gotoCurrentTag)) {
+    // init() has already QUEUED term_init's strings - the alternate
+    // screen, the keypad - and less never reached term_init at all on
+    // this path. Left in the buffer they would flush on the way out
+    // and hand back a terminal parked on a screen nobody ever painted
+    discardOutput();
+    setKeyboardRaw(false);
+    keyboard().pause();
+
+    printStartupError(search.message || 'Tag not found');
+    search.message = '';
+    process.exitCode = 1;
+
+    return;
+  }
 
   // a still-delivering pipe keeps feeding the session (less's ch
   // reads); wired after init so appends can repaint
