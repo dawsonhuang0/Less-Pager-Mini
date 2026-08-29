@@ -163,6 +163,19 @@ export const files = {
 };
 
 /**
+ * What less CALLS the help page (less.h:627).
+ *
+ * less's h is `edit(FAKE_HELPFILE)`, which inserts an ifile under that
+ * name after the current one (command.c:2119) - so the name is real
+ * enough to reach the screen: `%x` on the file before the page prints
+ * it, in full and unabbreviated. MEASURED against the binary.
+ *
+ * Ours is a position rather than an entry, so nothing here is opened
+ * or stat'd under this name. It exists to be printed.
+ */
+export const FAKE_HELPFILE = '@/\\less/\\help/\\file/\\@';
+
+/**
  * How many files there are to step through, the help page included.
  *
  * This is what `%m` reports and what bounds `:x`, so a session with a

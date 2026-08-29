@@ -7,7 +7,8 @@ import { config, mode } from "../state/config";
 import { visualWidth } from "../lines/helpers";
 
 import { files, bottomRow, sourceByteOffset, screenPosAt, percentage,
-  sizeIsKnown, byteBase, virtualCount, virtualIndex } from "./files";
+  sizeIsKnown, byteBase, virtualCount, virtualIndex, fileAtVirtual,
+  FAKE_HELPFILE } from "./files";
 
 import { hook, opt, optLinenums, optQuotes, optHeader, vlinenum,
   vlinenumAbsolute }
@@ -238,6 +239,29 @@ function noLines(content: string[]): boolean {
 }
 
 /**
+ * What comes after this screen in the file list, like less's
+ * get_filename(next_ifile(curr_ifile)) - the whole of `%x` and `?x`.
+ *
+ * The help page is one of them. less's h inserts FAKE_HELPFILE after
+ * the current ifile like any other edit, so the file BEFORE a page
+ * ends its prompt "- Next: @/\less/\help/\file/\@" - printed in
+ * full, no basename, exactly as less prints any other next file.
+ * MEASURED: `a.txt`, h, `:e b.txt`, `2:p`.
+ *
+ * @returns The name, or null when this is the last place there is.
+ */
+function nextName(): string | null {
+  const dest = fileAtVirtual(virtualIndex(mode.HELP) + 1);
+
+  if (dest === undefined) return null;
+  if (dest === null) return FAKE_HELPFILE;
+
+  const entry = files.list[dest];
+
+  return entry.display ?? entry.path;
+}
+
+/**
  * Evaluates a conditional char, like less's cond().
  */
 function cond(content: string[], out: string, char: string): boolean {
@@ -281,7 +305,7 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'Q':
       return config.col + config.screenWidth < longestLine(content);
 
-    case 'x': return files.list[files.index + 1] !== undefined;
+    case 'x': return nextName() !== null;
 
     // line numbers are only known while -n keeps them on
     // less's cond is `linenums && currline(where) != 0` (prompt.c:229):
@@ -321,7 +345,6 @@ function protochar(
   where: Where
 ): string {
   const entry = files.list[files.index];
-  const next = files.list[files.index + 1];
   // less keeps the real length and guards the DIVISION instead: `%p`
   // asks `if (pos != NULL_POSITION && len > 0)` and prints "?"
   // otherwise (prompt.c:396). Clamping the length to 1 made an empty
@@ -486,8 +509,12 @@ function protochar(
     case 't': return out.replace(/ +$/, '');
     case 'T': return out + (ntags() ? 'tag' : 'file');
     case 'W': return out + longestLine(content);
-    case 'x': return out + (next ? next.display ?? next.path : '?');
-    case 'y': return out + (next ? shellQuote(next.path) : '?');
+    case 'x': return out + (nextName() ?? '?');
+    case 'y': {
+      const name = nextName();
+
+      return out + (name === null ? '?' : shellQuote(name));
+    }
     case '%': return out + '%';
   }
 

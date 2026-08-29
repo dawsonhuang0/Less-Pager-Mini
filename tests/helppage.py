@@ -103,9 +103,13 @@ CASES = [
     # :e ADDS a file; the page keeps its slot, so b is the third place
     ('a; h; :e b', ['a.txt'], ['h', ':e b.txt\n'],
      [HELP, 'b.txt (file 3 of 3) (END)']),
-    # 2:p passes THROUGH the page without spending it
+    # 2:p passes THROUGH the page without spending it - and the file
+    # before the page names it as its "Next", which is where less's
+    # own name for the page reaches the screen (less.h:627). Both rows
+    # are byte-identical to the binary
     ('a; h; :e b; 2:p; 2:n', ['a.txt'], ['h', ':e b.txt\n', '2:p', '2:n'],
-     [HELP, None, 'a.txt (file 1 of 3) (END) - Next: b.txt',
+     [HELP, None,
+      'a.txt (file 1 of 3) (END) - Next: @/\\less/\\help/\\file/\\@',
       'b.txt (file 3 of 3) (END)']),
     # :p LANDS on it: the page comes back, prompt and all
     ('a; h; :e b; :p', ['a.txt'], ['h', ':e b.txt\n', ':p'],
@@ -116,6 +120,8 @@ CASES = [
     # q on the page is :p that also spends it
     ('a; h; :e b; :p; q', ['a.txt'], ['h', ':e b.txt\n', ':p', 'q'],
      [HELP, None, HELP, 'a.txt (file 1 of 2) (END) - Next: b.txt']),
+    # ...and with the page spent, "Next" is the ordinary file again
+
     # :e from the page inserts after the PAGE, not after the last file
     ('a; h; :e b; :p; :e long', ['a.txt'],
      ['h', ':e b.txt\n', ':p', ':e long\n'],
