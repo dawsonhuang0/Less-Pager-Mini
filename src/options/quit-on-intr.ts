@@ -8,7 +8,7 @@ export const quitOnIntr: OptionSpec = {
     type: 'bool',
     messages: [
       'Interrupt (ctrl-C) returns to prompt',
-      'Interrupt (ctrl-C) exits less',
+      'Interrupt (ctrl-C) exits less-pager-mini',
     ],
     defaultValue: 0,
     get: () => opt.quitOnIntr,

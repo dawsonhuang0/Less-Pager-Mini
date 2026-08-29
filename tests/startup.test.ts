@@ -127,7 +127,7 @@ describe('startup option orchestration', () => {
     startupInit([]);
 
     expect(stderrWrite.mock.calls.map(call => call[0])).toEqual([
-      'There is no -Y option ("less --help" for help)\n',
+      'There is no -Y option ("lmn --help" for help)\n',
       'Value is required after -P (--prompt)\n',
     ]);
     expect(startupErrors.count).toBe(2);

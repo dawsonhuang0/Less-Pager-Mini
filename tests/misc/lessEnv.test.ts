@@ -126,7 +126,7 @@ describe('letters and triples', () => {
   it('reports an unknown letter and stops, like less', () => {
     scan('-Y -S');
     expect(search.message).toBe(
-      'There is no -Y option ("less --help" for help)'
+      'There is no -Y option ("lmn --help" for help)'
     );
     expect(config.chopLongLines).toBe(false);
   });
@@ -154,14 +154,14 @@ describe('long names', () => {
   it('reports ambiguous abbreviations with the remainder', () => {
     scan('--quit');
     expect(search.message).toBe(
-      '--quit is an ambiguous abbreviation ("less --help" for help)'
+      '--quit is an ambiguous abbreviation ("lmn --help" for help)'
     );
   });
 
   it('reports unknown names with the remainder, like less', () => {
     scan('--xyzzy -S');
     expect(search.message).toBe(
-      'There is no --xyzzy -S option ("less --help" for help)'
+      'There is no --xyzzy -S option ("lmn --help" for help)'
     );
     expect(config.chopLongLines).toBe(false);
   });
@@ -187,7 +187,7 @@ describe('long names', () => {
 
     scan('--chop-long-lines$-s');
     expect(search.message).toBe(
-      'There is no --chop-long-lines$-s option ("less --help" for help)'
+      'There is no --chop-long-lines$-s option ("lmn --help" for help)'
     );
   });
 });

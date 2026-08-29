@@ -1409,7 +1409,7 @@ export function scanOptions(
 
       if (!spec) {
         optScanError(
-          `There is no ${printopt} option ("less --help" for help)`
+          `There is no ${printopt} option ("lmn --help" for help)`
         );
         return result;
       }
@@ -1423,8 +1423,8 @@ export function scanOptions(
 
       if (found.spec === null) {
         optScanError(found.ambig
-          ? `--${rest} is an ambiguous abbreviation ("less --help" for help)`
-          : `There is no --${rest} option ("less --help" for help)`);
+          ? `--${rest} is an ambiguous abbreviation ("lmn --help" for help)`
+          : `There is no --${rest} option ("lmn --help" for help)`);
         return result;
       }
 
@@ -1443,7 +1443,7 @@ export function scanOptions(
       } else if (i < env.length && env[i] !== ' ') {
         // the typed name is longer than the real option name
         optScanError(
-          `There is no --${rest} option ("less --help" for help)`
+          `There is no --${rest} option ("lmn --help" for help)`
         );
         return result;
       }
