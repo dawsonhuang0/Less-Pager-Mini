@@ -305,7 +305,11 @@ function cond(content: string[], out: string, char: string): boolean {
     case 'Q':
       return config.col + config.screenWidth < longestLine(content);
 
-    case 'x': return nextName() !== null;
+    // less answers FALSE outright with a tag list loaded
+    // (prompt.c:265), so a -t session shows no "Next:" however many
+    // files are open - %i and %m are counting tags there, and a file
+    // number beside them would be reporting two different lists
+    case 'x': return ntags() ? false : nextName() !== null;
 
     // line numbers are only known while -n keeps them on
     // less's cond is `linenums && currline(where) != 0` (prompt.c:229):

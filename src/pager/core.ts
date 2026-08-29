@@ -203,7 +203,7 @@ import {
   pipeDraining,
   pendingScroll,
   fileAtVirtual,
-  takeHelpOnly,
+  takeNoInput,
   lineBase,
 } from "../features/files";
 
@@ -272,7 +272,8 @@ import {
 } from "../features/misc";
 
 import {
-  onTagJump
+  onTagJump,
+  resetTags
 } from "../features/tags";
 
 import { cmd } from "../features/cmdbuf";
@@ -685,16 +686,18 @@ export async function contentPager(
   // session would otherwise start with the first one's screens on it.
   overlays.length = 0;
 
-  if (startup.dohelp || startup.lesskeyHelp) {
-    // -?/--help on its own pages a value nobody supplied: the entry
-    // initContent made for it stands for no input at all. Dropped, so
-    // the page is the only place there is - "file 1 of 1", and a q
-    // with nowhere to go back to, which is what ends the session
-    if (takeHelpOnly()) {
-      files.list = [];
-      files.current = null;
-    }
+  // -?/--help and -t page a value nobody supplied: they bring their
+  // own screen and there is nothing under it. The entry initContent
+  // made for that empty value is not a file anyone named, so it goes
+  // before either can count - which leaves --help "file 1 of 1" with
+  // a q that has nowhere to go but out, and leaves the tag jump below
+  // to open the ONE file a -t session holds.
+  if (takeNoInput()) {
+    files.list = [];
+    files.current = null;
+  }
 
+  if (startup.dohelp || startup.lesskeyHelp) {
     openHelp(startup.lesskeyHelp ? lesskeyHelp : help);
   } else if (isLesskeyViewSession()) {
     // this session IS the view: nothing to open over, only the temp
@@ -2577,6 +2580,13 @@ async function dispatchKey(sequence: string): Promise<void> {
       // the help is left by the SWITCH, not by the command: an examine
       // that opens nothing leaves less exactly where it was
       runExamine(parkHelpPage);
+
+      // less's A_EXAMINE ends `/* If tag structure is loaded then
+      // clean it up. */ cleantags();` (command.c:318), unconditionally
+      // - naming a file by hand ends the tag list, and the prompt goes
+      // back to counting files. MEASURED: `less -t mytag` then `:e
+      // b.txt` says "b.txt (file 2 of 2)", not "(tag 1 of 2)"
+      resetTags();
     }
     if (!drainFirstCmd()) render(session.content, session.buffer);
     return;

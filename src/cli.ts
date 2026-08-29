@@ -12,7 +12,7 @@ import { openTtyKeyboard } from './tty/keyboard';
 import { printVersion } from './features/misc';
 
 import { closeAlt, errorText, files as fileList, initFiles, openForCat,
-  setHelpOnly } from './features/files';
+  setNoInput } from './features/files';
 
 import {
   OptionSpec,
@@ -320,7 +320,7 @@ async function main(): Promise<void> {
   if (wantsLesskeyHelp || wantsHelp) {
     // the page is the whole session: nothing is named, so nothing is
     // paged UNDER it. startup.dohelp/lesskeyHelp opens the page over
-    // whatever was given, and setHelpOnly says there was nothing -
+    // whatever was given, and setNoInput says there was nothing -
     // which is what leaves the file list empty, makes the page "file 1
     // of 1", and gives its q nowhere to go but out.
     //
@@ -328,16 +328,21 @@ async function main(): Promise<void> {
     // so the same 351 lines were the session's input and its overlay
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
-    setHelpOnly();
+    setNoInput();
     await pager('');
     return;
   }
 
   if (sawTag) {
     // -t supplies the file itself: the queued tag jump opens the
-    // file containing the tag, like less's main editing the tag file
+    // file containing the tag, like less's main editing the tag file.
+    //
+    // Nothing is paged under it either - less's -t session holds the
+    // ONE ifile the jump opened, so setNoInput drops the `-` entry
+    // this empty value would otherwise leave in front of it
     if (!openTtyKeyboard()) usageError('cannot open terminal');
 
+    setNoInput();
     await pager('');
     return;
   }

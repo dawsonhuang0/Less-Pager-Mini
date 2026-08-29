@@ -317,26 +317,29 @@ export function trimExamineHistory(length: number): void {
 }
 
 /**
- * Whether the help page is the whole session, with no file under it.
+ * Whether the value being paged stands for no input at all.
  *
- * `lmn --help` pages a value nobody supplied: the content is empty and
- * the `-` entry initContent makes for it stands for nothing. Counting
- * that entry would make the page "file 1 of 2", and `q` would go back
- * to a blank screen instead of quitting. So the executable says so
- * here, and the pager drops the entry before the page opens.
+ * Two switches supply their own screen and page nothing under it:
+ * `--help`/`-?`, whose page IS the session, and `-t`, which finds its
+ * file by jumping to the tag. Both reach the pager through an EMPTY
+ * value, and the `-` entry initContent makes for one is not a file
+ * anybody named. Counting it makes every "file N of M" one too many -
+ * MEASURED: `less -t mytag`, `:e b.txt` says "file 2 of 2" where ours
+ * said 3 of 3 - and for --help it also gives `q` a blank screen to go
+ * back to instead of quitting.
  *
  * Read once and cleared, like takeCliOptions: it describes the session
  * being STARTED, and a library caller's next one starts over.
  */
-let helpOnly = false;
+let noInput = false;
 
-export function setHelpOnly(): void {
-  helpOnly = true;
+export function setNoInput(): void {
+  noInput = true;
 }
 
-export function takeHelpOnly(): boolean {
-  const was = helpOnly;
-  helpOnly = false;
+export function takeNoInput(): boolean {
+  const was = noInput;
+  noInput = false;
 
   return was;
 }
