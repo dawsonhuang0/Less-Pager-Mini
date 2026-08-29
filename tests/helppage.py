@@ -30,7 +30,7 @@ CLI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                    'dist', 'cli.js')
 
 
-def bottom(args, steps, cwd):
+def bottom(args, steps, cwd, want_top=False):
     """The bottom row after each step; QUIT once the pager is gone."""
     pid, fd = pty.fork()
 
@@ -64,11 +64,12 @@ def bottom(args, steps, cwd):
             stream.feed(data.decode('utf8', 'replace'))
 
     drain(1.0)
-    out = []
+    out, top = [], []
 
     for keys in steps:
         if gone:
             out.append(QUIT)
+            top.append('')
             continue
         for ch in keys:
             try:
@@ -79,6 +80,8 @@ def bottom(args, steps, cwd):
             drain(0.15)
         drain(0.8)
         out.append(QUIT if gone else sc.display[ROWS - 1].rstrip())
+        top.append('' if gone else next(
+            (r.rstrip() for r in sc.display if r.strip()), ''))
 
     try:
         os.kill(pid, signal.SIGKILL)
@@ -87,7 +90,7 @@ def bottom(args, steps, cwd):
     except OSError:
         pass
 
-    return out
+    return (out, top) if want_top else out
 
 
 HELP = 'HELP -- Press RETURN for more, or q when done'
@@ -145,6 +148,24 @@ CASES = [
 ]
 
 
+# The bottom row is not enough for one shape. `h` then `:e <the file
+# you are already on>` re-edits nothing (edit.c:465), so the switch
+# that was supposed to replace the page's text never happened and the
+# help sat on the glass under a file's prompt. What that costs is the
+# CONTENT, so these read the first row instead.
+#
+#   (label, args, keys, the row 0 that must be there)
+CONTENT = [
+    ('h then :e the same file', ['a.txt'],
+     ['h', ':e a.txt\n'], 'a one'),
+    # the reported one: a brace list whose first name is already open.
+    # --use-zsh-glob so the expansion is ours and not $SHELL's, which
+    # is not brace-capable everywhere
+    ('h then :e a brace list', ['--use-zsh-glob', 'a.txt'],
+     ['h', ':e {a,b}.txt\n'], 'a one'),
+]
+
+
 def fixtures(root):
     """Files of this session's own, so a stray a.txt cannot decide it."""
     with open(os.path.join(root, 'a.txt'), 'w') as handle:
@@ -177,6 +198,17 @@ def run():
             print(f'     {mark} {keys!r:<14} {g!r}')
             if mark == '!':
                 print(f'       {"":<14} want {w!r}')
+
+    for title, args, steps, want in CONTENT:
+        _, tops = bottom(args, steps, root, want_top=True)
+        got = tops[-1]
+        ok = got == want
+        bad += not ok
+        print(f'{"ok  " if ok else "FAIL"} {title}')
+        print(f'      first row {got!r}')
+
+        if not ok:
+            print(f'      want      {want!r}')
 
     shutil.rmtree(root, ignore_errors=True)
     print('all clear' if not bad else f'{bad} case(s) wrong')

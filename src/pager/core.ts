@@ -3627,40 +3627,32 @@ function suspendSelf(): void {
  * What `:e` does. Examining a file ADDS one rather than moving among
  * them, so the page keeps its position and the prompt keeps counting
  * it: `h` in file 1 then `:e b` makes b "file 3 of 3", and :p comes
- * back to the page. A move - :n, :p, :x, q - spends it instead, and
- * goes through exitHelp.
+ * back to the page. A move - :n, :p, :x, q - spends it instead.
  *
- * Only what would OUTLIVE the page is undone here. The content and
- * the screen belong to the switch that is about to happen, and
- * restoring them first would paint a file nobody asked for.
+ * The leaving itself is exitHelp's, all of it. This was a trimmed copy
+ * that restored the modes but not the CONTENT, on the theory that the
+ * switch about to happen would replace it - and a switch to the file
+ * already current does not happen at all (edit.c:465). `h` then
+ * `:e a.txt` left the help's text on the glass under a file's prompt.
+ * less cannot reach that state: its curr_ifile while the page is up IS
+ * the page, so editing the file underneath is a real edit there.
  */
 function parkHelpPage(): void {
-  if (!mode.HELP) return;
-
-  // less's save_bs_mode: the help file is forced to BS_SPECIAL, and
-  // the file being switched to must not inherit it
-  if (helpSavedBs) {
-    opt.bsMode = helpSavedBs.bs;
-    opt.procBackspace = helpSavedBs.pb;
-    helpSavedBs = null;
-  }
-
-  applyConfig(session.prevConfig);
-  applyMode(session.prevMode);
-
-  mode.HELP = false;
-
-  if (overlays[overlays.length - 1] === 'help') overlays.pop();
+  exitHelp(true);
 }
 
-function exitHelp(): boolean {
+/**
+ * @param keepPage - Leave files.helpAt standing, for the one caller
+ *   that is moving off the page without spending it.
+ */
+function exitHelp(keepPage = false): boolean {
   if (!mode.HELP) return false;
 
   // the page is spent: a move off it, or a q, and there is nothing to
   // come back to. Only :e leaves it standing (parkHelpPage), and
   // opening another help sets this afresh - which is what makes two
   // pages in one session impossible
-  files.helpAt = -1;
+  if (!keepPage) files.helpAt = -1;
 
   const helpConfig = config;
 
