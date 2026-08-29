@@ -935,6 +935,10 @@ export async function contentPager(
     await ended;
   } finally {
     await cleanUp();
+
+    // after the terminal is back, so it is readable on the screen the
+    // caller returns to rather than on the one just torn down
+    reportCrash();
   }
 }
 
@@ -3283,9 +3287,53 @@ function noMoreKeys(): void {
 
 function onUncaught(error: unknown): void {
   closeAltQuiet(files.list[files.index]);
+
+  // Reported only when nobody else is listening. node's rule is that an
+  // uncaughtException listener HANDLES the error, so a host with one
+  // has already reported it and already decided what its process does
+  // next. MEASURED: a host with its own handler was killed mid-`await
+  // pager(...)` by a bug of its own that it had handled.
+  if (process.listenerCount('uncaughtException') <= 1) {
+    crashReport = String((error as Error)?.stack ?? error) + '\n';
+    process.exitCode = 1;
+  }
+
+  // the SESSION ends, not the process: the caller gets its await back
+  // with the terminal restored by the finally that is waiting on it,
+  // and an executable exits on the way out with the status above
+  session.exit();
+
+  if (session.exited) return;
+
+  // nothing was armed to end, so the crash came before the session
+  // and no finally is waiting. This is the old path, and the only one
+  // that still takes the process with it
   void cleanUp();
-  console.error(error);
+  reportCrash();
   process.exit(1);
+}
+
+/**
+ * The crash message, held until the terminal is back.
+ *
+ * Written straight away it goes onto the ALTERNATE screen and dies
+ * with it - the trace was on the glass for a few milliseconds and then
+ * thrown away by the very teardown that was meant to make it readable.
+ * less has the same ordering problem and the same answer: error()
+ * before term_deinit, never after.
+ */
+let crashReport = '';
+
+function reportCrash(): void {
+  if (!crashReport) return;
+
+  // fs.writeSync, like emitShellError putting a glob's complaint on
+  // the terminal: it goes out NOW, on the descriptor itself. It used
+  // to be console.error, whose buffered write was lost to the exit
+  // that followed - which is why an EBADF from the keyboard was
+  // invisible for as long as it was
+  fs.writeSync(2, crashReport);
+  crashReport = '';
 }
 
 /**
