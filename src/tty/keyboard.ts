@@ -19,6 +19,39 @@ let stream: tty.ReadStream =
 export const keyboard = (): tty.ReadStream => stream;
 
 /**
+ * Whether this keyboard has stopped being able to deliver a key.
+ *
+ * node announces that ONCE, as an 'end' or an 'error', and a waiter
+ * that attaches afterwards waits for an event that has already
+ * happened. less has no such race - its getchr simply reads and finds
+ * out - so the fact is recorded here, at the stream, and every waiter
+ * asks instead of listening. Without it a `Press RETURN to continue`
+ * on an unreadable keyboard hung for good.
+ *
+ * Unreadable is a real case, not a contrived one: less's last resort
+ * is fd 2 whatever it is (ttyin.c:71), so any `node app.js 2> log`
+ * with no controlling terminal makes the keyboard a descriptor opened
+ * write-only, and the first read of one is EBADF.
+ */
+let dead = false;
+
+export const keyboardDead = (): boolean => dead;
+
+/**
+ * Watches a newly attached stream for the one announcement it makes.
+ *
+ * Listening HERE also keeps a read error off the uncaughtException
+ * path: unhandled, it took a library caller's process down from
+ * inside `await pager(...)`.
+ */
+function watchForDeath(): void {
+  dead = false;
+
+  stream.once('end', () => { dead = true; });
+  stream.once('error', () => { dead = true; });
+}
+
+/**
  * Opens /dev/tty as the keyboard, like open_getchr when stdin is a
  * pipe. Returns false when no controlling terminal exists.
  */
@@ -76,6 +109,7 @@ function attach(fd: number): boolean {
   try {
     stream = new tty.ReadStream(fd);
     ttyFd = fd;
+    watchForDeath();
     return true;
   } catch {
     return false;
@@ -132,6 +166,7 @@ export function openTtyKeyboard(): boolean {
 
     stream = process.stdin as tty.ReadStream;
     ttyFd = 0;
+    watchForDeath();
 
     return true;
   }
@@ -180,6 +215,7 @@ function attachPlain(fd: number): boolean {
 
     stream = shim;
     ttyFd = fd;
+    watchForDeath();
     return true;
   } catch {
     return false;

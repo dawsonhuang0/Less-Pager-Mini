@@ -1,5 +1,5 @@
-import { keyboard, dumbTerminal, watchWinch, unwatchWinch, setKeyboardRaw }
-  from '../tty/keyboard';
+import { keyboard, keyboardDead, dumbTerminal, watchWinch, unwatchWinch,
+  setKeyboardRaw } from '../tty/keyboard';
 
 import { opt, scanOptions, initUnsupport, takeCliOptions, flushPendopt, onRebuild, optKnowDumb } from '../options';
 
@@ -162,12 +162,19 @@ export function printStartupError(message: string): void {
 }
 
 export function warnReturn(): Promise<string> {
+  // a keyboard that can no longer deliver never answers this, and
+  // less's get_return is one getchr whose failed read is its EOF
+  // (ttyin.c:220). Asked rather than listened for, because the event
+  // saying so may already have gone by. The empty answer is the one a
+  // resize gives: pass the gate and carry on
+  if (keyboardDead()) return Promise.resolve('');
+
   setKeyboardRaw(true);
   keyboard().resume();
 
   return new Promise(resolve => {
     const onKey = (data: Buffer): void => {
-      unwatchWinch(onWinch);
+      done();
 
       // less reads a single char; anything typed behind it stays
       // buffered as ordinary input (paused, or the re-emit would
@@ -183,12 +190,32 @@ export function warnReturn(): Promise<string> {
     // less's lwinch longjmps out of get_return: a resize passes the
     // gate with no key
     const onWinch = (): void => {
-      unwatchWinch(onWinch);
-      keyboard().off('data', onKey);
+      done();
       resolve('');
     };
 
+    // a keyboard that has ENDED, or that cannot be read at all, will
+    // never answer this - and less's get_return is one getchr, whose
+    // failed read is its EOF (ttyin.c:220). Waiting anyway hung the
+    // gate for good; worse, an unhandled stream error is an
+    // uncaughtException, which took a library caller's process down
+    // from inside `await pager(...)`. The empty answer is the same one
+    // a resize gives: pass the gate and carry on.
+    const onGone = (): void => {
+      done();
+      resolve('');
+    };
+
+    const done = (): void => {
+      unwatchWinch(onWinch);
+      keyboard().off('data', onKey);
+      keyboard().off('end', onGone);
+      keyboard().off('error', onGone);
+    };
+
     keyboard().once('data', onKey);
+    keyboard().once('end', onGone);
+    keyboard().once('error', onGone);
     watchWinch(onWinch);
   });
 }

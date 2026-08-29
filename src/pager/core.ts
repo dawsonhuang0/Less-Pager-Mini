@@ -19,7 +19,7 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
   osc8Visible, searchOsc8 }
   from '../features/osc8';
 
-import { keyboard, closeTtyKeyboard, dumbTerminal, takeUngot,
+import { keyboard, keyboardDead, closeTtyKeyboard, dumbTerminal, takeUngot,
   setKeyboardRaw,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyTrace,
   gateReturn, gateReleasedByWinch, gateReleaseKind, gateIsOpen }
@@ -591,13 +591,6 @@ export async function contentPager(
     const answer = await warnReturn();
     putstr('\n');
 
-    // less's query() quits on a capital Q only (output.c:808)
-    if (answer === 'Q') {
-      setKeyboardRaw(false);
-      closeTtyKeyboard();
-      process.exit(0);
-    }
-
     return answer;
   }
 
@@ -630,7 +623,35 @@ export async function contentPager(
         case 'D': case 'd':
           decided = true;
           break;
+
+        // less's query() quits on a capital Q (output.c:808), and its
+        // quit() ends the process. This is a library too, so it ends
+        // the SESSION and the executable exits on the way out with the
+        // same status. Nothing has been painted yet - use_logfile runs
+        // before term_init (edit.c:954) - so there is no screen to take
+        // down, only the keyboard to give back. It used to call
+        // process.exit(0) from in here, which meant a caller's own
+        // `finally` never ran.
+        case 'Q':
+          setKeyboardRaw(false);
+          keyboard().pause();
+
+          return;
+
         default:
+          // a keyboard that can no longer answer would be re-asked for
+          // ever: every empty answer falls to this branch and asks
+          // again. less's getchr quits QUIT_ERROR on the read that
+          // cannot succeed (ttyin.c:220), so the session ends here
+          // with that status and nothing is logged
+          if (keyboardDead()) {
+            process.exitCode = 1;
+            setKeyboardRaw(false);
+            keyboard().pause();
+
+            return;
+          }
+
           answer = await logQuery("Overwrite, Append, Don't log, " +
             'or Quit? (Type "O", "A", "D" or "Q") ');
       }
@@ -821,18 +842,45 @@ export async function contentPager(
     `isStdin=${(keyboard() as unknown) === process.stdin} ` +
     `paused=${keyboard().isPaused?.()}`);
 
+  // Armed BEFORE any listener can reach it, and that ordering is the
+  // whole point: it used to be assigned inside the promise executor
+  // below, so the keyboard's own 'end' - which fires on the tick it is
+  // attached when there is no terminal to read - found session.exit
+  // still resetSession's no-op. The end was swallowed, the promise was
+  // then created with nobody left to resolve it, and node drained the
+  // loop and exited 1 with a library caller's `await pager(...)` still
+  // pending: nothing after it ran, and no catch fired either.
+  const ended = new Promise<void>((resolve) => {
+    session.exit = () => {
+      session.exited = true;
+      resolve();
+    };
+  });
+
   keyboard().on('data', keyHandler);
 
   // less's getchr on an exhausted keyboard: "EOF on the tty means there
   // is no more keyboard input. Don't loop forever waiting for a byte
   // which cannot arrive" - quit(QUIT_ERROR) (ttyin.c:220). It happens
   // AFTER the first screen is painted, which is why less with no
-  // terminal to read still shows you the file and then leaves
-  keyboard().once('end', () => {
-    if (session.exited) return;
-    process.exitCode = 1;
-    session.exit();
-  });
+  // terminal to read still shows you the file and then leaves.
+  //
+  // A read that CANNOT SUCCEED is the same answer, and it needs saying
+  // separately because node delivers it as an event rather than as an
+  // empty read. less's last resort is fd 2 whatever it is (ttyin.c:71),
+  // so the keyboard can be a descriptor opened write-only - any
+  // `node app.js 2> log` with no controlling terminal - and the first
+  // read of one comes back EBADF. Nothing listened for that, so node
+  // raised it as an uncaughtException and onUncaught took the CALLER's
+  // process down with it, mid-await: `await pager(...)` never returned,
+  // nothing after it ran, and no catch of theirs fired either.
+  keyboard().once('end', noMoreKeys);
+  keyboard().once('error', noMoreKeys);
+
+  // ...and it may have said so ALREADY, before anything here could
+  // listen. Deferred, because session.exit resolving before the first
+  // paint would leave the screen less still shows in that case unpainted
+  if (keyboardDead()) setImmediate(noMoreKeys);
   // deferred fill keys replay through the same handler
   session.feedKeys = data => keyHandler(Buffer.from(data));
 
@@ -845,12 +893,12 @@ export async function contentPager(
   const ungotStart = takeUngot();
   if (ungotStart) keyHandler(ungotStart);
 
-  await new Promise<void>((resolve) => {
-    session.exit = () => {
-      session.exited = true;
-      resolve();
-    };
-
+  // from here the screen is up: every path out of this block restores
+  // the terminal, including a throw nobody expected. Without it an
+  // error in the first paint left the caller on the alternate screen
+  // in raw mode, since onUncaught only sees an uncaught EXCEPTION and
+  // this one rejects the promise instead
+  try {
     // less's prompt() skips make_display while ungot startup input
     // (the errmsgs gate key, +cmds) collects a command: the screen
     // stays blank under the command echo until the command finishes
@@ -883,8 +931,11 @@ export async function contentPager(
     // pager sits on a blank terminal, prompt and all, until the
     // first key arrives and pushes the buffer out
     flush();
-  });
-  await cleanUp();
+
+    await ended;
+  } finally {
+    await cleanUp();
+  }
 }
 
 /** Starts an interactive process escape unless policy forbids it. */
@@ -3216,6 +3267,20 @@ function init() {
  * answer a question from a process that is already dying, so the
  * crash path takes the ungated close and gets the terminal back.
  */
+/**
+ * The keyboard has nothing left to give, by EOF or by read error.
+ *
+ * less's quit(QUIT_ERROR) at that point (ttyin.c:220), which is an
+ * exit STATUS and not a crash: the screen it already painted stands,
+ * and a library caller gets its await back.
+ */
+function noMoreKeys(): void {
+  if (session.exited) return;
+
+  process.exitCode = 1;
+  session.exit();
+}
+
 function onUncaught(error: unknown): void {
   closeAltQuiet(files.list[files.index]);
   void cleanUp();
@@ -3976,6 +4041,10 @@ async function cleanUp(): Promise<void> {
   process.off('uncaughtException', onUncaught);
 
   keyboard().off('data', keyHandler);
+  // `once` takes itself off when it fires; these two often do not, and
+  // the stream outlives the session that listened to it
+  keyboard().off('end', noMoreKeys);
+  keyboard().off('error', noMoreKeys);
   setKeyboardRaw(false);
   keyboard().pause();
 
