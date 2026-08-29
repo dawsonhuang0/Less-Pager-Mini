@@ -107,7 +107,8 @@ import {
   markBareRepaint,
   dirtyBottomRow,
   markPosClear,
-  eprPrefix
+  eprPrefix,
+  takeInputNote
 } from "../helpers";
 
 import {
@@ -899,6 +900,13 @@ export async function contentPager(
   // in raw mode, since onUncaught only sees an uncaught EXCEPTION and
   // this one rejects the promise instead
   try {
+    // a value JSON could not hold says so on the PROMPT ROW, which is
+    // where this pager puts every other thing that went wrong. Written
+    // to fd 2 instead it went out before the screen existed and the
+    // first paint buried it; written after, it landed on the end of
+    // "(END)". less has the same two halves for a failed glob - the
+    // shell's complaint on the screen, its own message on the prompt
+    // row - and only the second half is ours to say
     // less's prompt() skips make_display while ungot startup input
     // (the errmsgs gate key, +cmds) collects a command: the screen
     // stays blank under the command echo until the command finishes
@@ -931,6 +939,28 @@ export async function contentPager(
     // pager sits on a blank terminal, prompt and all, until the
     // first key arrives and pushes the buffer out
     flush();
+
+    // a value JSON could not hold says so on the terminal, the way a
+    // glob's complaint arrives: written raw and then FORGOTTEN
+    // (emitShellError, files.ts). The screen model is deliberately not
+    // told - so the line sits under the content for the user to read
+    // and goes when something repaints, exactly as less leaves the
+    // shell's "no matches found" sitting there.
+    //
+    // The two halves the glob path gets for free have to be made here.
+    // cmd_exec has already cleared the prompt row when a command
+    // writes, so the CR and clear come first; and the command's own
+    // render puts the prompt back afterwards, which is what
+    // dirtyBottomRow asks for - the bottom row alone, no seeding, the
+    // model none the wiser about the newline that scrolled it
+    const note = takeInputNote();
+
+    if (note) {
+      fs.writeSync(2, '\r' + CLEAR_LINE + note + '\n');
+      dirtyBottomRow();
+      render(session.content, session.buffer);
+      flush();
+    }
 
     await ended;
   } finally {

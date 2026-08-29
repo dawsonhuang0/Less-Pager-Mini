@@ -1,11 +1,12 @@
 import fs from 'fs';
+import { inspect } from 'util';
 import { putstr } from './tty/output';
 
 import { hasUngot, abortSigs } from './tty/keyboard';
 
 import { terminalCapability } from './tty/terminal';
 
-import { config, fullScreen, mode } from './state/config';
+import { config, fullScreen, mode, DEFAULT_COLUMN } from './state/config';
 
 import { sawSourceRead } from './state/reads';
 
@@ -164,7 +165,18 @@ export function inputToString(
   input: unknown,
   tabObject: boolean
 ): string[] {
-  const text = inputToText(input, tabObject);
+  return textToLines(inputToText(input, tabObject));
+}
+
+/**
+ * The paged text, cut into lines.
+ *
+ * Separate from the conversion because a caller that needs BOTH - the
+ * text, for its byte length, and the lines - would otherwise convert
+ * twice, and converting is not free of consequence: a value JSON
+ * cannot hold reports that on stderr, and reported it twice.
+ */
+export function textToLines(text: string | null): string[] {
   if (text === null) return [];
 
   // a trailing newline ends the last line, it does not add an empty
@@ -200,13 +212,74 @@ export function inputToText(
       return input.toString();
 
     case 'object':
-      // the indent is a tab, so the rendered nesting is whatever the
-      // -x tab stops say — no option scan needed here
-      return JSON
-        .stringify(input, null, tabObject ? config.tabObjectIndent : 0);
+      return objectToText(input, tabObject);
   }
 
   return null;
+}
+
+/**
+ * What went wrong converting the caller's value, for the session to
+ * put on the terminal once it has one.
+ */
+let inputNote = '';
+
+export function takeInputNote(): string {
+  const note = inputNote;
+  inputNote = '';
+
+  return note;
+}
+
+/**
+ * An object as JSON, or as node's own rendering when JSON cannot hold
+ * it.
+ *
+ * JSON.stringify throws on three ordinary things - a circular
+ * reference, a BigInt anywhere inside, and any getter that throws -
+ * and it threw straight out of `pager()`, before a screen existed. A
+ * pager's job is to show you what you have. So it shows what it can
+ * and says what went wrong, exactly as a failed glob does: the
+ * complaint goes to fd 2 and the session carries on (emitShellError,
+ * files.ts).
+ *
+ * util.inspect is what it falls back to, because it survives all
+ * three - a circular reference becomes `<ref *1> ... [Circular *1]`, a
+ * BigInt keeps its `n`, and a getter is NAMED rather than called, so
+ * the one that threw cannot throw again here. Its own limits are off:
+ * a pager is for looking at the whole thing, not at `[Array]`.
+ *
+ * --tab-object does not reach the fallback. Its indent is a tab so
+ * that -x decides the nesting, and inspect indents with spaces it
+ * chooses itself; there is nothing to hand it.
+ */
+function objectToText(input: object | null, tabObject: boolean): string {
+  try {
+    return JSON
+      .stringify(input, null, tabObject ? config.tabObjectIndent : 0);
+  } catch (error) {
+    // node's own wording, named the way node names it - String() on an
+    // Error is "TypeError: ...", which is what the caller would have
+    // seen had this been left to throw. Its FIRST line: JSON's
+    // circular message carries two more explaining which property
+    // closed the loop, which is a debugger's detail on a screen
+    // somebody came to read something else on.
+    //
+    // Held for the session to put on the terminal once it has one,
+    // because this runs before any screen exists. It is not part of
+    // the text: a diagnostic that scrolled with the content would be
+    // counted by -N, found by /, and on anything longer than a screen
+    // it would sit at the very bottom where nobody looks
+    inputNote = String(error).split('\n')[0];
+
+    return inspect(input, {
+      depth: null,
+      maxArrayLength: null,
+      maxStringLength: null,
+      breakLength: config.screenWidth || DEFAULT_COLUMN,
+      colors: false,
+    });
+  }
 }
 
 /**
