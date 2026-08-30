@@ -962,6 +962,17 @@ export async function contentPager(
       flush();
     }
 
+    // ...and only THEN the preprocessor's exit status. less reports it
+    // from ch_get, which runs while the first screen is being built,
+    // so the screen is already on the glass when error() gates over
+    // it: MEASURED, 710x shows the one squished content row at 22 and
+    // the message at 23. Gating before the paint left ours on a blank
+    // screen with nothing but the message.
+    if (await gatePreprocError()) {
+      render(session.content, session.buffer);
+      flush();
+    }
+
     await ended;
   } finally {
     await cleanUp();
@@ -1067,6 +1078,14 @@ const acts: Record<Actions, () => void | Promise<void>> = {
 
       overlays.pop();
       exitHelp();
+
+      // the re-edit ran $LESSOPEN again, so a failing preprocessor
+      // reports again - less prints it over the help screen as the
+      // file comes back
+      // no render here: the dispatcher paints when the action returns,
+      // and doing it twice wrote the prompt onto itself - "f.txt
+      // (END)(END)"
+      if (files.current?.preprocError) return gatePreprocError().then(() => {});
 
       // exitHelp gives back the file the page was PARKED over, which
       // is the one before it unless the screen has since travelled -
@@ -3310,6 +3329,40 @@ function init() {
  * answer a question from a process that is already dying, so the
  * crash path takes the ungated close and gets the terminal back.
  */
+/**
+ * Reports a $LESSOPEN pipe's nonzero exit status, once, at the moment
+ * its content has been read to EOF.
+ *
+ * less v709's baa9515 closes the pipe in ch_get on the read that
+ * returns end-of-file and reports there, then clears the altpipe so
+ * leaving the file cannot report it again. Ours reads a pipe whole,
+ * so "read to EOF" is "the alt has just been loaded" - at startup,
+ * and again on every re-edit that arms a fresh pipe. Quitting the
+ * help is one of those: MEASURED, less prints the message over the
+ * help screen as the file comes back.
+ *
+ * @returns Whether a message was shown, so the caller can repaint.
+ */
+async function gatePreprocError(): Promise<boolean> {
+  const entry = files.current;
+
+  if (!entry?.preprocError || !optShowPreprocError()) return false;
+
+  const message = entry.preprocError;
+  entry.preprocError = undefined;
+  await gateReturn(message);
+
+  // error() ends with screen_trashed (9aba985), so what follows the
+  // message is a repaint and not the squished first paint - and the
+  // name comes with it, since less's message takes the place of the
+  // prompt that would have spent new_file
+  files.newFile = true;
+  mode.INIT = false;
+  markFullRepaint();
+
+  return true;
+}
+
 /**
  * The keyboard has nothing left to give, by EOF or by read error.
  *
