@@ -989,6 +989,21 @@ export async function contentPager(
   }
 }
 
+/**
+ * One notch of a vertical drag, through whichever mover owns the view.
+ *
+ * less's mouse_button_left calls forward()/backward() outright, and on
+ * a file those pull more of it in as they go. Ours splits that in two:
+ * the input engine moves and reads, and the in-memory mover stands in
+ * for the cases it does not own (the help screen, a foreign file).
+ */
+function dragMove(action: 'LINE_FORWARD' | 'LINE_BACKWARD', n: number): void {
+  if (pagerInput?.handle(action, n) === true) return;
+
+  if (action === 'LINE_FORWARD') lineForward(session.content, n);
+  else lineBackward(session.content, n);
+}
+
 /** Starts an interactive process escape unless policy forbids it. */
 function startShellFeature(
   feature: 'shell' | 'pipe',
@@ -3056,10 +3071,17 @@ async function dispatchKey(sequence: string): Promise<void> {
     }
 
     if ((opt.emouse & EMOUSE_VDRAG) && session.lastDragY >= 0) {
+      // through the input, like every other move: less's drag calls
+      // the same forward()/backward() its scroll commands do
+      // (decode.c:685), and on a file those READ. Calling the
+      // in-memory mover instead moved one line and then sat at a
+      // "(END)" the file was nowhere near - the same bug the wheel
+      // had, and for the same reason (fileInput's note on
+      // A_F_MOUSE)
       if (y > session.lastDragY) {
-        lineBackward(session.content, y - session.lastDragY);
+        dragMove('LINE_BACKWARD', y - session.lastDragY);
       } else if (y < session.lastDragY) {
-        lineForward(session.content, session.lastDragY - y);
+        dragMove('LINE_FORWARD', session.lastDragY - y);
       }
 
       session.lastDragY = y;
