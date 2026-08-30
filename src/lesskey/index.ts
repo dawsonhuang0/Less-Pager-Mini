@@ -103,6 +103,7 @@ const CMD_ACTIONS: Record<string, Actions | null> = {
   'repeat-search-all': 'REPEAT_SEARCH',
   'reverse-search': 'REVERSE_SEARCH',
   'reverse-search-all': 'REVERSE_SEARCH',
+  'right-limit-scroll': 'SET_HALF_SCREEN_RIGHT_LIMIT',
   'right-scroll': 'SET_HALF_SCREEN_RIGHT',
   'set-mark': 'SET_MARK',
   'set-mark-bottom': 'SET_MARK_BOTTOM',
@@ -309,6 +310,7 @@ const ACTION_CODES: Record<number, Actions | null> = {
   77: 'FOLLOW_BELL',             // A_F_FOREVER_BELL
   78: 'MOUSE_LEFT',              // A_L_MOUSE
   79: 'MOUSE_RIGHT',             // A_R_MOUSE
+  80: 'SET_HALF_SCREEN_RIGHT_LIMIT', // A_RSHIFT_LIMIT
   100: null,                     // A_INVALID
   101: 'NOACTION',               // A_NOACTION
   102: null,                     // A_UINVALID

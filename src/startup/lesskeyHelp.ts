@@ -119,6 +119,7 @@ export const lesskeyHelp: string[] = [
   "  percent              Go to beginning of file (or _\bN percent into file).",
   "  left-scroll          Left  one half screen width (or _\bN positions).",
   "  right-scroll         Right one half screen width (or _\bN positions).",
+  "  right-limit-scroll   Right like right-scroll but stop at longest line.",
   "  no-scroll            Left  to first column.",
   "  end-scroll           Right to last column displayed.",
   "  forw-bracket         Find close bracket _\b<_\bc_\b2_\b>.",

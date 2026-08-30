@@ -36,6 +36,7 @@ export const help: string[] = [
   "  u  ^U             *  Backward one half-window (and set half-window to _\bN).",
   "  ESC-)  RightArrow *  Right one half screen width (or _\bN positions).",
   "  ESC-(  LeftArrow  *  Left  one half screen width (or _\bN positions).",
+  "  ESC-]  ESC-RArrow *  Right like ESC-) but stop at longest line.",
   "  ESC-}  ^RightArrow   Right to last column displayed.",
   "  ESC-{  ^LeftArrow    Left  to first column.",
   "  F                    Forward forever; like \"tail -f\".",

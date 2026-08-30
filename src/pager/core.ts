@@ -1260,6 +1260,8 @@ const acts: Record<Actions, () => void | Promise<void>> = {
   SET_HALF_WINDOW_BACKWARD: () =>
     setHalfWindowBackward(session.content, session.buffer),
   SET_HALF_SCREEN_RIGHT: () => setHalfScreenRight(session.buffer),
+  SET_HALF_SCREEN_RIGHT_LIMIT: () =>
+    setHalfScreenRight(session.buffer, session.content, true),
   SET_HALF_SCREEN_LEFT: () => setHalfScreenLeft(session.buffer),
   LAST_COL: () => lastCol(session.content),
   FIRST_COL: () => firstCol(),

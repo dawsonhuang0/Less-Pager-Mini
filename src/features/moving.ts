@@ -874,7 +874,11 @@ function shifted(): void {
   hook.rebuildContent();
 }
 
-export function setHalfScreenRight(buffer: string[]): void {
+export function setHalfScreenRight(
+  buffer: string[],
+  content: string[] = [],
+  limit = false
+): void {
   if (mode.INIT) mode.INIT = false;
 
   // less shifts only whole lines: pos_rehead first (command.c)
@@ -883,7 +887,27 @@ export function setHalfScreenRight(buffer: string[]): void {
   const count = bufferToNum(buffer);
   if (count) setShiftCount(count);
 
-  config.col += optShiftCount() || config.halfScreenWidth;
+  let number = optShiftCount() || config.halfScreenWidth;
+
+  // ESC-] stops where the end of the longest DISPLAYED line reaches
+  // the right margin (command.c:2486, 73b023c). less does not floor
+  // the clamp, and it shows: on a file whose lines are all shorter
+  // than the screen the shift goes NEGATIVE, and two ESC-) are needed
+  // before the view moves at all. MEASURED on 710x, and reproduced.
+  if (limit) {
+    let longest = 0;
+
+    const end = Math.min(config.row + config.window - 1, content.length);
+    for (let row = config.row; row < end; row++) {
+      longest = Math.max(longest, visualWidth(content[row]));
+    }
+
+    if (config.col + config.screenWidth + number > longest) {
+      number = longest - config.col - config.screenWidth;
+    }
+  }
+
+  config.col += number;
   shifted();
 }
 

@@ -14,8 +14,13 @@ const KEY_SEQUENCE_REGEX =
   // inside the action itself (decode.c x11mouse_action)
   new RegExp(
     '\\x1B\\[M[\\s\\S]{3}' +
-    '|\\x1B\\[[\\x20-\\x3F]*[\\x40-\\x7E]' +
-    '|\\x1BO[\\x40-\\x7E]|\\x1B[\\s\\S]|[\\s\\S]',
+    // ...and an ESC in front of a whole sequence belongs TO it: less
+    // has cmdtable entries that are ESC followed by a special key's
+    // bytes (ESC-RightArrow, decode.c:125), and reading one byte at a
+    // time it matches them on the buffer's tail. Splitting "ESC ESC O
+    // C" into "ESC ESC", "O", "C" left that binding unreachable
+    '|\\x1B?\\x1B\\[[\\x20-\\x3F]*[\\x40-\\x7E]' +
+    '|\\x1B?\\x1BO[\\x40-\\x7E]|\\x1B[\\s\\S]|[\\s\\S]',
     'gu'
   );
 
@@ -126,6 +131,8 @@ const SPECIAL_KEYS: Array<[string, string, string[], Actions]> = [
   ['kf1', 'k1', ['\x1bOP', '\x1b[11~'], 'HELP'],
 ];
 
+const ESC = '\x1b';
+
 let bound: Record<string, Actions> | null = null;
 
 /**
@@ -149,6 +156,17 @@ function boundKeys(): Record<string, Actions> {
 
     for (const spelling of fallbacks) {
       if (!(spelling in bound)) bound[spelling] = action;
+    }
+
+    // less's cmdtable carries ESC before the right-arrow's special
+    // key as an entry of its own (decode.c:125, 73b023c), so every
+    // spelling of the arrow gains the ESC- form with it
+    if (action === 'SET_HALF_SCREEN_RIGHT') {
+      for (const spelling of [seq, ...fallbacks]) {
+        if (spelling && !(ESC + spelling in bound)) {
+          bound[ESC + spelling] = 'SET_HALF_SCREEN_RIGHT_LIMIT';
+        }
+      }
     }
   }
 
@@ -394,6 +412,9 @@ const keys: Record<string, Actions> = {
 
   // (*) right one half screen width (or (N) positions)
   '\x1B)': 'SET_HALF_SCREEN_RIGHT', // ESC-)
+
+  // (*) right like ESC-) but stop at the longest displayed line
+  '\x1B]': 'SET_HALF_SCREEN_RIGHT_LIMIT', // ESC-]
 
   // (*) left one half screen width (or (N) positions)
   '\x1B(': 'SET_HALF_SCREEN_LEFT', // ESC-(
