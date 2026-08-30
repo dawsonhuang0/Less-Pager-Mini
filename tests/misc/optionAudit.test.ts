@@ -508,12 +508,20 @@ describe('$LESS_UNSUPPORT and $LESS_IS_MORE', () => {
     expect(getFirstCmd()).toBe('G');
   });
 
-  it('skips an unknown long name and still marks a later entry', () => {
+  it('reports an unknown long name and still marks a later entry', () => {
     initUnsupport('--bogus --chop-long-lines');
     scanOptions('-S', []);
 
     expect(config.chopLongLines).toBe(false);
-    expect(search.message).toBe('');
+
+    // less 710's init_unsupport reports what it could not find, where
+    // it used to drop the entry in silence (8520c1f), and names the
+    // REST of the value from the bad entry on. MEASURED on 710x with
+    // this exact value: "invalid option in LESS_UNSUPPORT: --bogus
+    // --chop-long-lines", then the startup gate
+    expect(search.message).toBe(
+      'invalid option in LESS_UNSUPPORT: --bogus --chop-long-lines'
+    );
   });
 });
 

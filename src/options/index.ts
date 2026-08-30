@@ -1157,33 +1157,51 @@ export function initUnsupport(env: string): void {
 
   let i = 0;
 
-  while (i < env.length) {
+  for (;;) {
     while (env[i] === ' ' || env[i] === '\t') i++;
     if (i >= env.length) break;
 
-    // one leading dash is skipped; a second starts a long name
-    if (env[i] === '-') {
-      if (++i >= env.length) break;
-    }
+    // less reports the REST of the value from the bad entry onwards:
+    // parg.p_string is the pointer it takes before parsing and prints
+    // to the terminating NUL (option.c:765)
+    const from = i;
 
-    if (env[i] === '-') {
-      const found = findScanName(env.slice(i + 1));
+    let spec: OptionSpec | null = null;
 
-      if (found.spec !== null) {
-        markUnsupported(found.spec);
-        i += 1 + found.len;
-      } else {
-        i++;
+    // two dashes start a long name; one is skipped, and a lone dash
+    // with nothing after it is an entry that names no option
+    if (env[i] === '-' && env[i + 1] === '-') {
+      i += 2;
+
+      if (i < env.length) {
+        const found = findScanName(env.slice(i));
+        spec = found.spec;
+
+        // a failed lookup does NOT advance: less's findopt_name adds
+        // maxlen, which is 0 when nothing matched (opttbl.c:1022), so
+        // the loop comes back round and reads the name's letters as
+        // SHORT options - MEASURED on 710x, "LESS_UNSUPPORT=--nn"
+        // leaves -N unsupported
+        if (spec) i += found.len;
       }
     } else {
-      const c = env[i++];
-      const spec = OPTIONS.find(s => s.letter === c || (
-        s.type === 'triple' && s.letter !== '' &&
-          s.letter.toUpperCase() === c
-      ));
+      if (env[i] === '-') i++;
 
-      if (spec) markUnsupported(spec);
+      if (i < env.length) {
+        const c = env[i++];
+
+        spec = OPTIONS.find(s => s.letter === c || (
+          s.type === 'triple' && s.letter !== '' &&
+            s.letter.toUpperCase() === c
+        )) ?? null;
+      }
     }
+
+    // 8520c1f: an entry naming no option used to be dropped in
+    // silence, and an invalid LETTER hung less in a loop - it never
+    // advanced past the character it could not find
+    if (spec) markUnsupported(spec);
+    else optScanError(`invalid option in LESS_UNSUPPORT: ${env.slice(from)}`);
   }
 }
 
