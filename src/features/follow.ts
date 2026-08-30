@@ -8,7 +8,7 @@ import { optFollowName, optExitFollowOnClose } from "../options";
 
 import { POLLHUP_EXITS_F } from "../tty/platform";
 
-import { gateReturn, gateEndColumn, abortSigs, clearAbort }
+import { gateReturn, abortSigs, clearAbort }
   from "../tty/keyboard";
 
 import { session, deriveContent } from '../state/session';
@@ -267,11 +267,12 @@ export async function beginFollow(kind: FollowKind): Promise<void> {
     await gateReturn('Warning: command may not work correctly ' +
       'when file is viewed via LESSOPEN');
 
-    // "Printing the message has probably scrolled the screen"
-    // (output.c:733): a message that reaches the right margin wraps,
-    // and less answers that with screen_trashed, so the repaint lands
-    // once the gate is dismissed rather than a scroll off the old rows
-    if (gateEndColumn() >= config.screenWidth) markFullRepaint();
+    // "Printing the message may have scrolled the screen"
+    // (output.c:719). less counted the columns it had used and only
+    // trashed the screen when they reached the margin; v709's 9aba985
+    // dropped the count and trashes unconditionally, because it was
+    // counting BYTES and so was wrong for any non-ASCII message
+    markFullRepaint();
   }
 
   if (!startFollow(kind)) {

@@ -2476,13 +2476,12 @@ async function dispatchKey(sequence: string): Promise<void> {
       search.message &&
       (session.key === '\x0D' || session.key === '\x0A' || session.key === ' ')
     ) {
-      // less: a message wider than the screen wrapped and trashed the
-      // rows above the prompt (command.c:998 calls make_display
-      // again) - the dismissal repaint must be full, not a scroll
-      if (visualWidth(search.message + '  (press RETURN)') >
-          config.screenWidth) {
-        resetRender();
-      }
+      // less repaints after ANY message now, wide or not: v709's
+      // 9aba985 replaced error()'s `col >= sc_width` guess with an
+      // unconditional screen_trashed(). The guess counted BYTES, so
+      // it was wrong for every non-ASCII message - and ierror/ixerror
+      // never called it at all
+      resetRender();
 
       search.message = search.messageQueue.shift() ?? '';
       render(session.content, session.buffer);
@@ -2514,13 +2513,8 @@ async function dispatchKey(sequence: string): Promise<void> {
   // consecutive blocking error() calls
   const hadMessage = search.message !== '';
 
-  // less: a message wider than the screen wrapped and trashed the rows
-  // above the prompt (command.c:998 calls make_display again) - the
-  // dismissal repaint must be full, never a scroll shortcut
-  if (hadMessage && visualWidth(search.message + '  (press RETURN)') >
-      config.screenWidth) {
-    resetRender();
-  }
+  // less repaints after ANY message now: see above
+  if (hadMessage) resetRender();
 
   search.message = search.messageQueue.shift() ?? '';
 
