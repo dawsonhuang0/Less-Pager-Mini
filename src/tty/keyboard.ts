@@ -377,6 +377,18 @@ export function gateReleaseKind(): GateRelease {
   return gateKind;
 }
 
+/**
+ * Forgets it, once the gate's own caller has acted on it.
+ *
+ * The kind is a global, like less's, but less reads it as control
+ * flow the instant get_return returns. A later reader that never
+ * gated at all - a closeAlt with nothing to report - would otherwise
+ * find some earlier gate's answer still standing.
+ */
+export function clearGateRelease(): void {
+  gateKind = 'dismiss';
+}
+
 /** Reads whether the last gate was released by a resize. */
 export function gateReleasedByWinch(): boolean {
   return gateKind === 'winch';

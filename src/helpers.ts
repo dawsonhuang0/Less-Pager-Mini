@@ -1514,10 +1514,12 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     // jumped to a destination whose gutter was still blank - a frame
     // less never shows. Holding it here puts that back, and costs
     // nothing this time: the loop is free, so ^C still lands.
-    const atPrompt = !search.message && !option.pending && !search.input &&
+    const quiet = !search.message && !option.pending && !search.input &&
       !examine.pending && !miscInput.pending && !brackets.pending &&
-      !marks.pending && !mode.BUFFERING && !config.keyPrefix &&
-      !hasUngot() && hook.sourceCounting?.() !== true;
+      !marks.pending && !mode.BUFFERING && !config.keyPrefix;
+
+    const atPrompt = quiet && !hasUngot() &&
+      hook.sourceCounting?.() !== true;
 
     if (atPrompt) {
       frozenFrame = false;
@@ -1526,7 +1528,15 @@ function renderFrame(rawContent: string[], buffer: string[]): void {
     } else if (prevRows) {
       // held content: the answers describe rows this frame is not
       // drawing (see the mca hold above)
-      rows = [...prevRows.slice(0, -1), rows[rows.length - 1]];
+      //
+      // ...and when the ONLY thing holding the frame is ungot input,
+      // not a command line, the bottom row is held too: less's
+      // prompt() returns before make_display AND before it writes the
+      // prompt (command.c:864), so an ungot `h` paints nothing on its
+      // way to the help - ours flashed "f.txt (END)" first
+      rows = quiet && hasUngot()
+        ? [...prevRows]
+        : [...prevRows.slice(0, -1), rows[rows.length - 1]];
       resetRowEnds();
     }
   }

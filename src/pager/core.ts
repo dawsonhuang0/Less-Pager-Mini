@@ -22,7 +22,7 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
 import { keyboard, keyboardDead, closeTtyKeyboard, dumbTerminal, takeUngot,
   setKeyboardRaw,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyTrace,
-  gateReturn, gateReleasedByWinch, gateReleaseKind, gateIsOpen }
+  gateReturn, gateReleasedByWinch, gateReleaseKind, clearGateRelease, gateIsOpen }
   from "../tty/keyboard";
 
 
@@ -104,6 +104,7 @@ import {
   calculateEOF,
   lastScreen,
   clearBot,
+  formatContent,
   markBareRepaint,
   dirtyBottomRow,
   markPosClear,
@@ -971,6 +972,11 @@ export async function contentPager(
     if (await gatePreprocError()) {
       render(session.content, session.buffer);
       flush();
+
+      // this gate is not inside a command, so nothing else goes back
+      // to the queue for it: a key get_return ungot here - `h` at the
+      // very first message - only cleared the message and vanished
+      drainUngot();
     }
 
     await ended;
@@ -1077,15 +1083,60 @@ const acts: Record<Actions, () => void | Promise<void>> = {
       }
 
       overlays.pop();
+
+      // the help screen as it still stands, taken before exitHelp's
+      // resetRender forgets it: the interrupted paint below scrolls
+      // it, and an ungot command released from the gate has to find
+      // the result on the glass
+      const helpRows = lastScreen();
+
       exitHelp();
 
       // the re-edit ran $LESSOPEN again, so a failing preprocessor
-      // reports again - less prints it over the help screen as the
-      // file comes back
-      // no render here: the dispatcher paints when the action returns,
-      // and doing it twice wrote the prompt onto itself - "f.txt
-      // (END)(END)"
-      if (files.current?.preprocError) return gatePreprocError().then(() => {});
+      // reports again - and it reports from INSIDE the paint. edit_prev
+      // only opens the file (command.c:1972); the screen is drawn back
+      // in the loop by make_display, whose empty_screen() sends
+      // jump_loc down forw(), which prints "...skipping..." over the
+      // help (forwback.c:272) and then the file's line. Reading that
+      // line hits EOF, and ch_get closes the pipe THERE (ch.c:340), so
+      // error() lands on the row the prompt would have taken.
+      //
+      // So the paint comes first and the message over it, exactly as
+      // at startup. The dispatcher's own render is then the repaint
+      // that error()'s screen_trashed asks for, which is why this one
+      // has to flush before the gate blocks: rendering after it wrote
+      // the prompt onto itself - "f.txt (END)(END)"
+      if (files.current?.preprocError) {
+        // and the paint less made is the INTERRUPTED one, which no
+        // frame of ours can be: forw had put the marker and the
+        // file's lines when the read under the NEXT forw_line hit
+        // EOF, so the tilde pad and the prompt row never happened.
+        // The rows print raw, exactly the putstr + put_line less got
+        // through before error() took the screen away from it
+        // formatContent pads the window out with tildes; less never
+        // reaches them, because the read that would have fetched the
+        // line AFTER the last real one is the read that reports. Only
+        // the lines forw actually put are on the glass
+        const drawn = formatContent(session.content)
+          .slice(0, Math.min(config.window - 1, session.content.length));
+
+        const marker = fullScreen() ? ['...skipping...'] : [];
+
+        putstr(marker.map(line => line + '\n').join('') +
+          drawn.map(line => line + '\n').join(''));
+        flush();
+
+        // the rows those bytes leave on screen: cmd_exec's clear_bot
+        // put the cursor on the prompt row, so the marker is written
+        // OVER it and every line after scrolls one more away. The
+        // bottom row is the message's, which get_return then clears
+        if (helpRows) {
+          seedFrameRows([...helpRows.slice(0, -1), ...marker, ...drawn, '']
+            .slice(-config.window));
+        }
+
+        return gatePreprocError(true).then(() => {});
+      }
 
       // exitHelp gives back the file the page was PARKED over, which
       // is the one before it unless the screen has since travelled -
@@ -2065,6 +2116,19 @@ function drainKeys(): void {
   // ...unless the queue holds a key typed while this very screen was
   // up: the watcher takes those off the terminal mid-work, and the
   // message they answer has been showing the whole time
+  drainUngot();
+}
+
+/**
+ * Runs the keys less's ungot queue holds, like its command loop
+ * picking them up at the next prompt.
+ *
+ * Called from the end of a command whether it finished synchronously
+ * or not: an awaited one (a gate) returns long after drainKeys' own
+ * tail has run, and a key get_return ungot then had nothing left to
+ * carry it - `h` at a (press RETURN) simply never happened.
+ */
+function drainUngot(): void {
   if (!search.message || ungotIsLive()) {
     const pending = takeUngot();
 
@@ -2188,6 +2252,8 @@ async function handleKey(sequence: string): Promise<void> {
   // prompt: quit when the entire file is displayed, and either way
   // the flag gets only one chance at this
   if (!session.exited && optQuitIfOneScreen()) oneScreenQuit();
+
+  drainUngot();
 }
 
 /**
@@ -2897,7 +2963,13 @@ async function dispatchKey(sequence: string): Promise<void> {
       return;
     }
 
-    act(action);
+    // awaited: an action that BLOCKS (a (press RETURN) gate) has not
+    // finished when it returns its promise, and less's command loop
+    // does not read the next key until the command is over. Dropped
+    // here, the key get_return ungot had nothing to carry it back to
+    // the loop - `h` at a gate never ran
+    await act(action);
+
     return;
   }
 
@@ -3155,7 +3227,7 @@ async function dispatchKey(sequence: string): Promise<void> {
       return;
     }
 
-    act(action);
+    await act(action);
     session.escCount = 0;
   }
 }
@@ -3343,7 +3415,9 @@ function init() {
  *
  * @returns Whether a message was shown, so the caller can repaint.
  */
-async function gatePreprocError(): Promise<boolean> {
+async function gatePreprocError(
+  trashedClearHome: boolean = false
+): Promise<boolean> {
   const entry = files.current;
 
   if (!entry?.preprocError || !optShowPreprocError()) return false;
@@ -3358,6 +3432,30 @@ async function gatePreprocError(): Promise<boolean> {
   // prompt that would have spent new_file
   files.newFile = true;
   mode.INIT = false;
+
+  // ...but only once the loop reaches a PROMPT. get_return ungets
+  // any key that is not RETURN, space or an interrupt (output.c:696),
+  // and prompt() skips make_display while ungot input pends - so the
+  // command runs over the screen the message was printed on and the
+  // trashed repaint never happens. `h` at the gate opens the help;
+  // ours repainted first and cleared it away
+  const ungotCommand = gateReleaseKind() === 'unget';
+  clearGateRelease();
+
+  if (ungotCommand) {
+    freezeFrame();
+
+    return true;
+  }
+
+  // and when it WAS dismissed, the repaint happens - with top_scroll
+  // forced, so it clears and homes rather than scrolling more of the
+  // file in behind what the interrupted paint left
+  if (trashedClearHome) {
+    resetRender();
+    markClearHome();
+  }
+
   markFullRepaint();
 
   return true;
