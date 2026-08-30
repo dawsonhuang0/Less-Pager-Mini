@@ -471,7 +471,14 @@ export function shellCommand(
     text = text.slice(1);
   }
 
-  if (!text.startsWith('!')) lastShellCmd = fexpand(text);
+  // ONLY a bare "!" repeats. less tested the first character
+  // (`*cbuf != '!'`, command.c) until v709's b54d585 made it
+  // `strcmp(cbuf, "!") != 0` - the old test swallowed any command
+  // whose NAME begins with one, re-running the last command and
+  // discarding what was typed. MEASURED on both binaries: `!echo AAA`
+  // then `!!echo BBB` printed AAA again on 707 and answers
+  // "sh: !echo: command not found" on 710
+  if (text !== '!') lastShellCmd = fexpand(text);
 
   return { cmd: lastShellCmd, doneMsg };
 }

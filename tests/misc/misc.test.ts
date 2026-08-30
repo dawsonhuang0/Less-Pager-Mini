@@ -88,8 +88,17 @@ describe('shell command', () => {
       doneMsg: '!done',
     });
 
-    // !! reuses the stored command
-    expect(shellCommand('!!').cmd).toBe('echo - prev.txt');
+    // "!!" typed at the pager reuses the stored command - the answer
+    // this sees is what follows the prompt's own "!", so a bare one
+    expect(shellCommand('!').cmd).toBe('echo - prev.txt');
+
+    // ...and ONLY a bare one. less tested the first character until
+    // v709's b54d585 made it `strcmp(cbuf, "!") != 0`, so a command
+    // whose NAME starts with "!" used to be swallowed and the last
+    // one run again. MEASURED on less 710x: the answer "!!" gives
+    // "sh: !!: command not found", the answer "!" repeats
+    expect(shellCommand('!!').cmd).toBe('!!');
+    expect(shellCommand('!echo hi').cmd).toBe('!echo hi');
   });
 
   it('suppresses the done message after a leading ^P', () => {
