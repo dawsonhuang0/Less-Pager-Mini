@@ -147,8 +147,14 @@ describe('--rmouse', () => {
     scan('--MOUSE');
     expect(optMouseReverse()).toBe(true);
 
+    // less 710's opt_mouse (249e497) sets mouse_reverse only on the
+    // branch that ENABLES the mouse: over an already-enabled mouse,
+    // --mouse turns it off and leaves the direction alone. MEASURED
+    // on 710x: "--MOUSE --mouse" then __rmouse still answers "Reverse
+    // mouse scroll direction", and __mouse answers "Ignore mouse
+    // input"
     scan('--mouse');
-    expect(optMouseReverse()).toBe(false);
+    expect(optMouseReverse()).toBe(true);
 
     // turning the mouse off leaves the direction alone, like less
     scan('--MOUSE');

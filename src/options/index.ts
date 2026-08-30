@@ -722,7 +722,17 @@ function applyOption(
   }
 
   spec.set(next, content);
-  if (!option.noPrompt) search.message = spec.messages[stateOf(spec)];
+
+  if (!option.noPrompt) {
+    // less's toggle_option skips the generic odesc message when the
+    // entry is NULL (option.c:476, e89bbf6). An option whose message
+    // depends on more than its own value carries NULLs and prints for
+    // itself instead - opt_mouse by falling through into its QUERY
+    const message = spec.messages[stateOf(spec)];
+
+    if (message !== undefined) search.message = message;
+    else spec.query?.();
+  }
 }
 
 /**
