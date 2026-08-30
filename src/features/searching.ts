@@ -1072,17 +1072,9 @@ function highlightLineFor(line: string, row: number): string {
   let match: Found | null;
 
   while (!source && (match = globalRegex.exec(matchable)) !== null) {
-    if (search.subs.size && match.indices) {
-      for (const n of search.subs) {
-        const span = match.indices[n];
-
-        if (span && span[1] > span[0]) {
-          ranges.push([span[0], span[1], subColorKind(n)]);
-        }
-      }
-    } else if (match[0]) {
-      pushMatchRanges(ranges, match);
-    }
+    // as in sourceRanges: hilite_line drops SRCH_SUBSEARCH_ALL
+    // (search.c:1089, 1415651), so ^S never decides what is marked
+    if (match[0]) pushMatchRanges(ranges, match);
 
     if (match.index === globalRegex.lastIndex) globalRegex.lastIndex++;
 
@@ -1744,16 +1736,12 @@ function sourceRanges(source: string): [number, number, ColorKind][] {
   globalRegex.lastIndex = 0;
 
   for (let m = globalRegex.exec(text); m; m = globalRegex.exec(text)) {
-    if (search.subs.size && m.indices) {
-      for (const n of search.subs) {
-        const span = m.indices[n];
-        if (span && span[1] > span[0]) {
-          seen.push([span[0], span[1], subColorKind(n)]);
-        }
-      }
-    } else if (m[0]) {
-      pushMatchRanges(seen, m);
-    }
+    // ^S restricts which LINES match, never which matches are marked:
+    // less's hilite_line drops SRCH_SUBSEARCH_ALL from the search type
+    // it hands match_pattern (search.c:1089, 1415651), so every match
+    // on the line is hilited and every group carries its own colour,
+    // exactly as with no ^S at all
+    if (m[0]) pushMatchRanges(seen, m);
 
     if (m.index === globalRegex.lastIndex) globalRegex.lastIndex++;
     if (search.invert) break;
@@ -1781,6 +1769,14 @@ function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean
   // is what stopped less hanging on a pattern like `(x*)`).
   const scan = regex.global ? regex : psx(regex.source, regex.flags + 'g');
 
+  // the conditions still OUTSTANDING. less used to demand that one
+  // match satisfy them all, so `(foo)|(bar)` with ^S1 ^S2 could never
+  // match anything - an alternation matches one branch at a time.
+  // 1415651 made subsearch_ok CLEAR each condition a match satisfies
+  // and succeed once none are left, so the line matches when its
+  // matches TOGETHER cover the requested subpatterns
+  const pending = new Set(subs);
+
   let start = 0;
 
   for (;;) {
@@ -1789,13 +1785,15 @@ function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean
     const match = scan.exec(text);
     if (!match) return false;
 
-    let ok = true;
-    for (const n of subs) {
+    for (const n of pending) {
       const group = match[n];
-      if (group === undefined || group.length === 0) ok = false;
+
+      // a group that merely participated does not count: less tests
+      // `ep[i] != sp[i]`, so it has to have matched something
+      if (group !== undefined && group.length > 0) pending.delete(n);
     }
 
-    if (ok) return true;
+    if (pending.size === 0) return true;
 
     const end = match.end;
     if (end === start) return false;

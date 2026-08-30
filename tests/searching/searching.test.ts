@@ -371,7 +371,15 @@ describe('execSearch', () => {
     expect(highlightLine('x bravo y')).toBe(
       'x ' + INVERSE_ON + 'bravo' + INVERSE_OFF + ' y'
     );
-    expect(highlightLine('x alpha y')).toBe('x alpha y');
+
+    // ...but ^S restricts which LINES match, never which matches are
+    // MARKED: less's hilite_line drops SRCH_SUBSEARCH_ALL from the
+    // search type (search.c:1089, 1415651). MEASURED on 710x with
+    // "^S1 /(foo)|(bar)": less hilites the "bar" of a "bar only" line,
+    // which group 1 never touches
+    expect(highlightLine('x alpha y')).toBe(
+      'x ' + INVERSE_ON + 'alpha' + INVERSE_OFF + ' y'
+    );
   });
 });
 
