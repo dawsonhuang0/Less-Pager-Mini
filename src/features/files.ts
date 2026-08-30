@@ -467,13 +467,41 @@ export function binFile(bytes: Buffer): boolean {
 
   let count = 0;
 
+  // less's loop runs while `p + umax < edata` with umax 4
+  // (filename.c:519), so the last four bytes of the sample are never
+  // examined at all
+  let at = 0;
+
+  // whether the previous byte was part of an ill-formed sequence less
+  // has already counted
+  let illFormed = false;
+
   for (const char of text) {
     const code = char.codePointAt(0) ?? 0;
+    const raw = rawByteOf(char);
+    const width = raw >= 0 ? 1 : Buffer.byteLength(char);
 
-    if (rawByteOf(char) >= 0 || (code < 0x100 && binaryByte(code)) ||
-        ubinChar(char)) {
-      count++;
+    if (at + 4 >= head.length) break;
+    at += width;
+
+    if (raw >= 0) {
+      // ONE count per ill-formed SEQUENCE, not per byte: less counts
+      // the bad lead and then calls utf_skip_to_lead, which runs on
+      // through the continuation bytes and stops only at the next
+      // lead or ASCII octet (charset.c:10). Counting each byte called
+      // a file with three truncated sequences binary where less needs
+      // six - MEASURED, our question appeared at n=3 and less's at
+      // n=6
+      const lead = (raw & 0xC0) === 0xC0 && (raw & 0xFE) !== 0xFE;
+
+      if (!illFormed || lead) count++;
+      illFormed = true;
+      continue;
     }
+
+    illFormed = false;
+
+    if ((code < 0x100 && binaryByte(code)) || ubinChar(char)) count++;
   }
 
   return count > 5;
