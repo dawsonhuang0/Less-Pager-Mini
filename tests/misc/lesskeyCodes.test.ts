@@ -82,7 +82,8 @@ describe('lesskey action codes', () => {
     // the pager's own \\k handling resolves through terminfo and so
     // only knows the keys a terminal describes; this table is what
     // COMPILES, and less's tstr accepts the keypad forms too
-    expect(Object.keys(SPECIAL_KEY_CODES)).toHaveLength(55);
+    // 55, plus less 710's four page-key forms (2a2eca2)
+    expect(Object.keys(SPECIAL_KEY_CODES)).toHaveLength(59);
 
     expect({
       up: SPECIAL_KEY_CODES['u'],        // SK_UP_ARROW 3
@@ -91,6 +92,19 @@ describe('lesskey action codes', () => {
       padEnter: SPECIAL_KEY_CODES['pe'], // SK_PAD_ENTER 41
       padStar: SPECIAL_KEY_CODES['p*'],  // SK_PAD_STAR 27
     }).toEqual({ up: 3, ctrlDown: 45, shiftUp: 42, padEnter: 41, padStar: 27 });
+
+    // less's lesskey.nro prints "\k^U shift-PAGE UP" and "\k+U
+    // ctrl-PAGE UP", which is a typo in the MAN PAGE: lesskey_parse.c
+    // reads '^' as ctrl and '+' as shift for every one of these,
+    // page keys included (:287, :301)
+    expect({
+      shiftPageUp: SPECIAL_KEY_CODES['+U'],   // SK_SHIFT_PAGE_UP 47
+      shiftPageDown: SPECIAL_KEY_CODES['+D'], // SK_SHIFT_PAGE_DOWN 48
+      ctlPageUp: SPECIAL_KEY_CODES['^U'],     // SK_CTL_PAGE_UP 49
+      ctlPageDown: SPECIAL_KEY_CODES['^D'],   // SK_CTL_PAGE_DOWN 50
+    }).toEqual({
+      shiftPageUp: 47, shiftPageDown: 48, ctlPageUp: 49, ctlPageDown: 50,
+    });
 
     // a blob opens with CONTROL('K'), which is why a literal ^K has to
     // be stored as SK_CONTROL_K instead of as itself

@@ -179,6 +179,8 @@ const SPECIAL_KEYS: Record<string, string> = {
   'x': '\x1B[3~',
   'X': '\x1B[3;5~',
   '1': '\x1BOP',
+  '^D': '\x1B[6;5~',
+  '^U': '\x1B[5;5~',
   '^b': '\x08',
   '^d': '\x1B[1;5B',
   '^e': '\x1B[1;5F',
@@ -187,6 +189,8 @@ const SPECIAL_KEYS: Record<string, string> = {
   '^r': '\x1B[1;5C',
   '^u': '\x1B[1;5A',
   '^x': '\x1B[3;5~',
+  '+D': '\x1B[6;2~',
+  '+U': '\x1B[5;2~',
   '+d': '\x1B[1;2B',
   '+e': '\x1B[1;2F',
   '+h': '\x1B[1;2H',
@@ -204,6 +208,8 @@ const SPECIAL_CAPS: Record<string, [string, string | null]> = {
   H: ['kHOM5', null], I: ['kHOM', '#2'], L: ['kLFT5', null],
   M: ['kLFT', null], R: ['kRIT5', null], S: ['kRIT', null],
   E: ['kEND5', null], F: ['kEND', '#7'],
+  '^D': ['kNXT5', null], '^U': ['kPRV5', null],
+  '+D': ['kNXT', null], '+U': ['kPRV', null],
   '^d': ['kDN5', null], '^e': ['kEND5', null],
   '^h': ['kHOM5', null], '^l': ['kLFT5', null],
   '^r': ['kRIT5', null], '^u': ['kUP5', null],
@@ -356,6 +362,10 @@ const SK_CODES: Record<number, string> = {
   44: '\x1B[1;5A', // SK_CTL_UP_ARROW
   45: '\x1B[1;5B', // SK_CTL_DOWN_ARROW
   46: '\x1B[3;2~', // SK_SHIFT_DELETE
+  47: '\x1B[5;2~', // SK_SHIFT_PAGE_UP
+  48: '\x1B[6;2~', // SK_SHIFT_PAGE_DOWN
+  49: '\x1B[5;5~', // SK_CTL_PAGE_UP
+  50: '\x1B[6;5~', // SK_CTL_PAGE_DOWN
 };
 
 // the loaded user tables
