@@ -28,6 +28,7 @@ import {
   expandExamineList,
   addExamineHistory,
   setPreviousPath,
+  getPreviousPath,
   bottomRow,
   closeAlt,
   revealAltEnd,
@@ -390,6 +391,7 @@ export async function removeFile(): Promise<void> {
 
   const removed = files.index;
   const target = removed < files.list.length - 1 ? removed + 1 : removed - 1;
+  const removedPath = files.list[removed]?.path ?? null;
 
   const opened = switchToFile(target);
 
@@ -399,6 +401,14 @@ export async function removeFile(): Promise<void> {
 
   // less's del_ifile runs unmark(ifile): the removed file's marks die
   files.list.splice(removed, 1);
+
+  // ...and clears old_ifile when the ifile it frees IS the '#' one
+  // (ifile.c:143, ef9ec66). The switch above has just made this file
+  // the previous one, so without this ':e#' reopens the very file the
+  // ':d' deleted - in less it read freed memory instead
+  if (removedPath !== null && getPreviousPath() === removedPath) {
+    setPreviousPath(null);
+  }
   shiftHelpAt(removed, -1);
   if (files.index > removed) files.index--;
 }
