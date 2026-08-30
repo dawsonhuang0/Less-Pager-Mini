@@ -128,6 +128,7 @@ export const help: string[] = [
   "  !_\bc_\bo_\bm_\bm_\ba_\bn_\bd             Execute the shell command with $SHELL.",
   "  #_\bc_\bo_\bm_\bm_\ba_\bn_\bd             Execute the shell command, expanded like a prompt.",
   "  |X\bX_\bc_\bo_\bm_\bm_\ba_\bn_\bd            Pipe file between current pos & mark X\bX to shell command.",
+  "  ||X\bXY\bY_\bc_\bo_\bm_\bm_\ba_\bn_\bd          Pipe file between mark X\bX and mark Y\bY to shell command.",
   "  s _\bf_\bi_\bl_\be               Save input to a file.",
   "  v                    Edit the current file with $VISUAL or $EDITOR.",
   "  V                    Print version number of \"less-pager-mini\".",
