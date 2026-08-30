@@ -1328,12 +1328,23 @@ export function setMouseMark(content: string[], y: number): void {
     }
   }
 
-  userMarks.set('#', {
+  const mark: Mark = {
     file: files.list[files.index],
     row,
     subRow,
     sline: y + 1,
-  });
+  };
+
+  // less's mouse click calls the SAME setmark the m command does
+  // (decode.c:713), so the mark it leaves is an ordinary one: it
+  // carries the byte position a source engine jumps by, and it counts
+  // as a modification. Without the position, gomark had nothing to
+  // seek to and '#' was the one mark that never moved the view
+  const pos = sourceMarkHooks?.position(mark.row, mark.subRow);
+  if (pos !== null && pos !== undefined) mark.pos = pos;
+
+  userMarks.set('#', mark);
+  touchMarks();
 }
 
 /**
