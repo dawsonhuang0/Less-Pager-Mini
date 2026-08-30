@@ -1028,6 +1028,21 @@ const helpStep: HelpStep = {
 // @ts-expect-error - TODO: Remove this ignore once all Actions implemented
 const acts: Record<Actions, () => void | Promise<void>> = {
   EXIT: () => {
+    // less's A_QUIT opens with cmd_exec (command.c:1961, added by
+    // v709's 05bfd38) - BEFORE it looks at whether the help is up, so
+    // quitting the help repaints under an opening that is already
+    // written, and quitting outright takes the ":" off the row on the
+    // way out. MEASURED: one more "\r\e[K" ahead of the deinit than
+    // 707 sent, which is what clear_bot emits with the cursor already
+    // on the bottom row.
+    //
+    // Every byte sweep here ends with q, so the one line og added
+    // moved ttysweep to 4/10, keysweep to 1/25 and dumbsweep to 0/13
+    // the moment less/ was rebuilt at 710
+    putstr(clearBot());
+    flush();
+    search.cmdExecOpened = true;
+
     // the lesskey view unwinds before help does, and before quitting:
     // both are stashes over the same session
     // popped only once the close has actually happened: exitHelp reads
