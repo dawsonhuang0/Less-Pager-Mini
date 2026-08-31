@@ -1,6 +1,7 @@
 {
   "name": "less-pager-mini",
   "version": "1.15.2",
+  "lessVersion": "710x",
   "description": "A scrollable terminal pager for Node.js CLI apps (terminal only)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

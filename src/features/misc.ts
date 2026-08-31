@@ -1,6 +1,5 @@
 import fs from 'fs';
 import { putstr } from '../tty/output';
-import path from 'path';
 
 import { secureAllow } from "./secure";
 
@@ -16,6 +15,8 @@ import {
 import { filenameComplete } from "./files";
 
 import { optNoHistDups, optAutosaveAction } from "../options";
+
+import { packageVersion, lessVersion } from '../packageInfo';
 
 import { search } from "./searching";
 
@@ -655,23 +656,6 @@ export function printVersion(): void {
 }
 
 function versionString(): string {
-  return 'less-pager-mini ' + packageVersion() + ' (based on less 707x)';
-}
-
-let cachedVersion = '';
-
-function packageVersion(): string {
-  if (cachedVersion) return cachedVersion;
-
-  try {
-    const root = typeof __dirname === 'undefined'
-      ? process.cwd()
-      : path.join(__dirname, '..', '..');
-    const raw = fs.readFileSync(path.join(root, 'package.json'), 'utf8');
-    cachedVersion = (JSON.parse(raw) as { version: string }).version;
-  } catch {
-    cachedVersion = 'unknown';
-  }
-
-  return cachedVersion;
+  return 'less-pager-mini ' + packageVersion() +
+    ' (based on less ' + lessVersion() + ')';
 }

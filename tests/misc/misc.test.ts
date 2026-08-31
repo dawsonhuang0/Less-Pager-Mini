@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -302,8 +305,18 @@ describe('misc input editing', () => {
 });
 
 describe('version', () => {
-  it('reports the package version', () => {
+  it('reports the package version and the less it is built on', () => {
     versionMessage();
-    expect(search.message).toMatch(/^less-pager-mini \d+\.\d+\.\d+ \(based on less 707x\)$/);
+
+    // both halves come from package.json, so the assertion reads them
+    // from there too - the literal that used to be here said 707x
+    // long after the port had caught up with less
+    const pkg = JSON.parse(readFileSync(
+      join(__dirname, '..', '..', 'package.json'), 'utf8'
+    )) as { version: string; lessVersion: string };
+
+    expect(search.message).toBe(
+      `less-pager-mini ${pkg.version} (based on less ${pkg.lessVersion})`
+    );
   });
 });
