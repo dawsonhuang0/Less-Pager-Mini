@@ -20,8 +20,9 @@ import { resetSearch } from '../features/searching';
  * stops behind for the following call, and a squished first screen
  * never squished again because mode.INIT stayed false.
  *
- * Runs BEFORE the $LESS scan, so it writes onto defaults. Deliberately NOT reset: the queued CLI arguments
- * (the executable fills them before it calls in), and anything less
+ * Runs BEFORE the $LESS scan, so it writes onto defaults. Deliberately
+ * NOT reset: the queued CLI arguments (the executable fills them before
+ * it calls in), and anything less
  * persists across invocations by design — the history file, and the
  * marks --save-marks restores.
  */

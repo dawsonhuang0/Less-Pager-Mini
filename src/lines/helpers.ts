@@ -75,7 +75,8 @@ export function maxSubRow(line: string): number {
 // rather than put in the class: a lone ZWJ or variation selector
 // inside a character class reads as a misleading combined sequence.
 const CONTROL_REGEX = new RegExp(
-  '[\\x00-\\x08\\x0B-\\x1F\\x7F\\t\\uE000-\\uE0FF\\uFFFD\\p{Cn}\\p{Co}\\p{Cs}]' +
+  '[\\x00-\\x08\\x0B-\\x1F\\x7F\\t\\uE000-\\uE0FF\\uFFFD' +
+  '\\p{Cn}\\p{Co}\\p{Cs}]' +
   '|\\u00AD|\\u200D|[\\uFE00-\\uFE0F]' +
   '|[\\u{1F3FB}-\\u{1F3FF}]|[\\u{1F9B0}-\\u{1F9B3}]|[\\u{E0100}-\\u{E01EF}]',
   'u'

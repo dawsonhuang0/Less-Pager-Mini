@@ -1,7 +1,8 @@
 import { keyboard, keyboardDead, dumbTerminal, watchWinch, unwatchWinch,
   setKeyboardRaw } from '../tty/keyboard';
 
-import { opt, scanOptions, initUnsupport, takeCliOptions, flushPendopt, onRebuild, optKnowDumb } from '../options';
+import { opt, scanOptions, initUnsupport, takeCliOptions, flushPendopt,
+  onRebuild, optKnowDumb } from '../options';
 
 import { search } from '../features/searching';
 

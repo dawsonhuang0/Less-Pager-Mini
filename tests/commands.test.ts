@@ -161,7 +161,8 @@ describe('file command orchestration', () => {
     expect(files.newFile).toBe(true);
   });
 
-  it('starts the new file at column 0, like less edit_ifile hshift = 0', async () => {
+  it('starts the new file at column 0, like less edit_ifile hshift = 0',
+    async () => {
     // less's edit_ifile zeroes hshift (edit.c:680) in the same block as
     // pos_clear and clr_hilite: a switch starts at the left edge
     // however far the file being left was shifted. It has to - less
@@ -200,7 +201,8 @@ describe('file command orchestration', () => {
     expect(search.message).toContain('No such file or directory');
   });
 
-  it('inserts and opens a new name immediately after the current file', async () => {
+  it('inserts and opens a new name immediately after the current file',
+    async () => {
     expect(openByName(fileC)).toBe(true);
 
     expect(files.list.map(entry => entry.path))
@@ -380,7 +382,8 @@ describe('shell, pipe, and editor commands', () => {
       String(call[0]).includes('!done  (press RETURN)'))).toBe(true);
   });
 
-  it('pipes an inclusive marked range and parks on the pager screen', async () => {
+  it('pipes an inclusive marked range and parks on the pager screen',
+    async () => {
     pipeMark.rows = [1, 3];
 
     runPipe('wc -l');

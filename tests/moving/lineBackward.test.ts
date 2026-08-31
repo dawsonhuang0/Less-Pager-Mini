@@ -4,7 +4,8 @@ import { config, mode } from '../../src/state/config';
 
 import { text, content } from '../utils/mockContent';
 
-import { implementLineForward, implementLineBackward } from '../utils/testUtils';
+import { implementLineForward, implementLineBackward }
+  from '../utils/testUtils';
 
 import { calculateEOF } from '../../src/helpers';
 
@@ -38,11 +39,13 @@ describe('chopLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
     implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
     implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
-    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(
+      lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
   it('backwards 2 lines', () => {
@@ -57,7 +60,9 @@ describe('chopLongLines', () => {
   it('forwards multiple lines then backwards 1 line into chopped line', () => {
     implementLineForward(content, 14, false, [text[14]]);
 
-    implementLineBackward(content, 1, false, ['14 ' + CYAN + '这是一段非常非常长的中文文本' + RESET + '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementLineBackward(content, 1, false, ['14 ' + CYAN +
+      '这是一段非常非常长的中文文本' + RESET +
+      '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
     implementLineBackward(content, 1, false, [text[12]]);
   });
 
@@ -86,14 +91,17 @@ describe('wrapLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
     implementLineBackward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
     implementLineBackward(lessContent, 1, false, [line1, END_MARKER], [0, 23]);
-    implementLineBackward(lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
+    implementLineBackward(
+      lessContent, 9999, false, [line1, END_MARKER], [0, 23]);
   });
 
-  it('forwards to the end of wrapped line and backwards until exit wrapped line', () => {
+  it('forwards to the end of wrapped line and backwards until exit ' +
+    'wrapped line', () => {
     calculateEOF(content);
 
     implementLineForward(content, 27, false, [text[22]]);

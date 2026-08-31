@@ -2990,8 +2990,9 @@ function fullFrame(rows: string[]): string {
   nulCollapsed = rows.length - physical.length;
 
   const body = physical
-    .map((row, i) => CLEAR_LINE + row +
-      (i === physical.length - 1 ? '' : rowEnd(row, uncollapsed(physical, rows, i))))
+    .map((row, i) => CLEAR_LINE + row + (i === physical.length - 1
+      ? ''
+      : rowEnd(row, uncollapsed(physical, rows, i))))
     .join('');
 
   // CLEAR_BELOW blanks the rows the collapse freed, like less's paint

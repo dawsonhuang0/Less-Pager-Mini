@@ -986,7 +986,9 @@ function tstr(
           // later, when the blob is resolved (decode.c). So a keypad
           // name on a terminal with no keypad binds nothing and says
           // nothing - only a name less never had is an error
-          if (knownSpecialKey(name)) return { text: '', next, unresolved: true };
+          if (knownSpecialKey(name)) {
+            return { text: '', next, unresolved: true };
+          }
 
           parseError(`invalid escape sequence "\\k${name}"`);
           return { text: '', next };

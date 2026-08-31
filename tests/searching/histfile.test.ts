@@ -55,7 +55,8 @@ describe('saveHistory', () => {
   it('round-trips and preserves .shell and .mark sections', () => {
     fs.writeFileSync(
       file,
-      '.less-history-file:\n.search\n"old\n.shell\n"make\n.mark\nm a 1 2 /tmp/x\n'
+      '.less-history-file:\n.search\n"old\n.shell\n"make\n' +
+      '.mark\nm a 1 2 /tmp/x\n'
     );
 
     loadHistory();

@@ -113,7 +113,8 @@ afterEach(() => {
 });
 
 describe('stream attachment and EOF', () => {
-  it('grows the first screen, replays queued keys, drains, and detaches', () => {
+  it('grows the first screen, replays queued keys, drains, and detaches',
+    () => {
     const feed = vi.fn();
     const jump = vi.fn();
     session.feedKeys = feed;

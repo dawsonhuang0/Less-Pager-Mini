@@ -38,7 +38,8 @@ describe('chopLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
     implementLineForward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
     implementLineForward(lessContent, 1, false, [line1, END_MARKER], [0, 6]);
@@ -55,7 +56,9 @@ describe('chopLongLines', () => {
   it('forwards multiple lines into chopped line', () => {
     implementLineForward(content, 12, false, [text[12]]);
 
-    implementLineForward(content, 1, false, ['14 ' + CYAN + '这是一段非常非常长的中文文本' + RESET + '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementLineForward(content, 1, false, ['14 ' + CYAN +
+      '这是一段非常非常长的中文文本' + RESET +
+      '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
     implementLineForward(content, 1, false, [text[14]]);
   });
 
@@ -80,7 +83,8 @@ describe('wrapLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
     implementLineForward(lessContent, 0, false, [line1, END_MARKER], [0, 6]);
 
     implementLineForward(lessContent, 1, false, [line1, END_MARKER], [0, 6]);

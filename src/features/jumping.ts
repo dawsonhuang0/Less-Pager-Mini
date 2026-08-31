@@ -791,7 +791,10 @@ function goMark(content: string[], char: string, sline: number): void {
 
   switch (char) {
     case '^':
-      mark = { file: files.list[files.index], row: 0, subRow: 0, sline: 0, pos: 0 };
+      mark = {
+        file: files.list[files.index],
+        row: 0, subRow: 0, sline: 0, pos: 0,
+      };
       break;
 
     case '$': {

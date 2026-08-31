@@ -28,7 +28,10 @@ import { config } from '../../src/state/config';
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-view-'));
-const saved = { LESSKEYIN: process.env.LESSKEYIN, LESSKEY: process.env.LESSKEY };
+const saved = {
+  LESSKEYIN: process.env.LESSKEYIN,
+  LESSKEY: process.env.LESSKEY,
+};
 
 const source = path.join(dir, 'keys.lesskey');
 const target = path.join(dir, 'target.txt');

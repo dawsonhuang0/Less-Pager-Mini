@@ -18,7 +18,8 @@ import { markLesskeyViewSession, isLesskeyViewSession,
  * input file and whose q quits (less's dohelp registering
  * FAKE_HELPFILE).
  */
-const text = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+const text =
+  Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
 
 // the SECOND lesskey the file count is about - the first is
 // $LESSKEY_CONTENT. It used to be a path in /tmp written by hand,

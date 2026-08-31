@@ -125,7 +125,8 @@ describe('lesskey action codes', () => {
 
     // the only commented lines are the two paste markers, which have
     // no lesskey name (A_START_PASTE / A_END_PASTE)
-    expect(DEFAULT_KEYMAP.filter(line => line.startsWith('# '))).toHaveLength(4);
+    expect(DEFAULT_KEYMAP.filter(line => line.startsWith('# ')))
+      .toHaveLength(4);
 
     expect(DEFAULT_KEYMAP).toContain('j\tforw-line');
     expect(DEFAULT_KEYMAP).toContain('q\tquit');

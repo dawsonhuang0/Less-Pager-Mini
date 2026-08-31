@@ -20,7 +20,9 @@ const session = (keys: string[], options: string[] = []): LtFile => ({
   steps: keys.map(key => ({ key, screen: null, cursor: null })),
 });
 
-const replay = async (keys: string[], options: string[] = []): Promise<void> => {
+const replay = async (
+  keys: string[], options: string[] = []
+): Promise<void> => {
   const result = await runLt(session(keys, options));
   expect(result.steps).toBe(keys.length);
   expect(result.mismatches).toEqual([]);
@@ -38,7 +40,8 @@ describe('in-process interactive command loop', () => {
     ]);
   }, 20000);
 
-  it('drives search, filtering, runtime options, and help restore', async () => {
+  it('drives search, filtering, runtime options, and help restore',
+    async () => {
     await replay([
       '/', 'N', 'E', 'E', 'D', 'L', 'E', '\r',
       'n', 'N',

@@ -273,7 +273,9 @@ export function coloredWrap(
     return open ? [open, COLOR_RESET] : ['', ''];
   }
 
-  if (fallbackOn === INVERSE_ON && colorMap.standout) return attrWrap('standout');
+  if (fallbackOn === INVERSE_ON && colorMap.standout) {
+    return attrWrap('standout');
+  }
 
   return fallbackOn ? [fallbackOn, fallbackOff] : ['', ''];
 }

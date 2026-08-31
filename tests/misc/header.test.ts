@@ -149,7 +149,8 @@ describe('header line overlay', () => {
 
       const boundary = formatContent(content)[1];
       const underline = boundary.indexOf(UNDERLINE_ON);
-      const plain = (line: string): string => line.replace(/\x1B\[[\d;]*m/g, '');
+      const plain = (line: string): string =>
+        line.replace(/\x1B\[[\d;]*m/g, '');
 
       expect(underline).toBeGreaterThan(0);
       expect(boundary.slice(0, underline)).not.toContain(UNDERLINE_ON);

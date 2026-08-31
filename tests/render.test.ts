@@ -495,7 +495,8 @@ describe('a width change keeps the top on the same text', () => {
     lineBackward([long], 1);
     // less's add_back_pos prepends an ENTRY, whose end is the row that
     // used to be on top - that is what makes the exposed row short
-    expect(config.screen[0]).toEqual({ row: 0, offset: 4 * w, end: 4 * w + 30 });
+    expect(config.screen[0])
+      .toEqual({ row: 0, offset: 4 * w, end: 4 * w + 30 });
     expect(screenRows([long], [])[0]).toBe(long.slice(4 * w, 4 * w + 30));
 
     // a second backward move prepends another, and the first keeps the

@@ -9,7 +9,8 @@ import { files, makeFileList, FileEntry, saveFilePosition,
   getPreviousPath, setPreviousPath, examineHistoryLength,
   trimExamineHistory, forgetSourceFile } from '../features/files';
 
-import { markSnapshot, restoreMarkSnapshot, MarkSnapshot } from '../features/jumping';
+import { markSnapshot, restoreMarkSnapshot, MarkSnapshot }
+  from '../features/jumping';
 
 import { switchToFile } from '../commands';
 

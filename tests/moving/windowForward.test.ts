@@ -37,11 +37,14 @@ describe('chopLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
-    implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
+    implementWindowForward(
+      lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
     implementWindowForward(lessContent, '', false, [line1, END_MARKER], [0, 6]);
-    implementWindowForward(lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
+    implementWindowForward(
+      lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
   });
 
   const lastLine = text[27].slice(0, 79) + COL_END_MARKER;
@@ -59,16 +62,20 @@ describe('chopLongLines', () => {
   it('forwards into chopped line', () => {
     implementWindowForward(content, '12', false, [text[12]]);
 
-    implementWindowForward(content, '1', false, ['14 ' + CYAN + '这是一段非常非常长的中文文本' + RESET + '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
+    implementWindowForward(content, '1', false, ['14 ' + CYAN +
+      '这是一段非常非常长的中文文本' + RESET +
+      '，用于模拟宽度测试，看看换行逻辑是否正确处理这些' + COL_END_MARKER]);
     implementWindowForward(content, '1', false, [text[14]]);
   });
 
   it('forwards 64 windows on key press but does not exceed EOF', () => {
-    implementWindowForward(content, '64', true, [lastLine, END_MARKER], [0, 23]);
+    implementWindowForward(
+      content, '64', true, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards by large buffer but does not exceed EOF', () => {
-    implementWindowForward(content, '9999', false, [lastLine, END_MARKER], [0, 23]);
+    implementWindowForward(
+      content, '9999', false, [lastLine, END_MARKER], [0, 23]);
   });
 });
 
@@ -82,11 +89,14 @@ describe('wrapLongLines', () => {
 
     calculateEOF(lessContent);
 
-    // `(END)` should not be at bottom at first load with content rows less than window
-    implementWindowForward(lessContent, '0', false, [line1, END_MARKER], [0, 6]);
+    // `(END)` should not be at bottom at first load with content
+    // rows less than window
+    implementWindowForward(
+      lessContent, '0', false, [line1, END_MARKER], [0, 6]);
 
     implementWindowForward(lessContent, '', false, [line1, END_MARKER], [0, 6]);
-    implementWindowForward(lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
+    implementWindowForward(
+      lessContent, '9999', false, [line1, END_MARKER], [0, 6]);
   });
 
   const lastLine = text[30];
@@ -102,10 +112,12 @@ describe('wrapLongLines', () => {
   });
 
   it('forwards 64 windows on key press but does not exceed EOF', () => {
-    implementWindowForward(content, '64', true, [lastLine, END_MARKER], [0, 23]);
+    implementWindowForward(
+      content, '64', true, [lastLine, END_MARKER], [0, 23]);
   });
 
   it('forwards by large buffer but does not exceed EOF', () => {
-    implementWindowForward(content, '9999', false, [lastLine, END_MARKER], [0, 23]);
+    implementWindowForward(
+      content, '9999', false, [lastLine, END_MARKER], [0, 23]);
   });
 });

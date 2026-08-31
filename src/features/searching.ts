@@ -1610,7 +1610,6 @@ function compile(pattern: string, literal: boolean, invert: boolean): boolean {
  * "y he" fails to find "Why <ESC>[01;31m<ESC>[Khello".
  */
 /** True for the OSC 8 sequence that CLOSES a link: an empty URI. */
-/* eslint-disable-next-line no-control-regex */
 const OSC8_CLOSE = /^\x1b\]8;[^;]*;(?:\x07|\x1b\\)/;
 
 const isOsc8Close = (code: string): boolean => OSC8_CLOSE.test(code);
@@ -1758,7 +1757,11 @@ function sourceRanges(source: string): [number, number, ColorKind][] {
   return out;
 }
 
-function testRegex(regex: SearchRegex, text: string, subs: Set<number>): boolean {
+function testRegex(
+  regex: SearchRegex,
+  text: string,
+  subs: Set<number>
+): boolean {
   if (!subs.size) return regex.test(text);
 
   // less's subsearch_ok (pattern.c): a ^S group fails when `ep[i] ==

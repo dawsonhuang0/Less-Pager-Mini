@@ -22,7 +22,8 @@ import { jumpOsc8, osc8Internal, osc8OpenCommand, osc8SearchParam,
 import { keyboard, keyboardDead, closeTtyKeyboard, dumbTerminal, takeUngot,
   setKeyboardRaw,
   watchWinch, unwatchWinch, raiseSigint, wasSelfSigint, keyTrace,
-  gateReturn, gateReleasedByWinch, gateReleaseKind, clearGateRelease, gateIsOpen }
+  gateReturn, gateReleasedByWinch, gateReleaseKind, clearGateRelease,
+  gateIsOpen }
   from "../tty/keyboard";
 
 
@@ -2736,7 +2737,8 @@ async function dispatchKey(sequence: string): Promise<void> {
       } else {
         execSearch(
           session.content,
-          request => duringUserSearch(() => pagerInput?.search(request) ?? false)
+          request =>
+            duringUserSearch(() => pagerInput?.search(request) ?? false)
         );
       }
     } else if (result === 'cancel') {

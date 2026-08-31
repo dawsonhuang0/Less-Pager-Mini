@@ -31,7 +31,8 @@ import { screenRows, calculateEOF } from '../../src/helpers';
 
 import { transformContent } from '../../src/lines/helpers';
 
-import { BOLD_ON, BOLD_OFF, INVERSE_ON, INVERSE_OFF } from '../../src/state/constants';
+import { BOLD_ON, BOLD_OFF, INVERSE_ON, INVERSE_OFF }
+  from '../../src/state/constants';
 
 vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 

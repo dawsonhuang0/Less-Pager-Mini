@@ -21,7 +21,8 @@ beforeEach(() => {
 });
 
 describe('lastCol', () => {
-  it('scrolls right so the longest displayed line ends at the right edge', () => {
+  it('scrolls right so the longest displayed line ends at the right edge',
+    () => {
     const content = ['short', 'x'.repeat(120), 'y'.repeat(100)];
 
     lastCol(content);

@@ -22,7 +22,9 @@ it('maps : combos to file commands', () => {
 });
 
 it('invalid keys should only have undefined as result', () => {
-  const invalidKeys = ['\x1B[17~', '\x1B[24~', '\x1B[25~', '\x1B[30~', '\x1B[35~'];
+  const invalidKeys = [
+    '\x1B[17~', '\x1B[24~', '\x1B[25~', '\x1B[30~', '\x1B[35~',
+  ];
   invalidKeys.forEach(key => expect(getAction(key)).toBeUndefined());
 });
 
@@ -66,7 +68,8 @@ it('binds arrow keys to what terminfo says, like less', () => {
     // ESC O B, while a wheel tick translated to an arrow commonly
     // ignores DECCKM and arrives as ESC [ B. Binding only what
     // terminfo named left the keyboard working and the wheel dead.
-    const csi = '\x1B[' + { kcud1: 'B', kcuu1: 'A', kcuf1: 'C', kcub1: 'D' }[ti];
+    const csi = '\x1B[' +
+      { kcud1: 'B', kcuu1: 'A', kcuf1: 'C', kcub1: 'D' }[ti];
     expect(getAction(csi)).toBe(action);
   }
 
@@ -146,7 +149,8 @@ it('maps ESC combinations', () => {
 });
 
 it('splits batched wheel scrolls into individual arrow keys', () => {
-  expect(splitKeys('\x1B[B\x1B[B\x1B[B')).toEqual(['\x1B[B', '\x1B[B', '\x1B[B']);
+  expect(splitKeys('\x1B[B\x1B[B\x1B[B'))
+    .toEqual(['\x1B[B', '\x1B[B', '\x1B[B']);
   expect(splitKeys('\x1B[A\x1B[B')).toEqual(['\x1B[A', '\x1B[B']);
 });
 

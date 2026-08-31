@@ -1,3 +1,8 @@
+/* eslint-disable max-len -- the long lines ARE the fixture. This file
+   exists to feed the pager content wider than a terminal: CJK, emoji,
+   ZWJ sequences and ASCII past 80 columns. Wrapping them in the source
+   would change the data under every test that measures a width. */
+
 import { inputToString } from "../../src/helpers";
 
 import {
