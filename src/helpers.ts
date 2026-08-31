@@ -3552,7 +3552,19 @@ export function getPrompt(content: string[]): string {
   // any file line: tabs reach their stops and control chars take
   // caret notation rather than the terminal (command.c:1027)
   const text = transformPrompt(prExpand(content, prProto(displayPrType())));
-  if (files.newFile) files.newFile = false;
+
+  // less spends new_file inside prompt(), which runs ONCE per command
+  // and whose row then stands until the next one. Ours can paint the
+  // prompt twice for a single command: a burst holds the ":" off the
+  // screen and the settle timer repaints it afterwards. Spending the
+  // flag on the held build left the settled one with no name to show,
+  // so ":n" arriving in one read said "(END)" where less says
+  // "fb.txt (file 2 of 2) (END)" - MEASURED, tests/burstprompt.py.
+  //
+  // A held frame is one the user will not be left looking at, so it
+  // does not spend it; the frame that settles does. endPromptHold runs
+  // before that repaint, which is what makes this the right test.
+  if (files.newFile && !promptHolding()) files.newFile = false;
 
   promptPainted = true;
 
