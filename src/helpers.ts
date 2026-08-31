@@ -1185,6 +1185,22 @@ export const isStalled = (): boolean => stalled;
  */
 export const promptHolding = (): boolean => pollWouldFire();
 
+// the settle timer's repaint, which is not a command's prompt: it puts
+// back the ":" a burst hid, so it REPLAYS what the last command left
+// rather than deriving a new one
+let settleRepaint = false;
+
+/** Runs a render as the settle repaint rather than as a command's. */
+export function asSettleRepaint(paint: () => void): void {
+  settleRepaint = true;
+
+  try {
+    paint();
+  } finally {
+    settleRepaint = false;
+  }
+}
+
 /** Ends the hold once the keyboard has settled and the ":" can return. */
 export function endPromptHold(): void {
   promptHold = false;
@@ -3397,7 +3413,48 @@ export function calculateEOF(content: string[]): void {
  * @param content - Display lines, for prompt expansion.
  * @returns The prompt string.
  */
+// what the last COMMAND's frame put on the bottom row, with the two
+// flags its branches set: the settle repaint hands all three back
+let lastPrompt:
+  { text: string, painted: boolean, ierror: boolean } | null = null;
+
+/** Forgets the replayed prompt, for a session that starts over. */
+export function resetLastPrompt(): void {
+  lastPrompt = null;
+}
+
+/**
+ * The bottom row, like less's prompt().
+ *
+ * less paints ONE prompt per command and that row then stands until
+ * the next command paints another. Ours has a second painter: the
+ * settle timer that puts the ":" back once a burst stops. Deriving a
+ * fresh prompt there made it a second prompt() less never runs - it
+ * spent files.newFile on the held frame and the settled one had no
+ * name left to show, so ":n" in a single write said "(END)" where less
+ * says "fb.txt (file 2 of 2) (END)".
+ *
+ * So the settle replays the last command's row verbatim. A paste stays
+ * right too, which a narrower fix broke: to less a paste is THREE
+ * commands (A_START_PASTE, the text, A_END_PASTE), so its second
+ * prompt() legitimately overwrites the name - and replaying reproduces
+ * whichever of them ran last. tests/burstprompt.py holds all of it.
+ */
 export function getPrompt(content: string[]): string {
+  if (settleRepaint && lastPrompt !== null) {
+    promptPainted = lastPrompt.painted;
+    ierrorPrompt = lastPrompt.ierror;
+
+    return lastPrompt.text;
+  }
+
+  const text = buildPrompt(content);
+  lastPrompt = { text, painted: promptPainted, ierror: ierrorPrompt };
+
+  return text;
+}
+
+function buildPrompt(content: string[]): string {
   // only the branches below that paint less's display_prompt re-arm
   // the --end-prompt marker
   promptPainted = false;
@@ -3553,18 +3610,7 @@ export function getPrompt(content: string[]): string {
   // caret notation rather than the terminal (command.c:1027)
   const text = transformPrompt(prExpand(content, prProto(displayPrType())));
 
-  // less spends new_file inside prompt(), which runs ONCE per command
-  // and whose row then stands until the next one. Ours can paint the
-  // prompt twice for a single command: a burst holds the ":" off the
-  // screen and the settle timer repaints it afterwards. Spending the
-  // flag on the held build left the settled one with no name to show,
-  // so ":n" arriving in one read said "(END)" where less says
-  // "fb.txt (file 2 of 2) (END)" - MEASURED, tests/burstprompt.py.
-  //
-  // A held frame is one the user will not be left looking at, so it
-  // does not spend it; the frame that settles does. endPromptHold runs
-  // before that repaint, which is what makes this the right test.
-  if (files.newFile && !promptHolding()) files.newFile = false;
+  if (files.newFile) files.newFile = false;
 
   promptPainted = true;
 

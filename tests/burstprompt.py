@@ -139,6 +139,17 @@ CASES = [
     ('typed  h then q',      ['nums.txt', 'fb.txt'],  typed('hq')),
     ('burst  :n then =',     ['nums.txt', 'fb.txt'],  burst(':n=')),
 
+    # a real bracketed paste, which is what a terminal actually sends:
+    # THREE commands to less - A_START_PASTE, the text, A_END_PASTE -
+    # so its second prompt() legitimately overwrites the file's name.
+    # Missing this case let a fix for the burst above regress it.
+    ('paste  :n',            ['nums.txt', 'fb.txt'],
+     ([b'\x1b[200~:n\x1b[201~'], BURST)),
+    ('paste  :n, --no-paste', ['--no-paste', 'nums.txt', 'fb.txt'],
+     ([b'\x1b[200~:n\x1b[201~'], BURST)),
+    ('paste  jjj',           ['nums.txt'],
+     ([b'\x1b[200~jjj\x1b[201~'], BURST)),
+
     # -E quits at EOF; the prompt must not outlive it either way
     ('-E burst G',           ['-E', 'nums.txt'],      burst('G')),
     ('-E typed G',           ['-E', 'nums.txt'],      typed('G')),

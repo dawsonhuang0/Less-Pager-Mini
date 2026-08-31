@@ -86,6 +86,7 @@ import {
   armStall,
   promptHolding,
   endPromptHold,
+  asSettleRepaint,
   PROMPT_SETTLE_MS,
   freezeFrame,
   unfreezeFrame,
@@ -1827,7 +1828,21 @@ async function keyHandlerKeys(data: Buffer): Promise<void> {
   }
 
   if (optNoPaste() || session.pasting || session.ignoringPaste) {
+    const before = text;
     text = filterPaste(text);
+
+    // less's A_START_PASTE is a COMMAND: it reaches the dispatch,
+    // calls start_ignoring_input and returns to prompt(), which paints
+    // and spends new_file (command.c:1655). Ours drops the markers in
+    // the input layer, so nothing painted and a startup prompt still
+    // naming the file survived the paste where less had replaced it
+    // with ":" - MEASURED, tests/burstprompt.py's --no-paste case
+    if (text === '' && before !== '' && !session.exited) {
+      render(session.content, session.buffer);
+      flush();
+
+      return;
+    }
   }
 
   // one write per COMMAND, which is less's granularity: cmd_exec flushes
@@ -2201,7 +2216,7 @@ function armPromptSettle(): void {
     // still carries whatever the last written prompt was, so the
     // delta would dedupe the ":" away and it would never come back
     dirtyBottomRow();
-    render(session.content, session.buffer);
+    asSettleRepaint(() => render(session.content, session.buffer));
     flush();
   }, PROMPT_SETTLE_MS);
 }
