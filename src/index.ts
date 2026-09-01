@@ -5,11 +5,11 @@ import { setCliOptions, takeCliOptions } from './options';
 
 import { setSessionEnv } from './startup/environment';
 
-import { LessOptions, LessOptionLetter } from './state/lessOptionTypes';
+import { LessOptions as OptionTable, LessOptionLetter }
+  from './state/lessOptionTypes';
 
-import { PagerEnv } from './state/envTypes';
+import { PagerEnv as SessionEnv } from './state/envTypes';
 
-export { LessOptions, PagerEnv };
 
 /**
  * This library's own switches, spelled like options but never reaching
@@ -25,7 +25,7 @@ const TAB_OBJECT = '--tab-object';
 const EXAMINE_FILE = '--examine-file';
 
 /** Every long option name the table knows, as the generator left it. */
-type LessOptionName = keyof LessOptions & string;
+type LessOptionName = keyof OptionTable & string;
 
 /**
  * One less argument.
@@ -38,26 +38,9 @@ type LessOptionName = keyof LessOptions & string;
  * (`-NS`), initial commands (`+G`, `+/pattern`) - none of which have
  * a name to suggest.
  */
-export type NamedArg =
-  // the letter forms, so `-R` and `-N` are offered beside the names
-  | `-${LessOptionLetter}`
-  | `--${LessOptionName}`
-  | `--${LessOptionName}=${string}`
-  | `--+${LessOptionName}`
-  | typeof TAB_OBJECT
-  | typeof EXAMINE_FILE;
-
-export type PagerArg =
-  | NamedArg
-  // Everything else legal on a less command line. It also means
-  // nothing is REJECTED here, so the suggestion set is worth
-  // asserting against NamedArg, which has no such escape hatch -
-  // dropping a form from it is otherwise invisible.
-  | (string & {});
-
 /** Pulls this library's switches out of the argument list, leaving
  *  the rest for the ordinary less scan. */
-function splitArgs(args: readonly PagerArg[]): {
+function splitArgs(args: readonly pager.PagerArg[]): {
   tabObject: boolean,
   examineFile: boolean,
   rest: string[],
@@ -99,8 +82,8 @@ function splitArgs(args: readonly PagerArg[]): {
  */
 async function pager(
   input: unknown,
-  args: readonly PagerArg[] = [],
-  env: PagerEnv | null = null
+  args: readonly pager.PagerArg[] = [],
+  env: pager.PagerEnv | null = null
 ): Promise<void> {
   const { tabObject, examineFile, rest } = splitArgs(args);
 
@@ -120,10 +103,10 @@ async function pager(
 
 /** Pages a non-seekable stream; arguments work as in pager (the two
  *  library switches are meaningless for a pipe and ignored). */
-async function pagerPipe(
+async function pipePager(
   stream: Parameters<typeof pipeSession>[0],
-  args: readonly PagerArg[] = [],
-  env: PagerEnv | null = null
+  args: readonly pager.PagerArg[] = [],
+  env: pager.PagerEnv | null = null
 ): Promise<void> {
   const { rest } = splitArgs(args);
 
@@ -138,15 +121,57 @@ async function pagerPipe(
   }
 }
 
-export { pagerPipe };
+/**
+ * The package's export IS the function, which is what a CommonJS
+ * `module.exports = pager` means - and `export =` is how a .d.ts says
+ * so. Declaring an ES default export over a CommonJS emit was a lie
+ * TypeScript could see through: under `module: nodenext` it models the
+ * interop as `default = module.exports`, computes that from an
+ * ES-shaped declaration as the module NAMESPACE, and a namespace has
+ * no call signatures. Every form that reached the default failed to
+ * type-check - `import pager from`, `import * as ns` then `ns.default`,
+ * and both spellings of `await import()` - while the runtime handed
+ * back the function all along.
+ *
+ * Everything else rides the merged namespace, so the named and type
+ * imports are unchanged. tests/types checks every form under both
+ * nodenext and bundler.
+ */
+// The properties are assigned by hand rather than through the
+// namespace, whose IIFE emit (`pager.pagerPipe = ...`) cjs-module-lexer
+// cannot see - and what it cannot see, node does not offer as a named
+// export, so `import { pagerPipe }` threw. Assigning module.exports
+// FIRST makes the object being decorated the function itself, so the
+// `export =` assignment that follows in the emit is a no-op.
+module.exports = pager;
+module.exports.pagerPipe = pipePager;
+module.exports.default = pager;
 
-export default pager;
+/* eslint-disable-next-line @typescript-eslint/no-namespace, no-redeclare
+   -- the function and namespace MERGE, which is the whole point */
+declare namespace pager {
+  export const pagerPipe: typeof pipePager;
 
-// CommonJS interop; ESM importers use the default export directly.
-try {
-  module.exports = pager;
-  module.exports.default = pager;
-  module.exports.pagerPipe = pagerPipe;
-} catch {
-  // ESM module records are frozen.
+  export type NamedArg =
+    // the letter forms, so `-R` and `-N` are offered beside the names
+    | `-${LessOptionLetter}`
+    | `--${LessOptionName}`
+    | `--${LessOptionName}=${string}`
+    | `--+${LessOptionName}`
+    | typeof TAB_OBJECT
+    | typeof EXAMINE_FILE;
+
+  export type PagerArg =
+    | NamedArg
+    // Everything else legal on a less command line. It also means
+    // nothing is REJECTED here, so the suggestion set is worth
+    // asserting against NamedArg, which has no such escape hatch -
+    // dropping a form from it is otherwise invisible.
+    | (string & {});
+
+  // less's own option shapes, re-exported so a caller can name them
+  export type LessOptions = OptionTable;
+  export type PagerEnv = SessionEnv;
 }
+
+export = pager;
