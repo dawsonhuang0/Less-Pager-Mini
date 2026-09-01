@@ -30,7 +30,9 @@
     <li>
       <a href="#usage">Usage</a>
       <ul>
-        <li><a href="#function-parameters">Parameters</a></li>
+        <li><a href="#function-parameters">Function Parameters</a></li>
+        <li><a href="#featuring-arguments">Featuring Arguments</a></li>
+        <li><a href="#notice">Notice</a></li>
       </ul>
     </li>
     <li>
@@ -44,6 +46,7 @@
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
     <li><a href="#license">License</a></li>
+    <li><a href="#-famous-dependents">🏆 Famous Dependents</a></li>
   </ol>
 </details>
 
@@ -243,3 +246,10 @@ Let’s make **Less-Pager-Mini** better together!
 
 Distributed under the MIT License.  
 See [`LICENSE`](LICENSE) for more information.
+
+
+## 🏆 Famous Dependents
+
+- [@gmickel/gno](https://gno.sh) - A local knowledge engine for your notes, code, PDFs, and Office docs.
+
+*(Having 100+ stars but not on the list? Please [open a PR](https://github.com/dawsonhuang0/Less-Pager-Mini/pulls) — we'd love to have you on it)*
