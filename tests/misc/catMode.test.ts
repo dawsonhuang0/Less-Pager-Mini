@@ -18,6 +18,12 @@ import path from 'path';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-cat-'));
 const cli = path.join(__dirname, '..', '..', 'src', 'cli.ts');
 
+// the local binary, never `npx`: npm writes notices of its own to the
+// child's streams ("npm notice run ...", and a warning about whatever
+// .npmrc it was handed), and these cases assert the exact bytes the
+// pager produced
+const tsx = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'tsx');
+
 const real = path.join(dir, 'real.txt');
 const aux = path.join(dir, 'aux.txt');
 const missing = path.join(dir, 'nope.txt');
@@ -39,7 +45,7 @@ function cat(
   args: string[],
   env: Record<string, string> = {}
 ): { out: string, err: string, code: number } {
-  const result = spawnSync('npx', ['tsx', cli, ...args], {
+  const result = spawnSync(tsx, [cli, ...args], {
     encoding: 'utf8',
     env: { ...process.env, LESSHISTFILE: '-', ...env },
   });
@@ -109,7 +115,7 @@ describe('a non-terminal session cats through the normal open path', () => {
     fs.writeFileSync(passthrough, '#!/bin/sh\ncat "$1"\n');
     fs.chmodSync(passthrough, 0o755);
 
-    const result = spawnSync('npx', ['tsx', cli, bin], {
+    const result = spawnSync(tsx, [cli, bin], {
       env: { ...process.env, LESSHISTFILE: '-',
         LESSOPEN: `|${passthrough} %s` },
     });
@@ -129,7 +135,7 @@ describe('a non-terminal session cats through the normal open path', () => {
       '#!/bin/sh\necho before\nsleep 0.3\necho oops >&2\necho after\n');
     fs.chmodSync(noisy, 0o755);
 
-    const merged = spawnSync('sh', ['-c', `npx tsx ${cli} ${real} 2>&1`], {
+    const merged = spawnSync('sh', ['-c', `${tsx} ${cli} ${real} 2>&1`], {
       encoding: 'utf8',
       env: { ...process.env, LESSHISTFILE: '-', LESSOPEN: `|${noisy} %s` },
     });
