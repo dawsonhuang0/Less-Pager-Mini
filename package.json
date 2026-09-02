@@ -9,12 +9,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --removeComments --declaration false && tsc --emitDeclarationOnly",
+    "build": "rm -rf dist && tsx scripts/build.ts && tsc --emitDeclarationOnly && tsx scripts/pruneTypes.ts",
     "gen:options": "tsx scripts/genOptionTypes.ts",
     "lint": "eslint src tests scripts",
     "typecheck": "tsc -p tsconfig.typecheck.json",
-    "test": "vitest",
+    "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
   "repository": {
@@ -55,18 +56,17 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.9",
+    "char-width": "^1.0.1",
+    "esbuild": "^0.28.2",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "husky": "^9.1.7",
+    "posix-regex": "^1.0.2",
+    "shell-glob": "^1.2.1",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vitest": "^4.1.9"
-  },
-  "dependencies": {
-    "char-width": "^1.0.1",
-    "posix-regex": "^1.0.2",
-    "shell-glob": "^1.2.1"
   },
   "bin": {
     "lmn": "dist/cli.js"

@@ -7,8 +7,11 @@
  * simply never ends. A plain process has no such trouble, so the test
  * runs this and reads the JSON back.
  */
-import { guardedMatch, endJsRegexGuard, beginGuardedRun }
-  from '../../dist/features/jsRegexGuard.js';
+// the build bundles to CommonJS, whose named exports an ESM import
+// cannot always see - createRequire reads them the way node does
+import { createRequire } from 'node:module';
+const { guardedMatch, endJsRegexGuard, beginGuardedRun } =
+  createRequire(import.meta.url)('../../dist/features/jsRegexGuard.js');
 
 const never = () => false;
 const out = {};

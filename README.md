@@ -187,7 +187,7 @@ Want to glance your array or objects, but scrolling through terminal feels painf
 Whether you're debugging, dumping logs, or previewing data structures — this pager helps you scroll fast without getting lost in overwhelming output.
 
 - 🔁 **Familiar Commands** – Inherits command keys from [`less`](https://github.com/gwsw/less)
-- 📦 **Minimal Dependencies** – Lightweight, stable, and portable
+- 📦 **Zero Dependencies** – One bundled file, nothing else installed
 - 🖥️ **Pure Terminal UX** – Replicates 99% of the [`less`](https://github.com/gwsw/less) experience
 
 
