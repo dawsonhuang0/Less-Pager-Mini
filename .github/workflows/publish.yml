@@ -1,0 +1,67 @@
+# Publishes from a tag, so the tarball comes from a clean machine and
+# npm can attest to the commit that built it. Provenance is the point:
+# it answers "do these bytes match the source?" without anyone having
+# to take the maintainer's word for it.
+#
+# Auth is trusted publishing (OIDC) - there is no NPM_TOKEN to leak.
+# It has to be configured once on npmjs.com: the package's Settings ->
+# Publishing access -> Trusted publisher, naming this repository and
+# this workflow file.
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # what lets npm mint the provenance attestation
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # node 24 ships npm 11, but trusted publishing landed in 11.5.1
+      # and the bundled version is whatever the image froze
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      # a tag that disagrees with the manifest would publish the wrong
+      # version under the right name, and npm would accept it
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$manifest" ]; then
+            echo "tag $GITHUB_REF_NAME != package.json $manifest" >&2
+            exit 1
+          fi
+
+      # dist has to exist before the tests: tests/fixtures/guardProbe.mjs
+      # imports the BUILT guard
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Linter
+        run: npm run lint
+
+      - name: Publish
+        run: npm publish --provenance --access public

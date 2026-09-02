@@ -15,7 +15,6 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "version": "tsx scripts/syncVersion.ts && git add src/version.ts",
-    "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
   "repository": {
