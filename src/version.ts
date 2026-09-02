@@ -16,7 +16,7 @@
  */
 
 /** Our own version, for -V and the version message. */
-export const VERSION = '1.16.3';
+export const VERSION = '1.16.4';
 
 /**
  * The less this port replicates, as less writes it: "710x".
