@@ -11,6 +11,8 @@ import { config, mode } from '../../src/state/config';
 
 import { search } from '../../src/features/searching';
 
+import { LESS_VERSION } from '../../src/version';
+
 import {
   files,
   initContent,
@@ -308,15 +310,15 @@ describe('version', () => {
   it('reports the package version and the less it is built on', () => {
     versionMessage();
 
-    // both halves come from package.json, so the assertion reads them
-    // from there too - the literal that used to be here said 707x
-    // long after the port had caught up with less
+    // LESS_VERSION has one home and cannot drift, but VERSION has to
+    // track package.json, which npm bumps on its own - so that half is
+    // read from the manifest rather than from the constant it asserts
     const pkg = JSON.parse(readFileSync(
       join(__dirname, '..', '..', 'package.json'), 'utf8'
-    )) as { version: string; lessVersion: string };
+    )) as { version: string };
 
     expect(search.message).toBe(
-      `less-pager-mini ${pkg.version} (based on less ${pkg.lessVersion})`
+      `less-pager-mini ${pkg.version} (based on less ${LESS_VERSION})`
     );
   });
 });

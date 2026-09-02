@@ -20,7 +20,7 @@ import { SPECIAL_KEY_CODES } from './codes';
 
 import { secureAllow } from '../features/secure';
 
-import { lessVersionNumber } from '../packageInfo';
+import { LESS_VERSION_NUMBER } from '../version';
 
 /**
  * A #command binding: the pager action, an optional canonical key for
@@ -33,10 +33,10 @@ interface UserBinding {
   extra?: string;
 }
 
-// which less this port replicates, from package.json's lessVersion:
-// the -V string and a lesskey #version comparison must agree, and
-// writing the number here as well let them drift
-export const LESS_VERSION = lessVersionNumber();
+// which less this port replicates, from src/version.ts: the -V
+// string and a lesskey #version comparison must agree, and writing
+// the number here as well let them drift
+export const LESS_VERSION = LESS_VERSION_NUMBER;
 
 /** Command names from lesskey_parse.c mapped onto our actions; null
  *  names are accepted but unsupported (they ring like A_UINVALID). */

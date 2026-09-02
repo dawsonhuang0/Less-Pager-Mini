@@ -16,7 +16,7 @@ import { filenameComplete } from "./files";
 
 import { optNoHistDups, optAutosaveAction } from "../options";
 
-import { packageVersion, lessVersion } from '../packageInfo';
+import { VERSION, LESS_VERSION } from '../version';
 
 import { search } from "./searching";
 
@@ -656,6 +656,6 @@ export function printVersion(): void {
 }
 
 function versionString(): string {
-  return 'less-pager-mini ' + packageVersion() +
-    ' (based on less ' + lessVersion() + ')';
+  return 'less-pager-mini ' + VERSION +
+    ' (based on less ' + LESS_VERSION + ')';
 }
