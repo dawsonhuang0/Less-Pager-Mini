@@ -19,10 +19,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          # setup-node keys this on package-lock.json, so a run whose
+          # deps have not moved unpacks ~/.npm instead of fetching 206
+          # packages from the registry
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --fund=false
 
       # tests/fixtures/guardProbe.mjs imports the BUILT guard: it has to
       # run in a process of its own, because vitest's worker pool will
@@ -46,10 +50,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          # setup-node keys this on package-lock.json, so a run whose
+          # deps have not moved unpacks ~/.npm instead of fetching 206
+          # packages from the registry
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Linter
         run: npm run lint
