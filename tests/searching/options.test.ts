@@ -253,34 +253,37 @@ describe('--use-gnu-regexp', () => {
     optUseJsRegexp() ? 'JS' : (optUseGnuRegexp() ? 'GNU' : 'POSIX');
 
   it('uncovers the dialect under JS instead of flipping it', () => {
+    // never a dialect by NAME: which one the flag lands on depends on
+    // the libc, so the claim is about the relationship - the press
+    // that comes out from under JS must not move the dialect
     dash('use-gnu-regexp');
-    expect(engine()).toBe('GNU');
+    const chosen = engine();
 
     dash('use-js-regexp');
     expect(engine()).toBe('JS');
 
-    // the press that used to land on POSIX: the dialect underneath
-    // was already 1 and invisible, so flipping it flipped something
-    // the user could not see
+    // the press that used to flip: the dialect underneath was already
+    // set and invisible, so it flipped what the user could not see
     dash('use-gnu-regexp');
-    expect(engine()).toBe('GNU');
-    expect(search.message).toBe('Search with GNU regular expressions');
+    expect(engine()).toBe(chosen);
+    expect(search.message).toBe(`Search with ${chosen} regular expressions`);
 
     // ...and the press after that does change it
     dash('use-gnu-regexp');
-    expect(engine()).toBe('POSIX');
-    expect(search.message).toBe('Search with POSIX regular expressions');
+    expect(engine()).not.toBe(chosen);
   });
 
   it('names the dialect it returns to when JS is switched off', () => {
     // the message used to come from the HOST rather than the dialect
-    // in force, so this said POSIX while searching with GNU
+    // in force, so on a Mac it said POSIX while searching with GNU
     dash('use-gnu-regexp');
+    const chosen = engine();
+
     dash('use-js-regexp');
     dash('use-js-regexp');
 
-    expect(engine()).toBe('GNU');
-    expect(search.message).toBe('Search with GNU regular expressions');
+    expect(engine()).toBe(chosen);
+    expect(search.message).toBe(`Search with ${chosen} regular expressions`);
   });
 
   it('is never written by --use-js-regexp', () => {
