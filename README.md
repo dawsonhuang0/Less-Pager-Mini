@@ -247,8 +247,8 @@ Let’s make **Less-Pager-Mini** better together!
 
 ## License
 
-Distributed under the MIT License.  
-See [`LICENSE`](LICENSE) for more information.
+Derived from [`less`](https://github.com/gwsw/less) under the LESS License; distributed under the MIT License.  
+See [`LICENSE`](LICENSE) and [`LESS LICENSE`](LESS-LICENSE) for more information.
 
 
 ## 🏆 Famous Dependents
