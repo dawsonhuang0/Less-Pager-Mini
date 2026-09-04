@@ -13,6 +13,10 @@ import { search } from '../../src/features/searching';
 
 import { LESS_VERSION } from '../../src/version';
 
+import { patternLibName, REGEX_DIALECT } from '../../src/tty/platform';
+
+import { PsxRegExp } from 'posix-regex';
+
 import {
   files,
   initContent,
@@ -36,7 +40,8 @@ import {
   logFileTarget,
   overwriteKey,
   writeLogFile,
-  versionMessage
+  versionMessage,
+  printVersion
 } from '../../src/features/misc';
 
 import {
@@ -320,5 +325,41 @@ describe('version', () => {
     expect(search.message).toBe(
       `less-pager-mini ${pkg.version} (based on less ${LESS_VERSION})`
     );
+  });
+
+  it('names the pattern library at startup, and never on V', () => {
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write')
+      .mockImplementation(data => { written.push(String(data)); return true; });
+
+    try {
+      printVersion();
+    } finally {
+      spy.mockRestore();
+    }
+
+    const pkg = JSON.parse(readFileSync(
+      join(__dirname, '..', '..', 'package.json'), 'utf8'
+    )) as { version: string };
+
+    expect(written.join('')).toBe(
+      `less-pager-mini ${pkg.version} (based on less ${LESS_VERSION}) `
+      + `(${patternLibName()} regular expressions)\n`
+    );
+
+    // og prints the library under INIT alone; TOGGLE and QUERY both
+    // fall to dispversion, which never names it (optfunc.c:594)
+    versionMessage();
+    expect(search.message).not.toContain('regular expressions');
+  });
+
+  it('reports the library the search actually behaves like', () => {
+    // not the platform and not the flag - the observable difference,
+    // so the label cannot drift away from the engine underneath it:
+    // on glibc `\w` is a word character, on BSD it is the letter w
+    const wordClass =
+      new PsxRegExp('\\w', { flavor: REGEX_DIALECT }).exec('abc') !== null;
+
+    expect(patternLibName()).toBe(wordClass ? 'GNU' : 'POSIX');
   });
 });

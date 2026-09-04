@@ -17,6 +17,7 @@ import { filenameComplete } from "./files";
 import { optNoHistDups, optAutosaveAction } from "../options";
 
 import { VERSION, LESS_VERSION } from '../version';
+import { patternLibName } from '../tty/platform';
 
 import { search } from "./searching";
 
@@ -650,9 +651,19 @@ export function versionMessage(): void {
 /**
  * Prints the version to stdout for -V in $LESS, like less's opt__V at
  * INIT printing and quitting before the pager starts.
+ *
+ * The pattern library goes here and NOT on `V`: og prints it under
+ * INIT alone, and its TOGGLE and QUERY arms both fall to dispversion,
+ * which never names it (optfunc.c:594).
+ *
+ * It names the host's dialect, never --use-js-regexp. -V prints and
+ * quits before a session exists, so the JS engine that option selects
+ * could not have run; naming it would advertise an engine that never
+ * gets a pattern.
  */
 export function printVersion(): void {
-  putstr(versionString() + '\n');
+  putstr(versionString() +
+    ` (${patternLibName()} regular expressions)\n`);
 }
 
 function versionString(): string {

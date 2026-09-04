@@ -116,6 +116,25 @@ export const REGEX_DIALECT: Dialect = {
     : {}),
 };
 
+/**
+ * What -V calls the pattern matcher, as og's pattern_lib_name does.
+ *
+ * og reports the library configure LINKED (pattern.c:493), which is a
+ * build-time fact; we have one engine, so this reports the dialect it
+ * was given instead. That lands on the same word for the same reason
+ * a user would care: on glibc `\\w` is a word character and on BSD it
+ * is the letter w, which is exactly what the label predicts.
+ *
+ * It is not always the word og prints on the same machine - a glibc
+ * less built --with-regex=posix says POSIX and still reads `\\w`,
+ * because glibc's regcomp passes RE_SYNTAX_POSIX_EXTENDED, which
+ * omits RE_NO_GNU_OPS. Ours describes behaviour; og's describes a
+ * link line.
+ */
+export function patternLibName(): string {
+  return REGEX_DIALECT.gnuOperators ? 'GNU' : 'POSIX';
+}
+
 /** Shell metacharacters (DEF_METACHARS, defines.wn's smaller set). */
 export const DEF_METACHARS = isWindows
   ? "; *?\t\n'\"()<>|&"
