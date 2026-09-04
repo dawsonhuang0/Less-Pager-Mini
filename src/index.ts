@@ -66,10 +66,12 @@ function splitArgs(args: readonly pager.PagerArg[]): {
  *   tab stop width is 8 by default, adjust via `--tabs`.
  * - `--examine-file`: treats the input as file path(s) and attempts to read
  *   from disk, invalid file paths are not paged.
- * - `--use-js-regexp`: uses JavaScript's RegExp for searching;
- *   *off* by default - using `posix-regex`.
+ * - `--use-gnu-regexp`: uses GNU regular expressions for searching;
+ *   *on* by default for glibc systems, else using POSIX regular expressions.
+ * - `--use-js-regexp`: uses JavaScript regular expressions for searching;
+ *   *off* by default - using POSIX or GNU regular expressions.
  * - `--use-zsh-glob`: expands a filename with zsh's globbing rules in process;
- *   *on* for Windows, else *off* by default - globbing via `$SHELL`.
+ *   *on* by default for Windows, else globbing via `$SHELL`.
  *
  * @example
  * await pager(lines);

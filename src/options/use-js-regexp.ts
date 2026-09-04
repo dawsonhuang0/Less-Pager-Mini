@@ -1,6 +1,6 @@
 import { OptionSpec } from './spec';
 
-import { hook } from './shared';
+import { hook, optUseGnuRegexp } from './shared';
 
 import { clearForcePosix, search } from '../features/searching';
 
@@ -24,12 +24,26 @@ export const useJsRegexp: OptionSpec = {
     letter: '',
     names: ['use-js-regexp'],
     type: 'bool',
-    messages: [
-      'Search with POSIX regular expressions',
-      "Search with JavaScript's RegExp",
-    ],
+    // a GETTER, and asking the dialect rather than the host: turning
+    // this off returns to whatever --use-gnu-regexp says, which is
+    // not the libc's answer once the user has said otherwise. Built
+    // once at module load it reported the host forever, so
+    // "--use-gnu-regexp, JS on, JS off" claimed POSIX while searching
+    // with GNU
+    get messages() {
+      return [
+        `Search with ${optUseGnuRegexp() ? 'GNU' : 'POSIX'} `
+          + 'regular expressions',
+        'Search with JavaScript regular expressions',
+      ];
+    },
     defaultValue: 0,
     set: value => {
+      // this option NEVER writes --use-gnu-regexp. It sits on top: it
+      // picks the engine, and the dialect flag underneath keeps
+      // saying whatever it said, so turning JS off uncovers the
+      // reading the user already chose instead of guessing at one.
+      // That flag is the memory, so there is none to keep here
       opt.useJsRegexp = value as number;
 
       // an explicit toggle overrides a "yes, use POSIX for this one"

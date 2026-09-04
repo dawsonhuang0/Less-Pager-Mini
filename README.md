@@ -163,8 +163,11 @@ on:
 }
 ```
 
+<code>--use-gnu-regexp</code>:  uses GNU regular expressions for searching. On for glibc systems,
+Off elsewhere by default - searching with POSIX regular expressions.
+
 <code>--use-js-regexp</code>: Searches with JavaScript's `RegExp`. Off by default —
-compiling POSIX-compatible regex patterns with `posix-regex`.
+searching with POSIX or GNU regular expressions.
 
 <code>--use-zsh-glob</code>: Expands a filename with zsh's globbing rules in process.
 On for Windows, Off elsewhere by default — globbing via `$SHELL`.

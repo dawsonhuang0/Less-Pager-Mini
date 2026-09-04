@@ -65,13 +65,32 @@ export const EDIT_PGM = isWindows ? 'edit' : 'vi';
  */
 export const POLLHUP_EXITS_F = process.platform === 'linux';
 
+let gnuLibc: boolean | null = null;
+
 /**
- * True on the BSDs, whose libc regex is Henry Spencer's — one family,
- * one set of answers, and NOT only Darwin: FreeBSD, OpenBSD and NetBSD
- * ship the same lineage, and macOS's copy came from FreeBSD's.
+ * Whether this process is linked against glibc, which is the only libc
+ * whose regex reads the GNU operators.
+ *
+ * og answers this by LINKING: configure.ac:466 compiles a program
+ * calling re_compile_pattern against -lc and asks whether it resolves.
+ * We cannot link, and process.platform cannot stand in for it - musl
+ * (Alpine), bionic (Termux) and uClibc all report "linux" and none of
+ * them is glibc, while nothing outside Linux is. Node emits
+ * glibcVersionRuntime in its report header ONLY when built against
+ * glibc, which is the same question by a different route.
+ *
+ * Memoized, and gated on Linux so the report - 13ms and 39kB - is
+ * never built where the answer is already known.
  */
-const IS_BSD_LIBC = ['darwin', 'freebsd', 'openbsd', 'netbsd']
-  .includes(process.platform);
+export function hasGnuLibc(): boolean {
+  if (gnuLibc === null) {
+    gnuLibc = process.platform === 'linux' &&
+      (process.report.getReport() as { header?: Record<string, unknown> })
+        .header?.glibcVersionRuntime !== undefined;
+  }
+
+  return gnuLibc;
+}
 
 /**
  * The regex dialect less's own search would use here.
@@ -89,16 +108,33 @@ const IS_BSD_LIBC = ['darwin', 'freebsd', 'openbsd', 'netbsd']
  * reading there rather than give a JS user a pager whose search has
  * lost counted repetition.)
  */
-export const REGEX_DIALECT: Dialect = {
+/**
+ * The dialect glibc gives: POSIX ERE plus the GNU operators.
+ *
+ * What a Linux user's less reads, whichever regex API it linked -
+ * glibc's regcomp passes RE_SYNTAX_POSIX_EXTENDED, which omits
+ * RE_NO_GNU_OPS, so `\\w` is a word character through both doors.
+ * --use-gnu-regexp asks for exactly this on a host that does not.
+ */
+export const GNU_REGEX_DIALECT: Dialect = { ...flavors.extended };
+
+/**
+ * The dialect a BSD libc gives: POSIX ERE and not one thing more.
+ *
+ * Unconditional, not "whatever this host does". A machine has one
+ * libc, so less can only ever offer the one its build linked - but
+ * posix-regex carries both, so --use-gnu-regexp can be turned OFF on
+ * glibc and land here, which no less on any system can do.
+ */
+export const POSIX_REGEX_DIALECT: Dialect = {
   // less compiles with REG_EXTENDED (pattern.h's REGCOMP_FLAG), and this
   // must be spelled out rather than left to the "e" flag: an explicit
   // flavor overrides that flag, and a partial one merges onto POSIX's
   // default BASIC, where "(a)|(b)" is nine literal characters that
   // quietly match nothing
-  ...flavors.extended,
+  ...GNU_REGEX_DIALECT,
 
-  ...(IS_BSD_LIBC
-    ? {
+  ...({
         // \w \b and friends are GNU additions BSD does not read
         gnuOperators: false,
         // a**, a+?, a++ ... one duplication symbol upon another
@@ -112,9 +148,19 @@ export const REGEX_DIALECT: Dialect = {
         emptyBranch: false,
         // a{,3} is text, not {0,3}
         openMinimum: false,
-      }
-    : {}),
+      }),
 };
+
+/**
+ * The dialect less's own search would use here - the host's libc.
+ *
+ * Only what -V reports and what --use-gnu-regexp DEFAULTS to; the
+ * search itself reads one of the two above, because the option can
+ * take a glibc user to POSIX as readily as it takes a BSD user to GNU.
+ */
+export function hostRegexDialect(): Dialect {
+  return hasGnuLibc() ? GNU_REGEX_DIALECT : POSIX_REGEX_DIALECT;
+}
 
 /**
  * What -V calls the pattern matcher, as og's pattern_lib_name does.
@@ -132,7 +178,7 @@ export const REGEX_DIALECT: Dialect = {
  * link line.
  */
 export function patternLibName(): string {
-  return REGEX_DIALECT.gnuOperators ? 'GNU' : 'POSIX';
+  return hasGnuLibc() ? 'GNU' : 'POSIX';
 }
 
 /** Shell metacharacters (DEF_METACHARS, defines.wn's smaller set). */

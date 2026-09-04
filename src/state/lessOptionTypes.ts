@@ -81,6 +81,7 @@ export const LESS_OPTION_VALUES = {
   incsearch: 'flag',
   'use-color': 'flag',
   'use-js-regexp': 'flag',
+  'use-gnu-regexp': 'flag',
   'use-zsh-glob': 'flag',
   'file-size': 'flag',
   'status-line': 'flag',
@@ -171,7 +172,7 @@ export interface LessOptions {
   'lesskey-content'?: number | string;
   /** Use a lesskey source file. */
   'lesskey-src'?: number | string;
-  /** Exit less in response to ctrl-C. */
+  /** Exit less-pager-mini in response to ctrl-C. */
   'quit-on-intr'?: boolean;
   /** Ignore the LESSOPEN environment variable. */
   'no-lessopen'?: boolean;
@@ -265,7 +266,7 @@ export interface LessOptions {
   rmouse?: boolean;
   /** Each click of the mouse wheel moves N lines. @default 1 */
   'wheel-lines'?: number | string;
-  /** Retain marks across invocations of less. */
+  /** Retain marks across invocations of less-pager-mini. */
   'save-marks'?: boolean;
   /** Set the width of the -N line number field to N characters. @default 7 */
   'line-num-width'?: number | string;
@@ -275,8 +276,10 @@ export interface LessOptions {
   incsearch?: boolean;
   /** Enables colored text. */
   'use-color'?: boolean;
-  /** Search with JavaScript's RegExp. */
+  /** Search with JavaScript regular expressions. */
   'use-js-regexp'?: boolean;
+  /** Search with GNU regular expressions. */
+  'use-gnu-regexp'?: boolean;
   /** Expand filenames with built-in zsh globbing. */
   'use-zsh-glob'?: boolean;
   /** Automatically determine the size of the input file. */

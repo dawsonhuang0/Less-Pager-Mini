@@ -41,7 +41,7 @@ describe('the offer to finish a search with POSIX', () => {
     // a message outranks the prompt row, and a toggle sets one - so
     // the question would be raised into a row already spoken for, and
     // the user would answer something they never saw
-    search.message = "Search with JavaScript's RegExp";
+    search.message = 'Search with JavaScript regular expressions';
     posixRetry.pending = true;
 
     // what searching.ts does when it raises the question

@@ -42,7 +42,7 @@ FIXTURE = 'tests/redos-long.txt'
 EXPECTED = [
     ('startup', None, 1.5, 'redos-long.txt'),
     ('toggle --use-js-regexp', '--use-js-regexp\n', 1.0,
-     "Search with JavaScript's RegExp  (press RETURN)"),
+     "Search with JavaScript regular expressions  (press RETURN)"),
     ('RETURN dismisses', '\n', 0.6, ':'),
     ('search, 1.0s in', '/(a+)+b\n', 1.0, ''),
     ('search, 2.5s in', None, 1.5, 'Searching... (interrupt to abort)'),

@@ -11,7 +11,25 @@ import {
   highlightLine
 } from '../../src/features/searching';
 
-import { option, startOption, optionKey } from '../../src/options';
+import {
+  option,
+  startOption,
+  optionKey,
+  scanOptions
+} from '../../src/options';
+
+import { opt } from '../../src/options/state';
+
+import {
+  optUseGnuRegexp,
+  optUseJsRegexp
+} from '../../src/options/shared';
+
+import { useGnuRegexp } from '../../src/options/use-gnu-regexp';
+
+import { useJsRegexp } from '../../src/options/use-js-regexp';
+
+import { hasGnuLibc } from '../../src/tty/platform';
 
 import { INVERSE_ON } from '../../src/state/constants';
 
@@ -45,6 +63,8 @@ beforeEach(() => {
   search.message = '';
 
   option.pending = '';
+  opt.useGnuRegexp = -1;
+  opt.useJsRegexp = 0;
 });
 
 function doSearch(dir: '/' | '?', pattern: string): void {
@@ -148,5 +168,130 @@ describe('case sensitivity in searches', () => {
     const filter = execFilter();
 
     expect(content.filter(filter!)).toEqual(['ALPHA LINE']);
+  });
+});
+
+/*
+ * glibc's regcomp passes RE_SYNTAX_POSIX_EXTENDED, which leaves
+ * RE_NO_GNU_OPS clear, so a Linux user's less reads `\w` and a BSD
+ * user's reads the letter w. --use-gnu-regexp hands the second user
+ * the first one's dialect.
+ *
+ * There is no w anywhere in the corpus, which is what makes `\w` tell
+ * the two apart.
+ */
+describe('--use-gnu-regexp', () => {
+  const POSIX = 0;
+  const GNU = 1;
+
+  it('follows the host libc until something says otherwise', () => {
+    // -1 is untouched: an unasked session searches the way the less
+    // on the same machine does, which is the only default that can be
+    // right on both a glibc box and a BSD one
+    opt.useGnuRegexp = -1;
+    expect(optUseGnuRegexp()).toBe(hasGnuLibc());
+  });
+
+  it('hands over the OTHER dialect when named', () => {
+    // naming a bool sets it to the opposite of its default and the
+    // default is the host's - so this is GNU where glibc is absent
+    // and POSIX where it is, which is what the help line says
+    scanOptions('--use-gnu-regexp', content, false);
+    expect(optUseGnuRegexp()).toBe(!hasGnuLibc());
+  });
+
+  it('puts the host back on -+', () => {
+    scanOptions('--use-gnu-regexp', content, false);
+    scanOptions('--+use-gnu-regexp', content, false);
+    expect(optUseGnuRegexp()).toBe(hasGnuLibc());
+  });
+
+  it('reads \\w as a word character under GNU, and as w under POSIX', () => {
+    // there is no w anywhere in the corpus, which is what makes this
+    // tell the two dialects apart
+    opt.useGnuRegexp = GNU;
+    doSearch('/', '\\w');
+    expect(search.message).not.toMatch(/^Pattern not found: /);
+
+    search.message = '';
+    opt.useGnuRegexp = POSIX;
+    doSearch('/', '\\w');
+    expect(search.message).toMatch(/^Pattern not found: /);
+  });
+
+  it('brings the whole dialect, not the operators alone', () => {
+    // BSD has no backreferences either, so `(o)\1` is (o) then a 1;
+    // one knob without the other six would be a dialect no libc has
+    opt.useGnuRegexp = GNU;
+
+    doSearch('/', '(o)\\1');
+    expect(search.message).not.toMatch(/^Pattern not found: /);
+    expect(config.row).toBe(0);
+  });
+
+  it('stands aside from --use-js-regexp, either direction', () => {
+    // naming a dialect names the engine that HAS dialects, so JS
+    // steps aside - and because less scans left to right, that is
+    // also what makes the later flag win
+    for (const state of [GNU, POSIX]) {
+      useJsRegexp.set(1, '');
+      useGnuRegexp.set(state, '');
+      expect(opt.useJsRegexp).toBe(0);
+    }
+  });
+
+  // the `-` command as a user drives it: dash, the long name typed
+  // out, RETURN. Nothing below reimplements the toggle arithmetic -
+  // getting that wrong is what let the bug through
+  const dash = (name: string): void => {
+    search.message = '';
+    startOption('-');
+    for (const char of `-${name}`) optionKey(content, char);
+    optionKey(content, '\n');
+  };
+  const engine = (): string =>
+    optUseJsRegexp() ? 'JS' : (optUseGnuRegexp() ? 'GNU' : 'POSIX');
+
+  it('uncovers the dialect under JS instead of flipping it', () => {
+    dash('use-gnu-regexp');
+    expect(engine()).toBe('GNU');
+
+    dash('use-js-regexp');
+    expect(engine()).toBe('JS');
+
+    // the press that used to land on POSIX: the dialect underneath
+    // was already 1 and invisible, so flipping it flipped something
+    // the user could not see
+    dash('use-gnu-regexp');
+    expect(engine()).toBe('GNU');
+    expect(search.message).toBe('Search with GNU regular expressions');
+
+    // ...and the press after that does change it
+    dash('use-gnu-regexp');
+    expect(engine()).toBe('POSIX');
+    expect(search.message).toBe('Search with POSIX regular expressions');
+  });
+
+  it('names the dialect it returns to when JS is switched off', () => {
+    // the message used to come from the HOST rather than the dialect
+    // in force, so this said POSIX while searching with GNU
+    dash('use-gnu-regexp');
+    dash('use-js-regexp');
+    dash('use-js-regexp');
+
+    expect(engine()).toBe('GNU');
+    expect(search.message).toBe('Search with GNU regular expressions');
+  });
+
+  it('is never written by --use-js-regexp', () => {
+    // JS sits on top: it picks the engine and leaves the dialect
+    // saying whatever it said, so turning JS off uncovers the reading
+    // the user chose rather than guessing at one
+    useGnuRegexp.set(GNU, '');
+    useJsRegexp.set(1, '');
+    expect(opt.useGnuRegexp).toBe(GNU);
+
+    useJsRegexp.set(0, '');
+    expect(opt.useGnuRegexp).toBe(GNU);
   });
 });

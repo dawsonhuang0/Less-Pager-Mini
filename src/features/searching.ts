@@ -13,7 +13,10 @@ import { guardedMatch, watchWith, jsRegexNoticed, beginGuardedRun,
 
 import { consumeInterrupt, keyboard, keyboardPollFd, pushUngot,
   pushUngotLive, raiseAbort } from '../tty/keyboard';
-import { REGEX_DIALECT } from '../tty/platform';
+import {
+  GNU_REGEX_DIALECT,
+  POSIX_REGEX_DIALECT
+} from '../tty/platform';
 
 import { config, mode } from "../state/config";
 
@@ -54,7 +57,8 @@ import {
   optIntrChar,
   optNoInit,
   chopLine,
-  optUseJsRegexp
+  optUseJsRegexp,
+  optUseGnuRegexp
 } from "../options";
 
 import { hook } from "../options/shared";
@@ -226,12 +230,19 @@ export function chgCaseless(caseless: 0 | 1 | 2): void {
  *
  * The option machinery sets search.message AFTER calling an option's
  * set(), so an option whose set() does real work reports itself only
- * once that work is done - "Search with JavaScript's RegExp" arriving
+ * once that work is done - "Search with JavaScript regular
+ * expressions" arriving
  * after the re-highlight it caused reads as if the toggle did
  * nothing for a while. This is the line-number walk's trick: straight
  * to the terminal, and the next frame told the row is spoken for.
  */
 hook.flashMessage = (text: string): void => {
+  // a bottom row is the whole premise, so there has to be one. set()
+  // also runs at INIT, off the command line, where og's scan_option
+  // says nothing and only toggle_option speaks - and where stdout may
+  // be a pipe this would write escape codes into
+  if (!process.stdout.isTTY || !hook.screenActive) return;
+
   // exactly as a held message renders, "(press RETURN)" and all: this
   // row is not replaced when the frame comes round, it is the SAME
   // message arriving early, and it stays until the user dismisses it
@@ -1229,7 +1240,7 @@ export const searchCaseFlags = (pattern: string): string =>
  *
  * less hands the pattern to regcomp with REG_EXTENDED (pattern.h's
  * REGCOMP_FLAG) and REG_ICASE for -i. The dialect carries the extended
- * spelling itself — see REGEX_DIALECT, where leaving it to the "e"
+ * spelling itself — see POSIX_REGEX_DIALECT, where leaving it to the "e"
  * flag would silently fall back to BASIC.
  *
  * Matching is by CHARACTER, as less's is — cvt_text hands regcomp a
@@ -1356,7 +1367,10 @@ export function clearForcePosix(): void {
 function psx(source: string, flags: string): SearchRegex {
   if (optUseJsRegexp() && !forcePosix) return jsRegex(source, flags);
 
-  return new PsxRegExp(source, { flags, flavor: REGEX_DIALECT });
+  return new PsxRegExp(source, {
+    flags,
+    flavor: optUseGnuRegexp() ? GNU_REGEX_DIALECT : POSIX_REGEX_DIALECT,
+  });
 }
 
 /**
@@ -1410,7 +1424,8 @@ function jsRegex(source: string, flags: string): SearchRegex {
    * redone afterwards.
    *
    * The message the bottom row is holding goes with it. A toggle sets
-   * one ("Search with JavaScript's RegExp") and a message outranks the
+   * one ("Search with JavaScript regular expressions") and a message
+   * outranks the
    * prompt, so leaving it there would answer a question the user
    * cannot see.
    */

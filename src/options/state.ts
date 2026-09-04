@@ -54,6 +54,9 @@ export const opt = {
   incrSearch: 0,
   useColor: 0,
   useJsRegexp: 0,
+  // -1 is untouched - nobody has said, so follow the host's libc.
+  // 0 and 1 are POSIX and GNU, both certain (see use-gnu-regexp)
+  useGnuRegexp: -1,
   useZshGlob: 0,
   headerLines: 0,
   headerCols: 0,

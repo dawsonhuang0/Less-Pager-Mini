@@ -1,6 +1,7 @@
 
 import { opt } from './state';
 import { putstr } from '../tty/output';
+import { hasGnuLibc } from '../tty/platform';
 
 import { config, mode } from "../state/config";
 
@@ -343,6 +344,12 @@ export const optUseColor = (): boolean => opt.useColor > 0;
 /** True when --use-js-regexp searches with the host RegExp instead of
  *  the POSIX engine less's regcomp would give. */
 export const optUseJsRegexp = (): boolean => opt.useJsRegexp > 0;
+
+/** True when the search reads the GNU operators - either because
+ *  --use-gnu-regexp asked for them, or because untouched means the
+ *  host's libc and the host's libc is glibc. */
+export const optUseGnuRegexp = (): boolean =>
+  opt.useGnuRegexp < 0 ? hasGnuLibc() : opt.useGnuRegexp > 0;
 
 /** The -T tags file name (or a GTAGS-family name). */
 export const optTagsFile = (): string => opt.tagsFile;

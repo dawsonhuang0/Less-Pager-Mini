@@ -13,7 +13,10 @@ import { search } from '../../src/features/searching';
 
 import { LESS_VERSION } from '../../src/version';
 
-import { patternLibName, REGEX_DIALECT } from '../../src/tty/platform';
+import {
+  patternLibName,
+  hostRegexDialect
+} from '../../src/tty/platform';
 
 import { PsxRegExp } from 'posix-regex';
 
@@ -358,7 +361,7 @@ describe('version', () => {
     // so the label cannot drift away from the engine underneath it:
     // on glibc `\w` is a word character, on BSD it is the letter w
     const wordClass =
-      new PsxRegExp('\\w', { flavor: REGEX_DIALECT }).exec('abc') !== null;
+      new PsxRegExp('\\w', { flavor: hostRegexDialect() }).exec('abc') !== null;
 
     expect(patternLibName()).toBe(wordClass ? 'GNU' : 'POSIX');
   });
