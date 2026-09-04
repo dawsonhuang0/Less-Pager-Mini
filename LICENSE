@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 Dawson Huang
+Copyright (c) 2025-2026 Dawson Huang
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,24 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+-------------------------------------------------------------------------
+
+less-pager-mini is a reimplementation of less, whose behaviour and
+control flow it follows deliberately.
+
+less is distributed under either the GNU General Public License v3 or
+the Less License, at the recipient's option (less's README). This
+project takes the second: it is derived from less under the terms of
+the Less License, NOT the GPL.
+
+That license, and the copyright notice it requires be retained, are in
+the file LESS-LICENSE, copied verbatim from less 710x - the version
+this port is written against, named by LESS_VERSION in src/version.ts.
+The notice to retain is the one carried by the source a work was taken
+from, so LESS-LICENSE is re-copied when that version moves, not when
+the calendar does:
+
+    Less
+    Copyright (C) 1984-2026  Mark Nudelman

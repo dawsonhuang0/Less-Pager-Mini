@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "LESS-LICENSE"
   ],
   "scripts": {
     "build": "rm -rf dist && tsx scripts/build.ts && tsc --emitDeclarationOnly && tsx scripts/pruneTypes.ts",
